@@ -26,14 +26,14 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — Understand this run. Improve the next recipe.",
+    title: "Ingot — From run evidence to the next recipe.",
     description: "Connect real recipe runs and continuously recommend the next recipe within safety boundaries and observed coverage.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — Understand this run. Improve the next recipe." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — From run evidence to the next recipe." }],
   },
   twitter: {
     card: "summary_large_image",

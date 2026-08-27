@@ -22,7 +22,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Stateless `POST /v1/suggestions` HTTP contract
 - Synthetic digital-twin demonstration
 
-The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. Information-first model discrimination belongs only to the engineer-selected hypothesis-validation path and does not automatically spend the reach-specification budget. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. This successor intentionally invalidates the old frozen acceptance fingerprint and still requires new unseen-data acceptance. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
+The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. Information-first model discrimination belongs only to the engineer-selected hypothesis-validation path and does not automatically spend the reach-specification budget. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
 The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate campaigns stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar.
 
@@ -50,23 +50,9 @@ commit both files; CI and container builds reject an out-of-date lock.
 
 Local development uses `8110` by default to avoid conflicting with the optimizer service on port `8100` in Docker Compose.
 
-## Public-data regression
+## Validation boundary
 
-The repository uses fixed public experimental data to check historical-pool replay, comparisons with random and response-surface baselines, and preservation of the correct claim boundary when results are unfavorable. Check retained frozen-acceptance integrity and the current algorithm's fingerprint-invalid state with:
-
-```bash
-./scripts/verify-optimizer-acceptance.sh
-```
-
-Ordinary CI runs fast deterministic integrity and no-leakage checks in `optimizer/tests/test_optimizer_acceptance.py`. The complete 450-episode frozen result is retained and cannot become new acceptance after an algorithm change. See [Public-data experiment-efficiency validation](../tools/public-validation/README.en.md) for provenance, the current failed result, and update rules.
-
-The current method-selection policy's development regression uses four strong baselines and a mechanism-feature ablation:
-
-```bash
-./scripts/benchmark-optimizer-development.sh
-```
-
-This command reads disclosed data and exists only for development and regression prevention. The current development problem is distinguishing applicable linear from quadratic structure. New effect evidence requires committing a successor first, then selecting fresh data and freezing objectives, budgets, and rules; a modified method cannot rerun old outcomes and relabel them as independent validation.
+The repository bundles no public or field-validation datasets, historical protocols, or result files. `optimizer/tests` covers algorithm contracts, constraints, determinism, fail-closed behavior, and replay without future-result access. Deployers evaluate scenario-specific effects outside the repository with their own data.
 
 ## Stateless contract
 

@@ -22,9 +22,7 @@
     <text x="1115" y="188" font-size="12" fill="#64748B" text-anchor="middle">控制系统 · 仪器 · 视觉 · 检验 · 按需接入 MES/QMS/LIMS</text>
   </g>
 
-  <rect x="60" y="222" width="1320" height="828" rx="18" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.8"/>
-  <text x="92" y="254" font-size="13" font-weight="700" fill="#0F766E" letter-spacing="1.4">INGOT 当前应用运行边界</text>
-  <text x="1348" y="272" font-size="11.5" fill="#94A3B8" text-anchor="end">虚线框或虚线连接表示可选能力；不是新的正式记录源</text>
+  <rect x="60" y="250" width="1320" height="800" rx="18" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.8"/>
 
   <g>
     <rect x="120" y="284" width="360" height="106" rx="12" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>

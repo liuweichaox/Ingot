@@ -35,8 +35,6 @@ while IFS= read -r path; do
   case "$path" in
     tests/fixtures/synthetic/*|tools/*/examples/synthetic/*)
       ;;
-    tools/public-validation/data/fdm-doe-grid.csv|tools/public-validation/data/crossed-barrel.csv|tools/public-validation/data/airfoil-self-noise.csv|tools/public-validation/data/yacht-hydrodynamics.csv|tools/public-validation/data/energy-efficiency.csv|tools/public-validation/data/synchronous-machine.csv|tools/public-validation/data/lnp3-formulations.csv|tools/public-validation/data/oer-plate-3496.csv|tools/public-validation/data/oer-plate-3851.csv|tools/public-validation/data/oer-plate-3860.csv|tools/public-validation/data/oer-plate-4098.csv|tools/public-validation/data/fullerenes-source.csv|tools/public-validation/data/fullerenes.csv|tools/public-validation/data/suzuki-source.csv|tools/public-validation/data/suzuki.csv|tools/public-validation/data/alkox-source.csv|tools/public-validation/data/alkox.csv|tools/public-validation/data/p3ht-source.csv|tools/public-validation/data/p3ht.csv|tools/public-validation/data/hplc-source.csv|tools/public-validation/data/hplc.csv)
-      ;;
     .ingot-import/*|mapping-*.json|*.csv|*.parquet|*.xlsx|*.xls|*.db)
       sensitive_paths+=("$path")
       ;;
@@ -48,70 +46,6 @@ if (( ${#sensitive_paths[@]} > 0 )); then
   echo "Production data or site-specific import mappings must not be tracked. Synthetic data files are allowed only under tests/fixtures/synthetic or tools/*/examples/synthetic." >&2
   exit 1
 fi
-
-python3 - <<'PY'
-import hashlib
-import json
-from pathlib import Path
-
-root = Path("tools/public-validation")
-protocols = [
-    json.loads((root / name).read_text(encoding="utf-8"))
-    for name in (
-        "protocol-v2.json",
-        "protocol-v3.json",
-        "protocol-v4.json",
-        "protocol-v6.json",
-        "protocol-v7.json",
-        "unseen-protocol.json",
-        "acceptance-protocol.json",
-    )
-]
-allowed = {
-    "data/fdm-doe-grid.csv",
-    "data/crossed-barrel.csv",
-    "data/airfoil-self-noise.csv",
-    "data/yacht-hydrodynamics.csv",
-    "data/energy-efficiency.csv",
-    "data/synchronous-machine.csv",
-    "data/lnp3-formulations.csv",
-    "data/oer-plate-3496.csv",
-    "data/oer-plate-3851.csv",
-    "data/oer-plate-3860.csv",
-    "data/oer-plate-4098.csv",
-    "data/fullerenes-source.csv",
-    "data/fullerenes.csv",
-    "data/suzuki-source.csv",
-    "data/suzuki.csv",
-    "data/alkox-source.csv",
-    "data/alkox.csv",
-    "data/p3ht-source.csv",
-    "data/p3ht.csv",
-    "data/hplc-source.csv",
-    "data/hplc.csv",
-}
-declared = {
-    path
-    for protocol in protocols
-    for source in protocol["sources"].values()
-    for path in (source["fixture"], source.get("source_snapshot"))
-    if path is not None
-}
-if declared != allowed:
-    raise SystemExit("public validation protocol must declare exactly the approved fixtures")
-if not (root / "NOTICE.md").is_file():
-    raise SystemExit("public validation fixtures require NOTICE.md attribution")
-for protocol in protocols:
-    for source in protocol["sources"].values():
-        checks = [(source["fixture"], source["fixture_sha256"])]
-        if source.get("source_snapshot") is not None:
-            checks.append((source["source_snapshot"], source["source_sha256"]))
-        for relative_path, expected in checks:
-            path = root / relative_path
-            actual = hashlib.sha256(path.read_bytes()).hexdigest()
-            if actual != expected:
-                raise SystemExit(f"public validation checksum mismatch: {path}")
-PY
 
 if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' \
   --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.next \

@@ -43,9 +43,8 @@
 
   <!-- Headline -->
   <g transform="translate(64,270)">
-    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">Understand this run.</text>
-    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">Improve the</text>
-    <text y="104" font-size="38" font-weight="800" fill="#F4F8F6">next recipe.</text>
+    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">From run evidence</text>
+    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">to the next recipe.</text>
   </g>
 
   <!-- Subheadline -->

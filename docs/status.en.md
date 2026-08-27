@@ -1,27 +1,23 @@
 # Current status
 
-> Document status: **rolling facts page**. This page is the single entry point for what the code implements, what validation has established, and what production use still requires. [Brand guide](brand.en.md) governs product positioning; the [public validation record](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) governs detailed method results.
+> Document status: **rolling facts page**. This page states what the code implements and what deployers complete themselves. [Brand guide](brand.en.md) governs product positioning.
 
 ## Conclusion summary
 
 Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, and engineer-confirmed next-recipe recommendations generated directly from real recipe runs. Controlled validation is a separate optional workflow.
 
-A working software workflow does not establish real-factory benefit. The current strategy has not yet passed an independent unseen-data acceptance, and formal real-factory historical review and prospective validation remain incomplete.
+The repository claims only code, database contracts, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data, historical protocols, or effect results.
 
-- **Confirmed:** the software organizes traceable run evidence and returns candidate process settings when data and safety conditions are met.
-- **Not yet confirmed:** Ingot consistently reduces experiments, development time, or production risk in a real factory.
+- **Repository responsibility:** software capabilities, constraints, permissions, audit, fail-closed behavior, and a deployment reference.
+- **Deployer responsibility:** data quality, scenario applicability, process safety, recipe adoption, and realized-benefit evaluation.
 
 ## Status overview
 
 | Layer | Current status | Supported conclusion |
 |---|---|---|
 | Synthetic demo | Runnable | The principal pages and business workflow can be toured |
-| Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and show why |
-| Public method replay | Several test rounds completed; current method awaits new acceptance | Successes and failures are visible, but old results do not mean the current method passed |
-| Real historical replay | Tools implemented; formal report incomplete | It is not yet formally shown that replay of an old project avoids seeing future results |
-| Prospective shadow validation | Tools implemented; results incomplete | Recommendations are not yet shown to remain reliable on a new project; shadow advice does not affect actual decisions |
-| Controlled online validation | Workflow and gates implemented; results incomplete | Real-factory benefit and causal effect are not established |
-| Production operation | Single-machine reference deployment available | Production still requires high-availability, recovery, security, and capacity acceptance |
+| Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and explain why |
+| Production operation | Single-machine reference deployment available | Deployers still complete site security, recovery, capacity, and operations configuration |
 
 ## Implemented software capabilities
 
@@ -33,59 +29,37 @@ The repository currently covers:
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;
 - automatically combining admitted real recipe runs with quality outcomes into optimization observations without requiring a user-created experiment;
 - generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch;
-- designing controlled validation with controls, repetition, and safety boundaries when needed, then reviewing candidate operating regions;
-- selecting response-surface or Gaussian-process methods according to the data, with fallback when a complex method is unsuitable;
+- designing controlled validation with controls, repetition, and safety boundaries when needed;
+- selecting response-surface or Gaussian-process methods according to the data and degrading when evidence is insufficient;
 - preserving evidence, constraints, model versions, engineer review, and final outcomes for every recommendation;
 - providing a permissioned analysis assistant plus backup, restore, monitoring, and basic failure-drill tooling.
 
-“Implemented” means that repository code, database contracts, and tests exist. It does not mean that a factory has completed data, performance, security, or benefit acceptance.
+“Implemented” means repository code, database contracts, and tests exist. It does not mean the software fits every process or has produced a particular business benefit.
 
-## Public method evidence
+## Repository validation boundary
 
-Public-data testing asks whether the system can reach a target sooner when selecting experiments one by one from a set whose outcomes are already known. It does not replace a real-factory pilot. Three conclusions are supported:
+The repository bundles no public or field-validation datasets, historical round protocols, result trajectories, or effect reports. Optimizer unit tests cover algorithm contracts, determinism, constraints, fail-closed behavior, and historical replay without future-result access. Scenario-specific effect comparisons run in the deployer's own environment.
 
-- the system was faster than random trial and error in some tests;
-- in other tests it did not consistently beat a simpler response-surface method, so overall acceptance failed;
-- the algorithm has since changed, so the old data are useful for development checks but no longer provide independent proof of the current method.
+## Deployer responsibility
 
-The current method still needs acceptance on a new dataset group that was not inspected during development.
+Deployers are responsible for:
 
-The complete protocols, figures, confidence intervals, and failure breakdowns are maintained only in [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) and its audit files.
+- defining objectives, controllable parameters, safety constraints, and acceptable risk;
+- ensuring reliable identity and timing across runs, recipes, process data, and quality results;
+- comparing applicable baselines on their own data and choosing acceptance thresholds;
+- reviewing, adopting, or rejecting recipe recommendations;
+- evaluating actual quality, cost, cycle-time, and production-safety effects.
 
-## Real-project evidence
-
-Real projects advance in this order, with each step answering one question:
-
-```text
-Historical review (can an old project be replayed correctly?)
-→ Shadow validation (do new recommendations remain sensible without influencing engineers?)
-→ Controlled online (is adopting a recommendation safe and useful?)
-→ Second scenario (does the approach still work for a different process?)
-```
-
-None of these four steps yet has a formal result that may be claimed publicly as passed. Real production data, project and equipment identities, parameter distributions, and calculated results remain in the controlled factory environment. Public-data tests cannot stand in for this evidence.
-
-See [Scenario validation](rollout.en.md) for the acceptance questions, preregistration content, and falsification conditions.
+See [Scenario validation](rollout.en.md) for an optional evaluation method.
 
 ## Production-deployment boundary
 
-The default Docker Compose setup is for local development validation and a single-machine reference deployment; it is not production acceptance. A production deployer must still complete:
-
-- secrets, identity, site isolation, and least-privilege configuration;
-- backup and restore, acceptable data-loss and recovery-time targets, failover, and sustained-observation evidence;
-- capacity, backlog, latency, and retention acceptance under representative load;
-- object storage, point-in-time recovery, high availability, and external-dependency failure plans;
-- equipment interlocks, human approval, stopping, and fallback drills.
+The default Docker Compose setup is for local development and a single-machine reference deployment; it does not complete production requirements. Production deployers still configure secrets, identity, and site isolation and complete backup, recovery, capacity, alerting, equipment interlock, human approval, stopping, and fallback drills.
 
 See [Production architecture](production-architecture.en.md) for the target topology and [Deployment](deployment.en.md) for current operating steps.
 
 ## Status update rules
 
-Every status change requires reviewable evidence:
-
-1. software capability follows merged code, database migrations, and automated tests;
-2. method effect follows preregistration, freeze, unseen data, and complete failure retention;
-3. real-project value follows separately reviewed historical, shadow, and online reports;
-4. production maturity follows recovery, capacity, security, and observation evidence from the target site.
-
-An API, a runnable demo, or completed internal infrastructure does not automatically promote a higher evidence layer.
+1. Software capability follows merged code, database migrations, and automated tests.
+2. Scenario effects and business benefit are confirmed by deployers using their own evaluation data.
+3. Production maturity is confirmed by recovery, capacity, security, and operating evidence from the target site.

@@ -26,13 +26,13 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — 看清这次运行，做好下一份配方",
+    title: "Ingot — 从运行证据，到下一份配方",
     description: "连接真实配方运行，在安全边界和历史覆盖内持续推荐下一份配方。",
     url: origin,
     type: "website",
     locale: "zh_CN",
     siteName: "Ingot",
-    images: [{ url: "/og.zh.png", width: 1200, height: 630, alt: "Ingot — 看清这次运行，做好下一份配方。" }],
+    images: [{ url: "/og.zh.png", width: 1200, height: 630, alt: "Ingot — 从运行证据，到下一份配方。" }],
   },
   twitter: {
     card: "summary_large_image",

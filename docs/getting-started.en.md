@@ -110,5 +110,4 @@ docker compose -f docker-compose.app.yml logs --tail=200
 - To connect a set of real or representative recipe runs, continue with the [Recipe-optimization pilot guide](pilot.en.md).
 - To understand identity, points, and mappings, read [Data integration](data-connection.en.md).
 - To see which capabilities are actually validated, read [Current status](status.en.md).
-- To reproduce public method results, read [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md).
 - To deploy in production, complete the site acceptance defined by [Production architecture](production-architecture.en.md).

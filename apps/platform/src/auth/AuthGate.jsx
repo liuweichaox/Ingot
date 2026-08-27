@@ -242,8 +242,8 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
 
           <div className="relative max-w-2xl py-14">
             <p className="data-label text-evidence-400">Process diagnosis · constrained optimization</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.05em] text-white xl:text-6xl">看清这次运行，<br /><span className="text-evidence-400">做对下一项实验。</span></h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">把真实运行条件、过程轨迹和质量结果整理为可复核的工程证据，帮助团队缩小候选原因并形成下一步验证实验。</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.05em] text-white xl:text-6xl">从运行证据，<br /><span className="text-evidence-400">到下一份配方。</span></h1>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">把真实运行条件、过程轨迹和质量结果整理为可复核的工程证据，帮助团队缩小候选原因并形成下一份配方建议。</p>
 
             <div className="mt-10 overflow-hidden rounded-2xl border border-white/12 bg-black/15 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">

@@ -127,22 +127,6 @@ if grep -RIniE --exclude='package-lock.json' \
   exit 1
 fi
 
-current_evidence_zh='当前策略尚未通过独立的未见数据验收'
-current_evidence_en='current strategy has not yet passed an independent unseen-data acceptance'
-for file in README.md docs/index.md docs/status.md; do
-  if ! grep -Fq "$current_evidence_zh" "$file"; then
-    echo "$file must retain the current public evidence boundary from docs/status.md." >&2
-    exit 1
-  fi
-done
-
-for file in README.en.md docs/index.en.md docs/status.en.md; do
-  if ! grep -Fqi "$current_evidence_en" "$file"; then
-    echo "$file must retain the current public evidence boundary from docs/status.en.md." >&2
-    exit 1
-  fi
-done
-
 for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.md; do
   if ! grep -Fq "$canonical_en" "$file"; then
     echo "$file must retain the canonical English core value from docs/brand.en.md." >&2

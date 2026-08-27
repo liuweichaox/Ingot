@@ -59,33 +59,21 @@ trusted acquisition → run and quality evidence → optimization observations
 
 This is a dependency chain, not menu order. Do not perform strong analysis with untrusted data, claim causes from observational evidence, enter shadow mode before replay, or enter controlled action before shadow and safety evidence pass.
 
-The first sustained validation scenario has data onboarding and diagnosis running; historical replay, shadow, and controlled-online validation are still in progress. Its industry and equipment details stay out of the public repository, and the scenario itself is not the product boundary. Generality is supported only when a second, materially different manufacturing process works without changing the core evidence, experiment, and action contracts.
+Industry, equipment, validation data, and effect results stay out of the public repository. Deployers evaluate scenario applicability and business benefit with their own data; those results are not prerequisites for repository code completion.
 
 ## 3. Three-horizon strategy
 
-### Near term: prove the trustworthy apparatus
+### Near term: complete a reliable natural-run optimization loop
 
-The immediate priority is leakage-free replay of a real historical project. It does not answer whether model recommendations have improved the process. It tests whether:
+The near-term scope is limited to capabilities the repository can own:
 
-- one frozen evidence snapshot reproduces the same analysis and recommendation;
 - run identity, actual values, quality outcomes, and context are unique, complete, and traceable;
-- round `t` uses only information available at round `t`;
-- methods compare fairly with engineer history, applicable DOE, and simple baselines;
+- normal production runs automatically become optimization observations without experiment setup or recipe reclassification;
+- method selection reads visible evidence only and explains admission or fallback;
 - missingness, mismatches, unauthorized access, and insufficient evidence are rejected explicitly;
-- inputs, policies, models, seeds, outputs, reviews, and content hashes form a complete report.
+- inputs, policies, models, seeds, outputs, and reviews are reproducible.
 
-Real production data and derived results remain inside the controlled environment. The complete report above is an access-controlled, auditable internal evidence artifact; completion never requires publishing raw data, project identities, parameter distributions, or project results. The public repository provides general protocols, schemas, synthetic examples, explicitly licensed and checksum-verified public-data benchmarks, and conformance tests. A public benchmark validates reproducible software and method behavior; it does not replace the real-project report.
-
-The near-term conclusion can only be that the apparatus is trustworthy, reproducible, and leakage-free. Prospective value requires shadow validation; causal and benefit claims require controlled online experiments. The evidence ladder is:
-
-```text
-historical replay: trustworthy, reproducible, leakage-free
-→ prospective shadow: applicable, executable, calibrated
-→ controlled intervention: safe prospective value inside declared boundaries
-→ second scenario: transferable core contracts
-```
-
-See [Scenario validation](rollout.en.md) for the protocol and report requirements.
+Deployers own scenario effects, process safety, and realized benefit. The repository provides an optional [scenario-validation method](rollout.en.md) but stores none of its data or results.
 
 ### Medium term: become a model-independent process capability substrate
 
@@ -237,33 +225,27 @@ Each work line preregisters data, baselines, measures, threshold versions, accep
 
 ## 8. Current priorities and rolling batches
 
-The current code checkpoint is not a validation pass. Trusted identity, event integrity, quality admission, Application use cases, replay/shadow/online report services, mechanism-knowledge gates, and production-acceptance tooling are in the repository. A formal leakage-free report on real history, new-project shadow results, controlled-online results, a second scenario, and an external protocol implementation remain incomplete. The first two batches therefore shift from filling code paths to proving them under real load and failure exercises; the next scientific hard gate remains Batch 3, preregistered historical replay.
+The current priority is tightening implemented software paths rather than accumulating scenario-validation rounds in the repository. Deployers manage validation data and effect results; the repository keeps core code, contracts, tests, and documentation simple and consistent.
 
 | Priority | Work | Definition of done |
 |---|---|---|
 | P0 | run identity, actual values, context, inspection linkage, and quality validity | every analysis record uniquely reaches a real run and valid outcome |
-| P0 | evidence freezing, replay, transactions, and recovery | inputs cannot be rewritten after the fact; recovery preserves provenance |
-| P0 scientific | historical-question and production-equivalent sequential replay | access-controlled internal preregistration and reviewed leakage-free report with baselines, failures, and limits |
-| P0 scientific | protocol-frozen public external-data evaluation | data not used during development, strong baselines, and mechanism ablation run under the frozen protocol with unfavorable results retained |
+| P0 | observation assembly, algorithm selection, and recommendation fallback | identical inputs reproduce; insufficient evidence selects a simpler method |
 | P1 | process-decision case and deterministic diagnosis contract | evidence, candidates, counterevidence, hypotheses, experiments, and conclusions share one formal spine |
-| P1 | agent replay and adversarial evaluation | unsupported inference, identity mismatch, overreach, and incorrect tool use are detectable |
-| P1 | shadow recommendations, calibration, and stopping | recommendations freeze in advance and preserve independent engineer choice and rejection reasons |
+| P1 | agent adversarial tests | unsupported inference, identity mismatch, overreach, and incorrect tool use are detectable |
 | P2 | read and propose agent protocols | multiple models use the same schemas and cannot bypass state machines |
 | P2 | single-step controlled action protocol | allow lists, approval, actual confirmation, stop, and rollback drills pass |
-| P3 | second scenario and specification candidate | core contracts remain unchanged and at least one external implementation exists |
+| P3 | specification candidate | core contracts remain stable and at least one external implementation exists |
 
 Current rolling batches:
 
-1. **Trusted identity and quality chain**: core code paths and database constraints exist; continue adversarial acceptance with real site isolation, clock faults, missing actual values, and incorrect inspection linkage.
-2. **Historical evidence apparatus**: freezing, content hashes, transactions, replay services, and recovery tooling exist; complete site retention rules, recomputation consistency, and recovery-drill evidence.
-3. **Protocol-frozen public external-data evaluation**: commit the algorithm and protocol before running physical-experiment data not used during development, strong baselines, and mechanism-feature ablation; do not revise frozen conditions in response to the first result.
-4. **Preregistered historical replay**: complete engineering-question and production-equivalent sequential replay, preserve every failure and limit in the controlled internal report, and expose only that real project's protocol and conclusion boundaries publicly; a separately published public-data benchmark must not be presented as the real-project result.
-5. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and experiment-proposal structure.
-6. **Agent evaluation corpus**: golden-question, run-snapshot, and evaluation storage exist; expand adversarial examples for engineer questions, correct refusal, citation coverage, permissions, and tool calls.
-7. **Prospective shadow validation**: freeze variables, mappings, context, constraints, policies, and engineer rejection reasons.
-8. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
-9. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
-10. **Second scenario and specification candidate**: validate cross-scenario semantics and publish candidate schemas, validators, and reference implementations.
+1. **Trusted identity and quality chain**: tighten rejection of site-isolation, clock, missing-actual-value, and incorrect-inspection-linkage failures.
+2. **Natural-run optimization**: keep automatic observation assembly, algorithm selection, recommendation explanation, and result materialization on one path.
+3. **Process-decision case**: fix data quality, baseline, first deviation, candidates, counterevidence, confounding, missingness, and controlled-validation proposal structure.
+4. **Agent adversarial tests**: expand correct refusal, citation coverage, permission, and tool-call tests.
+5. **Protocolized read and propose capabilities**: derive stable domain tools from internal APIs and provide MCP, OpenAPI, or SDK adapters.
+6. **Controlled-action preparation**: action ledger, authorization tokens, policy checks, device confirmation, stop, and rollback.
+7. **Specification candidate**: publish stable candidate schemas, validators, and reference implementations.
 
 These batches are the current sequence, not an immutable product definition. Reorder them after each completed batch according to evidence.
 

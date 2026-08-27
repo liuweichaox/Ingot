@@ -384,6 +384,8 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
 
 test("local authentication has a complete login and session-expiry experience", () => {
   assert.match(main, /<AuthGate>/);
+  assert.match(authGate, /从运行证据，/);
+  assert.match(authGate, /到下一份配方。/);
   assert.match(authGate, /\/api\/v1\/auth\/me/);
   assert.match(authGate, /\/api\/v1\/auth\/login/);
   assert.match(authGate, /ingot:unauthorized/);

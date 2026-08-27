@@ -6,7 +6,7 @@
   </a>
 
   <p><strong>开源工艺追因与优化系统</strong></p>
-  <p>看清这次运行，做好下一份配方。</p>
+  <p>从运行证据，到下一份配方。</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
@@ -21,7 +21,7 @@
 </div>
 
 <a href="https://ingotstack.com">
-  <img src="apps/website/public/og.zh.png" alt="Ingot：看清这次运行，做好下一份配方" width="100%">
+  <img src="apps/website/public/og.zh.png" alt="Ingot：从运行证据，到下一份配方" width="100%">
 </a>
 
 <details>
@@ -117,11 +117,11 @@ npm --prefix apps/platform run demo
 
 主要软件流程已经实现：系统可以把真实配方运行和质量结果关联起来，检查数据能否用于优化，并生成需要工程师确认、不会自动下发的下一配方建议；可选受控验证及其审核记录继续保留。
 
-真实收益验证尚未完成。当前策略尚未通过独立的未见数据验收，真实工厂的历史复盘、旁路试用和受控在线验证仍在进行。现阶段可对软件能力进行体验和评估，但相关结果不能证明系统已在真实工厂减少实验或缩短研发周期。
+仓库只声明代码、自动化测试和可复现的软件行为，不内置任何特定场景的验证数据或结果。部署者负责使用自己的数据评估适用性、安全性和实际收益。
 
 数据或方法未通过准入时，系统停止相应建议、记录原因，并降级至响应面或传统实验设计。
 
-完整的能力、验证和生产成熟度见[当前状态](docs/status.md)；公开方法结果、失败项和统计边界见[优化器实验效率验证](tools/public-validation/README.md)。
+完整的能力和生产边界见[当前状态](docs/status.md)。
 
 ## 系统边界
 
@@ -189,7 +189,7 @@ docker compose -f docker-compose.app.yml up -d --build
 
 ## 路线图
 
-近期目标是完成真实历史项目的无泄漏回放，再进入前瞻影子和受控在线验证；中长期才开放模型无关的 Agent 协议和制造智能证据规范。详细闸门见[发展规划](docs/project-plan.md)。
+近期目标是继续收紧自然运行数据准入、配方推荐解释和部署可靠性；中长期开放模型无关的 Agent 协议和制造智能证据规范。详细边界见[发展规划](docs/project-plan.md)。
 
 ## 参与贡献
 

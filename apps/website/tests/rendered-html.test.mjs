@@ -20,8 +20,8 @@ test("Chinese home uses the canonical diagnosis-and-optimization narrative", asy
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
   assert.match(source, /开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据/);
   assert.doesNotMatch(source, /面向工艺工程师的开源工艺追因与优化系统/);
-  assert.match(source, /看清这次运行/);
-  assert.match(source, /做好下一份配方/);
+  assert.match(source, /从运行证据/);
+  assert.match(source, /到下一份配方/);
   assert.match(source, /受约束优化/);
   assert.match(source, /RECIPE OPTIMIZATION · RUN-042/);
   assert.match(source, /无需先建立实验，也无需工程师重新归类配方/);
@@ -44,8 +44,8 @@ test("English home uses the same diagnosis-and-optimization narrative", async ()
   assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
   assert.match(source, /system that turns linked equipment, production, and inspection data into trustworthy evidence/i);
   assert.doesNotMatch(source, /system for process engineers/i);
-  assert.match(source, /Understand this run/);
-  assert.match(source, /Improve the next recipe/);
+  assert.match(source, /From run evidence/);
+  assert.match(source, /to the next recipe/);
   assert.match(source, /No experiment setup or manual recipe reclassification is required/);
   assert.match(source, /constrained optimization/i);
   assert.match(source, /Confirm that the data are trustworthy before choosing an analysis or optimization method/);

@@ -70,15 +70,15 @@ No. A next-recipe recommendation is not an experiment plan and creates no approv
 
 No. Field acquisition, run records, and inspections continue; generation of new optimization recommendations and natural-language explanations pauses.
 
-## Why don't public materials name a specific validation scenario?
+## Why does the repository bundle no validation data?
 
-Real projects usually contain restricted equipment, parameter, and production data. The repository therefore publishes validation methods, data formats, synthetic examples, and conclusion boundaries without identifying a factory. Public data with appropriate permission can reproduce software and algorithm behavior but cannot replace real-factory validation. This rule protects field information and preserves scenario neutrality.
+Validation data, protocols, and results are tied to a specific scenario, objective, and decision rule, and historical rounds quickly become hard to maintain. The repository keeps product code, general contracts, synthetic tests, and validation methods only. Users manage their evaluation data and results outside the repository.
 
 ## How is a reduction in experiment count validated?
 
 Before results are reviewed, the validation plan fixes the target, starting data, experiment budget, comparison methods, and pass criteria. Every executed experiment is included in cost. Historical review, shadow use, and controlled online experiments respectively evaluate historical efficiency, recommendation stability on a new project, and experiment count and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
 
-Existing public-data tests support a cautious conclusion: the system was faster than random trial and error in some tests, but did not consistently beat every applicable simple method, so overall acceptance failed. The algorithm has changed and still needs another test on data that were not inspected during development. See [Public-data experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for complete figures and failures.
+The repository provides historical replay and method-comparison capabilities but bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
 
 ## Is the documentation now finalized?
 

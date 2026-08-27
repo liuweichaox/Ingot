@@ -6,7 +6,7 @@
   </a>
 
   <p><strong>Open-source Process Diagnosis &amp; Optimization</strong></p>
-  <p>Understand this run. Improve the next recipe.</p>
+  <p>From run evidence to the next recipe.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
@@ -21,7 +21,7 @@
 </div>
 
 <a href="https://ingotstack.com/en/">
-  <img src="apps/website/public/og.png" alt="Ingot: Understand this run. Improve the next recipe." width="100%">
+  <img src="apps/website/public/og.png" alt="Ingot: From run evidence to the next recipe." width="100%">
 </a>
 
 <details>
@@ -117,11 +117,11 @@ Trustworthy run facts are a prerequisite for analysis and recommendations. Data 
 
 The main software workflow is implemented: the system can link real recipe runs to quality outcomes, decide whether they are usable for optimization, and generate an engineer-reviewed next-recipe recommendation that is never dispatched automatically. Optional controlled validation and its review records remain available.
 
-Benefit validation remains incomplete. The current strategy has not yet passed an independent unseen-data acceptance, and real-factory historical review, side-by-side shadow use, and controlled online validation remain in progress. The software is available for inspection and evaluation, but the current evidence does not establish fewer experiments or shorter development time in a real factory.
+The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
 
 When data or methods fail admission, the system stops the recommendation, records the reason, and falls back to a response-surface or traditional experiment-design path.
 
-See [Current status](docs/status.en.md) for capability, validation, and production maturity. See [Optimizer experiment-efficiency validation](tools/public-validation/README.en.md) for public method results, failures, and statistical boundaries.
+See [Current status](docs/status.en.md) for capability and production boundaries.
 
 ## System boundaries
 
@@ -189,7 +189,7 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 
 ## Roadmap
 
-The near-term objective is leakage-free replay on real historical projects, followed by prospective shadow and controlled online validation. Model-independent agent protocols and a manufacturing-evidence specification come later. See the [Roadmap](docs/project-plan.en.md) for the detailed gates.
+The near-term objective is tighter admission of natural-run data, clearer recipe-recommendation explanations, and stronger deployment reliability. Model-independent agent protocols and a manufacturing-evidence specification come later. See the [Roadmap](docs/project-plan.en.md) for the detailed boundaries.
 
 ## Contributing
 

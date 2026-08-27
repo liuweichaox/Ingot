@@ -110,5 +110,4 @@ docker compose -f docker-compose.app.yml logs --tail=200
 - 要接入一组真实或代表性配方运行：继续[配方优化试点指南](pilot.md)；
 - 要了解身份、点位和映射：阅读[数据接入](data-connection.md)；
 - 要判断哪些能力已经验证：阅读[当前状态](status.md)；
-- 要复现公开方法结果：阅读[优化器实验效率验证](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.md)；
 - 要部署生产环境：先完成[生产架构](production-architecture.md)定义的站点验收。

@@ -199,26 +199,16 @@ Historical replay reveals outcomes sequentially in time; future runs are never v
 
 Formal sequential validation uses fail-closed method admission: the newest historical replay for the current policy, mechanism-knowledge snapshot, and mechanism-model snapshot must have been independently reviewed and passed, and the current optimizer model version must appear in that replay before the system claims that the method can save validation runs. A daily next-recipe recommendation makes no such efficiency claim: it uses admitted real runs only, remains inside safety boundaries and the observed envelope, and always requires engineer confirmation. Controlled online validation additionally requires stricter shadow-calibration, rollback-drill, and online-stop-signal gates.
 
-### Public-data benchmark
+### Repository validation boundary
 
-`tools/public-validation` commits explicitly licensed FDM DOE and Crossed Barrel additive-manufacturing mechanical-design snapshots, SHA-256 verification, a fixed-seed replay runner, and automated tests. Discrete factors such as material, equipment type, tooling identity, formulation class, and structural column count are stratified as process context: one optimization campaign fits one explicit context, and category codes must not be treated as continuous values with a false distance relationship. Comparing multiple discrete levels requires stratified campaigns or an applicable factorial design.
-
-The public benchmark asks only how many additional experiments are needed to reach the same target. Random search and maximin represent selection without a response model and use superiority tests. Linear and quadratic response surfaces are already effective experiment-reduction methods and use noninferiority guardrails. An aggregate result cannot hide a material dataset regression. See [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for execution and complete decision rules.
-
-Public acceptance no longer exposes internal round numbers that users must decode. It has three states only: development regression, unseen-data acceptance, and real pilot. Historical protocols, trajectories, and failed results remain available for audit but do not define the current policy's effect claim.
-
-The previous frozen policy completed 450 paired episodes on Alkox enzyme catalysis, P3HT conductive formulations, and an HPLC injection process after data selection and protocol freeze. It reduced additional experiments by 49.24% versus random search and 62.96% versus maximin, passing confidence and all three dataset guardrails. It reduced 12.02% versus the linear response surface in aggregate, but Alkox and P3HT were −32.08% and −68.36%, triggering subgroup failure. It was 0% versus the quadratic response surface, with identical trajectories on every dataset.
-
-This frozen result shows that the previous policy reliably beat blind exploration, but its routing collapsed to a fixed quadratic response surface and could not recognize data better served by a linear surface. Core acceptance therefore failed. The current successor addresses only how to distinguish linear from quadratic structure from revealed observations: linear by default, stable target-ranking evidence before quadratic admission, and the simpler model when evidence is inconclusive. The algorithm change invalidates the old frozen fingerprint; successor effectiveness requires another fresh-data decision.
-
-Mechanism-feature contribution and core experiment selection are decided separately. A feature without contribution must be disabled; that neither erases a core result on raw controls nor supports a mechanism claim. Public-data conclusions always describe additional-result-query efficiency within fixed experimental pools, not development-cycle savings for an arbitrary factory.
+The repository bundles no validation datasets, historical protocols, or result files. Automated tests cover algorithm contracts, constraints, determinism, fail-closed behavior, and historical replay without future-result access. Users compare random, space-filling, linear/quadratic response-surface, and current optimization policies for their own objectives outside the repository.
 
 ## Current limitations
 
 See [Mechanism knowledge design](mechanism-knowledge.en.md) for the current implementation, knowledge-absent degradation modes, and remaining fusion boundary.
 
 - Internal chain validation from import to R&D observations has used controlled, non-public production history, while formal leakage-free replay and prospective online value validation remain incomplete.
-- Real production data, parameter distributions, and derived results do not enter the public repository. Public tests use synthetic data or explicitly licensed, checksum-verified public data and must not be presented as real-project evidence.
+- Real production data, parameter distributions, validation data, and derived results do not enter the public repository.
 - Prediction intervals still require continuous calibration on real projects.
 - Physical features exist, while real-data-calibrated grey-box priors continue to evolve.
 - Cross-product, equipment, and scenario transfer must wait for explicit applicability and second-scenario validation.

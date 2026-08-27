@@ -10,7 +10,7 @@ Avoiding unproductive experiments is the outcome the product is built to deliver
 
 For product communication, prefer the more concrete action line:
 
-> **Understand this run. Improve the next recipe.**
+> **From run evidence to the next recipe.**
 
 It represents the complete product loop: real recipe runs automatically become optimization observations, the system recommends the next recipe within objectives, safety boundaries, and observed coverage, engineers confirm it through the existing production flow, and later runs continue the loop. Controlled validation is used only for causal confirmation, extrapolation, or operating-region validation.
 
@@ -55,7 +55,7 @@ Observational data can support candidate causes, stable associations, confounded
 |---|---|---|
 | Product category | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | Core value | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
-| Short tagline | 看清这次运行，做好下一份配方。 | Understand this run. Improve the next recipe. |
+| Short tagline | 从运行证据，到下一份配方。 | From run evidence to the next recipe. |
 | Business entries | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
 | Capability terms | 运行比较、工艺追因、配方建议、受约束优化、受控验证 | run comparison, process diagnosis, recipe recommendation, constrained optimization, controlled validation |
 | Data unit | 运行 / 过程执行 | run / process execution |

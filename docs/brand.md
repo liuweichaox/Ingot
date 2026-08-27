@@ -10,7 +10,7 @@
 
 面向产品传播时，优先使用更具体的行动主句：
 
-> **看清这次运行，做好下一份配方。**
+> **从运行证据，到下一份配方。**
 
 这句话对应完整产品闭环：真实配方运行自动形成优化观察，系统在目标、安全边界和已观察覆盖范围内推荐下一份配方，工程师在既有生产流程中确认，后续运行继续回流。受控验证只在需要因果确认、外推或工艺操作域验证时使用。
 
@@ -55,7 +55,7 @@ Ingot 的工作对象不是孤立点位或单一算法，而是可复核的工�
 |---|---|---|
 | 产品类别 | 开源工艺追因与优化系统 | Open-source Process Diagnosis & Optimization |
 | 核心价值 | 少做无效实验，更快找到达标工艺 | Avoid unproductive experiments and reach target process conditions faster |
-| 简短标语 | 看清这次运行，做好下一份配方。 | Understand this run. Improve the next recipe. |
+| 简短标语 | 从运行证据，到下一份配方。 | From run evidence to the next recipe. |
 | 业务入口 | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
 | 能力描述 | 运行比较、工艺追因、配方建议、受约束优化、受控验证 | run comparison, process diagnosis, recipe recommendation, constrained optimization, controlled validation |
 | 数据单位 | 运行 / 过程执行 | run / process execution |

@@ -12,10 +12,6 @@ PAIRS = [
     (ROOT / "README.md", ROOT / "README.en.md"),
     (ROOT / "CONTRIBUTING.md", ROOT / "CONTRIBUTING.en.md"),
     (ROOT / "optimizer" / "README.md", ROOT / "optimizer" / "README.en.md"),
-    (
-        ROOT / "tools" / "public-validation" / "README.md",
-        ROOT / "tools" / "public-validation" / "README.en.md",
-    ),
 ]
 PAIRS.extend(
     (path, path.with_name(f"{path.stem}.en.md"))
@@ -29,8 +25,6 @@ PUBLIC_DOCUMENTS = [
     *sorted((ROOT / "docs").glob("*.md")),
     ROOT / "optimizer" / "README.md",
     ROOT / "optimizer" / "README.en.md",
-    ROOT / "tools" / "public-validation" / "README.md",
-    ROOT / "tools" / "public-validation" / "README.en.md",
 ]
 
 FORBIDDEN = {

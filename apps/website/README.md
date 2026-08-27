@@ -4,7 +4,7 @@ Bilingual static website for Ingot. Public copy follows [`docs/brand.md`](../../
 
 The home page must:
 
-- use “Open-source Process Diagnosis & Optimization” as the product category and “Understand this run. Improve the next recipe.” as the lead line;
+- use “Open-source Process Diagnosis & Optimization” as the product category and “From run evidence to the next recipe.” as the lead line;
 - use “recipe optimization” for the default workflow, “constrained optimization” for the numerical capability, and “next-recipe recommendation” for system output;
 - lead with real data supporting process-engineer decisions;
 - show acquisition, context, production runs, inspections, diagnosis, optimization observations, and next-recipe recommendations as one evidence chain;

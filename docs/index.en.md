@@ -37,9 +37,9 @@ This order means “what must exist before the next step.” Navigation may foll
 
 ## Current maturity
 
-The main software workflow runs and has automated tests. In formal terms, the current strategy has not yet passed an independent unseen-data acceptance; that is, it has not passed on a new dataset that was not inspected during development. Real-factory historical review, side-by-side shadow use, and controlled online validation also remain incomplete. You can inspect and evaluate the software today, but it is too early to claim that it consistently improves recipe quality or shortens optimization cycles.
+The main software workflow runs and is covered by automated tests. The repository bundles no scenario-specific validation data or results; users evaluate optimization effects, applicability, and production safety with their own data.
 
-See [Current status](status.en.md) for the complete layered conclusion. See [Optimizer experiment-efficiency validation](https://github.com/liuweichaox/Ingot/blob/main/tools/public-validation/README.en.md) for public method results and failure records.
+See [Current status](status.en.md) for the complete boundary.
 
 ## Documentation map
 

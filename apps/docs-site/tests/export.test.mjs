@@ -44,7 +44,6 @@ test("publishes the recipe-optimization journey and public references without in
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
     assert.match(index, lang === "zh" ? /下一份配方建议/ : /next recipe recommendation/i);
     assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*配方优化/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*recipe optimization/is);
-    assert.match(index, lang === "zh" ? /当前策略尚未通过独立的未见数据验收/ : /current strategy has not yet passed an independent unseen-data acceptance/i);
     assert.doesNotMatch(`${index}${design}`, /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);
   }
   assert.doesNotMatch(JSON.stringify(search), /\/api\/|curl|ProductionEvent|InspectionRecord|endpoint|HTTP API/i);

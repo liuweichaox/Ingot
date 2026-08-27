@@ -43,8 +43,8 @@
 
   <!-- Headline -->
   <g transform="translate(64,268)">
-    <text y="0" font-size="46" font-weight="800" fill="#F4F8F6">看清这次运行，</text>
-    <text y="58" font-size="46" font-weight="800" fill="#F4F8F6">做好下一份配方。</text>
+    <text y="0" font-size="46" font-weight="800" fill="#F4F8F6">从运行证据，</text>
+    <text y="58" font-size="46" font-weight="800" fill="#F4F8F6">到下一份配方。</text>
   </g>
 
   <!-- Subheadline -->

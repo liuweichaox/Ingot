@@ -423,7 +423,7 @@ check "connector-contract" src \
   'IPlc|Plc(Read|Write)|WriteRegister|Read(UShort|UInt|ULong|Short|Int|Long|Float|Double|String|Bool)Async' \
   "核心源码必须保持连接器协议中立"
 
-echo "== 当前应用架构图 =="
+echo "== 架构图一致性 =="
 
 diagram_require docs/architecture/system-architecture.svg \
   '本地 SQLite：outbox · 日志 · 配置缓存' \
@@ -452,6 +452,9 @@ diagram_reject docs/architecture/system-architecture.svg \
 diagram_reject docs/architecture/system-architecture.svg \
   '批准实验' \
   'architecture-diagram-zh'
+diagram_reject docs/architecture/system-architecture.svg \
+  'INGOT 当前应用运行边界|虚线框或虚线连接表示可选能力' \
+  'architecture-diagram-zh'
 
 diagram_require docs/architecture/system-architecture.en.svg \
   'Local SQLite: outbox · logs · configuration cache' \
@@ -479,6 +482,9 @@ diagram_reject docs/architecture/system-architecture.en.svg \
   'architecture-diagram-en'
 diagram_reject docs/architecture/system-architecture.en.svg \
   'approves experiments' \
+  'architecture-diagram-en'
+diagram_reject docs/architecture/system-architecture.en.svg \
+  'INGOT CURRENT APPLICATION RUNTIME BOUNDARY|Dashed items are optional capabilities' \
   'architecture-diagram-en'
 
 echo "== 工程依赖 =="

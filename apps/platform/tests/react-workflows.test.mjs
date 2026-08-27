@@ -236,7 +236,7 @@ test("workbench and logs use current response contracts without misleading place
   assert.match(pages, /\/api\/v1\/research-projects\?limit=100/);
   assert.match(pages, /质量待办/);
   assert.match(pages, /开始工艺追因/);
-  assert.doesNotMatch(pages, /看清这次运行，优化下一次运行|三分钟演示/);
+  assert.doesNotMatch(pages, /三分钟演示/);
   assert.match(pages, /executionOverview: executions\.overview/);
   assert.match(pages, /state\.loading \? <LoadingCard \/>/);
   assert.match(pages, /logs\?pageSize=200/);
