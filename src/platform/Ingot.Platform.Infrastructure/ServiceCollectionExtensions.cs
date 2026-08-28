@@ -2,10 +2,12 @@
 using Ingot.Agent;
 using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Chat;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.Insight;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.Manufacturing;
+using Ingot.Platform.Application.ModelServices;
 using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Application.ProcessResearch;
@@ -18,6 +20,7 @@ using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.Migrations;
+using Ingot.Platform.Infrastructure.ModelServices;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -27,6 +30,7 @@ using Ingot.Platform.Infrastructure.TimeSeries;
 using Ingot.Platform.Infrastructure.Workers;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.DataProtection;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure;
@@ -42,10 +46,31 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<NpgsqlDataSource>(provider =>
             PostgresDataSourceFactory.Create(provider.GetRequiredService<IConfiguration>()));
+
+        var dataProtection = services.AddDataProtection()
+            .SetApplicationName("Ingot.Platform");
+        var dataProtectionKeysPath = configuration["DataProtection:KeysPath"];
+        if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+
+        services.AddSingleton<PostgresModelServiceConfigurationStore>();
+        services.AddSingleton<IModelServiceConfigurationStore>(provider =>
+            provider.GetRequiredService<PostgresModelServiceConfigurationStore>());
+        services.AddSingleton<IModelServiceConfigurationProvider>(provider =>
+            provider.GetRequiredService<PostgresModelServiceConfigurationStore>());
+        services.AddSingleton<ModelServiceConfigurationApplication>();
+        services.AddHostedService<ModelServiceConfigurationInitializerHostedService>();
         services.AddSingleton<PostgresAgentRunStore>();
         services.AddSingleton<IAgentRunStore>(provider =>
             provider.GetRequiredService<PostgresAgentRunStore>());
         services.AddSingleton<IAgentRunSnapshotReader, AgentRunSnapshotReader>();
+        services.AddSingleton<PostgresChatConversationStore>();
+        services.AddSingleton<IChatConversationStore>(provider =>
+            provider.GetRequiredService<PostgresChatConversationStore>());
+        services.AddSingleton<IAgentRunLifecycleSink>(provider =>
+            provider.GetRequiredService<PostgresChatConversationStore>());
+        services.AddSingleton<IChatRunGateway, AgentChatRunGateway>();
+        services.AddSingleton<ChatConversationApplication>();
 
         services.AddSingleton<EdgeRegistry>();
 

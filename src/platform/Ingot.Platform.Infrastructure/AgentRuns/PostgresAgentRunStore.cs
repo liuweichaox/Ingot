@@ -1,4 +1,7 @@
+// 使用 PostgreSQL 保存 Agent 快照、事件流和带租约的持久运行队列。
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
 using Npgsql;
@@ -6,7 +9,7 @@ using NpgsqlTypes;
 
 namespace Ingot.Platform.Infrastructure.AgentRuns;
 
-public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentRunStore
+public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurableAgentRunStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -20,16 +23,43 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentR
 
     public async Task CreateAsync(AgentRunSnapshot run, CancellationToken ct = default)
     {
-        await using var command = dataSource.CreateCommand(
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using (var conversation = new NpgsqlCommand(
+                         """
+                         INSERT INTO chat_conversations(
+                           conversation_id, user_id, title, page_context, status,
+                           created_at, updated_at, last_message_at, version)
+                         VALUES ($1, $2, $3, $4, 'active', $5, $5, $5, 1)
+                         ON CONFLICT (conversation_id) DO NOTHING
+                         """, connection, transaction))
+        {
+            conversation.Parameters.AddWithValue(ConversationId(run));
+            conversation.Parameters.AddWithValue(run.UserId);
+            conversation.Parameters.AddWithValue(
+                run.Question.Length <= 200 ? run.Question : run.Question[..200]);
+            conversation.Parameters.Add(new NpgsqlParameter
+            {
+                NpgsqlDbType = NpgsqlDbType.Jsonb,
+                Value = run.PageContext is null
+                    ? DBNull.Value
+                    : JsonSerializer.Serialize(run.PageContext, JsonOptions)
+            });
+            conversation.Parameters.AddWithValue(run.CreatedAt);
+            await conversation.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
+        await using var command = new NpgsqlCommand(
             """
             INSERT INTO agent_runs(
-              run_id, user_id, entry_point, status, created_at, completed_at, snapshot, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-            """);
+              run_id, user_id, entry_point, status, created_at, completed_at, snapshot, updated_at,
+              conversation_id, trigger_message_id, response_message_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8, $9, $10)
+            """, connection, transaction);
         BindRun(command, run);
         try
         {
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -46,6 +76,83 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentR
         return value is null or DBNull
             ? null
             : JsonSerializer.Deserialize<AgentRunSnapshot>((string)value, JsonOptions);
+    }
+
+    public async Task<AgentRunSnapshot?> ClaimNextAsync(
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand(
+            """
+            WITH candidate AS (
+              SELECT run_id
+              FROM agent_runs
+              WHERE status = 'queued'
+                 OR (status = 'running' AND lease_expires_at < now())
+              ORDER BY created_at, run_id
+              FOR UPDATE SKIP LOCKED
+              LIMIT 1
+            )
+            UPDATE agent_runs run
+            SET status = 'running',
+                snapshot = jsonb_set(run.snapshot, '{status}', to_jsonb('running'::text), true),
+                lease_owner = $1,
+                lease_expires_at = now() + $2,
+                attempt_count = attempt_count + 1,
+                updated_at = now()
+            FROM candidate
+            WHERE run.run_id = candidate.run_id
+            RETURNING run.snapshot::text
+            """);
+        command.Parameters.AddWithValue(leaseOwner);
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Interval,
+            Value = leaseDuration
+        });
+        var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return value is null or DBNull
+            ? null
+            : JsonSerializer.Deserialize<AgentRunSnapshot>((string)value, JsonOptions);
+    }
+
+    public async Task<bool> RenewLeaseAsync(
+        string runId,
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand(
+            """
+            UPDATE agent_runs
+            SET lease_expires_at = now() + $3, updated_at = now()
+            WHERE run_id = $1 AND lease_owner = $2 AND status = 'running'
+            """);
+        command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(leaseOwner);
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Interval,
+            Value = leaseDuration
+        });
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
+    }
+
+    public async Task ReleaseLeaseAsync(
+        string runId,
+        string leaseOwner,
+        CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand(
+            """
+            UPDATE agent_runs
+            SET lease_owner = NULL, lease_expires_at = NULL, updated_at = now()
+            WHERE run_id = $1 AND lease_owner = $2
+            """);
+        command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(leaseOwner);
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(
@@ -83,13 +190,45 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentR
         return values;
     }
 
+    public async Task<IReadOnlyList<AgentRunSnapshot>> ListConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        int limit,
+        CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand(
+            """
+            SELECT snapshot::text
+            FROM agent_runs
+            WHERE user_id = $1
+              AND entry_point = $2
+              AND conversation_id = $3::uuid
+            ORDER BY created_at, run_id
+            LIMIT $4
+            """);
+        command.Parameters.AddWithValue(userId);
+        command.Parameters.AddWithValue(entryPoint);
+        command.Parameters.AddWithValue(conversationId);
+        command.Parameters.AddWithValue(Math.Clamp(limit, 1, 100));
+        var values = new List<AgentRunSnapshot>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var value = JsonSerializer.Deserialize<AgentRunSnapshot>(reader.GetString(0), JsonOptions);
+            if (value is not null) values.Add(value);
+        }
+        return values;
+    }
+
     public async Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand(
             """
             UPDATE agent_runs
             SET user_id = $2, entry_point = $3, status = $4, created_at = $5,
-                completed_at = $6, snapshot = $7, updated_at = now()
+                completed_at = $6, snapshot = $7, updated_at = now(),
+                conversation_id = $8, trigger_message_id = $9, response_message_id = $10
             WHERE run_id = $1
             """);
         BindRun(command, run);
@@ -114,6 +253,50 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentR
             "DELETE FROM agent_runs WHERE run_id = $1;", connection, transaction);
         command.Parameters.AddWithValue(runId);
         var deleted = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return deleted;
+    }
+
+    public async Task<bool> DeleteConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        CancellationToken ct = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using (var evidence = new NpgsqlCommand(
+                         """
+                         SELECT EXISTS(
+                           SELECT 1
+                           FROM golden_question_evaluations evaluation
+                           JOIN agent_runs run ON run.run_id = evaluation.agent_run_id
+                           WHERE run.user_id = $1
+                             AND run.entry_point = $2
+                             AND run.conversation_id = $3::uuid)
+                         """,
+                         connection,
+                         transaction))
+        {
+            evidence.Parameters.AddWithValue(userId);
+            evidence.Parameters.AddWithValue(entryPoint);
+            evidence.Parameters.AddWithValue(conversationId);
+            if (await evidence.ExecuteScalarAsync(ct).ConfigureAwait(false) is true)
+                throw new InvalidOperationException("该对话已有运行进入正式评测证据，不能删除。");
+        }
+        await using var command = new NpgsqlCommand(
+            """
+            DELETE FROM agent_runs
+            WHERE user_id = $1
+              AND entry_point = $2
+              AND conversation_id = $3::uuid
+            """,
+            connection,
+            transaction);
+        command.Parameters.AddWithValue(userId);
+        command.Parameters.AddWithValue(entryPoint);
+        command.Parameters.AddWithValue(conversationId);
+        var deleted = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return deleted;
     }
@@ -203,5 +386,29 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IAgentR
             NpgsqlDbType = NpgsqlDbType.Jsonb,
             Value = JsonSerializer.Serialize(run, JsonOptions)
         });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Uuid,
+            Value = ConversationId(run)
+        });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Uuid,
+            Value = Guid.TryParse(run.TriggerMessageId, out var triggerMessageId)
+                ? triggerMessageId
+                : DBNull.Value
+        });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Uuid,
+            Value = Guid.TryParse(run.ResponseMessageId, out var responseMessageId)
+                ? responseMessageId
+                : DBNull.Value
+        });
     }
+
+    private static Guid ConversationId(AgentRunSnapshot run)
+        => Guid.TryParse(run.ConversationId ?? run.RunId, out var conversationId)
+            ? conversationId
+            : new Guid(MD5.HashData(Encoding.UTF8.GetBytes(run.ConversationId ?? run.RunId)));
 }

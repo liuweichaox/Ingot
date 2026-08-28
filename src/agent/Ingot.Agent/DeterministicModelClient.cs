@@ -174,6 +174,22 @@ public sealed class DeterministicModelClient : IModelClient
         }, "answer.compose"));
     }
 
+    public Task<ModelCallResult<AnalysisAnswer>> ComposeConversationAsync(
+        CreateChatRunRequest request,
+        AnalysisPlan plan,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var isGreeting = ContainsAny(request.Question, "你好", "您好", "hello", "hi");
+        return Task.FromResult(Result(new AnalysisAnswer
+        {
+            Summary = isGreeting
+                ? "你好，我可以帮你查找和分析当前账号有权访问的生产、质量与工艺记录。"
+                : "要继续这项分析，请补充希望核对的站点、运行对象、执行记录或时间范围。",
+            FollowUpQuestions = ["你想先查看哪个站点或运行对象？"]
+        }, "conversation.compose"));
+    }
+
     public Task<ModelCallResult<PerspectiveAnalysis>> ParticipateAsync(
         CombinedAnalysisTurn turn,
         CancellationToken ct = default)
@@ -271,8 +287,19 @@ public sealed class DefaultModelRouter(IEnumerable<IModelClient> clients) : IMod
 {
     private readonly IReadOnlyList<IModelClient> _clients = clients.ToArray();
 
-    public IModelClient GetClient(string entryPoint, ModelRole role)
-        => _clients.FirstOrDefault(client => string.Equals(client.EntryPoint, entryPoint, StringComparison.Ordinal))
-           ?? _clients.FirstOrDefault(client => client.EntryPoint == "*")
-           ?? throw new InvalidOperationException($"功能入口 {entryPoint} 没有可用分析模型。");
+    public IModelClient GetClient(string entryPoint, ModelRole role, string? provider = null)
+    {
+        var candidates = _clients.Where(client =>
+                string.Equals(client.EntryPoint, entryPoint, StringComparison.Ordinal) || client.EntryPoint == "*")
+            .ToArray();
+        var selected = string.IsNullOrWhiteSpace(provider)
+            ? candidates.FirstOrDefault(client => string.Equals(client.EntryPoint, entryPoint, StringComparison.Ordinal))
+              ?? candidates.FirstOrDefault(client => client.EntryPoint == "*")
+            : candidates.FirstOrDefault(client =>
+                string.Equals(client.Provider, provider, StringComparison.OrdinalIgnoreCase));
+        if (selected is null)
+            throw new InvalidOperationException(
+                $"功能入口 {entryPoint} 没有 Provider={provider ?? "default"} 的可用分析模型。");
+        return selected is IModelClientSnapshotFactory factory ? factory.CreateSnapshot() : selected;
+    }
 }

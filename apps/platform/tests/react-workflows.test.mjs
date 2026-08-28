@@ -535,6 +535,11 @@ test("engineer golden questions freeze reviewed evidence and evaluate actual age
 test("Chat is a standalone conversation workspace with optional project context and full lifecycle controls", () => {
   assert.match(pages, /\/api\/v1\/chat\/capabilities/);
   assert.match(pages, /\/api\/v1\/chat\/runs/);
+  assert.match(pages, /\/api\/v1\/chat\/conversations\?limit=50/);
+  assert.match(pages, /\/api\/v1\/chat\/conversations\/\$\{encodeURIComponent\(routeConversationId\)\}\/messages/);
+  assert.match(pages, /clientMessageId: crypto\.randomUUID\(\)/);
+  assert.match(pages, /messages\.map\(message =>/);
+  assert.match(app, /\/chat\/:conversationId/);
   assert.match(pages, /streamSse/);
   assert.match(pages, /function ChatAnswer/);
   assert.match(pages, /answer\.summary/);
@@ -554,6 +559,11 @@ test("Chat is a standalone conversation workspace with optional project context 
   assert.match(pages, /capabilitiesLoading/);
   assert.match(pages, /scopedHistory/);
   assert.match(pages, /item\.pageContext\?\.id === projectId/);
+  assert.match(pages, /function ChatHistoryList/);
+  assert.match(pages, /setHistoryOpen\(true\).*对话记录/);
+  assert.match(pages, /title="对话记录"/);
+  assert.match(pages, /当前账号共/);
+  assert.match(pages, /全部消息及分析过程将被永久删除/);
   assert.match(pages, /新建分析/);
   assert.match(pages, /\{confirmationDialog\}/);
   assert.match(app, /isChatWorkspace/);

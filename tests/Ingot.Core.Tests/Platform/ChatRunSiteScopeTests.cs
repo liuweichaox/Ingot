@@ -81,6 +81,34 @@ public sealed class ChatRunSiteScopeTests
         Assert.Equal(run.RunId, item.RunId);
     }
 
+    [Fact]
+    public async Task List_GroupsRunsFromTheSameConversation()
+    {
+        var conversationId = Guid.CreateVersion7().ToString();
+        var first = Snapshot("first", "operator", Scope("SITE-A")) with
+        {
+            ConversationId = conversationId,
+            Question = "第一轮",
+            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
+        };
+        var second = Snapshot("second", "operator", Scope("SITE-A")) with
+        {
+            ConversationId = conversationId,
+            Question = "第二轮",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var controller = Controller(
+            new RecordingRuntime([first, second]),
+            Identity("operator", ["SITE-A"]));
+
+        var result = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
+        var item = Assert.Single(Assert.IsType<ChatRunPage>(result.Value).Items);
+
+        Assert.Equal(conversationId, item.ConversationId);
+        Assert.Equal("第一轮", item.Question);
+        Assert.Equal(second.RunId, item.RunId);
+    }
+
     private static ChatRunsController Controller(RecordingRuntime runtime, ClaimsPrincipal principal)
     {
         var context = new DefaultHttpContext
@@ -158,6 +186,7 @@ public sealed class ChatRunSiteScopeTests
                     .Select(static run => new AgentRunListItem
                     {
                         RunId = run.RunId,
+                        ConversationId = run.ConversationId ?? run.RunId,
                         UserId = run.UserId,
                         Question = run.Question,
                         PageContext = run.PageContext,
@@ -188,6 +217,17 @@ public sealed class ChatRunSiteScopeTests
             CancellationToken ct = default)
             => Task.FromResult(runs.FirstOrDefault(run => run.RunId == runId));
 
+        public Task<IReadOnlyList<AgentRunSnapshot>> GetConversationAsync(
+            string entryPoint,
+            string userId,
+            string conversationId,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<AgentRunSnapshot>>(runs
+                .Where(run => run.EntryPoint == entryPoint && run.UserId == userId &&
+                              (run.ConversationId ?? run.RunId) == conversationId)
+                .OrderBy(static run => run.CreatedAt)
+                .ToArray());
+
         public IAsyncEnumerable<AgentStreamEvent> StreamAsync(
             string entryPoint,
             string runId,
@@ -209,6 +249,13 @@ public sealed class ChatRunSiteScopeTests
         public Task<bool> DeleteAsync(
             string entryPoint,
             string runId,
+            string userId,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> DeleteConversationAsync(
+            string entryPoint,
+            string conversationId,
             string userId,
             CancellationToken ct = default)
             => throw new NotSupportedException();

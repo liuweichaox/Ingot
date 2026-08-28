@@ -20,7 +20,7 @@ controls / instruments / vision / inspection / MES
                                       └─ Platform Web (independent React frontend)
 ```
 
-Platform API handles requests and business transactions. Platform Worker handles knowledge extraction, analysis backfills, experiment materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
+Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat runs, knowledge extraction, analysis backfills, experiment materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
 The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs now share PostgreSQL with business evidence, so they no longer prevent an external orchestrator from scaling API replicas behind a load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
 
@@ -82,11 +82,11 @@ Do not use wildcard callback URIs. The identity provider must also allow this SP
 
 Never commit `.env` or real equipment credentials. Inject device passwords and certificates through a site-approved secret-management method.
 
-### Local model service
+### Model service
 
-When Chat is enabled, the model service provides an OpenAI-compatible `/v1` interface. Configure `INGOT_CHAT_BASE_URL`, `INGOT_CHAT_FAST_MODEL`, `INGOT_CHAT_REASONING_MODEL`, and `OPENAI_API_KEY`. Platform enables a role only when its configured model ID is available.
+When Chat is enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, model IDs, and API key under System Administration > Model Services; switching compatible services changes page configuration only, not Ingot source code. The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. One DeepSeek configuration uses `Provider=DeepSeek`, `Protocol=Responses`, `BaseUrl=https://api.deepseek.com`, and currently available DeepSeek model IDs. Platform probes only the model list during startup; relevant questions, page context, and read-only tool results are sent to the selected model service only when Chat runs. Before enabling an external service, confirm that these materials may be sent to its service region. Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
 
-Model-assisted mechanism drafts are disabled by default. When required, explicitly set `INGOT_MECHANISM_DRAFT_ENABLED=true`, `INGOT_MECHANISM_DRAFT_BASE_URL`, `INGOT_MECHANISM_DRAFT_MODEL`, and `OPENAI_API_KEY`, and first confirm that knowledge fragments may be sent to that service region. The capability returns an editable draft only; it never persists, reviews, or activates a claim automatically.
+Model-assisted mechanism drafts are disabled by default. When required, explicitly set `INGOT_MECHANISM_DRAFT_ENABLED=true`, `INGOT_MECHANISM_DRAFT_BASE_URL`, `INGOT_MECHANISM_DRAFT_MODEL`, and the independent `INGOT_MECHANISM_DRAFT_API_KEY`, and first confirm that knowledge fragments may be sent to that service region. The capability returns an editable draft only; it never persists, reviews, or activates a claim automatically.
 
 The model service is not a startup dependency for acquisition, inspection, or numerical optimization. Content sent to it remains subject to authorized tools and business permissions.
 

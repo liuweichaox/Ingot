@@ -55,9 +55,14 @@ public sealed class ChatRunsController(
             return Accepted(new
             {
                 runId = run.RunId,
+                conversationId = run.ConversationId ?? run.RunId,
                 status = run.Status,
                 streamUrl = $"/api/v1/chat/runs/{run.RunId}/stream"
             });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return AuthorizationDenied();
         }
         catch (InvalidOperationException ex)
         {
@@ -74,26 +79,64 @@ public sealed class ChatRunsController(
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
         var identity = userResolver.ResolveIdentity(User)!;
-        var page = await runtime.ListAsync(ProductEntryPoints.Chat, userId!, before, limit, ct).ConfigureAwait(false);
+        var page = await runtime.ListAsync(ProductEntryPoints.Chat, userId!, before, Math.Clamp(limit * 10, 1, 100), ct).ConfigureAwait(false);
+        var conversations = page.Items
+            .Where(run => CanAccessRun(run.UserId, run.AccessScope, identity))
+            .GroupBy(static run => run.ConversationId, StringComparer.Ordinal)
+            .Select(static group =>
+            {
+                var ordered = group.OrderBy(static run => run.CreatedAt).ToArray();
+                var first = ordered[0];
+                var latest = ordered[^1];
+                return new ChatRunListItem
+                {
+                    RunId = latest.RunId,
+                    ConversationId = latest.ConversationId,
+                    Question = first.Question,
+                    PageContext = first.PageContext,
+                    EntryPoint = ProductEntryPoints.Chat,
+                    Purpose = RunPurposes.ReadOnlyAnalysis,
+                    Mode = latest.Mode,
+                    Status = latest.Status,
+                    CreatedAt = first.CreatedAt,
+                    CompletedAt = latest.CompletedAt,
+                    Summary = latest.Summary,
+                    Usage = latest.Usage
+                };
+            })
+            .OrderByDescending(static conversation => conversation.CompletedAt ?? conversation.CreatedAt)
+            .Take(Math.Clamp(limit, 1, 100))
+            .ToArray();
         return Ok(new ChatRunPage
         {
-            Items = page.Items
-                .Where(run => CanAccessRun(run.UserId, run.AccessScope, identity))
-                .Select(static run => new ChatRunListItem
-            {
-                RunId = run.RunId,
-                Question = run.Question,
-                PageContext = run.PageContext,
-                EntryPoint = ProductEntryPoints.Chat,
-                Purpose = RunPurposes.ReadOnlyAnalysis,
-                Mode = run.Mode,
-                Status = run.Status,
-                CreatedAt = run.CreatedAt,
-                CompletedAt = run.CompletedAt,
-                Summary = run.Summary,
-                Usage = run.Usage
-            }).ToArray(),
+            Items = conversations,
             NextBefore = page.NextBefore
+        });
+    }
+
+    [HttpGet("conversations/{conversationId}")]
+    public async Task<IActionResult> GetConversation(string conversationId, CancellationToken ct)
+    {
+        if (!TryAuthorize(out var userId, out var unauthorized))
+            return unauthorized!;
+        if (!Guid.TryParse(conversationId, out _))
+            return InvalidRequest("对话标识无效。");
+        var runs = await runtime.GetConversationAsync(ProductEntryPoints.Chat, userId!, conversationId, ct)
+            .ConfigureAwait(false);
+        if (runs.Count == 0)
+            return ResourceNotFound();
+        var identity = userResolver.ResolveIdentity(User)!;
+        if (runs.Any(run => !CanAccessRun(run.UserId, run.AccessScope, identity)))
+            return AuthorizationDenied();
+        var ordered = runs.OrderBy(static run => run.CreatedAt).ToArray();
+        return Ok(new ChatConversationSnapshot
+        {
+            ConversationId = conversationId,
+            Title = ordered[0].Question,
+            PageContext = ordered[0].PageContext,
+            CreatedAt = ordered[0].CreatedAt,
+            UpdatedAt = ordered[^1].CompletedAt ?? ordered[^1].CreatedAt,
+            Turns = ordered.Select(ToChatSnapshot).ToArray()
         });
     }
 
@@ -198,6 +241,33 @@ public sealed class ChatRunsController(
         }
     }
 
+    [HttpDelete("conversations/{conversationId}")]
+    public async Task<IActionResult> DeleteConversation(string conversationId, CancellationToken ct)
+    {
+        if (!TryAuthorize(out var userId, out var unauthorized))
+            return unauthorized!;
+        if (!Guid.TryParse(conversationId, out _))
+            return InvalidRequest("对话标识无效。");
+        var runs = await runtime.GetConversationAsync(ProductEntryPoints.Chat, userId!, conversationId, ct)
+            .ConfigureAwait(false);
+        if (runs.Count == 0)
+            return ResourceNotFound();
+        var identity = userResolver.ResolveIdentity(User)!;
+        if (runs.Any(run => !CanAccessRun(run.UserId, run.AccessScope, identity)))
+            return AuthorizationDenied();
+        try
+        {
+            return await runtime.DeleteConversationAsync(ProductEntryPoints.Chat, conversationId, userId!, ct)
+                .ConfigureAwait(false)
+                ? NoContent()
+                : ResourceNotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StateConflict(ex.Message);
+        }
+    }
+
     [HttpGet("/api/v1/chat/capabilities")]
     public IActionResult Capabilities()
     {
@@ -233,6 +303,7 @@ public sealed class ChatRunsController(
     private static ChatRunSnapshot ToChatSnapshot(AgentRunSnapshot run) => new()
     {
         RunId = run.RunId,
+        ConversationId = run.ConversationId ?? run.RunId,
         UserId = run.UserId,
         EntryPoint = run.EntryPoint,
         Purpose = run.Purpose,

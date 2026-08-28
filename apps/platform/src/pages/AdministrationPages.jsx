@@ -2,7 +2,7 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { postJson } from "../api/http";
+import { postJson, putJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, LoadingCard } from "./shared";
@@ -257,6 +257,116 @@ function RoleSelector({ value, onChange }) {
     </fieldset>
   );
 }
+
+export function ModelServiceConfigurationPage() {
+  const { data, loading, error, reload } = useApi("/api/v1/model-service-configuration");
+  const [form, setForm] = useState({
+    enabled: false,
+    provider: "",
+    protocol: "Responses",
+    baseUrl: "",
+    fastModel: "",
+    reasoningModel: "",
+    apiKey: "",
+    clearApiKey: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  useEffect(() => {
+    if (!data) return;
+    setForm({
+      enabled: Boolean(data.enabled),
+      provider: data.provider || "",
+      protocol: data.protocol || "Responses",
+      baseUrl: data.baseUrl || "",
+      fastModel: data.fastModel || "",
+      reasoningModel: data.reasoningModel || "",
+      apiKey: "",
+      clearApiKey: false,
+    });
+  }, [data]);
+
+  function update(field, value) {
+    setForm(current => ({ ...current, [field]: value }));
+  }
+
+  async function save() {
+    setBusy(true);
+    setActionError("");
+    try {
+      await putJson("/api/v1/model-service-configuration", {
+        ...form,
+        apiKey: form.apiKey.trim() || null,
+      });
+      setForm(current => ({ ...current, apiKey: "", clearApiKey: false }));
+      await reload();
+      notify("模型服务配置已生效。");
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasApiKey = Boolean(data?.hasApiKey) && !form.clearApiKey;
+  const complete = form.provider.trim() && form.baseUrl.trim() && form.fastModel.trim() &&
+    form.reasoningModel.trim() && (hasApiKey || form.apiKey.trim());
+  return (
+    <Page title="模型服务">
+      <Alert tone="info" title="密钥只写入，不回显">
+        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。留空表示保留现有密钥；替换后旧密钥立即失效于后续分析运行。
+      </Alert>
+      <RequestError error={error} title="模型服务配置不可用" onRetry={reload} />
+      {actionError && <Alert tone="danger">{actionError}</Alert>}
+      {loading && !data ? <LoadingCard /> : (
+        <Card
+          title="OpenAI-compatible 连接"
+          description={`配置来源：${data?.source === "platform" ? "Platform 加密配置" : "部署回退配置"}`}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="供应商标签" hint="仅用于运行记录和成本归因，不触发供应商专用代码。">
+              <Input value={form.provider} onChange={event => update("provider", event.target.value)} placeholder="DeepSeek" />
+            </Field>
+            <Field label="兼容协议">
+              <Select value={form.protocol} onChange={event => update("protocol", event.target.value)}>
+                <option value="Responses">Responses</option>
+                <option value="ChatCompletions">Chat Completions</option>
+              </Select>
+            </Field>
+            <Field label="API 根地址" hint="填写供应商的 OpenAI-compatible API 根地址。">
+              <Input value={form.baseUrl} onChange={event => update("baseUrl", event.target.value)} placeholder="https://api.deepseek.com" />
+            </Field>
+            <Field label="API key" hint={hasApiKey ? `已配置 ${data?.apiKeyHint || "密钥"}；留空保持不变。` : "尚未配置密钥。"}>
+              <Input type="password" autoComplete="new-password" value={form.apiKey} onChange={event => update("apiKey", event.target.value)} placeholder={hasApiKey ? "留空保持现有密钥" : "输入 API key"} />
+            </Field>
+            <Field label="快速模型">
+              <Input value={form.fastModel} onChange={event => update("fastModel", event.target.value)} placeholder="deepseek-v4-flash" />
+            </Field>
+            <Field label="推理模型">
+              <Input value={form.reasoningModel} onChange={event => update("reasoningModel", event.target.value)} placeholder="deepseek-v4-pro" />
+            </Field>
+            <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+              <input type="checkbox" className="mt-0.5 size-4 accent-blue-600" checked={form.enabled} onChange={event => update("enabled", event.target.checked)} />
+              <span><span className="block font-medium text-slate-900">启用模型服务</span><span className="mt-1 block text-xs leading-5 text-slate-500">关闭后分析助手保留历史记录，但不创建新的模型分析运行。</span></span>
+            </label>
+            {data?.hasApiKey && (
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                <input type="checkbox" className="mt-0.5 size-4 accent-red-600" checked={form.clearApiKey} disabled={form.enabled} onChange={event => update("clearApiKey", event.target.checked)} />
+                <span><span className="block font-medium text-slate-900">清除已保存密钥</span><span className="mt-1 block text-xs leading-5 text-slate-500">必须先关闭模型服务，才能清除密钥。</span></span>
+              </label>
+            )}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <p className="text-xs text-slate-500">最近更新：{data?.updatedAt ? `${formatTime(data.updatedAt)} · ${data.updatedBy || "unknown"}` : "尚未通过页面保存"}</p>
+            <Button variant="primary" disabled={busy || (form.enabled && !complete)} onClick={save}>{busy ? "保存中" : "保存并立即生效"}</Button>
+          </div>
+        </Card>
+      )}
+    </Page>
+  );
+}
+
 export function MetricsPage() {
   const edgeResponse = useApi("/api/edges", { interval: 10000 });
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });

@@ -25,6 +25,12 @@ public interface IAgentRuntime
 
     Task<AgentRunSnapshot?> GetAsync(string entryPoint, string runId, CancellationToken ct = default);
 
+    Task<IReadOnlyList<AgentRunSnapshot>> GetConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        CancellationToken ct = default);
+
     IAsyncEnumerable<AgentStreamEvent> StreamAsync(
         string entryPoint,
         string runId,
@@ -41,6 +47,12 @@ public interface IAgentRuntime
     Task<bool> DeleteAsync(
         string entryPoint,
         string runId,
+        string userId,
+        CancellationToken ct = default);
+
+    Task<bool> DeleteConversationAsync(
+        string entryPoint,
+        string conversationId,
         string userId,
         CancellationToken ct = default);
 }
@@ -61,9 +73,22 @@ public interface IAgentRunStore
         int limit,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<AgentRunSnapshot>> ListConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        int limit,
+        CancellationToken ct = default);
+
     Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default);
 
     Task<bool> DeleteAsync(string runId, CancellationToken ct = default);
+
+    Task<bool> DeleteConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        CancellationToken ct = default);
 
     Task<AgentStreamEvent> AppendEventAsync(
         string runId,
@@ -78,10 +103,55 @@ public interface IAgentRunStore
         CancellationToken ct = default);
 }
 
+/// <summary>由生产存储实现的持久运行队列；租约允许 Worker 崩溃后重新领取只读任务。</summary>
+public interface IDurableAgentRunStore : IAgentRunStore
+{
+    Task<AgentRunSnapshot?> ClaimNextAsync(
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationToken ct = default);
+
+    Task<bool> RenewLeaseAsync(
+        string runId,
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationToken ct = default);
+
+    Task ReleaseLeaseAsync(
+        string runId,
+        string leaseOwner,
+        CancellationToken ct = default);
+}
+
+/// <summary>由独立 Worker 驱动一次持久队列领取与执行。</summary>
+public interface IAgentRunProcessor
+{
+    Task<bool> ProcessNextAsync(string leaseOwner, CancellationToken ct = default);
+}
+
+/// <summary>在运行进入终态后更新宿主持有的消息投影；默认实现为空操作。</summary>
+public interface IAgentRunLifecycleSink
+{
+    Task OnTerminalAsync(AgentRunSnapshot run, CancellationToken ct = default);
+}
+
+/// <summary>为不持有正式消息投影的宿主提供空终态通知实现。</summary>
+public sealed class NullAgentRunLifecycleSink : IAgentRunLifecycleSink
+{
+    public Task OnTerminalAsync(AgentRunSnapshot run, CancellationToken ct = default)
+        => Task.CompletedTask;
+}
+
 /// <summary>按功能入口和模型角色选择已配置的模型客户端。</summary>
 public interface IModelRouter
 {
-    IModelClient GetClient(string entryPoint, ModelRole role);
+    IModelClient GetClient(string entryPoint, ModelRole role, string? provider = null);
+}
+
+/// <summary>为单次运行冻结当前模型连接，防止运行中配置变化造成模型切换。</summary>
+public interface IModelClientSnapshotFactory
+{
+    IModelClient CreateSnapshot();
 }
 
 public enum ModelRole
@@ -110,6 +180,11 @@ public interface IModelClient
         CreateChatRunRequest request,
         AnalysisPlan plan,
         IReadOnlyList<AnalysisToolResult> results,
+        CancellationToken ct = default);
+
+    Task<ModelCallResult<AnalysisAnswer>> ComposeConversationAsync(
+        CreateChatRunRequest request,
+        AnalysisPlan plan,
         CancellationToken ct = default);
 
     Task<ModelCallResult<PerspectiveAnalysis>> ParticipateAsync(

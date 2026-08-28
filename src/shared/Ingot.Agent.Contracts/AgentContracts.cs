@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Ingot.Contracts.Agents;
 
@@ -6,9 +7,31 @@ public sealed record CreateChatRunRequest
 {
     public required string Question { get; init; }
 
+    public string? ConversationId { get; init; }
+
     public PageContextRef? PageContext { get; init; }
 
     public string Mode { get; init; } = "quick";
+
+    [JsonIgnore]
+    public IReadOnlyList<ChatConversationContextTurn> ConversationHistory { get; init; } = [];
+
+    [JsonIgnore]
+    public string? TriggerMessageId { get; init; }
+
+    [JsonIgnore]
+    public string? ResponseMessageId { get; init; }
+}
+
+public sealed record ChatConversationContextTurn
+{
+    public required string Question { get; init; }
+
+    public required string Summary { get; init; }
+
+    public IReadOnlyList<string> Findings { get; init; } = [];
+
+    public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
 public static class ProductEntryPoints
@@ -221,6 +244,12 @@ public sealed record AgentRunSnapshot
 {
     public required string RunId { get; init; }
 
+    public string? ConversationId { get; init; }
+
+    public string? TriggerMessageId { get; init; }
+
+    public string? ResponseMessageId { get; init; }
+
     public required string UserId { get; init; }
 
     public required string EntryPoint { get; init; }
@@ -391,6 +420,8 @@ public sealed record ChatRunSnapshot
 {
     public required string RunId { get; init; }
 
+    public required string ConversationId { get; init; }
+
     public required string UserId { get; init; }
 
     public required string EntryPoint { get; init; }
@@ -440,6 +471,8 @@ public sealed record ChatRunListItem
 {
     public required string RunId { get; init; }
 
+    public required string ConversationId { get; init; }
+
     public required string Question { get; init; }
 
     public PageContextRef? PageContext { get; init; }
@@ -468,6 +501,21 @@ public sealed record ChatRunPage
     public DateTimeOffset? NextBefore { get; init; }
 }
 
+public sealed record ChatConversationSnapshot
+{
+    public required string ConversationId { get; init; }
+
+    public required string Title { get; init; }
+
+    public PageContextRef? PageContext { get; init; }
+
+    public required DateTimeOffset CreatedAt { get; init; }
+
+    public required DateTimeOffset UpdatedAt { get; init; }
+
+    public IReadOnlyList<ChatRunSnapshot> Turns { get; init; } = [];
+}
+
 public sealed record AgentToolCapability
 {
     public required string Name { get; init; }
@@ -486,6 +534,8 @@ public sealed record AgentToolCapability
 public sealed record AgentRunListItem
 {
     public required string RunId { get; init; }
+
+    public required string ConversationId { get; init; }
 
     public required string UserId { get; init; }
 

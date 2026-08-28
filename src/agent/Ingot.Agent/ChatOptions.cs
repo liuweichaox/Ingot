@@ -8,6 +8,8 @@ public sealed class ChatOptions
 
     public string Provider { get; set; } = "Deterministic";
 
+    public string Protocol { get; set; } = "Responses";
+
     public string FastModel { get; set; } = "deterministic-v1";
 
     public string ReasoningModel { get; set; } = "deterministic-v1";

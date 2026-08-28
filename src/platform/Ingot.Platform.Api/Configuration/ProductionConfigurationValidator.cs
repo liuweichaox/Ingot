@@ -45,6 +45,7 @@ public static class ProductionConfigurationValidator
 
         RequireValue(configuration, "InspectionAttachments:ArchiveRootPath", errors);
         RequireValue(configuration, "ProcessKnowledge:ArchiveRootPath", errors);
+        RequireValue(configuration, "DataProtection:KeysPath", errors);
 
         var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
         if (origins.Length == 0 || origins.Any(static origin =>
@@ -56,13 +57,21 @@ public static class ProductionConfigurationValidator
 
         if (configuration.GetValue<bool>("Chat:Enabled"))
         {
-            if (!string.Equals(configuration["Chat:Provider"], "OpenAI", StringComparison.OrdinalIgnoreCase))
-                errors.Add("Chat:Provider must be OpenAI when Chat is enabled in production.");
+            var provider = configuration["Chat:Provider"];
+            if (string.IsNullOrWhiteSpace(provider) ||
+                string.Equals(provider, "Deterministic", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add(
+                    "Chat:Provider must identify the configured external model service when Chat is enabled in production.");
+            }
+            var protocol = configuration["Chat:Protocol"] ?? "Responses";
+            if (!string.Equals(protocol, "Responses", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(protocol, "ChatCompletions", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add("Chat:Protocol must be Responses or ChatCompletions.");
+            }
             RequireValue(configuration, "Chat:FastModel", errors);
             RequireValue(configuration, "Chat:ReasoningModel", errors);
-            RequireValue(configuration, "OPENAI_API_KEY", errors);
-            if (IsPlaceholder(configuration["OPENAI_API_KEY"]))
-                errors.Add("OPENAI_API_KEY must not use a placeholder value.");
             var baseUrl = configuration["Chat:BaseUrl"];
             if (!string.IsNullOrWhiteSpace(baseUrl))
             {
@@ -81,9 +90,16 @@ public static class ProductionConfigurationValidator
         {
             RequireValue(configuration, "MechanismDraftGeneration:BaseUrl", errors);
             RequireValue(configuration, "MechanismDraftGeneration:Model", errors);
-            RequireValue(configuration, "OPENAI_API_KEY", errors);
-            if (IsPlaceholder(configuration["OPENAI_API_KEY"]))
-                errors.Add("OPENAI_API_KEY must not use a placeholder value.");
+            var apiKeyName = configuration["MechanismDraftGeneration:ApiKeyEnvironmentVariable"] ??
+                             "INGOT_MECHANISM_DRAFT_API_KEY";
+            if (!IsEnvironmentVariableName(apiKeyName))
+            {
+                errors.Add(
+                    "MechanismDraftGeneration:ApiKeyEnvironmentVariable must be a valid environment variable name.");
+            }
+            RequireValue(configuration, apiKeyName, errors);
+            if (IsPlaceholder(configuration[apiKeyName]))
+                errors.Add($"{apiKeyName} must not use a placeholder value.");
             if (!Uri.TryCreate(configuration["MechanismDraftGeneration:BaseUrl"], UriKind.Absolute, out var uri) ||
                 uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo))
                 errors.Add("MechanismDraftGeneration:BaseUrl must be a trusted absolute HTTP or HTTPS URL without user info.");
@@ -120,6 +136,11 @@ public static class ProductionConfigurationValidator
         !string.IsNullOrWhiteSpace(value) &&
         value.Length >= MinimumSecretLength &&
         !IsPlaceholder(value);
+
+    private static bool IsEnvironmentVariableName(string value)
+        => !string.IsNullOrWhiteSpace(value) &&
+           (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
+           value.Skip(1).All(static character => char.IsAsciiLetterOrDigit(character) || character == '_');
 
     private static void RequireEdgeSiteBindings(
         IConfiguration configuration,

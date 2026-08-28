@@ -61,6 +61,70 @@ public sealed class AgentRuntimeTests
     }
 
     [Fact]
+    public async Task ChatRun_NoQueryPlanCompletesWithGuidanceInsteadOfFailure()
+    {
+        var store = new MemoryRunStore();
+        var runtime = CreateRuntime(store, [new QualityTool()], model: new NoQueryModelClient());
+
+        var created = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest { Question = "hi" },
+            SiteScope);
+        var completed = await WaitForTerminalAsync(runtime, created.RunId);
+
+        Assert.Equal(AgentRunStatuses.Completed, completed.Status);
+        Assert.Empty(completed.ToolInvocations);
+        Assert.Contains("继续这段对话", completed.Answer!.Summary, StringComparison.Ordinal);
+        Assert.Equal(2, completed.Usage.ModelCalls);
+        var events = await store.ReadEventsAsync(created.RunId, 0, 100);
+        Assert.Contains(events, item => item.Type == AgentStreamEventTypes.RunCompleted);
+    }
+
+    [Fact]
+    public async Task ChatRun_ContinuationKeepsConversationAndSuppliesCompletedHistory()
+    {
+        var store = new MemoryRunStore();
+        var model = new NoQueryModelClient();
+        var runtime = CreateRuntime(store, [new QualityTool()], model: model);
+        var first = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest { Question = "hi" },
+            SiteScope);
+        var firstCompleted = await WaitForTerminalAsync(runtime, first.RunId);
+
+        var second = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest
+            {
+                Question = "继续",
+                ConversationId = firstCompleted.ConversationId
+            },
+            SiteScope);
+        await WaitForTerminalAsync(runtime, second.RunId);
+
+        Assert.Equal(first.RunId, first.ConversationId);
+        Assert.Equal(first.ConversationId, second.ConversationId);
+        var previous = Assert.Single(model.LastRequest!.ConversationHistory);
+        Assert.Equal("hi", previous.Question);
+        Assert.Contains("继续这段对话", previous.Summary, StringComparison.Ordinal);
+        Assert.Equal(2, (await runtime.GetConversationAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            first.ConversationId!)).Count);
+        Assert.True(await runtime.DeleteConversationAsync(
+            ProductEntryPoints.Chat,
+            first.ConversationId!,
+            "analyst"));
+        Assert.Empty(await runtime.GetConversationAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            first.ConversationId!));
+    }
+
+    [Fact]
     public async Task ChatRun_DeterministicProviderDoesNotAdvertiseProfessionalCombinedAnalysis()
     {
         var runtime = CreateRuntime(new MemoryRunStore(), [new QualityTool()]);
@@ -196,7 +260,8 @@ public sealed class AgentRuntimeTests
     private static AgentRuntime CreateRuntime(
         MemoryRunStore store,
         IReadOnlyList<IAnalysisTool> tools,
-        Action<ChatOptions>? configure = null)
+        Action<ChatOptions>? configure = null,
+        IModelClient? model = null)
     {
         var chatOptions = new ChatOptions
         {
@@ -208,14 +273,18 @@ public sealed class AgentRuntimeTests
         };
         configure?.Invoke(chatOptions);
         var options = Options.Create(chatOptions);
-        var model = new DeterministicModelClient();
+        var resolvedModel = model ?? new DeterministicModelClient();
+        chatOptions.Provider = resolvedModel.Provider;
+        chatOptions.FastModel = resolvedModel.ModelFor(ModelRole.Fast);
+        chatOptions.ReasoningModel = resolvedModel.ModelFor(ModelRole.Reasoning);
         return new AgentRuntime(
             store,
-            new DefaultModelRouter([model]),
+            new DefaultModelRouter([resolvedModel]),
             tools,
             new DefaultPlanValidator(options),
             new DefaultAnalysisResultValidator(),
             new BoundedCombinedAnalysisWorkflow(options),
+            new NullAgentRunLifecycleSink(),
             options,
             NullLogger<AgentRuntime>.Instance);
     }
@@ -356,6 +425,69 @@ public sealed class AgentRuntimeTests
         }
     }
 
+    private sealed class NoQueryModelClient : IModelClient
+    {
+        public CreateChatRunRequest? LastRequest { get; private set; }
+
+        public string EntryPoint => ProductEntryPoints.Chat;
+
+        public string Provider => "NoQuery";
+
+        public string Model => "no-query-v1";
+
+        public string ModelFor(ModelRole role) => Model;
+
+        public Task<ModelCallResult<AnalysisPlan>> ResolveIntentAsync(
+            CreateChatRunRequest request,
+            IReadOnlyCollection<AnalysisToolDefinition> tools,
+            CancellationToken ct = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(new ModelCallResult<AnalysisPlan>
+            {
+                Value = new AnalysisPlan
+                {
+                    Intent = "conversation",
+                    Summary = "用户未提出需要查询生产数据的问题。",
+                    ToolCalls = []
+                },
+                Usage = Usage("intent.resolve")
+            });
+        }
+
+        public Task<ModelCallResult<AnalysisAnswer>> ComposeAnswerAsync(
+            CreateChatRunRequest request,
+            AnalysisPlan plan,
+            IReadOnlyList<AnalysisToolResult> results,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("无查询计划不应调用答案模型。");
+
+        public Task<ModelCallResult<AnalysisAnswer>> ComposeConversationAsync(
+            CreateChatRunRequest request,
+            AnalysisPlan plan,
+            CancellationToken ct = default)
+            => Task.FromResult(new ModelCallResult<AnalysisAnswer>
+            {
+                Value = new AnalysisAnswer
+                {
+                    Summary = "你好，我可以继续这段对话。"
+                },
+                Usage = Usage("conversation.compose")
+            });
+
+        public Task<ModelCallResult<PerspectiveAnalysis>> ParticipateAsync(
+            CombinedAnalysisTurn turn,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("无查询计划不应进入多视角分析。");
+
+        private ModelCallUsage Usage(string operation) => new()
+        {
+            Provider = Provider,
+            Model = Model,
+            Operation = operation
+        };
+    }
+
     private static AnalysisToolDefinition DefinitionFor(string name) => new()
     {
         Name = name,
@@ -402,6 +534,19 @@ public sealed class AgentRuntimeTests
                 .Take(limit)
                 .ToArray());
 
+        public Task<IReadOnlyList<AgentRunSnapshot>> ListConversationAsync(
+            string entryPoint,
+            string userId,
+            string conversationId,
+            int limit,
+            CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<AgentRunSnapshot>>(_runs.Values
+                .Where(run => run.EntryPoint == entryPoint && run.UserId == userId &&
+                              (run.ConversationId ?? run.RunId) == conversationId)
+                .OrderBy(static run => run.CreatedAt)
+                .Take(limit)
+                .ToArray());
+
         public Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default)
         {
             _runs[run.RunId] = run;
@@ -412,6 +557,25 @@ public sealed class AgentRuntimeTests
         {
             _events.TryRemove(runId, out _);
             return Task.FromResult(_runs.TryRemove(runId, out _));
+        }
+
+        public Task<bool> DeleteConversationAsync(
+            string entryPoint,
+            string userId,
+            string conversationId,
+            CancellationToken ct = default)
+        {
+            var runIds = _runs.Values
+                .Where(run => run.EntryPoint == entryPoint && run.UserId == userId &&
+                              (run.ConversationId ?? run.RunId) == conversationId)
+                .Select(static run => run.RunId)
+                .ToArray();
+            foreach (var runId in runIds)
+            {
+                _runs.TryRemove(runId, out _);
+                _events.TryRemove(runId, out _);
+            }
+            return Task.FromResult(runIds.Length > 0);
         }
 
         public Task<AgentStreamEvent> AppendEventAsync(

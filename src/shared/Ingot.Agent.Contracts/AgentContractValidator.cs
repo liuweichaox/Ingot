@@ -1,4 +1,4 @@
-
+// 校验并规范化外部 Chat 运行请求，阻止越界模式和无效页面上下文。
 using System.Text.RegularExpressions;
 
 namespace Ingot.Contracts.Agents;
@@ -16,6 +16,12 @@ public static partial class AgentContractValidator
             error = "请求体不能为空。";
             return false;
         }
+        if (!string.IsNullOrWhiteSpace(request.ConversationId) &&
+            !Guid.TryParse(request.ConversationId.Trim(), out _))
+        {
+            error = "ConversationId 必须是合法的 UUID。";
+            return false;
+        }
         if (!TryNormalize(
                 request.Question,
                 request.PageContext,
@@ -30,7 +36,10 @@ public static partial class AgentContractValidator
         {
             Question = question!,
             Mode = mode!,
-            PageContext = pageContext
+            PageContext = pageContext,
+            ConversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+                ? null
+                : Guid.Parse(request.ConversationId).ToString()
         };
         return true;
     }

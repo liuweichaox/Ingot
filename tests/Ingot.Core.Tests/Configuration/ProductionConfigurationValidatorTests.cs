@@ -59,11 +59,59 @@ public sealed class ProductionConfigurationValidatorTests
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
             ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
-            ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void Chat_AcceptsArbitraryCompatibleProviderLabelAndProtocol()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
+            ["EdgeDiagnostics:EdgeTokens:EDGE-001"] = "diagnostics-token-with-at-least-24-characters",
+            ["EdgeDiagnostics:EdgeBaseUrls:EDGE-001"] = "http://edge-001:8001",
+            ["Authentication:Authority"] = "https://identity.example.com",
+            ["Authentication:Audience"] = "ingot-platform",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Chat:Enabled"] = "true",
+            ["Chat:Provider"] = "FutureCompatibleVendor",
+            ["Chat:Protocol"] = "ChatCompletions",
+            ["Chat:BaseUrl"] = "https://models.example.com/api",
+            ["Chat:FastModel"] = "vendor-fast",
+            ["Chat:ReasoningModel"] = "vendor-reasoning",
+            ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void Chat_RejectsUnsupportedProtocol()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["Chat:Enabled"] = "true",
+            ["Chat:Provider"] = "AnyCompatibleProvider",
+            ["Chat:Protocol"] = "VendorSpecificProtocol",
+            ["Chat:FastModel"] = "vendor-fast",
+            ["Chat:ReasoningModel"] = "vendor-reasoning",
+            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
+        });
+
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+
+        Assert.Contains("Chat:Protocol must be Responses or ChatCompletions", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -78,7 +126,6 @@ public sealed class ProductionConfigurationValidatorTests
             ["Chat:Provider"] = "OpenAI",
             ["Chat:FastModel"] = "chat-fast-model",
             ["Chat:ReasoningModel"] = "chat-reasoning-model",
-            ["OPENAI_API_KEY"] = "secret-store-value",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
@@ -103,13 +150,16 @@ public sealed class ProductionConfigurationValidatorTests
             ["MechanismDraftGeneration:Enabled"] = "true",
             ["MechanismDraftGeneration:BaseUrl"] = "not-a-url",
             ["MechanismDraftGeneration:Model"] = "",
-            ["OPENAI_API_KEY"] = "replace-with-local-service-token"
+            ["INGOT_MECHANISM_DRAFT_API_KEY"] = "replace-with-local-service-token"
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
         Assert.Contains("MechanismDraftGeneration:Model", error.Message, StringComparison.Ordinal);
         Assert.Contains("MechanismDraftGeneration:BaseUrl", error.Message, StringComparison.Ordinal);
-        Assert.Contains("OPENAI_API_KEY must not use a placeholder", error.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "INGOT_MECHANISM_DRAFT_API_KEY must not use a placeholder",
+            error.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -533,8 +583,16 @@ public sealed class ProductionConfigurationValidatorTests
         Assert.Empty(capabilities.Modes);
     }
 
-    private static IConfiguration Build(IReadOnlyDictionary<string, string?> values) =>
-        new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    private static IConfiguration Build(IReadOnlyDictionary<string, string?> values)
+    {
+        var merged = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["DataProtection:KeysPath"] = "/tmp/ingot-test-data-protection"
+        };
+        foreach (var pair in values)
+            merged[pair.Key] = pair.Value;
+        return new ConfigurationBuilder().AddInMemoryCollection(merged).Build();
+    }
 
     private static Dictionary<string, string?> CompletePlatformOidcConfiguration() => new()
     {
@@ -562,8 +620,10 @@ public sealed class ProductionConfigurationValidatorTests
         public Task CreateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<AgentRunSnapshot?> GetAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(string entryPoint, string userId, DateTimeOffset? before, int limit, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AgentRunSnapshot>> ListConversationAsync(string entryPoint, string userId, string conversationId, int limit, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(AgentRunSnapshot run, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<bool> DeleteAsync(string runId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> DeleteConversationAsync(string entryPoint, string userId, string conversationId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<AgentStreamEvent> AppendEventAsync(string runId, string type, object? data, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<AgentStreamEvent>> ReadEventsAsync(string runId, long afterSequence, int limit, CancellationToken ct = default) => throw new NotSupportedException();
     }

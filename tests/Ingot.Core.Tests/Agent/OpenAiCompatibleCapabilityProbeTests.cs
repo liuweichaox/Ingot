@@ -8,13 +8,24 @@ namespace Ingot.Core.Tests.Agent;
 public sealed class OpenAiCompatibleCapabilityProbeTests
 {
     [Fact]
-    public void BuildModelsUri_RequiresVersionedApiRoot()
+    public void BuildModelsUri_AppendsToConfiguredApiRoot()
     {
         Assert.Equal(
             "http://model-host:8000/v1/models",
             OpenAiCompatibleCapabilityProbe.BuildModelsUri("http://model-host:8000/v1").ToString());
+        Assert.Equal(
+            "https://api.deepseek.com/models",
+            OpenAiCompatibleCapabilityProbe.BuildModelsUri("https://api.deepseek.com").ToString());
+    }
+
+    [Theory]
+    [InlineData("https://user:secret@models.example.com/v1")]
+    [InlineData("https://models.example.com/v1?tenant=unsafe")]
+    [InlineData("models.example.com/v1")]
+    public void BuildModelsUri_RejectsUnsafeApiRoots(string baseUrl)
+    {
         Assert.Throws<InvalidOperationException>(() =>
-            OpenAiCompatibleCapabilityProbe.BuildModelsUri("http://model-host:8000"));
+            OpenAiCompatibleCapabilityProbe.BuildModelsUri(baseUrl));
     }
 
     [Fact]

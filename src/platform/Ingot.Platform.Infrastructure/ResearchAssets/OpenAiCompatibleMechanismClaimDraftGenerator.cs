@@ -1,4 +1,4 @@
-
+// 通过独立配置的 OpenAI-compatible 服务生成只读机理语义草稿。
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -11,6 +11,7 @@ public sealed class MechanismDraftGenerationOptions
     public bool Enabled { get; init; }
     public string BaseUrl { get; init; } = "https://api.openai.com/v1";
     public string Model { get; init; } = "gpt-5-mini";
+    public string ApiKeyEnvironmentVariable { get; init; } = "INGOT_MECHANISM_DRAFT_API_KEY";
     public int TimeoutSeconds { get; init; } = 60;
 }
 
@@ -61,9 +62,10 @@ public sealed class OpenAiCompatibleMechanismClaimDraftGenerator(
             .Get<MechanismDraftGenerationOptions>() ?? new MechanismDraftGenerationOptions();
         if (!options.Enabled)
             throw new ResearchAssetRuleException("机理语义草稿生成未启用。");
-        var apiKey = configuration["OPENAI_API_KEY"];
+        var apiKey = configuration[options.ApiKeyEnvironmentVariable];
         if (string.IsNullOrWhiteSpace(apiKey))
-            throw new ResearchAssetRuleException("机理语义草稿生成缺少 OPENAI_API_KEY。");
+            throw new ResearchAssetRuleException(
+                $"机理语义草稿生成缺少 {options.ApiKeyEnvironmentVariable}。");
         if (!Uri.TryCreate(options.BaseUrl.TrimEnd('/') + "/chat/completions", UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https"))
             throw new ResearchAssetRuleException("MechanismDraftGeneration:BaseUrl 必须是绝对 HTTP 或 HTTPS URL。");

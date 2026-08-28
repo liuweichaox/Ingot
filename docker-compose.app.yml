@@ -65,12 +65,14 @@ services:
       - ingot-inspection-archive:/app/Archive/inspection-attachments
       - ingot-process-knowledge:/app/Data/process-knowledge
       - ingot-process-knowledge-archive:/app/Archive/process-knowledge
+      - ingot-platform-data-protection:/app/DataProtection-Keys
     # 列表形式允许 Compose 在配置键中展开 EdgeId；映射形式只会展开值，
     # 会把令牌错误地固定到某个示例 Edge。
     environment:
       - ASPNETCORE_ENVIRONMENT=${INGOT_ASPNETCORE_ENVIRONMENT:-Production}
       - Urls=http://+:8000
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
+      - DataProtection__KeysPath=/app/DataProtection-Keys
       - Postgres__MinPoolSize=${INGOT_POSTGRES_MIN_POOL_SIZE:-2}
       - Postgres__MaxPoolSize=${INGOT_POSTGRES_API_MAX_POOL_SIZE:-100}
       - EventIngest__RequireToken=true
@@ -102,6 +104,7 @@ services:
       - ProcessOptimizer__CircuitBreakSeconds=${INGOT_OPTIMIZER_CIRCUIT_BREAK_SECONDS:-30}
       - Chat__Enabled=${INGOT_CHAT_ENABLED:-false}
       - Chat__Provider=${INGOT_CHAT_PROVIDER:-Deterministic}
+      - Chat__Protocol=${INGOT_CHAT_PROTOCOL:-Responses}
       - Chat__FastModel=${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
       - Chat__ReasoningModel=${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
       - Chat__BaseUrl=${INGOT_CHAT_BASE_URL:-}
@@ -113,11 +116,12 @@ services:
       - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - MechanismDraftGeneration__Enabled=${INGOT_MECHANISM_DRAFT_ENABLED:-false}
       - MechanismDraftGeneration__BaseUrl=${INGOT_MECHANISM_DRAFT_BASE_URL:-https://api.openai.com/v1}
       - MechanismDraftGeneration__Model=${INGOT_MECHANISM_DRAFT_MODEL:-gpt-5-mini}
+      - MechanismDraftGeneration__ApiKeyEnvironmentVariable=INGOT_MECHANISM_DRAFT_API_KEY
       - MechanismDraftGeneration__TimeoutSeconds=${INGOT_MECHANISM_DRAFT_TIMEOUT_SECONDS:-60}
+      - INGOT_MECHANISM_DRAFT_API_KEY=${INGOT_MECHANISM_DRAFT_API_KEY:-}
       - Cors__AllowedOrigins__0=http://localhost:3000
     depends_on:
       platform-migrate:
@@ -139,9 +143,11 @@ services:
     volumes:
       - ingot-process-knowledge:/app/Data/process-knowledge
       - ingot-process-knowledge-archive:/app/Archive/process-knowledge
+      - ingot-platform-data-protection:/app/DataProtection-Keys
     environment:
       - DOTNET_ENVIRONMENT=${INGOT_ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__Events=Host=postgres;Port=5432;Database=ingot;Username=ingot;Password=${INGOT_POSTGRES_PASSWORD:?INGOT_POSTGRES_PASSWORD is required}
+      - DataProtection__KeysPath=/app/DataProtection-Keys
       - EventIngest__RetentionDays=${INGOT_EVENT_RETENTION_DAYS:-0}
       - EventIngest__KeyRetentionDays=${INGOT_EVENT_KEY_RETENTION_DAYS:-0}
       - ProcessKnowledge__RootPath=/app/Data/process-knowledge
@@ -151,6 +157,19 @@ services:
       - ProcessOptimizer__RequestTimeoutSeconds=${INGOT_OPTIMIZER_TIMEOUT_SECONDS:-300}
       - ProcessOptimizer__CircuitFailureThreshold=${INGOT_OPTIMIZER_CIRCUIT_FAILURES:-3}
       - ProcessOptimizer__CircuitBreakSeconds=${INGOT_OPTIMIZER_CIRCUIT_BREAK_SECONDS:-30}
+      - Chat__Enabled=${INGOT_CHAT_ENABLED:-false}
+      - Chat__Provider=${INGOT_CHAT_PROVIDER:-Deterministic}
+      - Chat__Protocol=${INGOT_CHAT_PROTOCOL:-Responses}
+      - Chat__FastModel=${INGOT_CHAT_FAST_MODEL:-deterministic-v1}
+      - Chat__ReasoningModel=${INGOT_CHAT_REASONING_MODEL:-deterministic-v1}
+      - Chat__BaseUrl=${INGOT_CHAT_BASE_URL:-}
+      - Chat__ProbeOnStartup=false
+      - Chat__EnableCombinedAnalysis=${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
+      - Chat__MaxToolCalls=${INGOT_CHAT_MAX_TOOL_CALLS:-8}
+      - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}
+      - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
+      - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
+      - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
       - KnowledgeExtractionWorker__MaxAttempts=${INGOT_KNOWLEDGE_EXTRACTION_MAX_ATTEMPTS:-5}
       - KnowledgeExtractionWorker__LeaseTimeout=${INGOT_KNOWLEDGE_EXTRACTION_LEASE_TIMEOUT:-00:15:00}
       - KnowledgeExtractionWorker__HeartbeatInterval=${INGOT_KNOWLEDGE_EXTRACTION_HEARTBEAT_INTERVAL:-00:01:00}
@@ -321,6 +340,7 @@ volumes:
   ingot-inspection-archive:
   ingot-process-knowledge:
   ingot-process-knowledge-archive:
+  ingot-platform-data-protection:
   ingot-prometheus-data:
   ingot-alertmanager-data:
   ingot-grafana-data:

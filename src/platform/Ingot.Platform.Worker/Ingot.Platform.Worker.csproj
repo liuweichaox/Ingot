@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\agent\Ingot.Agent.Providers\Ingot.Agent.Providers.csproj" />
     <ProjectReference Include="..\Ingot.Platform.Infrastructure\Ingot.Platform.Infrastructure.csproj" />
   </ItemGroup>
 

@@ -257,6 +257,7 @@ app.MapGet("/", () => Results.Ok(new
         productionContexts = "/api/v1/production-contexts",
         auth = "/api/v1/auth/login",
         users = "/api/v1/users",
+        chatConversations = "/api/v1/chat/conversations",
         chatRuns = "/api/v1/chat/runs",
         chatCapabilities = "/api/v1/chat/capabilities"
     }
@@ -302,6 +303,7 @@ Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", bas
 Log.Logger.Information("    > Installations: {0}/api/v1/tooling-installations", baseAddress);
 Log.Logger.Information("    > Prod Contexts: {0}/api/v1/production-contexts", baseAddress);
 Log.Logger.Information("    > Chat Runs:     {0}/api/v1/chat/runs", baseAddress);
+Log.Logger.Information("    > Chat History:  {0}/api/v1/chat/conversations", baseAddress);
 Log.Logger.Information("    > Chat Capabilities:{0}/api/v1/chat/capabilities", baseAddress);
 Log.Logger.Information("==================================================================");
 

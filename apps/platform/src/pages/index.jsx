@@ -1,4 +1,4 @@
-
+// 汇总 Platform 页面组件的稳定导出入口。
 export { ResearchProjectsPage } from "./ResearchProjectsPage";
 export { ResearchAssetsPage } from "./ResearchAssetsPage";
 export { GoldenQuestionsPage } from "./GoldenQuestionsPage";
@@ -19,4 +19,4 @@ export {
   QualityPlansPage,
 } from "./RegistryPages";
 export { EdgesPage, EdgeDetailPage } from "./EdgePages";
-export { UsersPage, MetricsPage, LogsPage, NotFoundPage } from "./AdministrationPages";
+export { UsersPage, ModelServiceConfigurationPage, MetricsPage, LogsPage, NotFoundPage } from "./AdministrationPages";

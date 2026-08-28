@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Ingot.Agent;
 
 /// <summary>编排 Agent 运行、持久化状态、执行只读工具并实施并发与时限预算。</summary>
-public sealed class AgentRuntime : IAgentRuntime
+public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
 {
     private const string ChatPromptVersion = "ingot-chat-v1";
     private const string ChatToolsetVersion = "production-records-readonly-v2";
@@ -20,7 +20,9 @@ public sealed class AgentRuntime : IAgentRuntime
     private readonly IAnalysisResultValidator _relatedRecordsVerifier;
     private readonly ILogger<AgentRuntime> _logger;
     private readonly ICombinedAnalysisWorkflow _investigationWorkflow;
+    private readonly IAgentRunLifecycleSink _lifecycleSink;
     private readonly IModelRouter _models;
+    private readonly IModelServiceConfigurationProvider _modelSettings;
     private readonly ChatOptions _chatOptions;
     private readonly IPlanValidator _planValidator;
     private readonly IAgentRunStore _store;
@@ -33,15 +35,19 @@ public sealed class AgentRuntime : IAgentRuntime
         IPlanValidator planValidator,
         IAnalysisResultValidator relatedRecordsVerifier,
         ICombinedAnalysisWorkflow investigationWorkflow,
+        IAgentRunLifecycleSink lifecycleSink,
         IOptions<ChatOptions> chatOptions,
-        ILogger<AgentRuntime> logger)
+        ILogger<AgentRuntime> logger,
+        IModelServiceConfigurationProvider? modelSettings = null)
     {
         _store = store;
         _models = models;
         _planValidator = planValidator;
         _relatedRecordsVerifier = relatedRecordsVerifier;
         _investigationWorkflow = investigationWorkflow;
+        _lifecycleSink = lifecycleSink;
         _chatOptions = chatOptions.Value;
+        _modelSettings = modelSettings ?? new DeploymentModelServiceConfigurationProvider(chatOptions);
         _logger = logger;
         _tools = tools.ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
     }
@@ -66,15 +72,56 @@ public sealed class AgentRuntime : IAgentRuntime
         if (tools.Count == 0)
             throw new InvalidOperationException($"{entryPoint} 没有已注册工具。");
 
+        var conversationId = request.ConversationId;
+        IReadOnlyList<AgentRunSnapshot> priorRuns = [];
+        if (conversationId is not null)
+        {
+            priorRuns = await _store.ListConversationAsync(entryPoint, userId, conversationId, 100, ct)
+                .ConfigureAwait(false);
+            var isFormalFirstTurn = priorRuns.Count == 0 &&
+                                    !string.IsNullOrWhiteSpace(request.TriggerMessageId) &&
+                                    !string.IsNullOrWhiteSpace(request.ResponseMessageId);
+            if (priorRuns.Count == 0 && !isFormalFirstTurn)
+                throw new InvalidOperationException("要继续的对话不存在。");
+            if (priorRuns.Any(static run => !AgentRunStatuses.IsTerminal(run.Status)))
+                throw new InvalidOperationException("当前对话仍在分析，请等待完成或先停止分析。");
+            if (priorRuns.Any(run => !CanReuseCapturedScope(run.AccessScope, accessScope)))
+                throw new UnauthorizedAccessException("当前身份已无权继续访问该对话的历史数据范围。");
+            if (priorRuns.Any(run => !SamePageContext(run.PageContext, request.PageContext)))
+                throw new InvalidOperationException("不能在不同页面上下文中继续同一对话。");
+
+            request = request with
+            {
+                ConversationHistory = priorRuns
+                    .Where(static run => run.Status == AgentRunStatuses.Completed && run.Answer is not null)
+                    .TakeLast(10)
+                    .Select(static run => new ChatConversationContextTurn
+                    {
+                        Question = run.Question,
+                        Summary = run.Answer!.Summary,
+                        Findings = run.Answer.Findings
+                            .Select(static finding => finding.Statement)
+                            .Take(8)
+                            .ToArray(),
+                        Limitations = run.Answer.Limitations.Take(5).ToArray()
+                    })
+                    .ToArray()
+            };
+        }
+
         var modelRole = request.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
-        var model = _models.GetClient(entryPoint, modelRole);
+        var model = _models.GetClient(entryPoint, modelRole, settings.Provider);
         if (!string.Equals(model.Provider, settings.Provider, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"{entryPoint} 配置的模型 Provider 没有对应客户端。");
         ReserveRun(userId, settings);
         var admitted = true;
+        var runId = Guid.CreateVersion7().ToString();
         var run = new AgentRunSnapshot
         {
-            RunId = Guid.CreateVersion7().ToString(),
+            RunId = runId,
+            ConversationId = conversationId ?? runId,
+            TriggerMessageId = request.TriggerMessageId,
+            ResponseMessageId = request.ResponseMessageId,
             UserId = userId,
             EntryPoint = entryPoint,
             Purpose = RunPurposes.ReadOnlyAnalysis,
@@ -96,6 +143,9 @@ public sealed class AgentRuntime : IAgentRuntime
         {
             await _store.CreateAsync(run, ct).ConfigureAwait(false);
 
+            if (_store is IDurableAgentRunStore)
+                return run;
+
             var timeout = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900));
             var runCts = new CancellationTokenSource(timeout);
             if (!_active.TryAdd(run.RunId, runCts))
@@ -111,6 +161,127 @@ public sealed class AgentRuntime : IAgentRuntime
         {
             if (admitted)
                 ReleaseRun(userId);
+        }
+    }
+
+    public async Task<bool> ProcessNextAsync(string leaseOwner, CancellationToken ct = default)
+    {
+        if (_store is not IDurableAgentRunStore durableStore)
+            return false;
+        var settings = GetSettings();
+        if (!settings.Enabled)
+            return false;
+        var leaseDuration = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds + 60, 90, 960));
+        var claimed = await durableStore.ClaimNextAsync(leaseOwner, leaseDuration, ct).ConfigureAwait(false);
+        if (claimed is null)
+            return false;
+
+        var reserved = false;
+        var executionOwnsAdmission = false;
+        try
+        {
+            ReserveRun(claimed.UserId, settings);
+            reserved = true;
+            var tools = ToolsForEntryPoint(claimed.EntryPoint);
+            var modelRole = claimed.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
+            var model = _models.GetClient(claimed.EntryPoint, modelRole, settings.Provider);
+            var request = new CreateChatRunRequest
+            {
+                Question = claimed.Question,
+                ConversationId = claimed.ConversationId,
+                PageContext = claimed.PageContext,
+                Mode = claimed.Mode,
+                TriggerMessageId = claimed.TriggerMessageId,
+                ResponseMessageId = claimed.ResponseMessageId,
+                ConversationHistory = await BuildConversationHistoryAsync(claimed, ct).ConfigureAwait(false)
+            };
+            var accessScope = RestoreAccessScope(claimed.AccessScope);
+            var run = claimed with
+            {
+                ModelProvider = model.Provider,
+                Model = model.ModelFor(modelRole)
+            };
+            using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            runCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900)));
+            if (!_active.TryAdd(run.RunId, runCts))
+                throw new InvalidOperationException("无法注册持久 Chat 运行。");
+            using var monitorStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var monitor = MonitorLeaseAndCancellationAsync(
+                durableStore, run.RunId, leaseOwner, leaseDuration, runCts, monitorStop.Token);
+            try
+            {
+                executionOwnsAdmission = true;
+                await ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                await monitorStop.CancelAsync().ConfigureAwait(false);
+                await monitor.ConfigureAwait(false);
+            }
+            return true;
+        }
+        finally
+        {
+            await durableStore.ReleaseLeaseAsync(claimed.RunId, leaseOwner, CancellationToken.None)
+                .ConfigureAwait(false);
+            if (reserved && !executionOwnsAdmission)
+                ReleaseRun(claimed.UserId);
+        }
+    }
+
+    private async Task<IReadOnlyList<ChatConversationContextTurn>> BuildConversationHistoryAsync(
+        AgentRunSnapshot current,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(current.ConversationId))
+            return [];
+        var priorRuns = await _store.ListConversationAsync(
+            current.EntryPoint, current.UserId, current.ConversationId, 100, ct).ConfigureAwait(false);
+        return priorRuns
+            .Where(run => run.RunId != current.RunId &&
+                          run.Status == AgentRunStatuses.Completed && run.Answer is not null)
+            .TakeLast(10)
+            .Select(static run => new ChatConversationContextTurn
+            {
+                Question = run.Question,
+                Summary = run.Answer!.Summary,
+                Findings = run.Answer.Findings.Select(static finding => finding.Statement).Take(8).ToArray(),
+                Limitations = run.Answer.Limitations.Take(5).ToArray()
+            })
+            .ToArray();
+    }
+
+    private async Task MonitorLeaseAndCancellationAsync(
+        IDurableAgentRunStore store,
+        string runId,
+        string leaseOwner,
+        TimeSpan leaseDuration,
+        CancellationTokenSource runCts,
+        CancellationToken hostToken)
+    {
+        try
+        {
+            while (!runCts.IsCancellationRequested && !hostToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), hostToken).ConfigureAwait(false);
+                var persisted = await _store.GetAsync(runId, hostToken).ConfigureAwait(false);
+                if (persisted is null || AgentRunStatuses.IsTerminal(persisted.Status) ||
+                    string.Equals(persisted.Status, AgentRunStatuses.Cancelling, StringComparison.Ordinal))
+                {
+                    await runCts.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+                if (!await store.RenewLeaseAsync(runId, leaseOwner, leaseDuration, hostToken)
+                        .ConfigureAwait(false))
+                {
+                    await runCts.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (runCts.IsCancellationRequested || hostToken.IsCancellationRequested)
+        {
         }
     }
 
@@ -166,6 +337,7 @@ public sealed class AgentRuntime : IAgentRuntime
             Items = page.Select(static run => new AgentRunListItem
             {
                 RunId = run.RunId,
+                ConversationId = run.ConversationId ?? run.RunId,
                 UserId = run.UserId,
                 Question = run.Question,
                 PageContext = run.PageContext,
@@ -190,6 +362,17 @@ public sealed class AgentRuntime : IAgentRuntime
         return run is not null && string.Equals(run.EntryPoint, entryPoint, StringComparison.Ordinal) ? run : null;
     }
 
+    public async Task<IReadOnlyList<AgentRunSnapshot>> GetConversationAsync(
+        string entryPoint,
+        string userId,
+        string conversationId,
+        CancellationToken ct = default)
+    {
+        ValidateEntryPoint(entryPoint);
+        return await _store.ListConversationAsync(entryPoint, userId, conversationId, 100, ct)
+            .ConfigureAwait(false);
+    }
+
     private static AgentRunAccessScopeSnapshot SnapshotAccessScope(AgentAccessScope accessScope)
         => new()
         {
@@ -202,6 +385,15 @@ public sealed class AgentRuntime : IAgentRuntime
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Order(StringComparer.OrdinalIgnoreCase)
                     .ToArray()
+        };
+
+    private static AgentAccessScope RestoreAccessScope(AgentRunAccessScopeSnapshot? snapshot)
+        => new()
+        {
+            AllowAllSites = snapshot?.AllowAllSites ?? false,
+            SiteIds = new HashSet<string>(
+                snapshot?.SiteIds ?? [],
+                StringComparer.OrdinalIgnoreCase)
         };
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(
@@ -263,6 +455,7 @@ public sealed class AgentRuntime : IAgentRuntime
                 CancellationReason = cancellationReason
             };
             await _store.UpdateAsync(cancelled, CancellationToken.None).ConfigureAwait(false);
+            await NotifyTerminalAsync(cancelled).ConfigureAwait(false);
             await EmitAsync(runId, AgentStreamEventTypes.RunCancelled,
                 new { reason = cancellationReason }, CancellationToken.None).ConfigureAwait(false);
         }
@@ -282,6 +475,40 @@ public sealed class AgentRuntime : IAgentRuntime
         if (!AgentRunStatuses.IsTerminal(run.Status))
             throw new InvalidOperationException("运行中的对话不能删除，请先停止并等待运行结束。");
         return await _store.DeleteAsync(runId, ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> DeleteConversationAsync(
+        string entryPoint,
+        string conversationId,
+        string userId,
+        CancellationToken ct = default)
+    {
+        ValidateEntryPoint(entryPoint);
+        var runs = await _store.ListConversationAsync(entryPoint, userId, conversationId, 100, ct)
+            .ConfigureAwait(false);
+        if (runs.Count == 0)
+            return false;
+        if (runs.Any(static run => !AgentRunStatuses.IsTerminal(run.Status)))
+            throw new InvalidOperationException("运行中的对话不能删除，请先停止并等待运行结束。");
+        return await _store.DeleteConversationAsync(entryPoint, userId, conversationId, ct)
+            .ConfigureAwait(false);
+    }
+
+    private static bool SamePageContext(PageContextRef? left, PageContextRef? right)
+        => left is null && right is null ||
+           left is not null && right is not null &&
+           string.Equals(left.Kind, right.Kind, StringComparison.Ordinal) &&
+           string.Equals(left.Id, right.Id, StringComparison.Ordinal);
+
+    private static bool CanReuseCapturedScope(
+        AgentRunAccessScopeSnapshot? captured,
+        AgentAccessScope current)
+    {
+        if (captured is null)
+            return false;
+        if (captured.AllowAllSites)
+            return current.AllowAllSites;
+        return current.AllowAllSites || captured.SiteIds.All(current.SiteIds.Contains);
     }
 
     private async Task ExecuteAsync(
@@ -319,6 +546,40 @@ public sealed class AgentRuntime : IAgentRuntime
                 planResult.Value with { EntryPoint = run.EntryPoint },
                 accessScope,
                 tools);
+            if (plan.ToolCalls.Count == 0)
+            {
+                run = run with { Plan = plan };
+                await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.PlanCreated, plan, ct).ConfigureAwait(false);
+
+                var conversationResult = await model.ComposeConversationAsync(request, plan, ct)
+                    .ConfigureAwait(false);
+                modelCalls.Add(conversationResult.Usage);
+                RecordModelCall(conversationResult.Usage);
+                var guidance = conversationResult.Value with
+                {
+                    SummaryStrength = AnalysisClaimStrengths.Observation,
+                    Findings = [],
+                    RelatedRecords = [],
+                    Charts = [],
+                    Proposals = [],
+                    CombinedAnalysis = null
+                };
+                run = run with
+                {
+                    Status = AgentRunStatuses.Completed,
+                    Answer = guidance,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    Usage = BuildUsage(modelCalls, 0, settings.ModelPricing)
+                };
+                await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                await NotifyTerminalAsync(run).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.AnswerDelta,
+                    new { text = guidance.Summary }, CancellationToken.None).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.RunCompleted,
+                    new { run.RunId, answer = guidance }, CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
             if (!_planValidator.TryValidate(run.EntryPoint, plan, tools, out var planError))
             {
                 await EmitAsync(run.RunId, AgentStreamEventTypes.PlanRejected, new { error = planError }, ct)
@@ -509,6 +770,7 @@ public sealed class AgentRuntime : IAgentRuntime
                 Usage = BuildUsage(modelCalls, invocations.Count, settings.ModelPricing)
             };
             await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunCompleted,
                     new { run.RunId, answer }, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -524,6 +786,7 @@ public sealed class AgentRuntime : IAgentRuntime
                 Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
             };
             await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunCancelled,
                     new { reason = run.CancellationReason }, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -539,6 +802,7 @@ public sealed class AgentRuntime : IAgentRuntime
                 Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
             };
             await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunFailed,
                     new { error = ex.Message }, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -554,6 +818,18 @@ public sealed class AgentRuntime : IAgentRuntime
             if (_active.TryRemove(run.RunId, out var source))
                 source.Dispose();
             ReleaseRun(run.UserId);
+        }
+    }
+
+    private async Task NotifyTerminalAsync(AgentRunSnapshot run)
+    {
+        try
+        {
+            await _lifecycleSink.OnTerminalAsync(run, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Chat 消息终态投影更新失败: {RunId}", run.RunId);
         }
     }
 
@@ -711,11 +987,14 @@ public sealed class AgentRuntime : IAgentRuntime
         string.Equals(settings.Provider, "Deterministic", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(settings.FastModel, "deterministic-v1", StringComparison.OrdinalIgnoreCase);
 
-    private EntryPointSettings GetSettings() => new(
-            _chatOptions.Enabled,
-            _chatOptions.Provider,
-            _chatOptions.FastModel,
-            _chatOptions.ReasoningModel,
+    private EntryPointSettings GetSettings()
+    {
+        var model = _modelSettings.Current;
+        return new(
+            model.Enabled,
+            model.Provider,
+            model.FastModel,
+            model.ReasoningModel,
             Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
             Math.Clamp(_chatOptions.MaxRunSeconds, 1, 900),
             Math.Clamp(_chatOptions.MaxConcurrentRuns, 1, 128),
@@ -724,6 +1003,7 @@ public sealed class AgentRuntime : IAgentRuntime
             Math.Clamp(_chatOptions.MaxDiscussionRounds, 1, 5),
             Math.Clamp(_chatOptions.MaxDiscussionTurns, 3, 15),
             _chatOptions.ModelPricing);
+    }
 
     private static void ValidateEntryPoint(string entryPoint)
     {

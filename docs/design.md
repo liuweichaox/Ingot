@@ -64,12 +64,12 @@ flowchart LR
     Api <--> Optimizer["Optimizer\n配方推荐 · 诊断 · 可选验证设计"]
     Api <--> DB[("PostgreSQL 17\nTimescaleDB 扩展")]
     Api <--> Files[("持久文件卷\n附件 · 工艺知识 · 归档")]
-    Worker["Platform Worker\n投影 · 重算 · 维护 · 结果固化 · 知识处理"] <--> DB
+    Worker["Platform Worker\nChat 运行 · 投影 · 重算 · 维护 · 结果固化 · 知识处理"] <--> DB
     Worker -.-> Files
     Migrator["Platform Migrator\n一次性迁移与首用户引导"] --> DB
 ```
 
-代码项目边界不等于部署边界。当前持续运行单元是 Platform API、Platform Worker、独立 Edge ConnectorHost、PostgreSQL/TimescaleDB、Optimizer 和 Web；Migrator 是 API 与 Worker 启动前完成的一次性作业。确定性分析和可选 Agent 随 Platform API 同进程运行，不是独立服务。检验附件与工艺知识使用持久文件卷，元数据与正式状态仍在 PostgreSQL。小型现场可以共用物理服务器，但 Edge 与 Platform 仍保持独立进程、存储、身份和恢复生命周期。
+代码项目边界不等于部署边界。当前持续运行单元是 Platform API、Platform Worker、独立 Edge ConnectorHost、PostgreSQL/TimescaleDB、Optimizer 和 Web；Migrator 是 API 与 Worker 启动前完成的一次性作业。Chat 接收与查询接口随 Platform API 运行，确定性分析和可选模型 Agent 的持久任务由 Platform Worker 执行；Agent 仍是代码类库，不是独立服务。检验附件与工艺知识使用持久文件卷，元数据与正式状态仍在 PostgreSQL。小型现场可以共用物理服务器，但 Edge 与 Platform 仍保持独立进程、存储、身份和恢复生命周期。
 
 本文件固定稳定业务边界；多副本、故障域、数据生命周期、灾难恢复和受控行动的目标拓扑由[生产架构](production-architecture.md)定义，当前部署步骤由[部署运维](deployment.md)定义。目标设计不能被当作当前 Compose 已实现能力。
 
@@ -98,7 +98,9 @@ Edge 不判断工艺原因，不运行产品级优化，也不成为实验和质
 
 Platform 是正式业务记录源。下一配方建议使用独立追加式记录，不复用实验标识、运行计划或状态机；受控验证状态和正式结论也不能只保存在 Optimizer、Agent 或浏览器中。
 
-生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
+Chat 以 `ChatConversation` 和有序 `ChatMessage` 作为面向用户的正式对话模型；URL、历史列表、刷新恢复、幂等发送和删除都以 Conversation 为边界。用户消息与待生成的助手消息在同一事务中建立，`ClientMessageId` 防止网络重试产生重复消息。`AgentRun` 只是助手消息背后的执行明细，保存计划、工具调用、模型用量和流事件，不再承担对话身份。
+
+生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。API 在消息事务完成后只创建排队运行，独立 Platform Worker 通过数据库租约领取、续租和执行；API 重启不会丢失已接收的回答任务，Worker 中断后过期租约可由后续实例重新领取。连续对话只装配最近已完成回答的摘要、有限发现和限制，不把完整图表、建议或旧记录引用无限回灌给模型；旧回答也不能替代当前问题所需的生产数据查询。进入黄金问题评测的运行会在同一恢复边界内冻结完整快照与 SHA-256，不能再按普通对话删除。
 
 Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。配方优化、采集配置、制造上下文、事件、身份、洞察、分析与检验的数据库无关端口，以及其中的多步规则和用例，均归属 Application；PostgreSQL Store、优化器 HTTP 客户端、后台宿主和证据装配器归属 Infrastructure，并通过按模块的组合入口注册。新业务控制器只处理传输、鉴权并通过 Application 用例委托业务操作；当前 Edge 注册/诊断、身份和运行指标等少量运维适配器仍由 API 直接注入 Infrastructure 服务，受下方 `ARCH-001` 约束，不允许扩展为新的业务写路径。首用户引导由 Migrator 在事务锁内完成，周期维护由 Worker 执行。并发幂等与原子写入继续由数据库事务和约束保证，不上提为内存规则。配方优化规则不能直接读取检验模块；检验、过程运行和配置证据只能由显式登记的装配适配器（当前为 `ResearchObservationAssembler`）转换为研究观察。
 

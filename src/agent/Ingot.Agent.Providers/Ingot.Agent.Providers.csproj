@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Ingot.Core.Tests" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

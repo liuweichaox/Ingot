@@ -1,10 +1,10 @@
 // 管理 Chat 运行创建、历史、流式状态和受控删除交互。
 import { ArrowLeftIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { deleteJson, getJson, postJson, streamSse } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, DataTable, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, Drawer, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
 import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
 export function EventsPage() {
@@ -170,12 +170,9 @@ function ChatAnswer({ answer, onFollowUp }) {
   if (!answer) return null;
   if (typeof answer === "string") {
     return (
-      <article className="rounded-lg border border-slate-200 bg-white">
-        <header className="border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-900">分析结论</p>
-        </header>
-        <p className="whitespace-pre-wrap px-4 py-4 text-sm leading-7 text-slate-700">{answer}</p>
-      </article>
+      <div className="max-w-[90%] rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700">
+        <p className="whitespace-pre-wrap">{answer}</p>
+      </div>
     );
   }
 
@@ -190,6 +187,22 @@ function ChatAnswer({ answer, onFollowUp }) {
     hypothesis: "待验证假设",
   };
   const combined = answer.combinedAnalysis;
+  const isConversationReply = findings.length === 0 &&
+    (answer.relatedRecords || []).length === 0 &&
+    (answer.charts || []).length === 0 &&
+    (answer.proposals || []).length === 0 &&
+    (answer.limitations || []).length === 0 &&
+    !combined;
+  if (isConversationReply) {
+    return (
+      <div className="max-w-[90%] rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700">
+        <p className="whitespace-pre-wrap">{answer.summary || "请继续说明你的问题。"}</p>
+        {(answer.followUpQuestions || []).length > 0 && <div className="mt-3 flex flex-wrap gap-2">{answer.followUpQuestions.map(item => (
+          <button key={item} type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-[13px] text-slate-700 hover:border-blue-300 hover:bg-blue-50" onClick={() => onFollowUp(item)}>{item}</button>
+        ))}</div>}
+      </div>
+    );
+  }
   return (
     <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
@@ -289,7 +302,30 @@ function ChatAnswer({ answer, onFollowUp }) {
     </article>
   );
 }
+
+function ChatHistoryList({ items, loading, submitting, deletingConversationId, selectedConversationId, onOpen, onDelete }) {
+  if (loading) {
+    return <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>;
+  }
+  if (!items.length) {
+    return <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一个生产、质量或工艺问题开始。</p>;
+  }
+  return items.map(item => (
+    <div key={item.conversationId} className={`group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-md ${selectedConversationId === item.conversationId ? "bg-blue-50" : "hover:bg-white"}`}>
+      <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => onOpen(item.conversationId)} disabled={submitting} aria-current={selectedConversationId === item.conversationId ? "page" : undefined}>
+        <p className="truncate text-sm font-medium text-slate-800">{item.title}</p>
+        <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.lastMessageStatus] || item.lastMessageStatus || "对话"} · {formatTime(item.lastMessageAt)}</p>
+      </button>
+      <button type="button" className="grid size-8 place-items-center rounded-md text-slate-400 opacity-100 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 lg:opacity-0 lg:group-hover:opacity-100" aria-label={`删除对话：${item.title}`} onClick={() => onDelete(item)} disabled={Boolean(deletingConversationId) || submitting}>
+        <TrashIcon className="size-4" />
+      </button>
+    </div>
+  ));
+}
+
 export function ChatPage() {
+  const { conversationId: routeConversationId = "" } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectId = searchParams.get("projectId");
   const [capabilities, setCapabilities] = useState(null);
@@ -297,28 +333,46 @@ export function ChatPage() {
   const [question, setQuestion] = useState("");
   const [mode, setMode] = useState("quick");
   const [run, setRun] = useState(null);
+  const [conversation, setConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [events, setEvents] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [project, setProject] = useState(null);
   const [projectLoading, setProjectLoading] = useState(Boolean(projectId));
   const [projectError, setProjectError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [deletingRunId, setDeletingRunId] = useState("");
+  const [deletingConversationId, setDeletingConversationId] = useState("");
   const { confirm, confirmationDialog } = useConfirmDialog();
   const controller = useRef(null);
 
   const loadHistory = useCallback(async () => {
     try {
-      const value = await getJson("/api/v1/chat/runs?limit=50");
+      const value = await getJson("/api/v1/chat/conversations?limit=50");
       setHistory(value.items || []);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setHistoryLoading(false);
     }
+  }, []);
+
+  const routeFor = useCallback(value => {
+    const suffix = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    return value ? `/chat/${encodeURIComponent(value)}${suffix}` : `/chat${suffix}`;
+  }, [projectId]);
+
+  const loadConversation = useCallback(async value => {
+    const detail = await getJson(`/api/v1/chat/conversations/${encodeURIComponent(value)}`);
+    setConversation(detail.conversation);
+    setMessages(detail.messages || []);
+    const latestAssistant = [...(detail.messages || [])].reverse().find(item => item.role === "assistant");
+    setRun(latestAssistant?.runId ? { runId: latestAssistant.runId, status: latestAssistant.status } : null);
+    setEvents([]);
+    return detail;
   }, []);
 
   useEffect(() => {
@@ -332,6 +386,21 @@ export function ChatPage() {
     void loadHistory();
     return () => controller.current?.abort();
   }, [loadHistory]);
+
+  useEffect(() => {
+    if (!routeConversationId) {
+      setConversation(null);
+      setMessages([]);
+      setRun(null);
+      setEvents([]);
+      return;
+    }
+    setError("");
+    loadConversation(routeConversationId).catch(requestError => {
+      setError(requestError.message);
+      if (requestError.status === 404) navigate(routeFor(""), { replace: true });
+    });
+  }, [loadConversation, navigate, routeConversationId, routeFor]);
 
   useEffect(() => {
     if (!projectId) {
@@ -358,19 +427,42 @@ export function ChatPage() {
     setError("");
     setEvents([]);
     try {
-      const created = await postJson("/api/v1/chat/runs", {
-        question: submittedQuestion,
-        pageContext: projectId ? { kind: "research-project", id: projectId } : null,
+      const payload = {
+        text: submittedQuestion,
+        clientMessageId: crypto.randomUUID(),
         mode: submittedMode,
-      });
-      setRun({ ...created, question: submittedQuestion });
+      };
+      const created = routeConversationId
+        ? await postJson(`/api/v1/chat/conversations/${encodeURIComponent(routeConversationId)}/messages`, payload)
+        : await postJson("/api/v1/chat/conversations", {
+            ...payload,
+            pageContext: projectId ? { kind: "research-project", id: projectId } : null,
+          });
+      setRun(created);
+      if (!routeConversationId) navigate(routeFor(created.conversationId), { replace: true });
+      setMessages(current => [
+        ...current,
+        { messageId: created.userMessageId, role: "user", status: "completed", text: submittedQuestion },
+        { messageId: created.assistantMessageId, role: "assistant", status: "generating", runId: created.runId },
+      ]);
       setQuestion("");
       controller.current = new AbortController();
-      await streamSse(created.streamUrl, {
-        signal: controller.current.signal,
-        onEvent: ({ data }) => setEvents(current => [...current, data]),
-      });
-      setRun(await getJson(`/api/v1/chat/runs/${created.runId}`));
+      let terminalReceived = false;
+      try {
+        await streamSse(created.streamUrl, {
+          signal: controller.current.signal,
+          onEvent: ({ data }) => {
+            setEvents(current => [...current, data]);
+            if (["run.completed", "run.failed", "run.cancelled"].includes(data?.type)) {
+              terminalReceived = true;
+              controller.current?.abort();
+            }
+          },
+        });
+      } catch (streamError) {
+        if (streamError.name !== "AbortError" || !terminalReceived) throw streamError;
+      }
+      await loadConversation(created.conversationId);
       await loadHistory();
     } catch (requestError) {
       if (requestError.name !== "AbortError") setError(requestError.message);
@@ -386,7 +478,7 @@ export function ChatPage() {
     try {
       await postJson(`/api/v1/chat/runs/${run.runId}:cancel`, {});
       controller.current?.abort();
-      setRun(await getJson(`/api/v1/chat/runs/${run.runId}`));
+      if (routeConversationId) await loadConversation(routeConversationId);
       await loadHistory();
     } catch (requestError) {
       setError(requestError.message);
@@ -396,46 +488,43 @@ export function ChatPage() {
     }
   }
 
-  async function openHistory(runId) {
+  async function openHistory(selectedConversationId) {
     if (submitting) return;
-    setError("");
-    try {
-      const value = await getJson(`/api/v1/chat/runs/${runId}`);
-      setRun(value);
-      setMode(value.mode || "quick");
-      setEvents([]);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
+    setHistoryOpen(false);
+    navigate(routeFor(selectedConversationId));
   }
 
   function newConversation() {
     if (submitting) return;
     setRun(null);
+    setConversation(null);
+    setMessages([]);
     setQuestion("");
     setEvents([]);
     setError("");
+    setHistoryOpen(false);
     setMode(current => capabilities?.modes?.includes(current) ? current : capabilities?.modes?.[0] || "quick");
+    navigate(routeFor(""));
   }
 
   async function deleteHistory(item) {
     if (!await confirm({
       title: "删除对话",
-      description: `“${item.question}”及其分析过程将被永久删除。业务运行、质检和项目记录不会受影响。`,
+      description: `“${item.title}”的全部消息及分析过程将被永久删除。业务运行、质检和项目记录不会受影响。`,
       confirmLabel: "确认删除",
       tone: "danger",
     })) return;
-    setDeletingRunId(item.runId);
+    setDeletingConversationId(item.conversationId);
     setError("");
     try {
-      await deleteJson(`/api/v1/chat/runs/${item.runId}`);
-      if (run?.runId === item.runId) newConversation();
+      await deleteJson(`/api/v1/chat/conversations/${encodeURIComponent(item.conversationId)}`);
+      if (routeConversationId === item.conversationId) newConversation();
       await loadHistory();
       notify("对话已删除。", "success");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
-      setDeletingRunId("");
+      setDeletingConversationId("");
     }
   }
 
@@ -460,32 +549,21 @@ export function ChatPage() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           <p className="px-2 py-2 text-[13px] font-semibold text-slate-500">{projectId ? "当前项目的对话" : "最近对话"}</p>
-          {historyLoading ? (
-            <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>
-          ) : scopedHistory.length ? scopedHistory.map(item => (
-            <div key={item.runId} className="group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-md hover:bg-white">
-              <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => openHistory(item.runId)} disabled={submitting}>
-                <p className="truncate text-sm font-medium text-slate-800">{item.question}</p>
-                <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.status] || item.status} · {formatTime(item.createdAt)}</p>
-              </button>
-              <button type="button" className="grid size-8 place-items-center rounded-md text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 group-hover:opacity-100" aria-label={`删除对话：${item.question}`} onClick={() => deleteHistory(item)} disabled={Boolean(deletingRunId) || submitting}>
-                <TrashIcon className="size-4" />
-              </button>
-            </div>
-          )) : <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一个生产、质量或工艺问题开始。</p>}
+          <ChatHistoryList items={scopedHistory} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
         </div>
       </aside>
 
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
           <div className="min-w-0">
-            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="font-semibold text-slate-950">工艺分析助手</h1></div>
+            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="truncate font-semibold text-slate-950">{conversation?.title || "工艺分析助手"}</h1></div>
             <p className="mt-0.5 truncate text-[13px] text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "生产与工艺数据"}</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
             {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
               {capabilities.modes.map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
             </Select>}
+            <Button className="lg:hidden" onClick={() => setHistoryOpen(true)}><ChatBubbleLeftRightIcon className="size-4" />对话记录</Button>
             <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新对话</Button>
             {projectId && <Link to={`/research-projects/${encodeURIComponent(projectId)}`} className="hidden min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:inline-flex"><ArrowLeftIcon className="size-4" />项目</Link>}
           </div>
@@ -499,7 +577,7 @@ export function ChatPage() {
               {!capabilitiesLoading && serviceEnabled && deterministicDemo && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
-            {!run ? (
+            {!messages.length ? (
               <div className="w-full max-w-3xl self-start rounded-lg border border-slate-200 bg-white">
                 <div className="border-b border-slate-200 px-4 py-3">
                   <h2 className="text-sm font-semibold text-slate-950">新建分析</h2>
@@ -512,14 +590,19 @@ export function ChatPage() {
                 </dl>
               </div>
             ) : (
-              <div className="w-full space-y-6 self-start">
-                <div className="flex justify-end"><div className="max-w-[85%] rounded-lg rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white"><p className="whitespace-pre-wrap">{run.question}</p></div></div>
-                {!run.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
-                {submitting && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>}
-                <ChatAnswer answer={run.answer} onFollowUp={setQuestion} />
-                {run.error && <Alert tone="danger" title="分析失败">{run.error}</Alert>}
-                {run.cancellationReason && <Alert title="分析已取消">{run.cancellationReason}</Alert>}
-                {run.runId && <p className="text-center text-xs text-slate-400" title={run.runId}>调查记录 {run.runId}</p>}
+              <div className="w-full space-y-7 self-start">
+                {messages.map(message => message.role === "user" ? (
+                  <div key={message.messageId} className="flex justify-end"><div className="max-w-[85%] rounded-lg rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white"><p className="whitespace-pre-wrap">{message.text}</p></div></div>
+                ) : (
+                  <section key={message.messageId} className="space-y-4">
+                    {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
+                    {message.runId === run?.runId && submitting && !message.answer && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>}
+                    <ChatAnswer answer={message.answer || message.text} onFollowUp={setQuestion} />
+                    {message.status === "failed" && <Alert tone="danger" title="分析失败">{message.error || "回答生成失败，请重试。"}</Alert>}
+                    {message.status === "cancelled" && <Alert title="分析已取消">{message.error || "本次回答已取消。"}</Alert>}
+                    {message.runId && <p className="text-center text-xs text-slate-400" title={message.runId}>调查记录 {message.runId}</p>}
+                  </section>
+                ))}
               </div>
             )}
           </div>
@@ -533,6 +616,15 @@ export function ChatPage() {
           <p className="mx-auto mt-2 max-w-4xl text-center text-[13px] text-slate-500">回答基于平台记录，并标注证据范围。</p>
         </footer>
       </section>
+      <Drawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        title="对话记录"
+        description={projectId ? `当前项目共 ${scopedHistory.length} 条` : `当前账号共 ${scopedHistory.length} 条`}
+        size="md"
+      >
+        <ChatHistoryList items={scopedHistory} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
+      </Drawer>
       {confirmationDialog}
     </div>
   );

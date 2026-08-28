@@ -74,7 +74,7 @@ const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
     { label: "身份权限", items: [["/identity/users", "用户权限"]] },
     { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"]] },
-    { label: "助手治理", items: [["/golden-questions", "助手评测"]] },
+    { label: "助手治理", items: [["/model-service", "模型服务"], ["/golden-questions", "助手评测"]] },
   ],
 };
 
@@ -99,6 +99,7 @@ const pageDetails = {
   "/quality-analysis": ["偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
   "/golden-questions": ["助手评测", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
+  "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
   "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
   "/configuration/scenario-packages": ["配置发布", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
@@ -130,6 +131,7 @@ const searchAliases = {
   "/configuration/ingestion-tasks": "采集 PLC 点位映射",
   "/platform-metrics": "平台运行状态 系统状态",
   "/logs": "运行日志 系统日志",
+  "/model-service": "AI 大模型 API key DeepSeek OpenAI Qwen",
 };
 
 const searchEntriesForSections = navigationSections => navigationSections.flatMap(section => sectionItems(section).map(([path, label]) => ({
@@ -264,7 +266,7 @@ export default function App({ identity, logout }) {
   const globalSearchEntries = useMemo(() => searchEntriesForSections(navigationSections), [navigationSections]);
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
-  const isChatWorkspace = location.pathname === "/chat";
+  const isChatWorkspace = location.pathname === "/chat" || location.pathname.startsWith("/chat/");
 
   useEffect(() => {
     function handleShortcut(event) {
@@ -301,7 +303,9 @@ export default function App({ identity, logout }) {
   function toggleSection(sectionId) {
     setExpandedSectionId(current => current === sectionId ? null : sectionId);
   }
-  const page = location.pathname.startsWith("/process-executions/")
+  const page = location.pathname.startsWith("/chat/")
+    ? pageDetails["/chat"]
+    : location.pathname.startsWith("/process-executions/")
     ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
@@ -476,6 +480,7 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/workbench" element={<Pages.WorkbenchPage identity={identity} />} />
       <Route path="/analysis" element={<Pages.AnalysisHubPage identity={identity} />} />
       <Route path="/chat" element={<Pages.ChatPage />} />
+      <Route path="/chat/:conversationId" element={<Pages.ChatPage />} />
       <Route path="/research-assets" element={<Pages.ResearchAssetsPage />} />
       <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
       <Route path="/process-executions" element={<Pages.ProcessExecutionsPage />} />
@@ -493,6 +498,7 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
       <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
       <Route path="/golden-questions" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.GoldenQuestionsPage /></RequireRole>} />
+      <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.ModelServiceConfigurationPage /></RequireRole>} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
       <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage canWrite={canConfigure} />} />

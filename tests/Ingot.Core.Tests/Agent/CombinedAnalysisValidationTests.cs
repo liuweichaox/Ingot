@@ -134,6 +134,12 @@ public sealed class CombinedAnalysisValidationTests
             CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task<ModelCallResult<AnalysisAnswer>> ComposeConversationAsync(
+            CreateChatRunRequest request,
+            AnalysisPlan plan,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<ModelCallResult<PerspectiveAnalysis>> ParticipateAsync(
             CombinedAnalysisTurn turn,
             CancellationToken ct = default)
