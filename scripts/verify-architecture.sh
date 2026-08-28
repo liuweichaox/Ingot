@@ -252,6 +252,12 @@ check "application-context-direction" src/platform/Ingot.Platform.Application/Re
 unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
   -type f -name '*.cs' \
   ! -name 'PostgresProcessResearchStore.cs' \
+  ! -name 'PostgresProcessResearchStore.Audit.cs' \
+  ! -name 'PostgresProcessResearchStore.Experiments.cs' \
+  ! -name 'PostgresProcessResearchStore.Hypotheses.cs' \
+  ! -name 'PostgresProcessResearchStore.Persistence.cs' \
+  ! -name 'PostgresProcessResearchStore.Results.cs' \
+  ! -name 'PostgresProcessResearchStore.Validation.cs' \
   ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
   ! -name 'ProcessOptimizerClient.cs' \
   ! -name 'ResearchResultMaterializationHostedService.cs' \
