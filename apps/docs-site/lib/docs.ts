@@ -1,3 +1,4 @@
+// Loads the bilingual docs, rewrites cross-references for the docs site, and renders Markdown to HTML with a table of contents.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -33,6 +34,7 @@ const publicSlugs = [
   "faq",
   "brand",
   "open-source-dependencies",
+  "glossary",
 ] as const;
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
   slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));
@@ -58,7 +60,7 @@ export const groups = [
   { key: "guide", zh: "集成与运维", en: "Integration and operations", slugs: ["pilot", "data-connection", "deployment", "faq"] },
   { key: "concept", zh: "系统与算法", en: "System and algorithms", slugs: ["design", "optimization", "mechanism-knowledge"] },
   { key: "trust", zh: "验证与生产", en: "Validation and production", slugs: ["rollout", "production-architecture"] },
-  { key: "reference", zh: "项目治理", en: "Project governance", slugs: ["project-plan", "brand", "open-source-dependencies"] },
+  { key: "reference", zh: "项目治理", en: "Project governance", slugs: ["project-plan", "brand", "open-source-dependencies", "glossary"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;

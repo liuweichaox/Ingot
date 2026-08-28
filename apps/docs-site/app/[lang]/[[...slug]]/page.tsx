@@ -44,6 +44,7 @@ export default async function DocPage({ params }: Props) {
 
   return (
     <div className="shell">
+      <a className="skip-link" href="#doc-content">{lang === "zh" ? "跳到正文" : "Skip to content"}</a>
       <header>
         <a className="brand" href={routeFor(lang, "")}><Image src="/brand/ingot-lockup-dark.svg" alt="Ingot" width={142} height={36} priority /></a>
         <Search lang={lang} />
@@ -66,7 +67,7 @@ export default async function DocPage({ params }: Props) {
           return <a className={item === slug ? "active" : ""} key={item} href={routeFor(target.lang, item)}>{target.title}{lang === "en" && target.lang === "zh" ? " · Chinese reference" : ""}</a>;
         })}</section>)}
       </aside>
-      <main>
+      <main id="doc-content" tabIndex={-1}>
         <article dangerouslySetInnerHTML={{ __html: html }} />
         <footer className="pager">
           {previous && <a href={routeFor(lang, previous.slug)}>← {previous.title}</a>}

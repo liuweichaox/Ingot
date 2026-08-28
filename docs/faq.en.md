@@ -36,7 +36,7 @@ Material, tooling, and equipment context may affect quality or may serve only tr
 
 ## Why not always use the most complex model?
 
-Model complexity does not establish reliability. With limited samples or confounded conditions, a controlled experiment often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or experiments and does not generate an unsupported conclusion.
+Model complexity does not establish reliability. With limited samples or confounded conditions, controlled validation often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or experiments and does not generate an unsupported conclusion.
 
 ## What responsibilities does the language model have?
 

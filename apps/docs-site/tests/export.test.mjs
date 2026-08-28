@@ -9,7 +9,7 @@ const out = path.join(root, "apps/docs-site/out");
 test("exports the bilingual product documentation journey", async () => {
   for (const file of ["zh/index.html", "en/index.html", "zh/getting-started/index.html", "en/getting-started/index.html", "zh/status/index.html", "en/status/index.html", "zh/pilot/index.html", "en/pilot/index.html", "zh/design/index.html", "en/design/index.html", "zh/optimization/index.html", "en/optimization/index.html", "zh/mechanism-knowledge/index.html", "en/mechanism-knowledge/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["getting-started", "status", "pilot", "design", "optimization", "mechanism-knowledge", "data-connection", "production-architecture", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies"])
+  for (const slug of ["getting-started", "status", "pilot", "design", "optimization", "mechanism-knowledge", "data-connection", "production-architecture", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies", "glossary"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -31,10 +31,10 @@ test("uses the exact official brand assets", async () => {
 
 test("publishes the recipe-optimization journey and public references without interface documentation", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
-  assert.equal(search.length, 30);
+  assert.equal(search.length, 32);
   assert.deepEqual(
     [...new Set(search.map((item) => item.slug))].sort(),
-    ["", "brand", "data-connection", "deployment", "design", "faq", "getting-started", "mechanism-knowledge", "open-source-dependencies", "optimization", "pilot", "production-architecture", "project-plan", "rollout", "status"],
+    ["", "brand", "data-connection", "deployment", "design", "faq", "getting-started", "glossary", "mechanism-knowledge", "open-source-dependencies", "optimization", "pilot", "production-architecture", "project-plan", "rollout", "status"],
   );
 
   for (const lang of ["zh", "en"]) {

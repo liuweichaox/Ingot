@@ -25,7 +25,7 @@ Ingot starts from the engineer's decision, not from an algorithm:
 | Where did this run differ? | like-for-like matching, robust statistics, stage-trajectory comparison | size of the difference, uncertainty, and comparison group |
 | Which factors deserve validation? | screening, grouped comparison, and stability checks | candidate causes, counterevidence, factors that changed together, and data limits |
 | Is a factor causal? | controls, repetition, blocking, randomization, or intervention | supported, rejected, or inconclusive |
-| What should the next recipe be? | response surfaces, constrained candidate ranking, or Bayesian optimization | candidate recipe, prediction interval, risk, coverage, and rationale |
+| What should the next recipe be? | response surfaces, constrained candidate ranking, or Bayesian optimization | candidate process setting, prediction interval, risk, coverage, and rationale |
 | Is controlled validation required? | design of experiments (DOE), repetition, blocking, or intervention | support, rejection, or uncertainty plus executable validation conditions |
 | How should it be explained? | fixed result templates plus language-model assistance | readable explanation with source citations |
 
@@ -213,4 +213,4 @@ See [Mechanism knowledge design](mechanism-knowledge.en.md) for the current impl
 - Physical features exist, while real-data-calibrated grey-box priors continue to evolve.
 - Cross-product, equipment, and scenario transfer must wait for explicit applicability and second-scenario validation.
 - High-dimensional, strongly drifting processes, slow quality feedback, or dominant unmeasured causes may not suit direct BO.
-- Without controlled experiments, the system can help form cause candidates but cannot prove root cause.
+- Without controlled validation, the system can help form cause candidates but cannot prove root cause.

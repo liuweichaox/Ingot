@@ -17,6 +17,19 @@
 }
 
 * { box-sizing: border-box; }
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: #17140d;
+  font: 700 13px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  transition: top .2s;
+}
+.skip-link:focus { top: 16px; }
 html { scroll-behavior: smooth; background: var(--bg); }
 body {
   margin: 0;

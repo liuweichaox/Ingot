@@ -26,7 +26,7 @@ test("Chinese home uses the canonical diagnosis-and-optimization narrative", asy
   assert.match(source, /RECIPE OPTIMIZATION · RUN-042/);
   assert.match(source, /无需先建立实验，也无需工程师重新归类配方/);
   assert.match(source, /先确认数据是否可靠，再选择分析与优化方法/);
-  for (const stage of ["建立运行证据", "形成优化观察", "推荐下一配方", "继续从生产学习"]) {
+  for (const stage of ["建立运行证据", "形成优化观察", "推荐下一份配方", "继续从生产学习"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /优化能力持续升级，证据边界始终不变/);

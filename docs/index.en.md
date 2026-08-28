@@ -60,7 +60,7 @@ See [Current status](status.en.md) for the complete boundary.
 ### Validation and production engineering
 
 - [Current status](status.en.md): what works today and what remains unproven
-- [Scenario validation](rollout.en.md): how historical review, shadow use, and controlled experiments test value
+- [Scenario validation](rollout.en.md): how historical replay, shadow validation, and controlled online experiments test value
 - [Production architecture](production-architecture.en.md): what a production deployment must satisfy
 
 ### Project governance

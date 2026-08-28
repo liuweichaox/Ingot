@@ -66,7 +66,7 @@ For each question, compare:
 - whether candidates cover important factors later supported by evidence;
 - whether candidates cite correct records and state counterevidence, confounding, and missingness;
 - whether the system refuses correctly when evidence is insufficient;
-- time from problem start to the first executable validation experiment.
+- time from problem start to the first executable controlled validation.
 
 Engineers review the golden-question set; developers cannot author the standard answers alone.
 

@@ -49,9 +49,18 @@ const copy = {
     productCards: [
       ["01", "建立运行证据", "用同一个运行身份关联实际条件、阶段轨迹、材料、工装和质量结果。"],
       ["02", "形成优化观察", "已完成的真实配方运行通过质量和覆盖准入后，自动成为可复核的优化样本。"],
-      ["03", "推荐下一配方", "在目标、安全边界和历史覆盖范围内给出一份候选配方、预测区间和选择理由。"],
+      ["03", "推荐下一份配方", "在目标、安全边界和历史覆盖范围内给出一份候选工艺设置、预测区间和选择理由。"],
       ["04", "继续从生产学习", "工程师在原有生产流程中确认；新运行回流后再生成下一份建议。"],
     ],
+    shotsKicker: "REAL WORKBENCH",
+    shotsTitle: "同一套工作台，覆盖从运行证据到下一份配方。",
+    shotsText: "以下为合成演示数据的真实界面：工作台汇总运行与证据状态，追因总览进入差异比较，配方优化工作区把真实运行组织成下一份建议。",
+    shots: [
+      ["/screenshots/workbench.png", "工作台", "集中查看待办、生产状态、质量风险与研发进展"],
+      ["/screenshots/diagnosis.png", "追因总览", "从可信证据进入差异比较与候选原因"],
+      ["/screenshots/optimization.png", "配方优化", "让真实配方运行形成观察并推荐下一份配方"],
+    ],
+    shotsNote: "界面来自合成演示，仅验证软件流程，不证明真实工艺收益。",
     loopKicker: "ENGINEER IN THE LOOP",
     loopTitle: "系统提出建议，工程师掌握决策。",
     loopText: "Ingot 负责吸收真实运行、检查数据准入、计算并披露不确定性；工程师负责定义目标与安全边界、确认是否采用下一份配方。建议不自动下发，受控验证只在因果确认或越出历史覆盖时另行建立。",
@@ -72,8 +81,8 @@ const copy = {
     methodBText: "使用匹配比较、稳健统计、阶段轨迹和上下文分层缩小候选范围。",
     methodC: "形成优化观察",
     methodCText: "自动关联实际配方、过程上下文和已复核质量结果，并明确排除原因与证据范围。",
-    methodD: "推荐下一配方",
-    methodDText: "在目标、安全边界和已观察参数包络内提出一份候选配方，同时说明预期、风险和选择理由。",
+    methodD: "推荐下一份配方",
+    methodDText: "在目标、安全边界和已观察参数包络内提出一份候选工艺设置，同时说明预期、风险和选择理由。",
     engineFeatures: ["数据质量", "真实运行", "优化观察", "多目标权衡", "约束优化", "机理知识"],
     archKicker: "WORKS WITH YOUR EXISTING SYSTEMS",
     archTitle: "连接现有系统，不接管生产控制。",
@@ -82,7 +91,7 @@ const copy = {
       ["生产与设备", "MES · SCADA · Historian", "接收运行和过程事实，但不替代生产执行、监控或实时控制"],
       ["质量与研发", "LIMS · QMS · ELN", "关联检验、审核和研发记录，但不替代完整的质量或文档管理"],
       ["分析与优化", "DOE · 响应面 · 贝叶斯优化", "按问题和数据条件选择方法，不把一种算法套在所有场景上"],
-      ["工程决策", "确认 · 执行 · 回流", "系统提出下一配方；工程师设定边界并通过现有生产流程确认是否采用"],
+      ["工程决策", "确认 · 执行 · 回流", "系统提出下一份配方；工程师设定边界并通过现有生产流程确认是否采用"],
     ],
     visionKicker: "STABLE CORE, EVOLVING METHODS",
     visionTitle: "优化能力持续升级，证据边界始终不变。",
@@ -103,7 +112,7 @@ const copy = {
     statusText: "主要软件流程已经实现并有自动化测试；真实工厂收益验证尚未完成。系统可用于产品评估和受控试点，现有证据不能证明其已稳定减少实验或缩短研发周期。",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "从一个真实工艺问题开始。",
-    ctaText: "接入一组真实配方运行，核对实际参数和质量结果，让系统形成优化观察并给出第一份可审核的下一配方。",
+    ctaText: "接入一组真实配方运行，核对实际参数和质量结果，让系统形成优化观察并给出第一份可审核的下一份配方。",
     ctaPrimary: "建立第一个数据闭环",
     ctaSecondary: "打开 GitHub",
     footer: "Ingot · 从运行证据，到下一份配方。",
@@ -148,9 +157,18 @@ const copy = {
     productCards: [
       ["01", "Build run evidence", "Link actual conditions, stage trajectories, material, tooling, and quality outcomes through one run identity."],
       ["02", "Form observations", "Completed real recipe runs become reviewable optimization samples after quality and coverage admission."],
-      ["03", "Recommend the next recipe", "Return one candidate recipe with prediction intervals and rationale inside objectives, safety boundaries, and observed coverage."],
+      ["03", "Recommend the next recipe", "Return one candidate process setting with prediction intervals and rationale inside objectives, safety boundaries, and observed coverage."],
       ["04", "Keep learning from production", "Engineers confirm through the existing production flow; each new run feeds the next recommendation."],
     ],
+    shotsKicker: "REAL WORKBENCH",
+    shotsTitle: "One workbench, from run evidence to the next recipe.",
+    shotsText: "Real screenshots from the synthetic demo: the workbench summarizes runs and evidence, diagnosis enters difference comparison, and the optimization workspace turns real runs into the next recommendation.",
+    shots: [
+      ["/screenshots/workbench.png", "Workbench", "Review to-dos, production status, quality risks, and research progress in one place"],
+      ["/screenshots/diagnosis.png", "Diagnosis", "Enter difference comparison and candidate causes from trustworthy evidence"],
+      ["/screenshots/optimization.png", "Recipe optimization", "Turn real recipe runs into observations and the next recommendation"],
+    ],
+    shotsNote: "Screenshots come from the synthetic demo; they validate the software workflow, not real process outcomes.",
     loopKicker: "ENGINEER IN THE LOOP",
     loopTitle: "The system proposes. Engineers decide.",
     loopText: "Ingot absorbs real runs, checks admission, computes, and exposes uncertainty. Engineers define objectives and safety boundaries and decide whether to adopt the next recipe. Recommendations are never dispatched automatically; controlled validation is created separately only for causal confirmation or extrapolation.",
@@ -172,7 +190,7 @@ const copy = {
     methodC: "Form observations",
     methodCText: "Link actual recipes, process context, and reviewed quality outcomes automatically, with explicit exclusions and evidence scope.",
     methodD: "Recommend the next recipe",
-    methodDText: "Propose one candidate recipe inside objectives, safety boundaries, and the observed parameter envelope, with expected outcomes, risks, and rationale.",
+    methodDText: "Propose one candidate process setting inside objectives, safety boundaries, and the observed parameter envelope, with expected outcomes, risks, and rationale.",
     engineFeatures: ["Data quality", "Real runs", "Optimization observations", "Multiple objectives", "Constrained optimization", "Process knowledge"],
     archKicker: "WORKS WITH YOUR EXISTING SYSTEMS",
     archTitle: "Connect existing systems without taking over production control.",
@@ -216,6 +234,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
 
   return (
     <main>
+      <a className="skip-link" href="#main-content">跳转到主要内容</a>
       <header className="site-header">
         <div className="frame header-inner">
           <a className="brand" href={initialLocale === "zh" ? "/" : "/en/"} aria-label="Ingot home">
@@ -239,7 +258,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         </div>
       </header>
 
-      <section className="hero">
+      <section className="hero" id="main-content">
         <div className="hero-grid" aria-hidden="true" />
         <div className="frame hero-layout">
           <div className="hero-copy">
@@ -277,6 +296,21 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
           <div className="product-grid">
             {t.productCards.map(([number, title, text]) => <article key={title}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}
           </div>
+        </div>
+      </section>
+
+      <section className="screenshots section" id="screenshots">
+        <div className="frame">
+          <div className="section-heading wide"><p className="eyebrow">{t.shotsKicker}</p><h2>{t.shotsTitle}</h2><p>{t.shotsText}</p></div>
+          <div className="shots-grid">
+            {t.shots.map(([src, title, text]) => (
+              <figure className="shot" key={title}>
+                <Image src={src} alt={`${title} — Ingot`} loading="lazy" width={1600} height={1000} unoptimized />
+                <figcaption><strong>{title}</strong><span>{text}</span></figcaption>
+              </figure>
+            ))}
+          </div>
+          <p className="shots-note">{t.shotsNote}</p>
         </div>
       </section>
 

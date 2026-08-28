@@ -310,7 +310,7 @@ draft → reviewed → supported → validated → active → retired
 
 - `draft`：自动提取或人工录入，不能影响建议；
 - `reviewed`：结构、变量、单位、来源和适用范围已审核；
-- `supported`：至少有一次合格干预结果支持，但不足以声明稳定操作域；
+- `supported`：至少有一次合格干预结果支持，但不足以声明稳定工艺操作域；
 - `validated`：满足预注册的重复、区组、边界或交互验证；
 - `active`：被批准用于指定场景的建议能力；
 - `rejected`：草稿结构审核未通过；

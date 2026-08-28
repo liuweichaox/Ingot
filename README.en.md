@@ -52,7 +52,7 @@ For real recipe runs, Ingot provides three engineering capabilities:
 
 - **Run reconstruction**: establish actual conditions, process changes, material, tooling, and quality outcomes;
 - **Optimization observations**: automatically link actual recipes, process context, and quality outcomes while excluding untrustworthy runs;
-- **Next recipe**: propose a candidate recipe with uncertainty inside objectives, safety boundaries, and observed coverage.
+- **Next recipe**: propose a candidate process setting with uncertainty inside objectives, safety boundaries, and observed coverage.
 
 The fixed design objective is:
 
@@ -69,7 +69,7 @@ Ingot does not replace production-execution, real-time-control, quality-complian
 | Typical task | System output |
 |---|---|
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
-| Daily recipe optimization | A next recipe based on real runs, with prediction intervals, risk, and evidence scope |
+| Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
 | Validation of a new material, machine, or extrapolated setting | Optional controlled validation with bounds and a review record |
 
 ## Local demo
@@ -163,7 +163,7 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Before startup, change the database passwords, Edge token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
+Before startup, change the database passwords, Edge ingestion token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
 
 ## Development verification
 
