@@ -55,56 +55,6 @@ public static class ProductionConfigurationValidator
             errors.Add("Cors:AllowedOrigins must contain absolute HTTP or HTTPS origins.");
         }
 
-        if (configuration.GetValue<bool>("Chat:Enabled"))
-        {
-            var provider = configuration["Chat:Provider"];
-            if (string.IsNullOrWhiteSpace(provider) ||
-                string.Equals(provider, "Deterministic", StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add(
-                    "Chat:Provider must identify the configured external model service when Chat is enabled in production.");
-            }
-            var protocol = configuration["Chat:Protocol"] ?? "Responses";
-            if (!string.Equals(protocol, "Responses", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(protocol, "ChatCompletions", StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add("Chat:Protocol must be Responses or ChatCompletions.");
-            }
-            RequireValue(configuration, "Chat:FastModel", errors);
-            RequireValue(configuration, "Chat:ReasoningModel", errors);
-            var baseUrl = configuration["Chat:BaseUrl"];
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-            {
-                try
-                {
-                    _ = Ingot.Agent.Providers.OpenAiCompatibleCapabilityProbe.BuildModelsUri(baseUrl);
-                }
-                catch (InvalidOperationException exception)
-                {
-                    errors.Add(exception.Message);
-                }
-            }
-            RequireChatDataScopes(configuration, errors);
-        }
-        if (configuration.GetValue<bool>("MechanismDraftGeneration:Enabled"))
-        {
-            RequireValue(configuration, "MechanismDraftGeneration:BaseUrl", errors);
-            RequireValue(configuration, "MechanismDraftGeneration:Model", errors);
-            var apiKeyName = configuration["MechanismDraftGeneration:ApiKeyEnvironmentVariable"] ??
-                             "INGOT_MECHANISM_DRAFT_API_KEY";
-            if (!IsEnvironmentVariableName(apiKeyName))
-            {
-                errors.Add(
-                    "MechanismDraftGeneration:ApiKeyEnvironmentVariable must be a valid environment variable name.");
-            }
-            RequireValue(configuration, apiKeyName, errors);
-            if (IsPlaceholder(configuration[apiKeyName]))
-                errors.Add($"{apiKeyName} must not use a placeholder value.");
-            if (!Uri.TryCreate(configuration["MechanismDraftGeneration:BaseUrl"], UriKind.Absolute, out var uri) ||
-                uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo))
-                errors.Add("MechanismDraftGeneration:BaseUrl must be a trusted absolute HTTP or HTTPS URL without user info.");
-        }
-
         if (errors.Count > 0)
             throw new InvalidOperationException($"Invalid production configuration:{Environment.NewLine}- {string.Join($"{Environment.NewLine}- ", errors)}");
     }
@@ -136,11 +86,6 @@ public static class ProductionConfigurationValidator
         !string.IsNullOrWhiteSpace(value) &&
         value.Length >= MinimumSecretLength &&
         !IsPlaceholder(value);
-
-    private static bool IsEnvironmentVariableName(string value)
-        => !string.IsNullOrWhiteSpace(value) &&
-           (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
-           value.Skip(1).All(static character => char.IsAsciiLetterOrDigit(character) || character == '_');
 
     private static void RequireEdgeSiteBindings(
         IConfiguration configuration,
@@ -289,24 +234,6 @@ public static class ProductionConfigurationValidator
         return normalized.Contains("change-this-", StringComparison.OrdinalIgnoreCase) ||
                normalized.Contains("verification-", StringComparison.OrdinalIgnoreCase) ||
                normalized.Contains("replace-with-", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void RequireChatDataScopes(IConfiguration configuration, ICollection<string> errors)
-    {
-        var scopes = configuration.GetSection("ChatDataAccess:Users").GetChildren().ToArray();
-        if (scopes.Length == 0)
-        {
-            errors.Add("ChatDataAccess:Users must contain at least one platform user scope.");
-            return;
-        }
-
-        foreach (var scope in scopes)
-        {
-            var allowAll = scope.GetValue<bool>("AllowAll");
-            var edgeIds = scope.GetSection("EdgeIds").Get<string[]>() ?? [];
-            if (!allowAll && edgeIds.All(static edgeId => string.IsNullOrWhiteSpace(edgeId)))
-                errors.Add($"ChatDataAccess:Users:{scope.Key} must allow all data or list at least one EdgeId.");
-        }
     }
 
     private static void RequireValue(

@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using Ingot.Agent;
 using Ingot.Platform.Application.ModelServices;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Ingot.Platform.Infrastructure.ModelServices;
@@ -21,25 +20,17 @@ public sealed class PostgresModelServiceConfigurationStore :
 
     public PostgresModelServiceConfigurationStore(
         NpgsqlDataSource dataSource,
-        IDataProtectionProvider dataProtectionProvider,
-        IOptions<ChatOptions> options)
+        IDataProtectionProvider dataProtectionProvider)
     {
         _dataSource = dataSource;
         _protector = dataProtectionProvider.CreateProtector(
             "Ingot.Platform.ModelServiceConfiguration.ApiKey.v1");
-        var deployment = options.Value;
         _current = new ModelServiceConnectionSettings
         {
-            Enabled = deployment.Enabled,
-            Provider = deployment.Provider,
-            Protocol = deployment.Protocol,
-            BaseUrl = deployment.BaseUrl,
-            FastModel = deployment.FastModel,
-            ReasoningModel = deployment.ReasoningModel,
-            ApiKey = null,
-            Revision = "deployment"
+            Enabled = false,
+            Revision = "unconfigured"
         };
-        _view = ToView(_current, null, null, null, "deployment");
+        _view = ToView(_current, null, null, null, "platform");
     }
 
     public ModelServiceConnectionSettings Current

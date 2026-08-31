@@ -47,7 +47,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         _investigationWorkflow = investigationWorkflow;
         _lifecycleSink = lifecycleSink;
         _chatOptions = chatOptions.Value;
-        _modelSettings = modelSettings ?? new DeploymentModelServiceConfigurationProvider(chatOptions);
+        _modelSettings = modelSettings ?? new UnconfiguredModelServiceConfigurationProvider();
         _logger = logger;
         _tools = tools.ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
     }

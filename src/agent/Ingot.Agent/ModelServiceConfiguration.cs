@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace Ingot.Agent;
 
 /// <summary>模型服务当前生效的连接信息；API key 只在服务端内存中流转。</summary>
@@ -30,24 +28,12 @@ public interface IModelServiceConfigurationProvider
     Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
-/// <summary>在未配置平台存储时提供无凭据的部署默认值。</summary>
-public sealed class DeploymentModelServiceConfigurationProvider : IModelServiceConfigurationProvider
+/// <summary>在 Platform 配置存储不可用时保持模型服务禁用。</summary>
+public sealed class UnconfiguredModelServiceConfigurationProvider : IModelServiceConfigurationProvider
 {
-    public DeploymentModelServiceConfigurationProvider(IOptions<ChatOptions> options)
+    public ModelServiceConnectionSettings Current { get; } = new()
     {
-        var value = options.Value;
-        Current = new ModelServiceConnectionSettings
-        {
-            Enabled = value.Enabled,
-            Provider = value.Provider,
-            Protocol = value.Protocol,
-            BaseUrl = value.BaseUrl,
-            FastModel = value.FastModel,
-            ReasoningModel = value.ReasoningModel,
-            ApiKey = null,
-            Revision = "deployment"
-        };
-    }
-
-    public ModelServiceConnectionSettings Current { get; }
+        Enabled = false,
+        Revision = "unconfigured"
+    };
 }

@@ -32,105 +32,10 @@ public sealed class ProductionConfigurationValidatorTests
             ["Authentication:Audience"] = "ingot-platform",
             ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
             ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
-            ["Chat:Enabled"] = "false",
             ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
         });
 
         PlatformValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void Chat_AcceptsPlatformIdentityDataScope()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
-            ["EdgeDiagnostics:EdgeTokens:EDGE-001"] = "diagnostics-token-with-at-least-24-characters",
-            ["EdgeDiagnostics:EdgeBaseUrls:EDGE-001"] = "http://edge-001:8001",
-            ["Authentication:Authority"] = "https://identity.example.com",
-            ["Authentication:Audience"] = "ingot-platform",
-            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
-            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
-            ["Chat:Enabled"] = "true",
-            ["Chat:Provider"] = "OpenAI",
-            ["Chat:FastModel"] = "chat-fast-model",
-            ["Chat:ReasoningModel"] = "chat-reasoning-model",
-            ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        PlatformValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void Chat_AcceptsArbitraryCompatibleProviderLabelAndProtocol()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
-            ["EdgeDiagnostics:EdgeTokens:EDGE-001"] = "diagnostics-token-with-at-least-24-characters",
-            ["EdgeDiagnostics:EdgeBaseUrls:EDGE-001"] = "http://edge-001:8001",
-            ["Authentication:Authority"] = "https://identity.example.com",
-            ["Authentication:Audience"] = "ingot-platform",
-            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
-            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
-            ["Chat:Enabled"] = "true",
-            ["Chat:Provider"] = "FutureCompatibleVendor",
-            ["Chat:Protocol"] = "ChatCompletions",
-            ["Chat:BaseUrl"] = "https://models.example.com/api",
-            ["Chat:FastModel"] = "vendor-fast",
-            ["Chat:ReasoningModel"] = "vendor-reasoning",
-            ["ChatDataAccess:Users:analyst:EdgeIds:0"] = "EDGE-001",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        PlatformValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void Chat_RejectsUnsupportedProtocol()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["Chat:Enabled"] = "true",
-            ["Chat:Provider"] = "AnyCompatibleProvider",
-            ["Chat:Protocol"] = "VendorSpecificProtocol",
-            ["Chat:FastModel"] = "vendor-fast",
-            ["Chat:ReasoningModel"] = "vendor-reasoning",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-
-        Assert.Contains("Chat:Protocol must be Responses or ChatCompletions", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Chat_RejectsMissingPlatformUserScopes()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["Chat:Enabled"] = "true",
-            ["Chat:Provider"] = "OpenAI",
-            ["Chat:FastModel"] = "chat-fast-model",
-            ["Chat:ReasoningModel"] = "chat-reasoning-model",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-        Assert.Contains("ChatDataAccess:Users must contain at least one platform user scope", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -140,26 +45,6 @@ public sealed class ProductionConfigurationValidatorTests
 
         Assert.Equal(8, chat.MaxToolCalls);
         Assert.Equal(60, chat.MaxRunSeconds);
-    }
-
-    [Fact]
-    public void MechanismDraftGeneration_FailsClosedWithoutProviderConfiguration()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["MechanismDraftGeneration:Enabled"] = "true",
-            ["MechanismDraftGeneration:BaseUrl"] = "not-a-url",
-            ["MechanismDraftGeneration:Model"] = "",
-            ["INGOT_MECHANISM_DRAFT_API_KEY"] = "replace-with-local-service-token"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-        Assert.Contains("MechanismDraftGeneration:Model", error.Message, StringComparison.Ordinal);
-        Assert.Contains("MechanismDraftGeneration:BaseUrl", error.Message, StringComparison.Ordinal);
-        Assert.Contains(
-            "INGOT_MECHANISM_DRAFT_API_KEY must not use a placeholder",
-            error.Message,
-            StringComparison.Ordinal);
     }
 
     [Fact]

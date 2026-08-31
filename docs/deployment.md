@@ -86,9 +86,7 @@ https://platform.example.com/auth/logout-callback
 
 ### 模型服务
 
-启用 Chat 时，模型服务应提供 OpenAI-compatible 接口。平台管理员在“系统管理 → 模型服务”页面配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、模型标识和 API key；更换兼容模型服务只修改页面配置，不修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。DeepSeek 的一个配置示例是 `Provider=DeepSeek`、`Protocol=Responses`、`BaseUrl=https://api.deepseek.com`，并使用当前可用的 DeepSeek 模型标识。Platform 启动时只探查模型清单；只有服务实际执行 Chat 时才会把相关问题、页面上下文和只读工具结果发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
-
-机理知识语义草稿默认关闭。需要时显式设置 `INGOT_MECHANISM_DRAFT_ENABLED=true`、`INGOT_MECHANISM_DRAFT_BASE_URL`、`INGOT_MECHANISM_DRAFT_MODEL` 和独立的 `INGOT_MECHANISM_DRAFT_API_KEY`；启用前必须确认知识片段可发送到该服务所在区域。该能力只返回可编辑草稿，不自动持久化、审核或激活声明。
+启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、模型标识和 API key；Chat 与机理知识语义草稿在需要模型时直接复用这套配置，不存在第二套地址、模型或密钥配置。更换兼容模型服务只修改页面配置，不修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。DeepSeek 的一个配置示例是 `Provider=DeepSeek`、`Protocol=Responses`、`BaseUrl=https://api.deepseek.com`，并使用当前可用的 DeepSeek 模型标识。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
 
 模型服务不是采集、检验或数值优化的启动依赖。发送给模型的内容必须经过授权工具和业务权限控制。
 

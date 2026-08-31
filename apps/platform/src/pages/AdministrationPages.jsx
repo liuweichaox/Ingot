@@ -315,14 +315,14 @@ export function ModelServiceConfigurationPage() {
   return (
     <Page title="模型服务">
       <Alert tone="info" title="密钥只写入，不回显">
-        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。留空表示保留现有密钥；替换后旧密钥立即失效于后续分析运行。
+        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。Chat 与机理语义草稿按需共用此连接；留空表示保留现有密钥，替换后旧密钥立即失效于后续模型调用。
       </Alert>
       <RequestError error={error} title="模型服务配置不可用" onRetry={reload} />
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <Card
           title="OpenAI-compatible 连接"
-          description={`配置来源：${data?.source === "platform" ? "Platform 加密配置" : "部署回退配置"}`}
+          description={data?.updatedAt ? "配置来源：Platform 加密配置，供模型能力统一使用" : "尚未通过页面配置模型服务"}
         >
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="供应商标签" hint="仅用于运行记录和成本归因，不触发供应商专用代码。">

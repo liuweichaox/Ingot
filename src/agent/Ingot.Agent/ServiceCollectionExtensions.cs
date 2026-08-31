@@ -12,7 +12,7 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.Configure<ChatOptions>(configuration.GetSection("Chat"));
-        services.TryAddSingleton<IModelServiceConfigurationProvider, DeploymentModelServiceConfigurationProvider>();
+        services.TryAddSingleton<IModelServiceConfigurationProvider, UnconfiguredModelServiceConfigurationProvider>();
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IModelClient, DeterministicModelClient>());
         services.AddSingleton<IModelRouter, DefaultModelRouter>();

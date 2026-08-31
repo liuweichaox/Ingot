@@ -286,7 +286,15 @@ public sealed class AgentRuntimeTests
             new BoundedCombinedAnalysisWorkflow(options),
             new NullAgentRunLifecycleSink(),
             options,
-            NullLogger<AgentRuntime>.Instance);
+            NullLogger<AgentRuntime>.Instance,
+            new FixedModelServiceConfigurationProvider(new ModelServiceConnectionSettings
+            {
+                Enabled = true,
+                Provider = chatOptions.Provider,
+                Protocol = chatOptions.Protocol,
+                FastModel = chatOptions.FastModel,
+                ReasoningModel = chatOptions.ReasoningModel
+            }));
     }
 
     private static async Task<AgentRunSnapshot> WaitForTerminalAsync(IAgentRuntime runtime, string runId)
@@ -299,6 +307,12 @@ public sealed class AgentRuntimeTests
             await Task.Delay(10);
         }
         throw new TimeoutException("Chat 运行没有在预期时间内结束。");
+    }
+
+    private sealed class FixedModelServiceConfigurationProvider(ModelServiceConnectionSettings settings)
+        : IModelServiceConfigurationProvider
+    {
+        public ModelServiceConnectionSettings Current { get; } = settings;
     }
 
     private static AgentRunSnapshot Snapshot(string runId, string userId) => new()
