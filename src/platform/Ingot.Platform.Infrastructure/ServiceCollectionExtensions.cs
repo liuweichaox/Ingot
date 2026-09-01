@@ -4,7 +4,6 @@ using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.Chat;
 using Ingot.Platform.Application.Events;
-using Ingot.Platform.Application.Insight;
 using Ingot.Platform.Application.Inspections;
 using Ingot.Platform.Application.Manufacturing;
 using Ingot.Platform.Application.ModelServices;
@@ -63,7 +62,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunStore>();
         services.AddSingleton<IAgentRunStore>(provider =>
             provider.GetRequiredService<PostgresAgentRunStore>());
-        services.AddSingleton<IAgentRunSnapshotReader, AgentRunSnapshotReader>();
         services.AddSingleton<PostgresChatConversationStore>();
         services.AddSingleton<IChatConversationStore>(provider =>
             provider.GetRequiredService<PostgresChatConversationStore>());
@@ -126,10 +124,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
         services.AddSingleton<IDataReliabilityBaselineService, DataReliabilityBaselineService>();
-
-        services.AddSingleton<IGoldenQuestionStore, Ingot.Platform.Infrastructure.Insight.PostgresGoldenQuestionStore>();
-        services.AddSingleton<GoldenQuestionEvaluator>();
-        services.AddSingleton<GoldenQuestionApplication>();
 
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();

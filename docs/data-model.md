@@ -1,6 +1,6 @@
 # 数据模型总览
 
-本文是 Ingot PostgreSQL 正式关系表的职责清单。当前 schema 有 112 张关系表（不含序列）；迁移按编号顺序执行，`0001_baseline.sql` 是历史起点，不应手工改写为“当前全量 schema”。
+本文是 Ingot PostgreSQL 正式关系表的职责清单。迁移按编号顺序执行，`0001_baseline.sql` 是历史起点，不应手工改写为“当前全量 schema”。
 
 ## 1. 业务边界
 
@@ -30,7 +30,7 @@
 | 日常下一配方 | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | 冻结建议、采用知识、工程师决定、后续实际运行关联和源数据结果；后三者只追加，不能覆盖。 |
 | 候选原因与研究资产 | `research_hypotheses`, `research_hypothesis_variables`, `research_hypothesis_causal_links`, `research_hypothesis_confounders`, `research_hypothesis_evidence`, `research_hypothesis_failure_conditions`, `research_hypothesis_falsification_conditions`, `research_hypothesis_interactions`, `research_hypothesis_interaction_variables`, `research_hypothesis_temporal_features`, `research_knowledge_claims` | 候选原因、证据限制及项目知识资产；不承载生产运行或日常建议。 |
 | 机理知识 | `knowledge_sources`, `knowledge_source_context`, `knowledge_fragments`, `knowledge_fragment_values`, `knowledge_extraction_jobs`, `mechanism_claims`, `mechanism_claim_versions`, `mechanism_claim_applicability`, `mechanism_claim_constraints`, `mechanism_claim_evidence`, `mechanism_claim_reviews`, `mechanism_claim_lifecycle_decisions`, `mechanism_claim_variables`, `mechanism_claim_conflicts`, `mechanism_claim_forbidden_combinations`, `mechanism_claim_forbidden_combination_factors`, `mechanism_model_versions`, `mechanism_fusion_definitions` | 来源、抽取片段、可复核机理声明、约束/冲突、模型和融合定义。 |
-| Agent 与评测 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `golden_question_cases`, `golden_question_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、黄金问题评测和持久对话；不授予业务写权限。 |
+| Agent 对话与问题案例 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、案例评估和持久对话；不授予业务写权限。 |
 | 操作对象缓存 | `data_object_operation_keys`, `data_object_summaries` | 外部对象的操作幂等键和受限摘要缓存。 |
 
 ## 3. 本轮发现与已修复

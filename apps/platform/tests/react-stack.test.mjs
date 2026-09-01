@@ -72,7 +72,7 @@ test("all platform routes remain available after the React migration", () => {
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
-    "/comparisons", "/golden-questions", "/data-quality", "/configuration/scenario-packages",
+    "/comparisons", "/data-quality", "/configuration/scenario-packages",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
@@ -145,7 +145,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(app, /aria-label="全局导航"/);
   assert.doesNotMatch(app, /showSectionNavigation/);
   assert.doesNotMatch(app, /label: "运营工作台"/);
-  for (const obsoleteLabel of ["周期记录", "周期对比", "AI助手", "黄金问题集", "研发成果"]) {
+  for (const obsoleteLabel of ["周期记录", "周期对比", "AI助手", "研发成果"]) {
     assert.doesNotMatch(app, new RegExp(`label: "${obsoleteLabel}"`));
   }
   const itemLabels = [...app.matchAll(/\["\/[^\"]+", "([^\"]+)"\]/g)].map(match => match[1]);

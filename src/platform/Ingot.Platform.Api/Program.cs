@@ -244,7 +244,6 @@ app.MapGet("/", () => Results.Ok(new
         executionAnalysisBackfills = "/api/v1/process-execution-analysis-backfills",
         executionFeatureAggregates = "/api/v1/process-feature-aggregates",
         scenarioPackages = "/api/v1/scenario-packages",
-        goldenQuestions = "/api/v1/golden-questions",
         processModels = "/api/v1/process-models",
         trainingDatasets = "/api/v1/training-datasets",
         processKnowledge = "/api/v1/process-knowledge",

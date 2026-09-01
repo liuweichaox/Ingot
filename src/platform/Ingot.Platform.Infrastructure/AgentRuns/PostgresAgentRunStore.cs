@@ -240,15 +240,6 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await using (var evidence = new NpgsqlCommand(
-                         "SELECT EXISTS(SELECT 1 FROM golden_question_evaluations WHERE agent_run_id = $1);",
-                         connection,
-                         transaction))
-        {
-            evidence.Parameters.AddWithValue(runId);
-            if (await evidence.ExecuteScalarAsync(ct).ConfigureAwait(false) is true)
-                throw new InvalidOperationException("该 Chat 运行已经进入正式评测证据，不能删除。");
-        }
         await using var command = new NpgsqlCommand(
             "DELETE FROM agent_runs WHERE run_id = $1;", connection, transaction);
         command.Parameters.AddWithValue(runId);
@@ -265,25 +256,6 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await using (var evidence = new NpgsqlCommand(
-                         """
-                         SELECT EXISTS(
-                           SELECT 1
-                           FROM golden_question_evaluations evaluation
-                           JOIN agent_runs run ON run.run_id = evaluation.agent_run_id
-                           WHERE run.user_id = $1
-                             AND run.entry_point = $2
-                             AND run.conversation_id = $3::uuid)
-                         """,
-                         connection,
-                         transaction))
-        {
-            evidence.Parameters.AddWithValue(userId);
-            evidence.Parameters.AddWithValue(entryPoint);
-            evidence.Parameters.AddWithValue(conversationId);
-            if (await evidence.ExecuteScalarAsync(ct).ConfigureAwait(false) is true)
-                throw new InvalidOperationException("该对话已有运行进入正式评测证据，不能删除。");
-        }
         await using var command = new NpgsqlCommand(
             """
             DELETE FROM agent_runs

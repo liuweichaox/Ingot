@@ -171,7 +171,7 @@ Table ownership is fixed by the following keys and access rules rather than infe
 | Run-derived data | `ExecutionId`, traceable to a site ingestion fact | `execution_features`, `execution_phases`, analysis materializations and recompute jobs, `operation_context_snapshots` | Not an independent tenant boundary; external reads resolve allowed executions from authorized sites before loading derived rows |
 | Research projects and evidence | `ProjectId` plus project membership/role | `process_research_*`, `research_*`, `mechanism_*`, `knowledge_*`, `dataset_quality_validation_reports` | A project may reference authorized scopes from one or more sites; copied evidence retains its source site and run ownership |
 | Quality and inspection | `SiteId` plus run/project/inspection-plan relationship | `inspection_*`, `case_level_evaluations`, `model_evaluations`, `model_drift_readings` | Inspection records, scopes, and attachments freeze site ownership; authorization still derives from the related run or project, and attachments and review logs are never accessed without their parent |
-| Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `golden_question_*`, `problem_cases` | Agent records grant no new data permission; replay rechecks user, project, and site scope |
+| Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `problem_cases` | Agent records grant no new data permission; replay rechecks user, project, and site scope |
 
 The database gate currently enforces `site_id NOT NULL` on the canonical ingestion/projection tables as well as Edge registration, inspection records, quality scopes, and inspection attachments. Edge registration cannot migrate across sites; inspection attachments are deduplicated by site and content hash, and reads recheck both role and site authorization. Other run-derived tables retain `ExecutionId` ownership to avoid a duplicated site field that can drift; their APIs must first resolve execution IDs from an authorized site scope. If measurement later shows that join to be an audit or performance bottleneck, a redundant `SiteId` may be added only with database-enforced consistency, never as an unconstrained application copy.
 
@@ -273,7 +273,7 @@ Actual applied values come from equipment readback, never from requested values.
 | Hot | Recent raw events, process frames, and values | Online time-series storage for run detail and recent analysis |
 | Warm | Downsampled data, features, and run aggregates | Compression or continuous aggregation for common comparisons |
 | Cold | Expired raw data and large attachments | Immutable object archive with checksums |
-| Pinned evidence | Inputs referenced by a report, approval, golden question, or formal conclusion | Separate retention and legal hold, unaffected by ordinary time-series retention |
+| Pinned evidence | Inputs referenced by a report, approval, or formal conclusion | Separate retention and legal hold, unaffected by ordinary time-series retention |
 
 A retention job resolves references before deleting data. Every deletion records its range, policy version, actor, count, and verification result. If formal evidence depends on raw data approaching expiry, the system first creates a verifiable evidence package containing at least the query range, canonical data, units, quality codes, source versions, and content hash.
 

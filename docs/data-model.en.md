@@ -1,6 +1,6 @@
 # Data Model Overview
 
-This is the responsibility inventory for Ingot's PostgreSQL relations. The current schema has 112 relations, excluding sequences. Migrations run in numeric order; `0001_baseline.sql` is a historical starting point, not a hand-maintained current-schema dump.
+This is the responsibility inventory for Ingot's PostgreSQL relations. Migrations run in numeric order; `0001_baseline.sql` is a historical starting point, not a hand-maintained current-schema dump.
 
 ## 1. Business Boundaries
 
@@ -28,7 +28,7 @@ Research projects hold problems, hypotheses, evidence, and knowledge. They do no
 | Daily next recipe | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | Frozen recommendation, knowledge use, engineer decision, later execution link, and source outcome. The final three are append-only. |
 | Candidate causes and research assets | `research_hypotheses`, `research_hypothesis_variables`, `research_hypothesis_causal_links`, `research_hypothesis_confounders`, `research_hypothesis_evidence`, `research_hypothesis_failure_conditions`, `research_hypothesis_falsification_conditions`, `research_hypothesis_interactions`, `research_hypothesis_interaction_variables`, `research_hypothesis_temporal_features`, `research_knowledge_claims` | Candidate causes, evidence limits, and project knowledge assets; never production runs or daily recommendations. |
 | Mechanism knowledge | `knowledge_sources`, `knowledge_source_context`, `knowledge_fragments`, `knowledge_fragment_values`, `knowledge_extraction_jobs`, `mechanism_claims`, `mechanism_claim_versions`, `mechanism_claim_applicability`, `mechanism_claim_constraints`, `mechanism_claim_evidence`, `mechanism_claim_reviews`, `mechanism_claim_lifecycle_decisions`, `mechanism_claim_variables`, `mechanism_claim_conflicts`, `mechanism_claim_forbidden_combinations`, `mechanism_claim_forbidden_combination_factors`, `mechanism_model_versions`, `mechanism_fusion_definitions` | Sources, extracted fragments, reviewable claims, constraints/conflicts, models, and fusion definitions. |
-| Agent and evaluation | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `golden_question_cases`, `golden_question_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, golden-question evaluation, and durable chat; no business-write permission. |
+| Agent conversations and problem cases | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, case evaluation, and durable chat; no business-write permission. |
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
 
 ## 3. Findings and Fixes

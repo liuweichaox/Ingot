@@ -74,7 +74,7 @@ const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
     { label: "身份权限", items: [["/identity/users", "用户权限"]] },
     { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"]] },
-    { label: "助手治理", items: [["/model-service", "模型服务"], ["/golden-questions", "助手评测"]] },
+    { label: "助手治理", items: [["/model-service", "模型服务"]] },
   ],
 };
 
@@ -98,7 +98,6 @@ const pageDetails = {
   "/inspections": ["检验任务", "处理视觉检查、人工质检与原图复核"],
   "/quality-analysis": ["偏差分析", "按产品、工艺规范和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
-  "/golden-questions": ["助手评测", "用真实问题持续核对事实、记录引用、正确拒绝和因果边界"],
   "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
   "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
@@ -497,7 +496,6 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage canWrite={canConfigure} />} />
       <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
       <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
-      <Route path="/golden-questions" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.GoldenQuestionsPage /></RequireRole>} />
       <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.ModelServiceConfigurationPage /></RequireRole>} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />

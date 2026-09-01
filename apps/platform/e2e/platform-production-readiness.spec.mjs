@@ -174,7 +174,6 @@ test("全局搜索、面包屑和系统管理深链一致", async ({ page }) => 
   for (const [route, heading] of [
     ["/identity/users", "用户权限"],
     ["/logs", "平台日志"],
-    ["/golden-questions", "助手评测"],
   ]) {
     await page.goto(route);
     await expect(page.getByRole("heading", { name: heading, exact: true }).first(), route).toBeVisible();
