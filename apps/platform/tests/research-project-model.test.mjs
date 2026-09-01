@@ -26,8 +26,7 @@ test("rejected daily recommendation decisions omit parameter selections", () => 
 
 test("project lifecycle and localized statuses support the production-evidence workflow", () => {
   assert.deepEqual(nextProjectAction("draft"), ["开始研发", "active"]);
-  assert.deepEqual(nextProjectAction("active"), ["进入复核", "validating"]);
-  assert.deepEqual(nextProjectAction("validating"), ["完成项目", "completed"]);
+  assert.deepEqual(nextProjectAction("active"), ["完成项目", "completed"]);
   assert.equal(nextProjectAction("completed"), null);
   assert.equal(canArchiveProject("draft"), true);
   assert.equal(canArchiveProject("completed"), true);

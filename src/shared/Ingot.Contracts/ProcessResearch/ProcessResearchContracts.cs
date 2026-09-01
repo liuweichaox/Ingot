@@ -1,6 +1,5 @@
 // 定义工艺研发跨层契约；只承载状态、请求和证据快照，不包含存储或执行逻辑。
 using System.Text.Json;
-using Ingot.Contracts.Analytics;
 using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Contracts.ProcessResearch;
@@ -9,12 +8,11 @@ public static class ResearchProjectStatuses
 {
     public const string Draft = "draft";
     public const string Active = "active";
-    public const string Validating = "validating";
     public const string Completed = "completed";
     public const string Archived = "archived";
 
     public static bool IsValid(string? value)
-        => value is Draft or Active or Validating or Completed or Archived;
+        => value is Draft or Active or Completed or Archived;
 }
 
 public static class ResearchVariableRoles
@@ -271,76 +269,6 @@ public sealed record ResearchProjectEvidenceSnapshot
     public ResearchOptimizationFeatureSet OptimizationFeatures { get; init; } = new();
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
-}
-
-public static class ResearchValidationPreregistrationStatuses
-{
-    public const string Frozen = "frozen";
-    public const string Reviewed = "reviewed";
-}
-
-public sealed record ResearchWorkflowBaselineStep
-{
-    public int Sequence { get; init; }
-    public required string Name { get; init; }
-    public double Minutes { get; init; }
-}
-
-public sealed record ResearchWorkflowBaseline
-{
-    public required string Name { get; init; }
-    public DateTimeOffset StartedAt { get; init; }
-    public DateTimeOffset CompletedAt { get; init; }
-    public IReadOnlyList<ResearchWorkflowBaselineStep> Steps { get; init; } = [];
-    public string? Notes { get; init; }
-    public double TotalMinutes => (CompletedAt - StartedAt).TotalMinutes;
-}
-
-public sealed record ResearchValidationPreregistrationRequest
-{
-    public required string DataScope { get; init; }
-    public DateTimeOffset DataFrom { get; init; }
-    public DateTimeOffset DataTo { get; init; }
-    public string? EdgeId { get; init; }
-    public string? EquipmentId { get; init; }
-    public int MaximumRuns { get; init; } = 2000;
-    public required string InclusionMethod { get; init; }
-    public IReadOnlyList<string> InclusionRules { get; init; } = [];
-    public IReadOnlyList<string> ExclusionRules { get; init; } = [];
-    public IReadOnlyList<string> MatchingRules { get; init; } = [];
-    public IReadOnlyList<string> BaselineMethods { get; init; } = [];
-    public IReadOnlyList<string> PrimaryMetrics { get; init; } = [];
-    public IReadOnlyList<string> GuardrailMetrics { get; init; } = [];
-    public IReadOnlyList<string> StopConditions { get; init; } = [];
-    public IReadOnlyList<string> FalsificationConditions { get; init; } = [];
-    public IReadOnlyList<ResearchWorkflowBaseline> EngineerWorkflowBaselines { get; init; } = [];
-}
-
-public sealed record ResearchValidationPreregistration
-{
-    public Guid PreregistrationId { get; init; }
-    public Guid ProjectId { get; init; }
-    public int Version { get; init; }
-    public int ProjectRevision { get; init; }
-    public string Status { get; init; } = ResearchValidationPreregistrationStatuses.Frozen;
-    public required ResearchValidationPreregistrationRequest Plan { get; init; }
-    public DataReliabilityBaseline ReliabilityBaseline { get; init; } = new();
-    public required string ProjectSnapshotHash { get; init; }
-    public required string ContentHash { get; init; }
-    public string FrozenBy { get; init; } = "";
-    public DateTimeOffset FrozenAt { get; init; }
-    public string? ReviewedBy { get; init; }
-    public DateTimeOffset? ReviewedAt { get; init; }
-}
-
-public sealed record ResearchStageZeroAdmission
-{
-    public bool Eligible { get; init; }
-    public Guid? PreregistrationId { get; init; }
-    public int? PreregistrationVersion { get; init; }
-    public string? ContentHash { get; init; }
-    public IReadOnlyList<string> Failures { get; init; } = [];
-    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 public sealed record EvidenceReference
@@ -659,8 +587,6 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchOperatingRegion> OperatingRegions { get; init; } = [];
     public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
     public IReadOnlyList<MechanismClaimUsage> MechanismKnowledgeUsages { get; init; } = [];
-    public IReadOnlyList<ResearchValidationPreregistration> ValidationPreregistrations { get; init; } = [];
-    public ResearchStageZeroAdmission? StageZeroAdmission { get; init; }
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
     public IReadOnlyDictionary<string, string> NextCursors { get; init; } =
         new Dictionary<string, string>();

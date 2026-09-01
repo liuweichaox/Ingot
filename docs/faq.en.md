@@ -16,7 +16,7 @@ No. The system organizes facts, performs calculations, explains uncertainty, and
 
 ## Can the system find root causes automatically?
 
-Historical data cannot establish a root cause by itself; it can only identify associations between factors. Material, equipment, time, and tooling may change together and create confounding. The system records these limits and supports controlled, repeated additional validations. A candidate becomes a validated cause only when evidence-based results and engineering judgment support it.
+Historical data cannot establish a root cause by itself; it can only identify associations between factors. Material, equipment, time, and tooling may change together and create confounding. The system records these limits and requires additional real-run evidence before a candidate is treated as a supported cause.
 
 ## Why does the system record conditions, runs, and inspections together?
 
@@ -36,7 +36,7 @@ Material, tooling, and equipment context may affect quality or may serve only tr
 
 ## Why not always use the most complex model?
 
-Model complexity does not establish reliability. With limited samples or confounded conditions, supplementary evidence review often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or additional validations and does not generate an unsupported conclusion.
+Model complexity does not establish reliability. With limited samples or confounded conditions, supplementary evidence review often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data and does not generate an unsupported conclusion.
 
 ## What responsibilities does the language model have?
 
@@ -46,15 +46,15 @@ A large language model (LLM) parses questions, queries authorized records, and g
 
 Ingot's product position does not change with foundation-model capability. Language models remain replaceable components, while Ingot preserves run records, evidence sources, execution state, approvals, and final conclusions. See the [Roadmap](project-plan.en.md).
 
-## Does adding MCP make an agent safe to drive additional validations?
+## Does adding MCP make an agent safe to drive production actions?
 
 No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Project access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
 
 ## When is Bayesian optimization appropriate?
 
-Bayesian optimization applies when individual additional validations are costly and each result can guide subsequent additional validation selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
+Bayesian optimization applies when individual real recipe runs are costly and each result can guide subsequent recipe selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
 
-## Can existing recipe runs be analyzed without creating an additional validation?
+## Can existing recipe runs be analyzed directly?
 
 Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more runs or create separate supplementary evidence review.
 
@@ -76,7 +76,7 @@ Validation data, protocols, and results are tied to a specific scenario, objecti
 
 ## How is a reduction in run count validated?
 
-Before results are reviewed, the validation plan fixes the target, starting data, run budget, comparison methods, and pass criteria. Every executed additional validation is included in cost. Historical review, shadow use, and actual online runs respectively evaluate historical efficiency, recommendation stability on a new project, and run count and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
+Before results are reviewed, define the target, starting data, run budget, comparison methods, and pass criteria outside Ingot. Historical review and actual production runs can then evaluate recommendation stability, run count, and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
 
 The repository provides historical replay and method-comparison capabilities but bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
 

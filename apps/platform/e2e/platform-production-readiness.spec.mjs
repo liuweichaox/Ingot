@@ -194,7 +194,7 @@ test("模拟场景覆盖空态、加载态、权限态和生命周期状态", as
   await page.goto("/research-projects");
   await page.getByRole("combobox", { name: "状态" }).selectOption("all");
   const projectTable = page.getByRole("region", { name: "可横向滚动的数据表" });
-  for (const status of ["草稿", "研发中", "验证中", "已完成", "已归档"]) {
+  for (const status of ["草稿", "研发中", "已完成", "已归档"]) {
     await expect(projectTable.getByText(status, { exact: true }).first()).toBeVisible();
   }
 
@@ -237,7 +237,7 @@ test("危险操作有确认，证据边界和核心业务动作可见", async ({
 
   await page.goto("/comparisons");
   await page.getByRole("button", { name: "生成对比结论", exact: true }).click();
-  await expect(page.getByText("观察结果只形成待验证候选", { exact: false })).toBeVisible();
+  await expect(page.getByText("观察结果只形成下一配方候选", { exact: false })).toBeVisible();
   await expect(page.getByText("因果结论须由后续真实生产运行和质量结果持续支持", { exact: false })).toBeVisible();
 
   await page.goto("/research-projects?create=1&executionId=RUN-2026-0821-005&comparisonExecutionIds=RUN-2026-0821-005,RUN-2026-0821-004");
@@ -286,11 +286,4 @@ test("机理知识从业务选择映射到可追溯配方建议", async ({ page 
   await expect(page.getByLabel("适用对象")).toHaveValue("PRESS-01");
   await expect(page.getByLabel("适用对象").locator("option")).toHaveCount(1);
 
-  await page.goto("/research-projects/research-active");
-  const knowledgeSummary = page.getByText("本次采用的机理知识 · 1 条", { exact: true });
-  await expect(knowledgeSummary).toBeVisible();
-  await knowledgeSummary.click();
-  await expect(page.getByText("硬边界", { exact: true })).toBeVisible();
-  await expect(page.getByText("候选偏好", { exact: true })).toBeVisible();
-  await expect(page.getByText("高温高压联合禁区", { exact: true })).toBeVisible();
 });

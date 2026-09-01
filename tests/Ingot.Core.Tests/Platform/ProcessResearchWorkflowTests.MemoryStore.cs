@@ -9,7 +9,6 @@ public abstract partial class ProcessResearchWorkflowTestBase
     protected sealed class MemoryStore : IProcessResearchStore
     {
         private readonly Dictionary<Guid, ResearchProject> projects = [];
-        private readonly Dictionary<Guid, ResearchValidationPreregistration> preregistrations = [];
         private readonly Dictionary<Guid, ResearchHypothesis> hypotheses = [];
         private readonly Dictionary<Guid, ResearchRecipeRecommendation> recommendations = [];
         private readonly Dictionary<Guid, ResearchRecipeRecommendationDecision> decisions = [];
@@ -37,32 +36,6 @@ public abstract partial class ProcessResearchWorkflowTestBase
         public Task<ResearchProject> SaveProjectAsync(ResearchProject value, CancellationToken ct = default)
         {
             projects[value.ProjectId] = value;
-            return Task.FromResult(value);
-        }
-
-        public Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
-            Guid preregistrationId, CancellationToken ct = default)
-            => Task.FromResult(preregistrations.GetValueOrDefault(preregistrationId));
-
-        public Task<IReadOnlyList<ResearchValidationPreregistration>> ListValidationPreregistrationsAsync(
-            Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ResearchValidationPreregistration>>(preregistrations.Values
-                .Where(value => value.ProjectId == projectId).ToArray());
-
-        public Task<ResearchValidationPreregistration> CreateValidationPreregistrationAsync(
-            ResearchValidationPreregistration value, CancellationToken ct = default)
-        {
-            preregistrations.Add(value.PreregistrationId, value);
-            return Task.FromResult(value);
-        }
-
-        public Task<ResearchValidationPreregistration> ReviewValidationPreregistrationAsync(
-            ResearchValidationPreregistration value, CancellationToken ct = default)
-        {
-            if (!preregistrations.TryGetValue(value.PreregistrationId, out var current) ||
-                current.Status != ResearchValidationPreregistrationStatuses.Frozen)
-                throw new ProcessResearchRuleException("阶段 0 预注册不存在或已经复核。");
-            preregistrations[value.PreregistrationId] = value;
             return Task.FromResult(value);
         }
 
@@ -125,6 +98,15 @@ public abstract partial class ProcessResearchWorkflowTestBase
                 Items = decisions.Values.Where(value => value.ProjectId == projectId)
                     .OrderByDescending(static value => value.DecidedAt).Take(limit).ToArray()
             });
+
+        public Task<IReadOnlyList<ResearchRecipeRecommendationDecision>> ListPendingRecipeRecommendationDecisionsAsync(
+            Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ResearchRecipeRecommendationDecision>>(decisions.Values
+                .Where(value => value.ProjectId == projectId &&
+                    value.Decision is ResearchRecipeRecommendationDecisionStatuses.Accepted or
+                        ResearchRecipeRecommendationDecisionStatuses.Modified &&
+                    !string.IsNullOrWhiteSpace(value.ActualExecutionKey) && value.Outcome is null)
+                .OrderBy(static value => value.DecidedAt).ThenBy(static value => value.DecisionId).ToArray());
 
         public async Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(
             ResearchRecipeRecommendationDecision value, string? actualExecutionKey, ResearchAuditEntry audit,

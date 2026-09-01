@@ -17,19 +17,6 @@ public interface IProcessResearchStore
         CancellationToken ct = default);
     Task<ResearchProject> SaveProjectAsync(ResearchProject value, CancellationToken ct = default);
 
-    Task<ResearchValidationPreregistration?> GetValidationPreregistrationAsync(
-        Guid preregistrationId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchValidationPreregistration>> ListValidationPreregistrationsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchValidationPreregistration> CreateValidationPreregistrationAsync(
-        ResearchValidationPreregistration value,
-        CancellationToken ct = default);
-    Task<ResearchValidationPreregistration> ReviewValidationPreregistrationAsync(
-        ResearchValidationPreregistration value,
-        CancellationToken ct = default);
-
     Task<ResearchHypothesis?> GetHypothesisAsync(Guid hypothesisId, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchHypothesis>> ListHypothesesAsync(
         Guid projectId,
@@ -68,6 +55,9 @@ public interface IProcessResearchStore
         Guid projectId,
         string? cursor,
         int limit,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<ResearchRecipeRecommendationDecision>> ListPendingRecipeRecommendationDecisionsAsync(
+        Guid projectId,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(
         ResearchRecipeRecommendationDecision value,

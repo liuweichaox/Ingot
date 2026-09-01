@@ -58,7 +58,7 @@ The fixed design objective is:
 
 > **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
 
-Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. Daily optimization does not require a separately created experiment. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production. Controlled validation remains optional for causal confirmation, extrapolation beyond observed coverage, or operating-region validation.
+Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. Daily optimization does not require a separately created experiment and does not provide a separate controlled-validation workflow. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production.
 
 Methods are selected by question type, data coverage, and constraints. Available methods include traditional design of experiments (DOE), response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
 
@@ -70,7 +70,7 @@ Ingot does not replace production-execution, real-time-control, quality-complian
 |---|---|
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
 | Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
-| Validation of a new material, machine, or extrapolated setting | Optional controlled validation with bounds and a review record |
+| New material, machine, or extrapolated setting | Collect additional real runs through existing production and compliance processes; Ingot only records and explains their evidence |
 
 ## Local demo
 
@@ -109,13 +109,13 @@ Process configuration → Field integration → Production runs → Quality mana
 | Production runs | Record actual conditions, process trajectories, and production context |
 | Quality management | Link inspection results and perform independent review |
 | Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
-| Recipe optimization | Learn from real recipe runs and recommend the next recipe within safety boundaries and observed coverage; start controlled validation only when needed |
+| Recipe optimization | Learn from real recipe runs and recommend the next recipe within safety boundaries and observed coverage |
 
 Trustworthy run facts are a prerequisite for analysis and recommendations. Data acquisition and optimization methods serve the same evidence chain.
 
 ## Current status
 
-The main software workflow is implemented: the system can link real recipe runs to quality outcomes, decide whether they are usable for optimization, and generate an engineer-reviewed next-recipe recommendation that is never dispatched automatically. Optional controlled validation and its review records remain available.
+The main software workflow is implemented: the system can link real recipe runs to quality outcomes, decide whether they are usable for optimization, and generate an engineer-reviewed next-recipe recommendation that is never dispatched automatically.
 
 The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
 
@@ -129,7 +129,7 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 |---|---|---|
 | MES, SCADA, historian | Receive run, equipment, and process facts | Does not replace execution, monitoring, or real-time control |
 | LIMS, QMS, ELN | Link inspection results, review, and R&D context | Does not replace complete sample, compliance, or document management |
-| Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs and design controlled validation only when needed | Does not treat one algorithm as the answer to every process problem |
+| Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs | Does not treat one algorithm as the answer to every process problem |
 | AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, approve experiments, or control equipment |
 
 ## Runtime architecture

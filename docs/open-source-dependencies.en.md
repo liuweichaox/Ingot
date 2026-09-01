@@ -18,7 +18,7 @@ Dependency selection is based on the engineering problem, license compatibility,
 
 Every new runtime dependency must:
 
-- directly improve data trust, engineering judgment, additional validation efficiency, or system reliability;
+- directly improve data trust, engineering judgment, recipe-decision quality, or system reliability;
 - have a project-compatible open-source license;
 - use a pinned version or controlled range;
 - enter build, vulnerability, license, and supply-chain audits;

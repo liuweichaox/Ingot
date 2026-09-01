@@ -22,13 +22,15 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: `INGOT_DEMO_PORT=${demoPort} node ../../scripts/platform-demo.mjs`,
+      command: "node ../../scripts/platform-demo.mjs",
+      env: { ...process.env, INGOT_DEMO_PORT: demoPort },
       url: `${demoUrl}/health`,
       reuseExistingServer: true,
       timeout: 20_000,
     },
     {
-      command: `INGOT_PLATFORM_API_TARGET=${demoUrl} npm run demo -- --port ${platformPort}`,
+      command: `npm run demo -- --port ${platformPort}`,
+      env: { ...process.env, INGOT_PLATFORM_API_TARGET: demoUrl },
       url: platformUrl,
       reuseExistingServer: true,
       timeout: 30_000,

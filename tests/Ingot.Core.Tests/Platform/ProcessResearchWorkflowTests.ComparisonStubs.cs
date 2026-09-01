@@ -1,17 +1,14 @@
 // 提供流程测试使用的可靠性与执行比较桩。
 using System.Text.Json;
-using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Api.Controllers;
-using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
@@ -21,35 +18,6 @@ namespace Ingot.Core.Tests.Platform;
 
 public abstract partial class ProcessResearchWorkflowTestBase
 {
-    protected sealed class StubReliabilityBaselineService : IDataReliabilityBaselineService
-    {
-        public Task<DataReliabilityBaseline> CalculateAsync(
-            DataReliabilityBaselineQuery query,
-            CancellationToken ct = default)
-            => Task.FromResult(new DataReliabilityBaseline
-            {
-                GeneratedAt = DateTimeOffset.UtcNow,
-                From = query.From,
-                To = query.To,
-                EdgeId = query.EdgeId,
-                EquipmentId = query.EquipmentId,
-                MatchingCompletedRunCount = 12,
-                AnalyzedRunCount = 12,
-                Rates =
-                [
-                    new ReliabilityRate
-                    {
-                        Code = "analysis_admission",
-                        Name = "正式分析准入率",
-                        Numerator = 9,
-                        Denominator = 12,
-                        Rate = 0.75,
-                        Definition = "测试快照"
-                    }
-                ]
-            });
-    }
-
     protected sealed class RejectingExecutionComparisonService : IExecutionComparisonService
     {
         public int CallCount { get; private set; }

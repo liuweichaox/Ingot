@@ -42,6 +42,8 @@ public sealed class ResearchOptimizationService(
         var constraintCodes = project.OutcomeConstraints.Select(static value => value.Code).ToHashSet(StringComparer.Ordinal);
         var controls = project.Variables.Where(static value => value.Role == ResearchVariableRoles.Control)
             .ToDictionary(static value => value.Code, StringComparer.Ordinal);
+        var projectSnapshot = ResearchProjectEvidenceSnapshots.Freeze(project);
+        var projectSnapshotHash = ResearchProjectEvidenceSnapshots.Hash(projectSnapshot);
         var observations = assembly.Observations
             .Where(value => value.ValidForOptimization &&
                 value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(objectiveCodes) &&
@@ -65,6 +67,13 @@ public sealed class ResearchOptimizationService(
             .Distinct(StringComparer.Ordinal).Count() < 2)
             throw new ProcessResearchRuleException("当前生产记录只有一种实际配方，尚无法比较配方效果或推荐下一配方。");
 
+        var pendingPoints = (await store.ListPendingRecipeRecommendationDecisionsAsync(projectId, ct)
+                .ConfigureAwait(false))
+            .Where(value => value.ProjectRevision == project.Revision &&
+                string.Equals(value.ProjectSnapshotHash, projectSnapshotHash, StringComparison.Ordinal))
+            .Select(value => MapPendingPoint(value, controls))
+            .ToArray();
+
         var topK = mechanismKnowledge.RankingConstraints.Count == 0 ? 1 : 4;
         var call = new OptimizerSuggestionCall
         {
@@ -72,7 +81,7 @@ public sealed class ResearchOptimizationService(
                 MechanismKnowledgeRecommendationPolicy.ApplyHardConstraints(BuildCampaign(project), mechanismKnowledge),
                 mechanismModels),
             Observations = observations,
-            PendingPoints = [],
+            PendingPoints = pendingPoints,
             TopK = topK,
             Seed = request.Seed
         };
@@ -98,14 +107,13 @@ public sealed class ResearchOptimizationService(
         var recommendationId = CreateDeterministicRecommendationId(projectId, inputHash);
         var recommendationKey = $"recipe-{recommendationId:N}"[..22];
         var now = DateTimeOffset.UtcNow;
-        var snapshot = ResearchProjectEvidenceSnapshots.Freeze(project);
         var recommendation = new ResearchRecipeRecommendation
         {
             RecommendationId = recommendationId,
             ProjectId = projectId,
             ProjectRevision = project.Revision,
-            ProjectSnapshot = snapshot,
-            ProjectSnapshotHash = ResearchProjectEvidenceSnapshots.Hash(snapshot),
+            ProjectSnapshot = projectSnapshot,
+            ProjectSnapshotHash = projectSnapshotHash,
             ModelVersion = response.ModelVersion,
             InputHash = inputHash,
             ObservationCount = observations.Length,
@@ -185,6 +193,23 @@ public sealed class ResearchOptimizationService(
         FeasibilityProbability = value.FeasibilityProbability, AcquisitionValue = value.AcquisitionValue,
         ColdStart = value.ColdStart, Rationale = value.Rationale
     };
+
+    private static IReadOnlyDictionary<string, double> MapPendingPoint(
+        ResearchRecipeRecommendationDecision decision,
+        IReadOnlyDictionary<string, ResearchVariable> controls)
+    {
+        var values = decision.EngineerSelectedParameters.OrderBy(static value => value.VariableCode, StringComparer.Ordinal)
+            .ToDictionary(
+            static value => value.VariableCode,
+            static value => value.Value,
+            StringComparer.Ordinal);
+        if (!values.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(controls.Keys))
+            throw new ProcessResearchRuleException("待观察配方的可控变量集合与当前项目不一致。");
+        foreach (var (code, value) in values)
+            if (!double.IsFinite(value) || value < controls[code].LowerLimit || value > controls[code].UpperLimit)
+                throw new ProcessResearchRuleException($"待观察配方的优化变量 {code} 超出项目范围。");
+        return values;
+    }
 
     private static OptimizerObjectiveInput MapObjective(ResearchObjective value) => value.Direction switch
     {

@@ -145,9 +145,7 @@ public sealed partial class ProcessResearchWorkflow
         var allowed = (project.Status, targetStatus) switch
         {
             (ResearchProjectStatuses.Draft, ResearchProjectStatuses.Active) => true,
-            (ResearchProjectStatuses.Active, ResearchProjectStatuses.Validating) => true,
-            (ResearchProjectStatuses.Validating, ResearchProjectStatuses.Active) => true,
-            (ResearchProjectStatuses.Validating, ResearchProjectStatuses.Completed) => true,
+            (ResearchProjectStatuses.Active, ResearchProjectStatuses.Completed) => true,
             (ResearchProjectStatuses.Draft, ResearchProjectStatuses.Archived) => true,
             (ResearchProjectStatuses.Completed, ResearchProjectStatuses.Archived) => true,
             _ => false
@@ -158,10 +156,6 @@ public sealed partial class ProcessResearchWorkflow
         if (targetStatus == ResearchProjectStatuses.Active &&
             (project.Objectives.Count == 0 || project.Variables.Count == 0))
             throw new ProcessResearchRuleException("研发项目进入执行阶段前必须定义目标和变量。");
-        if (project.Status == ResearchProjectStatuses.Draft &&
-            targetStatus == ResearchProjectStatuses.Active)
-            await new ResearchValidationPreregistrationService(store)
-                .RequireAsync(projectId, ct).ConfigureAwait(false);
         var projectContext = targetStatus == ResearchProjectStatuses.Active
             ? await FreezeContextPolicyAsync(project, ct).ConfigureAwait(false)
             : project.Context;
@@ -315,9 +309,6 @@ public sealed partial class ProcessResearchWorkflow
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
         var mechanismUsagesTask = mechanismKnowledgeStore?.ListUsagesAsync(projectId, ct)
             ?? Task.FromResult<IReadOnlyList<Ingot.Contracts.ResearchAssets.MechanismClaimUsage>>([]);
-        var preregistrationsTask = store.ListValidationPreregistrationsAsync(projectId, ct);
-        var stageZeroAdmissionTask = new ResearchValidationPreregistrationService(store)
-            .AssessAsync(projectId, ct);
         var auditTask = store.ListAuditEntriesPageAsync(
             projectId, null, workspaceHistoryLimit, ct);
         await Task.WhenAll(
@@ -326,8 +317,6 @@ public sealed partial class ProcessResearchWorkflow
             windowsTask,
             claimsTask,
             mechanismUsagesTask,
-            preregistrationsTask,
-            stageZeroAdmissionTask,
             auditTask).ConfigureAwait(false);
         var recipeFlows = await recipeFlowsTask.ConfigureAwait(false);
         return new ResearchProjectWorkspace
@@ -347,8 +336,6 @@ public sealed partial class ProcessResearchWorkflow
             OperatingRegions = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
             MechanismKnowledgeUsages = await mechanismUsagesTask.ConfigureAwait(false),
-            ValidationPreregistrations = await preregistrationsTask.ConfigureAwait(false),
-            StageZeroAdmission = await stageZeroAdmissionTask.ConfigureAwait(false),
             Audit = (await auditTask.ConfigureAwait(false)).Items,
             NextCursors = new Dictionary<string, string>(StringComparer.Ordinal)
             {

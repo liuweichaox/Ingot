@@ -386,7 +386,6 @@ export function ResearchProjectsPage({ identity }) {
             <option value="open">进行中与待处理</option>
             <option value="all">全部</option>
             <option value="active">优化中</option>
-            <option value="validating">验证中</option>
             <option value="completed">已完成</option>
             <option value="archived">已归档</option>
           </Select>

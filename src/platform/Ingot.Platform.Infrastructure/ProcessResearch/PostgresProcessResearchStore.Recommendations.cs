@@ -176,6 +176,26 @@ public sealed partial class PostgresProcessResearchStore
             static value => value.DecisionId,
             ct);
 
+    public Task<IReadOnlyList<ResearchRecipeRecommendationDecision>> ListPendingRecipeRecommendationDecisionsAsync(
+        Guid projectId,
+        CancellationToken ct = default)
+        => ListAsync<ResearchRecipeRecommendationDecision>(
+            """
+            SELECT decision.payload
+                   || jsonb_build_object('actualExecutionKey', execution_link.actual_execution_key)
+            FROM research_recipe_recommendation_decisions AS decision
+            JOIN research_recipe_recommendation_decision_executions AS execution_link
+                ON execution_link.decision_id = decision.decision_id
+            LEFT JOIN research_recipe_recommendation_decision_outcomes AS outcome
+                ON outcome.decision_id = decision.decision_id
+            WHERE decision.project_id = $1
+              AND decision.decision IN ('accepted', 'modified')
+              AND outcome.decision_id IS NULL
+            ORDER BY decision.decided_at, decision.decision_id
+            """,
+            projectId,
+            ct);
+
     public async Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(
         ResearchRecipeRecommendationDecision value,
         string? actualExecutionKey,

@@ -36,7 +36,6 @@ export const projectFormInitial = {
 export const statusLabels = {
   draft: "草稿",
   active: "研发中",
-  validating: "复核中",
   completed: "已完成",
   archived: "已归档",
   proposed: "待选择",
@@ -86,8 +85,7 @@ export function formatResearchNumber(value) {
 
 export function nextProjectAction(status) {
   if (status === "draft") return ["开始研发", "active"];
-  if (status === "active") return ["进入复核", "validating"];
-  if (status === "validating") return ["完成项目", "completed"];
+  if (status === "active") return ["完成项目", "completed"];
   return null;
 }
 
