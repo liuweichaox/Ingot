@@ -1,5 +1,5 @@
 // 管理 Chat 运行创建、历史、流式状态和受控删除交互。
-import { ArrowLeftIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { deleteJson, getJson, postJson, streamSse } from "../api/http";
@@ -147,14 +147,6 @@ const chatHistoryStatusLabels = {
   failed: "分析失败",
   cancelled: "已取消",
   completed: "回答已完成",
-};
-
-const researchStatusLabels = {
-  draft: "草稿",
-  active: "研发中",
-  validating: "验证中",
-  completed: "已完成",
-  archived: "已归档",
 };
 
 function chatProgressText(item) {
@@ -326,8 +318,6 @@ function ChatHistoryList({ items, loading, submitting, deletingConversationId, s
 export function ChatPage() {
   const { conversationId: routeConversationId = "" } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const projectId = searchParams.get("projectId");
   const [capabilities, setCapabilities] = useState(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
   const [question, setQuestion] = useState("");
@@ -339,9 +329,6 @@ export function ChatPage() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [project, setProject] = useState(null);
-  const [projectLoading, setProjectLoading] = useState(Boolean(projectId));
-  const [projectError, setProjectError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -360,10 +347,7 @@ export function ChatPage() {
     }
   }, []);
 
-  const routeFor = useCallback(value => {
-    const suffix = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
-    return value ? `/chat/${encodeURIComponent(value)}${suffix}` : `/chat${suffix}`;
-  }, [projectId]);
+  const routeFor = useCallback(value => value ? `/chat/${encodeURIComponent(value)}` : "/chat", []);
 
   const loadConversation = useCallback(async value => {
     const detail = await getJson(`/api/v1/chat/conversations/${encodeURIComponent(value)}`);
@@ -402,21 +386,6 @@ export function ChatPage() {
     });
   }, [loadConversation, navigate, routeConversationId, routeFor]);
 
-  useEffect(() => {
-    if (!projectId) {
-      setProject(null);
-      setProjectLoading(false);
-      setProjectError("");
-      return;
-    }
-    setProjectLoading(true);
-    setProjectError("");
-    getJson(`/api/v1/research-projects/${encodeURIComponent(projectId)}`)
-      .then(value => setProject(value?.project || null))
-      .catch(requestError => setProjectError(requestError.message))
-      .finally(() => setProjectLoading(false));
-  }, [projectId]);
-
   async function start(event) {
     event.preventDefault();
     if (!question.trim()) return;
@@ -434,10 +403,7 @@ export function ChatPage() {
       };
       const created = routeConversationId
         ? await postJson(`/api/v1/chat/conversations/${encodeURIComponent(routeConversationId)}/messages`, payload)
-        : await postJson("/api/v1/chat/conversations", {
-            ...payload,
-            pageContext: projectId ? { kind: "research-project", id: projectId } : null,
-          });
+        : await postJson("/api/v1/chat/conversations", payload);
       setRun(created);
       if (!routeConversationId) navigate(routeFor(created.conversationId), { replace: true });
       setMessages(current => [
@@ -510,7 +476,7 @@ export function ChatPage() {
   async function deleteHistory(item) {
     if (!await confirm({
       title: "删除对话",
-      description: `“${item.title}”的全部消息及分析过程将被永久删除。业务运行、质检和项目记录不会受影响。`,
+      description: `“${item.title}”的全部消息及分析过程将被永久删除。业务运行、质检和工艺配置记录不会受影响。`,
       confirmLabel: "确认删除",
       tone: "danger",
     })) return;
@@ -532,9 +498,6 @@ export function ChatPage() {
     .map(item => ({ ...item, message: chatProgressText(item) }))
     .filter(item => item.message)
     .slice(-4);
-  const scopedHistory = projectId
-    ? history.filter(item => item.pageContext?.kind === "research-project" && item.pageContext?.id === projectId)
-    : history;
   const serviceEnabled = Boolean(capabilities?.enabled);
   const deterministicDemo = Boolean(capabilities?.isDeterministic);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
@@ -548,8 +511,8 @@ export function ChatPage() {
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <p className="px-2 py-2 text-[13px] font-semibold text-slate-500">{projectId ? "当前项目的对话" : "最近对话"}</p>
-          <ChatHistoryList items={scopedHistory} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
+          <p className="px-2 py-2 text-[13px] font-semibold text-slate-500">最近对话</p>
+          <ChatHistoryList items={history} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
         </div>
       </aside>
 
@@ -557,7 +520,7 @@ export function ChatPage() {
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="truncate font-semibold text-slate-950">{conversation?.title || "工艺分析助手"}</h1></div>
-            <p className="mt-0.5 truncate text-[13px] text-slate-500">{projectLoading ? "正在读取上下文…" : project ? `${project.name} · ${researchStatusLabels[project.status] || project.status}` : "生产与工艺数据"}</p>
+            <p className="mt-0.5 truncate text-[13px] text-slate-500">生产与工艺数据</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
             {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
@@ -565,14 +528,12 @@ export function ChatPage() {
             </Select>}
             <Button className="lg:hidden" onClick={() => setHistoryOpen(true)}><ChatBubbleLeftRightIcon className="size-4" />对话记录</Button>
             <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新对话</Button>
-            {projectId && <Link to={`/research-projects/${encodeURIComponent(projectId)}`} className="hidden min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:inline-flex"><ArrowLeftIcon className="size-4" />项目</Link>}
           </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/50">
           <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-6 sm:px-6">
             <div className="space-y-3">
-              {projectError && <Alert tone="danger" title="无法读取项目上下文">{projectError}</Alert>}
               {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署未启用分析服务，请联系平台管理员检查模型服务配置。</Alert>}
               {!capabilitiesLoading && serviceEnabled && deterministicDemo && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
@@ -620,10 +581,10 @@ export function ChatPage() {
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         title="对话记录"
-        description={projectId ? `当前项目共 ${scopedHistory.length} 条` : `当前账号共 ${scopedHistory.length} 条`}
+        description={`当前账号共 ${history.length} 条`}
         size="md"
       >
-        <ChatHistoryList items={scopedHistory} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
+        <ChatHistoryList items={history} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
       </Drawer>
       {confirmationDialog}
     </div>

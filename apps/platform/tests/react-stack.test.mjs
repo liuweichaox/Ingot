@@ -23,16 +23,6 @@ const acquisitionPanels = {
   mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
   points: await readFile(new URL("../src/acquisition/panels/DevicePointsPanel.jsx", import.meta.url), "utf8"),
 };
-const researchProjectsPage = await readFile(new URL("../src/pages/ResearchProjectsPage.jsx", import.meta.url), "utf8");
-const researchProjects = (await Promise.all([
-  researchProjectsPage,
-  readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
-  readFile(new URL("../src/research/researchProjectPresentation.js", import.meta.url), "utf8"),
-  readFile(new URL("../src/research/components/CreateResearchProjectDrawer.jsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/research/components/ResearchProjectDrawers.jsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/research/components/ResearchWorkspaceContent.jsx", import.meta.url), "utf8"),
-])).join("\n");
-const researchAssets = await readFile(new URL("../src/pages/ResearchAssetsPage.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
@@ -68,7 +58,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/research-projects", "/research-assets", "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
+    "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -79,7 +69,8 @@ test("all platform routes remain available after the React migration", () => {
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.match(app, /\/research-projects\/:projectId/);
+  assert.doesNotMatch(app, /\/research-projects/);
+  assert.doesNotMatch(app, /\/research-assets/);
   for (const retiredAlias of ["/production-setup", "/quality-plans", "/process-improvement", "/profiles", "/users"]) {
     assert.doesNotMatch(app, new RegExp(`path="${retiredAlias.replaceAll("/", "\\/")}"`));
   }
@@ -101,25 +92,22 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["research", "配方优化"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
-  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"[\s\S]*id: "research"/);
+  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
+  assert.doesNotMatch(app, /id: "research"/);
   assert.doesNotMatch(app, /id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
   assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
-  assert.match(app, /id: "research"[\s\S]*items: \[\["\/research-projects", "优化任务"\], \["\/research-assets", "工艺知识"\]\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
-  assert.match(app, /items: \[\["\/research-projects", "优化任务"\], \["\/research-assets", "工艺知识"\]\]/);
-  assert.match(app, /\["\/research-assets", "工艺知识"\]/);
   assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
   assert.match(app, /\["\/data-quality", "数据质量"\], \["\/comparisons", "运行对比"\]/);
   assert.doesNotMatch(app, /优化工作|复用资产/);
-  assert.match(pages, /title="配方优化"/);
   assert.match(pages, /工艺分析助手/);
   assert.doesNotMatch(app, /label: "AI 助手"/);
   assert.match(app, /aria-label="主导航"/);
@@ -152,7 +140,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   for (const label of itemLabels) {
     assert.ok([...label].length >= 3 && [...label].length <= 4, `menu label ${label} should contain 3–4 characters`);
   }
-  assert.doesNotMatch(researchProjects, />新建项目</);
+  assert.doesNotMatch(pages, /ResearchProjectsPage|ResearchAssetsPage|MechanismKnowledgeWorkbench/);
 });
 
 test("authenticated application exposes the identity administration surface", () => {
@@ -164,7 +152,6 @@ test("authenticated application exposes the identity administration surface", ()
   assert.match(pages, /export function UsersPage\(\)/);
   assert.match(pages, /:set-site-access/);
   assert.match(pages, /站点访问范围/);
-  assert.doesNotMatch(researchProjects, /\/api\/v1\/auth\/me/);
 });
 
 test("versioned registries use composite row keys and statuses are localized", () => {
@@ -227,29 +214,16 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /质量待办/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(researchProjects, /进行中与待处理/);
-  assert.match(researchProjects, /生成下一配方建议/);
-  assert.match(researchProjects, /真实运行证据/);
-  assert.match(researchProjects, /实际生产运行/);
-  assert.doesNotMatch(researchProjects, /从真实偏差进入研发闭环|发现偏差 → 缩小候选原因/);
+  assert.match(pages, /下一版配方/);
+  assert.match(pages, /运行依据/);
   assert.match(app, /<ToastHost \/>/);
 });
 
-test("research project orchestration stays separate from forms, evidence cards, and workspace presentation", () => {
-  assert.ok(researchProjectsPage.split("\n").length < 1100);
-  assert.match(researchProjectsPage, /CreateResearchProjectDrawer/);
-  assert.match(researchProjectsPage, /ResearchProjectDrawers/);
-  assert.match(researchProjectsPage, /ResearchWorkspaceContent/);
-  assert.doesNotMatch(researchProjectsPage, /function WorkspaceContent/);
-  assert.doesNotMatch(researchProjectsPage, /function CreateProjectDrawer/);
-});
-
-test("versioned tooling remains unique and the legacy improvement workspace is absent", () => {
+test("versioned tooling remains unique and configuration records stay bounded", () => {
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
   assert.doesNotMatch(pages, /ImprovementPanel|process-investigations|parameter-recommendations/);
-  assert.match(researchProjects, /recipe-recommendation-flows/);
-  assert.doesNotMatch(researchProjects, /shadow-recommendations/);
+  assert.doesNotMatch(pages, /research-projects|research-assets|recipe-recommendation-flows/);
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
@@ -259,10 +233,6 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /aria-label="分析方法"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
-  assert.match(researchProjects, /<Field label="工程师决定"/);
-  assert.match(researchProjects, /<Field label="实际生产运行号"/);
-  assert.match(researchAssets, /<Field label="当前优化任务">/);
-  assert.match(researchAssets, /\$\{definition\.endpoint\}\?projectId=/);
 });
 
 test("production forms use business fields and paginate long histories", () => {
@@ -310,8 +280,7 @@ test("user-facing terminology presents scenario packages as configuration publis
   assert.match(pages, /title: "配置发布"/);
   assert.match(pages, /createLabel: "创建配置版本"/);
   assert.match(registryEditor, /idLabel="工艺配置代码"/);
-  assert.match(researchProjects, /label="工艺配置（推荐）"/);
-  for (const source of [app, pages, registryEditor, researchProjects]) {
+  for (const source of [app, pages, registryEditor]) {
     assert.doesNotMatch(source, /场景包|工艺场景配置/);
   }
 });
@@ -436,7 +405,7 @@ test("ingestion tasks probe real source points before publishing", () => {
   assert.match(acquisitionPage, /发布前必须先验证连接/);
 });
 
-test("tooling and research workflows avoid editable JSON fields", () => {
+test("tooling and configuration workflows avoid editable JSON fields", () => {
   assert.match(pages, /function AttributeFields/);
   assert.match(pages, /function ToolingRoleFields/);
   assert.match(pages, /function ToolingAssembliesPage/);
@@ -446,6 +415,5 @@ test("tooling and research workflows avoid editable JSON fields", () => {
   assert.match(pages, /\/api\/v1\/tooling-assemblies\/revisions/);
   assert.match(pages, /assemblyRevisionId/);
   assert.doesNotMatch(pages, /BusinessObjectEditor|ImprovementPanel/);
-  assert.doesNotMatch(researchProjects, /JSON\.stringify|JSON\.parse|manifestJson/);
   assert.doesNotMatch(pages, /数据清单 JSON|执行请求 JSON|上下文过滤" hint="JSON|（JSON）/);
 });

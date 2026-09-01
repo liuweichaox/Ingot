@@ -146,7 +146,18 @@ const registryPages = {
 function RegistryPage({ definition, canWrite = true }) {
   const { data, loading, error, reload } = useApi(definition.endpoint);
   const rows = extractRows(data);
+  const isProcessSpecification = definition.kind === "processSpecificationVersion";
+  const processModelsResponse = useApi(
+    isProcessSpecification ? "/api/v1/process-data-models" : "",
+    { enabled: isProcessSpecification },
+  );
+  const executionsResponse = useApi(
+    isProcessSpecification ? "/api/v1/process-executions?status=completed&limit=200" : "",
+    { enabled: isProcessSpecification },
+  );
   const [open, setOpen] = useState(false);
+  const [nextDraftOpen, setNextDraftOpen] = useState(false);
+  const [nextDraftSource, setNextDraftSource] = useState(null);
   const [mode, setMode] = useState("create");
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
@@ -195,6 +206,21 @@ function RegistryPage({ definition, canWrite = true }) {
     setOpen(true);
   }
 
+  function openNextDraft(row) {
+    const versions = rows
+      .filter(item => item.processSpecificationId === row.processSpecificationId)
+      .map(item => Number(item.version) || 0);
+    const nextVersion = Math.max(...versions, 0) + 1;
+    setNextDraftSource(row);
+    setBusinessForm({
+      ...createRegistryBusinessForm(definition.kind, row, nextVersion),
+      basedOnVersion: String(row.version),
+    });
+    setEditorError("");
+    setShowValidation(false);
+    setNextDraftOpen(true);
+  }
+
   async function save() {
     if (editorValidation) {
       setShowValidation(true);
@@ -211,6 +237,27 @@ function RegistryPage({ definition, canWrite = true }) {
       setOpen(false);
       await reload();
       notify(`${definition.title}已保存。`);
+    } catch (saveError) {
+      setEditorError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createNextDraft() {
+    if (businessValidation) {
+      setShowValidation(true);
+      return;
+    }
+    setSaving(true);
+    setEditorError("");
+    try {
+      const payload = registryBusinessPayload(definition.kind, businessForm);
+      payload.updatedAt = new Date().toISOString();
+      await postJson(definition.endpoint, payload);
+      setNextDraftOpen(false);
+      await reload();
+      notify(`已创建 ${payload.processSpecificationId} V${payload.version} 草稿。`);
     } catch (saveError) {
       setEditorError(saveError.message);
     } finally {
@@ -271,7 +318,12 @@ function RegistryPage({ definition, canWrite = true }) {
           <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
             {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看" : "维护"}
           </Button>
-          {canWrite && <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>}
+          {canWrite && isProcessSpecification && row.status === "published" && (
+            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openNextDraft(row)}>下一版配方</Button>
+          )}
+          {canWrite && !isProcessSpecification && (
+            <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>
+          )}
           {canWrite && !isInspectionDefinition && row.status === "published" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
           {canWrite && (isInspectionDefinition || row.status === "draft") && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>{isInspectionDefinition ? "删除未引用版本" : "删除草稿"}</Button>}
         </div>
@@ -340,8 +392,93 @@ function RegistryPage({ definition, canWrite = true }) {
           />
         )}
       </Drawer>
+      <Drawer
+        open={nextDraftOpen}
+        onClose={() => setNextDraftOpen(false)}
+        closeOnBackdrop={false}
+        title="下一版配方"
+        description="保留当前规范的完整参数与适用条件，仅调整确认需要变化的控制参数。"
+        footer={<><Button onClick={() => setNextDraftOpen(false)}>取消</Button><Button variant="primary" onClick={createNextDraft} disabled={saving}>{saving ? "创建中" : `创建 V${businessForm.version || ""} 草稿`}</Button></>}
+        size="xl"
+      >
+        {editorError && <Alert tone="danger">{editorError}</Alert>}
+        {nextDraftSource && <NextSpecificationDraftEditor
+          source={nextDraftSource}
+          form={businessForm}
+          onChange={setBusinessForm}
+          models={extractRows(processModelsResponse.data)}
+          modelError={processModelsResponse.error}
+          executions={extractRows(executionsResponse.data)}
+          executionsLoading={executionsResponse.loading}
+          validation={showValidation ? businessValidation : ""}
+        />}
+      </Drawer>
       {confirmationDialog}
     </Page>
+  );
+}
+
+function NextSpecificationDraftEditor({ source, form, onChange, models, modelError, executions, executionsLoading, validation }) {
+  const modelId = source.dataModelId;
+  const modelVersion = Number(source.dataModelVersion);
+  const model = models.find(item => item.modelId === modelId && Number(item.version) === modelVersion);
+  const parameters = model?.controlParameters || [];
+  const sourceValues = new Map((source.values || []).map(item => [item.code, item.value]));
+  const matchingExecutions = executions.filter(item =>
+    item.processSpecificationId === source.processSpecificationId &&
+    String(item.processSpecificationVersion) === String(source.version));
+  const passCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "PASS").length;
+  const failCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "FAIL").length;
+
+  function updateValue(index, value) {
+    onChange({
+      ...form,
+      values: form.values.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item),
+    });
+  }
+
+  return (
+    <div className="grid gap-5">
+      {validation && <Alert tone="warning">{validation}</Alert>}
+      {modelError && <Alert tone="warning">无法读取控制参数定义：{modelError}</Alert>}
+      <section className="grid gap-3 border-b border-slate-200 pb-5 sm:grid-cols-3" aria-label="下一版配方基准">
+        <div><p className="data-label">基准版本</p><p className="mt-1 text-sm font-semibold text-slate-900">{source.processSpecificationId} · V{source.version}</p></div>
+        <div><p className="data-label">新草稿</p><p className="mt-1 text-sm font-semibold text-slate-900">V{form.version}</p></div>
+        <div><p className="data-label">适用条件</p><p className="mt-1 text-sm font-semibold text-slate-900">{Object.values(source.contextSelector || {}).filter(Boolean).join(" · ") || "未限定"}</p></div>
+      </section>
+      <Card title="运行依据" description="仅列出实际使用当前规范版本的已完成运行。">
+        {executionsLoading ? <p className="text-sm text-slate-500">正在读取运行记录…</p> : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div><p className="data-label">已完成运行</p><p className="mt-1 text-2xl font-semibold text-slate-950">{matchingExecutions.length}</p></div>
+            <div><p className="data-label">质量合格</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{passCount}</p></div>
+            <div><p className="data-label">质量不合格</p><p className="mt-1 text-2xl font-semibold text-rose-700">{failCount}</p></div>
+          </div>
+        )}
+        {!executionsLoading && matchingExecutions.length > 0 && <p className="mt-4 text-sm text-slate-600">{matchingExecutions.map(item => item.executionId).join(" · ")}</p>}
+        {!executionsLoading && matchingExecutions.length === 0 && <p className="text-sm text-slate-500">尚无可作为依据的已完成运行；仍可按既有变更流程创建草稿。</p>}
+      </Card>
+      <Card title="参数调整" description="未修改的参数会按当前规范原样带入下一版草稿。">
+        <div className="grid gap-3">
+          {form.values.map((item, index) => {
+            const parameter = parameters.find(value => value.code === item.code);
+            const current = sourceValues.get(item.code);
+            const changed = String(current ?? "") !== String(item.value ?? "");
+            const isBoolean = item.dataType === "boolean" || parameter?.dataType === "boolean";
+            return (
+              <div key={item.code || index} className="grid gap-2 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_10rem_11rem] md:items-end">
+                <div><p className="text-sm font-medium text-slate-900">{parameter?.displayName || item.code}</p><p className="mt-0.5 text-xs text-slate-500">当前：{String(current ?? "未设置")}{parameter?.unit ? ` ${parameter.unit}` : ""}</p></div>
+                <Field label="下一版">
+                  {isBoolean
+                    ? <Select aria-label={`下一版 ${parameter?.displayName || item.code}`} value={item.value} onChange={event => updateValue(index, event.target.value)}><option value="true">是</option><option value="false">否</option></Select>
+                    : <Input aria-label={`下一版 ${parameter?.displayName || item.code}`} type={["double", "integer"].includes(item.dataType || parameter?.dataType) ? "number" : "text"} step={item.dataType === "double" || parameter?.dataType === "double" ? "any" : undefined} value={item.value} onChange={event => updateValue(index, event.target.value)} />}
+                </Field>
+                <p className={`pb-2 text-sm font-medium ${changed ? "text-trajectory-700" : "text-slate-400"}`}>{changed ? "已调整" : "保持不变"}</p>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
   );
 }
 

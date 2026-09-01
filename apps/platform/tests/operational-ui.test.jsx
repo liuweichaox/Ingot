@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router";
 import { SystemStatusIndicator } from "../src/App";
 import { mergeRunIssues } from "../src/pages/OperationsPages";
 import { PlatformUptimeMetric } from "../src/pages/AdministrationPages";
-import { ConfigurationHubPage } from "../src/pages/RegistryPages";
+import { ConfigurationHubPage, ProcessSpecificationsPage } from "../src/pages/RegistryPages";
 import { DataTable, EmptyState, Field, Input } from "../src/ui/components";
 
 afterEach(() => {
@@ -157,5 +157,69 @@ describe("生产界面状态反馈", () => {
     await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "5"));
     expect(screen.getAllByText("已准备")).toHaveLength(5);
     screen.getAllByText("已准备").forEach(badge => expect(badge).toHaveClass("bg-emerald-50"));
+  });
+
+  it("从已发布工艺规范的运行依据创建下一版草稿", async () => {
+    const specification = {
+      processSpecificationId: "spec-lens-a",
+      version: 5,
+      name: "镜片模压标准配方",
+      basedOnVersion: 4,
+      dataModelId: "model-lens",
+      dataModelVersion: 2,
+      status: "published",
+      contextSelector: { product_family_code: "LENS" },
+      values: [
+        { code: "holding.temperature", value: 520 },
+        { code: "holding.pressure", value: 18.5 },
+      ],
+      updatedAt: "2026-08-31T08:00:00Z",
+    };
+    let createdPayload;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      if (options.method === "POST") {
+        createdPayload = JSON.parse(options.body);
+        return Promise.resolve(jsonResponse(createdPayload));
+      }
+      if (String(url).includes("/process-specifications")) return Promise.resolve(jsonResponse([specification]));
+      if (String(url).includes("/process-data-models")) return Promise.resolve(jsonResponse([{
+        modelId: "model-lens",
+        version: 2,
+        controlParameters: [
+          { code: "holding.temperature", displayName: "保压温度", dataType: "double", unit: "°C" },
+          { code: "holding.pressure", displayName: "保压压力", dataType: "double", unit: "kN" },
+        ],
+      }]));
+      if (String(url).includes("/process-executions")) return Promise.resolve(jsonResponse([
+        { executionId: "RUN-005", processSpecificationId: "spec-lens-a", processSpecificationVersion: 5, qualityStatus: "PASS" },
+        { executionId: "RUN-004", processSpecificationId: "spec-lens-a", processSpecificationVersion: 4, qualityStatus: "FAIL" },
+        { executionId: "RUN-OTHER", processSpecificationId: "spec-other", processSpecificationVersion: 5, qualityStatus: "PASS" },
+      ]));
+      return Promise.resolve(jsonResponse([]));
+    }));
+
+    render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "下一版配方" }));
+    expect(await screen.findByText("RUN-005")).toBeInTheDocument();
+    expect(screen.queryByText("RUN-004")).toBeNull();
+    expect(screen.queryByText("RUN-OTHER")).toBeNull();
+    fireEvent.change(screen.getByLabelText("下一版 保压温度"), { target: { value: "525" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建 V6 草稿" }));
+
+    await waitFor(() => expect(createdPayload).toEqual(expect.objectContaining({
+      processSpecificationId: "spec-lens-a",
+      version: 6,
+      name: "镜片模压标准配方",
+      status: "draft",
+      basedOnVersion: 5,
+      dataModelId: "model-lens",
+      dataModelVersion: 2,
+      contextSelector: { product_family_code: "LENS" },
+      values: [
+        { code: "holding.temperature", value: 525 },
+        { code: "holding.pressure", value: 18.5 },
+      ],
+    })));
   });
 });

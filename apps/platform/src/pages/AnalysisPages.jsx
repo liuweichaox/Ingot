@@ -1,10 +1,10 @@
 
 // 呈现运行对比、候选原因与数据可信度，并在证据不足时阻止结论升级。
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea, notify } from "../ui/components";
+import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
@@ -89,7 +89,6 @@ export function AnalysisReadinessCard({ diagnosis = {} }) {
 }
 
 export function ExecutionComparisonPage() {
-  const navigate = useNavigate();
   const [params] = useSearchParams();
   const requestedSiteId = params.get("siteId") || "";
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
@@ -102,19 +101,8 @@ export function ExecutionComparisonPage() {
   const [linkedBaseline, setLinkedBaseline] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [executionFilter, setProcessExecutionFilter] = useState("");
-  const [researchProjects, setResearchProjects] = useState([]);
-  const [researchProjectId, setResearchProjectId] = useState("");
   const [additionalConfounders, setAdditionalConfounders] = useState("");
   const [catalogRetryKey, setCatalogRetryKey] = useState(0);
-  useEffect(() => {
-    let mounted = true;
-    getJson("/api/v1/research-projects?limit=100").then(projectPayload => {
-      if (mounted) setResearchProjects(projectPayload?.data || []);
-    }).catch(() => {
-      if (mounted) setResearchProjects([]);
-    });
-    return () => { mounted = false; };
-  }, []);
   useEffect(() => {
     let mounted = true;
     const search = executionFilter.trim();
@@ -177,7 +165,6 @@ export function ExecutionComparisonPage() {
     ].some(value => String(value || "").toLowerCase().includes(normalizedProcessExecutionFilter))),
   );
   const comparisonReady = Boolean(baselineProcessExecution) && comparableProcessExecutions.length > 0;
-  const hypothesisGenerationReady = canGenerateHypotheses(result);
 
   useEffect(() => {
     if (comparisonScope === "single" && candidate && !comparableProcessExecutions.some(item => item.executionId === candidate)) {
@@ -218,25 +205,6 @@ export function ExecutionComparisonPage() {
       }
     } catch (requestError) {
       setResult(null);
-      setError(requestError.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function createHypotheses() {
-    if (!researchProjectId || !result) return;
-    setBusy(true);
-    try {
-      const created = await postJson(
-        `/api/v1/research-projects/${researchProjectId}/hypotheses/from-execution-comparison`,
-        {
-          baselineProcessExecutionId: result.baselineProcessExecutionId,
-          executionIds: comparedProcessExecutions.map(item => item.executionId),
-          maximumHypotheses: 3,
-        },
-      );
-      notify(`已将运行对比转为 ${created.length} 条候选假设；请补充验证标准，并用后续真实运行结果持续复核。`);
-    } catch (requestError) {
       setError(requestError.message);
     } finally {
       setBusy(false);
@@ -313,7 +281,7 @@ export function ExecutionComparisonPage() {
         <>
           <Alert tone={investigation?.status === "ready" ? "success" : "warning"} title="对比结论">
             {investigation?.status === "ready"
-              ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可带入配方优化并持续积累真实生产证据。`
+              ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可继续用真实生产证据复核。`
               : `对比计算已成功，但当前只能作为探索性证据。${(investigation?.missingData || []).length ? ` 还缺少：${investigation.missingData.join("；")}` : " 需要更多质量结果和重复运行。"}`}
           </Alert>
           <AnalysisReadinessCard diagnosis={result.diagnosis} />
@@ -377,27 +345,6 @@ export function ExecutionComparisonPage() {
               ]}
             />
           </Card></div></details>
-          <Card title="将追因结果带入配方优化" description="系统只把有证据的关联转为候选原因；因果结论须由后续真实生产运行和质量结果持续支持。">
-            {!hypothesisGenerationReady && <Alert tone="warning" title="暂不能批量生成候选假设">当前证据仍处于探索阶段。补充质量结果、重复运行和上下文变量，并在样本外验证通过后再转入研发。</Alert>}
-            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-              <Field label="优化任务"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择优化任务</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
-              {researchProjects.some(item => !["completed", "archived"].includes(item.status))
-                ? <Button className="self-end" disabled={!researchProjectId || busy || !hypothesisGenerationReady} onClick={createHypotheses}>生成候选假设</Button>
-                : <Button
-                    className="self-end"
-                    variant="primary"
-                    disabled={!hypothesisGenerationReady}
-                    onClick={() => {
-                      const next = new URLSearchParams({
-                        create: "1",
-                        executionId: result.baselineProcessExecutionId,
-                        comparisonExecutionIds: comparedProcessExecutions.map(item => item.executionId).join(","),
-                      });
-                      navigate(`/research-projects?${next}`);
-                    }}
-                  >新建优化任务并带入本次对比</Button>}
-            </div>
-          </Card>
           <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
             {causeRows.length ? (
               <>
@@ -485,11 +432,6 @@ export function ExecutionComparisonPage() {
   );
 }
 
-export function canGenerateHypotheses(result) {
-  return result?.diagnosis?.readiness?.mode === "candidate-ranking"
-    && Number(result?.diagnosis?.crossValidationScore) > 0
-    && (result?.diagnosis?.candidates || []).some(candidate => candidate.evidenceLevel === "stable");
-}
 export function DataQualityPage() {
   const [params] = useSearchParams();
   const objectQuery = new URLSearchParams({ limit: "200" });

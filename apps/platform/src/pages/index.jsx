@@ -1,6 +1,4 @@
 // 汇总 Platform 页面组件的稳定导出入口。
-export { ResearchProjectsPage } from "./ResearchProjectsPage";
-export { ResearchAssetsPage } from "./ResearchAssetsPage";
 export { WorkbenchPage, ProcessExecutionsPage, ProcessExecutionDetailPage } from "./OperationsPages";
 export { EventsPage, ChatPage } from "./ConversationPages";
 export { ObjectExplorerPage } from "./ObjectPages";

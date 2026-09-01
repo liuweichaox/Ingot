@@ -1,6 +1,6 @@
 
 // 呈现生产运行、过程曲线和比较入口；页面只编排受权 API 数据，不在客户端推断工艺因果。
-import { ArrowRightIcon, BeakerIcon, CircleStackIcon, ClipboardDocumentCheckIcon, MagnifyingGlassIcon, SignalIcon } from "@heroicons/react/24/outline";
+import { ArrowRightIcon, CircleStackIcon, ClipboardDocumentCheckIcon, MagnifyingGlassIcon, SignalIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson } from "../api/http";
@@ -48,7 +48,6 @@ export function WorkbenchPage({ identity }) {
     events: [],
     edges: [],
     contexts: [],
-    researchProjects: [],
   });
   useEffect(() => {
     let alive = true;
@@ -58,8 +57,7 @@ export function WorkbenchPage({ identity }) {
       getJson("/api/v1/events?limit=20"),
       getJson("/api/edges"),
       getJson("/api/v1/production-contexts"),
-      getJson("/api/v1/research-projects?limit=100"),
-    ]).then(([executions, summary, events, edges, contexts, researchProjects]) => {
+    ]).then(([executions, summary, events, edges, contexts]) => {
       if (alive) setState({
         loading: false,
         error: "",
@@ -70,7 +68,6 @@ export function WorkbenchPage({ identity }) {
         events: extractRows(events),
         edges: extractRows(edges),
         contexts: extractRows(contexts),
-        researchProjects: extractRows(researchProjects),
       });
     }).catch(error => {
       if (alive) setState(current => ({ ...current, loading: false, error: error.message }));
@@ -82,9 +79,6 @@ export function WorkbenchPage({ identity }) {
     ?? state.executions.filter(item => item.status === "active" || !item.completedAt).length;
   const onlineEdges = state.edges.filter(item => edgeStatus(item) === "online").length;
   const pendingInspections = state.summary.pending ?? state.summary.pendingCount ?? 0;
-  const activeContexts = state.contexts.filter(item => !item.validTo).length;
-  const activeOptimizationProjects = state.researchProjects.filter(item =>
-    item.status === "active" || item.status === "validating").length;
   const roles = identity?.roles || [];
   const isQualityRole = roles.some(role => role === "quality.inspector" || role === "quality.reviewer");
   const isEngineeringRole = roles.some(role => role === "process.engineer" || role === "platform.admin");
@@ -96,13 +90,6 @@ export function WorkbenchPage({ identity }) {
       to: "/inspections",
       tone: pendingInspections ? "border-l-amber-500" : "border-l-emerald-500",
       action: pendingInspections ? "去处理" : "查看记录",
-    };
-  const engineeringAction = {
-      title: activeOptimizationProjects ? `${activeOptimizationProjects} 个配方优化任务正在推进` : "从真实配方运行开始优化",
-      description: activeOptimizationProjects ? "查看新增运行、下一配方建议及其质量结果。" : "确定目标和安全边界，后续运行会自动进入优化证据。",
-      to: "/research-projects",
-      tone: activeOptimizationProjects ? "border-l-blue-500" : "border-l-amber-500",
-      action: activeOptimizationProjects ? "进入优化" : "创建任务",
     };
   const platformAction = {
       title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
@@ -121,18 +108,17 @@ export function WorkbenchPage({ identity }) {
   const dailyActions = isQualityRole && !isEngineeringRole
     ? [qualityAction, analysisAction, platformAction]
     : isEngineeringRole
-      ? [analysisAction, engineeringAction, isAdministrator ? platformAction : qualityAction]
+      ? [analysisAction, isAdministrator ? platformAction : qualityAction, qualityAction]
       : [analysisAction, qualityAction, platformAction];
   const overviewItems = [
     { label: "生产运行", value: state.executionTotal, hint: `${activeProcessExecutions} 个进行中`, icon: CircleStackIcon, tone: "text-trajectory-100 bg-trajectory-500/12 ring-trajectory-500/20" },
     { label: "待处理质检", value: pendingInspections, hint: "录入与复核", icon: ClipboardDocumentCheckIcon, tone: pendingInspections ? "text-amber-200 bg-amber-500/12 ring-amber-500/20" : "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" },
     { label: "现场节点", value: `${onlineEdges}/${state.edges.length}`, hint: "在线 / 全部", icon: SignalIcon, tone: onlineEdges === state.edges.length && state.edges.length ? "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" : "text-rose-200 bg-rose-500/12 ring-rose-500/20" },
-    { label: "配方优化", value: activeOptimizationProjects, hint: `${activeContexts} 个有效上下文`, icon: BeakerIcon, tone: "text-evidence-400 bg-evidence-500/12 ring-evidence-500/20" },
   ];
   return (
     <Page
       title="工作台"
-      description="把运行、质量、现场状态和配方优化进展汇总为今天需要处理的工程任务。"
+      description="把运行、质量和现场状态汇总为今天需要处理的工程任务。"
       actions={<Link to="/analysis" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-evidence-500 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 shadow-sm transition hover:border-evidence-400 hover:bg-evidence-400">开始工艺追因<ArrowRightIcon className="size-4" /></Link>}
     >
       <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />

@@ -1,45 +1,14 @@
 
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnalysisReadinessCard } from "../src/pages/AnalysisPages";
-import { MemberManagementButton } from "../src/research/components/ResearchWorkspaceContent";
-import { getJson, patchJson } from "../src/api/http";
+import { getJson } from "../src/api/http";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   sessionStorage.clear();
-});
-
-describe("项目成员权限与请求契约", () => {
-  it("只为 Owner 或管理员渲染成员管理动作", () => {
-    const onClick = vi.fn();
-    const { rerender } = render(<MemberManagementButton allowed={false} onClick={onClick} />);
-    expect(screen.queryByRole("button", { name: "添加协作成员" })).toBeNull();
-
-    rerender(<MemberManagementButton allowed onClick={onClick} />);
-    fireEvent.click(screen.getByRole("button", { name: "添加协作成员" }));
-    expect(onClick).toHaveBeenCalledOnce();
-  });
-
-  it("成员变更使用 PATCH 和 revision，而不是通用 PUT", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ revision: 4 }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await patchJson("/api/v1/research-projects/project/members", {
-      revision: 3,
-      memberUserIds: ["owner", "member"],
-    });
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/research-projects/project/members", expect.objectContaining({
-      method: "PATCH",
-      body: JSON.stringify({ revision: 3, memberUserIds: ["owner", "member"] }),
-    }));
-  });
 });
 
 describe("诊断透明降级", () => {

@@ -66,7 +66,6 @@ test("核心数据接口和主要页面使用完整模拟场景", async ({ page,
     ["/process-executions", "运行记录", "RUN-2026-0821-005"],
     ["/inspections", "检验任务", "LENS-006"],
     ["/edges", "现场节点", "上海一号压机节点"],
-    ["/research-projects", "配方优化", "面形误差候选原因验证"],
   ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
@@ -144,13 +143,10 @@ test("全部业务导航和关键详情深链可达", async ({ page }) => {
     "/comparisons",
     "/data-quality",
     "/chat",
-    "/research-projects",
-    "/research-assets",
     "/platform-metrics",
     "/process-executions/RUN-2026-0821-005?siteId=SITE-001",
     "/edges/edge-shanghai-01",
     "/configuration/ingestion-tasks/INGEST-PRESS-01",
-    "/research-projects/research-active",
   ];
 
   for (const route of routes) {
@@ -191,13 +187,6 @@ test("模拟场景覆盖空态、加载态、权限态和生命周期状态", as
   for (const status of ["在线", "运行异常", "离线"]) {
     await expect(page.getByText(status, { exact: true }).first()).toBeVisible();
   }
-  await page.goto("/research-projects");
-  await page.getByRole("combobox", { name: "状态" }).selectOption("all");
-  const projectTable = page.getByRole("region", { name: "可横向滚动的数据表" });
-  for (const status of ["草稿", "研发中", "已完成", "已归档"]) {
-    await expect(projectTable.getByText(status, { exact: true }).first()).toBeVisible();
-  }
-
   await setScenario(request, "empty");
   for (const [route, emptyText] of [
     ["/configuration/process-data-models", "还没有工艺数据字典"],
@@ -240,10 +229,6 @@ test("危险操作有确认，证据边界和核心业务动作可见", async ({
   await expect(page.getByText("观察结果只形成下一配方候选", { exact: false })).toBeVisible();
   await expect(page.getByText("因果结论须由后续真实生产运行和质量结果持续支持", { exact: false })).toBeVisible();
 
-  await page.goto("/research-projects?create=1&executionId=RUN-2026-0821-005&comparisonExecutionIds=RUN-2026-0821-005,RUN-2026-0821-004");
-  const projectDialog = page.getByRole("dialog");
-  await expect(projectDialog.getByText("创建配方优化任务", { exact: true })).toBeVisible();
-  await expect(projectDialog.getByRole("combobox").first()).toHaveValue("RUN-2026-0821-005");
 });
 
 test("核心模块接口失败后均可原地重试恢复", async ({ page, request }) => {
@@ -253,8 +238,6 @@ test("核心模块接口失败后均可原地重试恢复", async ({ page, reque
     ["/edges", "上海一号压机节点"],
     ["/process-executions", "RUN-2026-0821-005"],
     ["/inspections", "LENS-006"],
-    ["/research-projects", "面形误差候选原因验证"],
-    ["/research-assets", "光学模压标准作业指导书"],
   ]) {
     await setScenario(request, "error");
     await page.goto(route);
@@ -264,26 +247,4 @@ test("核心模块接口失败后均可原地重试恢复", async ({ page, reque
     await retry.click();
     await expect(page.getByText(recoveredEvidence, { exact: false }).first(), route).toBeVisible();
   }
-});
-
-test("机理知识从业务选择映射到可追溯配方建议", async ({ page }) => {
-  await login(page);
-  await page.goto("/research-assets");
-  await page.getByLabel("当前优化任务").selectOption({ label: "面形误差候选原因验证" });
-
-  await expect(page.getByText("已激活的模压安全窗口", { exact: true })).toBeVisible();
-  await expect(page.getByText("待审核的冷却速率观察", { exact: true })).toBeVisible();
-  await expect(page.getByText("不适用于当前设备的声明", { exact: true })).toBeVisible();
-  await expect(page.getByText("已反证的升温收益声明", { exact: true })).toBeVisible();
-  await expect(page.getByText("已停用的旧材料经验", { exact: true })).toBeVisible();
-  await expect(page.getByText("相同产品范围内对温度影响方向的判断相反", { exact: false })).toBeVisible();
-
-  await page.getByLabel("项目变量").selectOption("holding.temperature");
-  await expect(page.getByLabel("作用变量单位")).toHaveValue("°C");
-  await expect(page.getByLabel("作用变量单位")).toHaveAttribute("readonly", "");
-
-  await page.getByLabel("适用维度").selectOption("equipment");
-  await expect(page.getByLabel("适用对象")).toHaveValue("PRESS-01");
-  await expect(page.getByLabel("适用对象").locator("option")).toHaveCount(1);
-
 });
