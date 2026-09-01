@@ -20,7 +20,7 @@
                                       └─ Platform Web（独立 React 前端）
 ```
 
-Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker 负责持久 Chat 运行、知识提取、分析回填、实验固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker 负责持久 Chat 运行、知识提取、分析回填、补充取证固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
 
 仓库自带的 Compose 是单 API 实例参考拓扑，不宣称高可用。Agent 运行已经与业务证据一起进入 PostgreSQL，因此不再阻止外部编排器在共享数据库和负载均衡器之后扩展 API；正式多副本部署仍需自行提供入口负载均衡、数据库高可用和容量验收。
 
@@ -235,7 +235,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 恢复演练不仅检查服务启动，还要验证：
 
 - 运行、上下文和检验关联仍然存在；
-- 实验、证据和审核记录可读取；
+- 补充取证、证据和审核记录可读取；
 - Edge 离线积压能够无重复补传；
 - 历史观察能够按原版本重建；
 - 已知项目能够重新生成同一分析输入哈希。
@@ -259,7 +259,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 - 限制设备网络到所需地址和协议；
 - 附件、知识文件和备份目录执行访问控制；
 - 用户按岗位分权，质量录入与复核使用不同责任人；
-- 工程师审核实验后才允许进入现场执行；
+- 工程师审核补充取证后才允许进入现场执行；
 - 设备硬联锁和现场安全规则独立于模型建议存在；
 - 安全事件按 `SECURITY.md` 私下报告。
 
@@ -267,7 +267,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 上线前至少完成一次：Platform 中断、Edge 重启、网络断开、错误配置发布、数据库恢复、Optimizer 不可用和模型服务不可用演练，并证明采集和正式业务记录按设计降级或恢复。
 
-先使用只读业务闭环验收脚本核对当前部署是否已经具备版本化配置、运行中的真实来源、完整工装、生产上下文、运行—检验关联、数据准入、候选边界、实验结果和岗位分权：
+先使用只读业务闭环验收脚本核对当前部署是否已经具备版本化配置、运行中的真实来源、完整工装、生产上下文、运行—检验关联、数据准入、候选边界、运行结果和岗位分权：
 
 ```bash
 export INGOT_PLATFORM_URL=https://ingot.example.com

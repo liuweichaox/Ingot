@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
+// 适配外部优化器 HTTP 协议；应用层仅依赖 IProcessOptimizerClient 端口。
 public sealed class ProcessOptimizerOptions
 {
     public bool Enabled { get; init; }
@@ -92,29 +93,29 @@ public sealed class ProcessOptimizerClient(
         }
         catch (HttpRequestException exception)
         {
-            throw new ProcessOptimizerUnavailableException("实验设计服务暂时不可用。", exception);
+            throw new ProcessOptimizerUnavailableException("配方建议服务暂时不可用。", exception);
         }
         catch (TaskCanceledException exception) when (!ct.IsCancellationRequested)
         {
-            throw new ProcessOptimizerUnavailableException("实验设计服务请求超时。", exception);
+            throw new ProcessOptimizerUnavailableException("配方建议服务请求超时。", exception);
         }
         using (response)
         {
             if ((int)response.StatusCode >= 500)
                 throw new ProcessOptimizerUnavailableException(
-                    $"实验设计服务暂时不可用（{(int)response.StatusCode}）。");
+                    $"配方建议服务暂时不可用（{(int)response.StatusCode}）。");
             if (!response.IsSuccessStatusCode)
             {
                 var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 throw new ProcessResearchRuleException(
-                    $"实验设计服务拒绝请求（{(int)response.StatusCode}）：{detail[..Math.Min(detail.Length, 1000)]}");
+                    $"配方建议服务拒绝请求（{(int)response.StatusCode}）：{detail[..Math.Min(detail.Length, 1000)]}");
             }
             var result = await response.Content.ReadFromJsonAsync<OptimizerDesignResponse>(
                     cancellationToken: ct)
                 .ConfigureAwait(false)
-                ?? throw new ProcessResearchRuleException("实验设计服务返回了空响应。");
+                ?? throw new ProcessResearchRuleException("配方建议服务返回了空响应。");
             if (result.StatePersisted || result.Runs.Count == 0)
-                throw new ProcessResearchRuleException("实验设计服务响应无效或违反无状态契约。");
+                throw new ProcessResearchRuleException("配方建议服务响应无效或违反无状态契约。");
             return result;
         }
     }

@@ -29,7 +29,6 @@ const researchProjects = (await Promise.all([
   readFile(new URL("../src/research/researchProjectModel.js", import.meta.url), "utf8"),
   readFile(new URL("../src/research/researchProjectPresentation.js", import.meta.url), "utf8"),
   readFile(new URL("../src/research/components/CreateResearchProjectDrawer.jsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/research/components/ResearchEvidenceCards.jsx", import.meta.url), "utf8"),
   readFile(new URL("../src/research/components/ResearchProjectDrawers.jsx", import.meta.url), "utf8"),
   readFile(new URL("../src/research/components/ResearchWorkspaceContent.jsx", import.meta.url), "utf8"),
 ])).join("\n");
@@ -230,8 +229,8 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(pages, /配置下一批生产/);
   assert.match(researchProjects, /进行中与待处理/);
   assert.match(researchProjects, /生成下一配方建议/);
-  assert.match(researchProjects, /配方建议准备度/);
-  assert.match(researchProjects, /不需要建立实验/);
+  assert.match(researchProjects, /真实运行证据/);
+  assert.match(researchProjects, /实际生产运行/);
   assert.doesNotMatch(researchProjects, /从真实偏差进入研发闭环|发现偏差 → 缩小候选原因/);
   assert.match(app, /<ToastHost \/>/);
 });
@@ -249,8 +248,8 @@ test("versioned tooling remains unique and the legacy improvement workspace is a
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
   assert.doesNotMatch(pages, /ImprovementPanel|process-investigations|parameter-recommendations/);
-  assert.match(researchProjects, /design-validation/);
-  assert.doesNotMatch(researchProjects, /记录实验计算结果/);
+  assert.match(researchProjects, /recipe-recommendation-flows/);
+  assert.doesNotMatch(researchProjects, /shadow-recommendations/);
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
@@ -260,8 +259,8 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /aria-label="分析方法"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
-  assert.match(researchProjects, /<Field label="任务名称">/);
-  assert.match(researchProjects, /<Field label="受控验证名称">/);
+  assert.match(researchProjects, /<Field label="工程师决定"/);
+  assert.match(researchProjects, /<Field label="实际生产运行号"/);
   assert.match(researchAssets, /<Field label="当前优化任务">/);
   assert.match(researchAssets, /\$\{definition\.endpoint\}\?projectId=/);
 });

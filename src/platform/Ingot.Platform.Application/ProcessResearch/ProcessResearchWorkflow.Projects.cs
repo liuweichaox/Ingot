@@ -130,10 +130,17 @@ public sealed partial class ProcessResearchWorkflow
         Guid projectId,
         string targetStatus,
         string userId,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool isPlatformAdministrator = false,
+        int? expectedRevision = null)
     {
-        _ = NormalizeUser(userId);
+        userId = NormalizeUser(userId);
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
+        if (!isPlatformAdministrator &&
+            !string.Equals(project.OwnerUserId, userId, StringComparison.Ordinal))
+            throw new ProcessResearchRuleException("只有项目负责人或平台管理员可以变更项目状态。");
+        if (expectedRevision is not null && expectedRevision != project.Revision)
+            throw new ProcessResearchRuleException("项目已被其他人更新，请刷新后重试状态变更。");
         targetStatus = NormalizeStatus(targetStatus, ResearchProjectStatuses.IsValid, "研发项目状态");
         var allowed = (project.Status, targetStatus) switch
         {
@@ -141,8 +148,8 @@ public sealed partial class ProcessResearchWorkflow
             (ResearchProjectStatuses.Active, ResearchProjectStatuses.Validating) => true,
             (ResearchProjectStatuses.Validating, ResearchProjectStatuses.Active) => true,
             (ResearchProjectStatuses.Validating, ResearchProjectStatuses.Completed) => true,
-            (_, ResearchProjectStatuses.Archived)
-                when project.Status != ResearchProjectStatuses.Archived => true,
+            (ResearchProjectStatuses.Draft, ResearchProjectStatuses.Archived) => true,
+            (ResearchProjectStatuses.Completed, ResearchProjectStatuses.Archived) => true,
             _ => false
         };
         if (!allowed)
@@ -160,6 +167,7 @@ public sealed partial class ProcessResearchWorkflow
             : project.Context;
         if (targetStatus == ResearchProjectStatuses.Completed)
         {
+            await RequireProjectClosureReadyAsync(project, ct).ConfigureAwait(false);
             var windows = await store.ListOperatingRegionsAsync(projectId, ct).ConfigureAwait(false);
             if (windows.All(static value =>
                     value.Status != OperatingRegionStatuses.Validated ||
@@ -167,7 +175,7 @@ public sealed partial class ProcessResearchWorkflow
                         OperatingRegionValidationLevels.Laboratory or
                         OperatingRegionValidationLevels.Production)))
                 throw new ProcessResearchRuleException(
-                    "研发项目完成前必须形成经过跨区组重复实验验证的工艺操作域。");
+                    "研发项目完成前必须形成经过跨区组重复真实运行确认的工艺操作域。");
         }
 
         var saved = await store.SaveProjectAsync(
@@ -184,6 +192,116 @@ public sealed partial class ProcessResearchWorkflow
         return saved;
     }
 
+    private async Task RequireProjectClosureReadyAsync(
+        ResearchProject project,
+        CancellationToken ct)
+    {
+        var projectId = project.ProjectId;
+        var recommendationsTask = store.ListRecipeRecommendationsAsync(projectId, ct);
+        await Task.WhenAll(recommendationsTask).ConfigureAwait(false);
+
+        var pendingDecisions = 0;
+        var pendingExecutions = 0;
+        var pendingOutcomes = 0;
+        foreach (var recommendation in await recommendationsTask.ConfigureAwait(false))
+        {
+            foreach (var item in recommendation.Items)
+            {
+                var decision = await store.GetRecipeRecommendationDecisionByItemAsync(
+                    recommendation.RecommendationId, item.RecommendationKey, ct).ConfigureAwait(false);
+                if (decision is null)
+                {
+                    if (recommendation.ProjectRevision == project.Revision)
+                        pendingDecisions++;
+                    continue;
+                }
+                if (decision.Decision == ResearchRecipeRecommendationDecisionStatuses.Rejected)
+                    continue;
+                if (string.IsNullOrWhiteSpace(decision.ActualExecutionKey))
+                    pendingExecutions++;
+                else if (decision.Outcome is null)
+                    pendingOutcomes++;
+            }
+        }
+
+        if (pendingDecisions + pendingExecutions + pendingOutcomes == 0)
+            return;
+
+        throw new ProcessResearchRuleException(
+            $"研发项目尚不能完成：待决定 {pendingDecisions}，待关联运行 {pendingExecutions}，" +
+            $"待完整结果 {pendingOutcomes}。");
+    }
+
+    public async Task<ResearchPage<ResearchRecipeRecommendationFlow>> ListRecipeRecommendationFlowsAsync(
+        Guid projectId,
+        string? cursor,
+        int limit,
+        CancellationToken ct = default)
+    {
+        var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
+        var page = await store.ListRecipeRecommendationsPageAsync(projectId, cursor, limit, ct)
+            .ConfigureAwait(false);
+        var flows = new List<ResearchRecipeRecommendationFlow>();
+        foreach (var recommendation in page.Items)
+        {
+            foreach (var item in recommendation.Items)
+            {
+                var decision = await store.GetRecipeRecommendationDecisionByItemAsync(
+                    recommendation.RecommendationId, item.RecommendationKey, ct).ConfigureAwait(false);
+                var state = RecipeRecommendationFlowState(project, recommendation, decision);
+                flows.Add(new ResearchRecipeRecommendationFlow
+                {
+                    Recommendation = recommendation,
+                    Item = item,
+                    Decision = decision,
+                    State = state,
+                    AllowedActions = RecipeRecommendationAllowedActions(project, state)
+                });
+            }
+        }
+        return new ResearchPage<ResearchRecipeRecommendationFlow>
+        {
+            Items = flows,
+            NextCursor = page.NextCursor
+        };
+    }
+
+    private static string RecipeRecommendationFlowState(
+        ResearchProject project,
+        ResearchRecipeRecommendation recommendation,
+        ResearchRecipeRecommendationDecision? decision)
+    {
+        if (decision is null)
+            return recommendation.ProjectRevision == project.Revision
+                ? ResearchRecipeRecommendationFlowStates.PendingDecision
+                : ResearchRecipeRecommendationFlowStates.Stale;
+        if (decision.Decision == ResearchRecipeRecommendationDecisionStatuses.Rejected)
+            return ResearchRecipeRecommendationFlowStates.Rejected;
+        if (string.IsNullOrWhiteSpace(decision.ActualExecutionKey))
+            return ResearchRecipeRecommendationFlowStates.PendingExecution;
+        return decision.Outcome is null
+            ? ResearchRecipeRecommendationFlowStates.PendingOutcome
+            : ResearchRecipeRecommendationFlowStates.OutcomeFrozen;
+    }
+
+    private static IReadOnlyList<string> RecipeRecommendationAllowedActions(
+        ResearchProject project,
+        string state)
+    {
+        if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
+            return [];
+        return state switch
+        {
+            ResearchRecipeRecommendationFlowStates.PendingDecision =>
+                [ResearchRecipeRecommendationFlowActions.Decide],
+            ResearchRecipeRecommendationFlowStates.PendingExecution =>
+                [ResearchRecipeRecommendationFlowActions.LinkExecution],
+            ResearchRecipeRecommendationFlowStates.PendingOutcome =>
+                [ResearchRecipeRecommendationFlowActions.MaterializeOutcome],
+            _ => []
+        };
+    }
+
     public async Task<ResearchProjectWorkspace> GetWorkspaceAsync(
         Guid projectId,
         CancellationToken ct = default)
@@ -191,22 +309,12 @@ public sealed partial class ProcessResearchWorkflow
         const int workspaceHistoryLimit = 100;
         var project = await RequireProjectAsync(projectId, ct).ConfigureAwait(false);
         var hypothesesTask = store.ListHypothesesAsync(projectId, ct);
-        var recipeRecommendationsTask = store.ListRecipeRecommendationsPageAsync(
+        var recipeFlowsTask = ListRecipeRecommendationFlowsAsync(
             projectId, null, workspaceHistoryLimit, ct);
-        var experimentsTask = store.ListExperimentsPageAsync(
-            projectId, null, workspaceHistoryLimit, ct);
-        var resultsTask = store.ListExperimentResultsPageAsync(
-            projectId, null, workspaceHistoryLimit, ct);
-        var shadowTask = store.ListShadowRecommendationsPageAsync(
-            projectId, null, workspaceHistoryLimit, ct);
-        var replayTask = store.ListHistoricalReplayReportsPageAsync(
-            projectId, null, workspaceHistoryLimit, ct);
-        var rollbackTask = store.ListRollbackDrillsAsync(projectId, ct);
         var windowsTask = store.ListOperatingRegionsAsync(projectId, ct);
         var claimsTask = store.ListKnowledgeClaimsAsync(projectId, ct);
         var mechanismUsagesTask = mechanismKnowledgeStore?.ListUsagesAsync(projectId, ct)
             ?? Task.FromResult<IReadOnlyList<Ingot.Contracts.ResearchAssets.MechanismClaimUsage>>([]);
-        var transfersTask = store.ListTransferAssessmentsAsync(projectId, ct);
         var preregistrationsTask = store.ListValidationPreregistrationsAsync(projectId, ct);
         var stageZeroAdmissionTask = new ResearchValidationPreregistrationService(store)
             .AssessAsync(projectId, ct);
@@ -214,44 +322,37 @@ public sealed partial class ProcessResearchWorkflow
             projectId, null, workspaceHistoryLimit, ct);
         await Task.WhenAll(
             hypothesesTask,
-            recipeRecommendationsTask,
-            experimentsTask,
-            resultsTask,
-            shadowTask,
-            replayTask,
-            rollbackTask,
+            recipeFlowsTask,
             windowsTask,
             claimsTask,
             mechanismUsagesTask,
-            transfersTask,
             preregistrationsTask,
             stageZeroAdmissionTask,
             auditTask).ConfigureAwait(false);
+        var recipeFlows = await recipeFlowsTask.ConfigureAwait(false);
         return new ResearchProjectWorkspace
         {
             Project = project,
             Hypotheses = await hypothesesTask.ConfigureAwait(false),
-            RecipeRecommendations = (await recipeRecommendationsTask.ConfigureAwait(false)).Items,
-            Experiments = (await experimentsTask.ConfigureAwait(false)).Items,
-            ExperimentResults = (await resultsTask.ConfigureAwait(false)).Items,
-            ShadowRecommendations = (await shadowTask.ConfigureAwait(false)).Items,
-            HistoricalReplayReports = (await replayTask.ConfigureAwait(false)).Items,
-            RollbackDrills = await rollbackTask.ConfigureAwait(false),
+            RecipeRecommendationFlows = recipeFlows.Items,
+            RecipeRecommendations = recipeFlows.Items
+                .Select(static value => value.Recommendation)
+                .DistinctBy(static value => value.RecommendationId)
+                .ToArray(),
+            RecipeRecommendationDecisions = recipeFlows.Items
+                .Where(static value => value.Decision is not null)
+                .Select(static value => value.Decision!)
+                .DistinctBy(static value => value.DecisionId)
+                .ToArray(),
             OperatingRegions = await windowsTask.ConfigureAwait(false),
             KnowledgeClaims = await claimsTask.ConfigureAwait(false),
             MechanismKnowledgeUsages = await mechanismUsagesTask.ConfigureAwait(false),
-            TransferAssessments = await transfersTask.ConfigureAwait(false),
             ValidationPreregistrations = await preregistrationsTask.ConfigureAwait(false),
             StageZeroAdmission = await stageZeroAdmissionTask.ConfigureAwait(false),
             Audit = (await auditTask.ConfigureAwait(false)).Items,
             NextCursors = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["recipe-recommendations"] =
-                    (await recipeRecommendationsTask.ConfigureAwait(false)).NextCursor ?? "",
-                ["experiments"] = (await experimentsTask.ConfigureAwait(false)).NextCursor ?? "",
-                ["experiment-results"] = (await resultsTask.ConfigureAwait(false)).NextCursor ?? "",
-                ["shadow-recommendations"] = (await shadowTask.ConfigureAwait(false)).NextCursor ?? "",
-                ["historical-replays"] = (await replayTask.ConfigureAwait(false)).NextCursor ?? "",
+                ["recipe-recommendation-flows"] = recipeFlows.NextCursor ?? "",
                 ["audit"] = (await auditTask.ConfigureAwait(false)).NextCursor ?? ""
             }.Where(static pair => pair.Value.Length > 0)
                 .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
@@ -332,21 +433,6 @@ public sealed partial class ProcessResearchWorkflow
         if (outcomeConstraints.Select(static item => item.Code)
             .Intersect(objectives.Select(static item => item.Code), StringComparer.Ordinal).Any())
             throw new ProcessResearchRuleException("研发目标代码与结果约束代码不能重复。");
-        var safetyTemplates = value.SafetyTemplates.Select(item =>
-        {
-            var category = item.ExecutionCategory.Trim().ToLowerInvariant();
-            if (!ResearchExperimentExecutionCategories.IsValid(category))
-                throw new ProcessResearchRuleException("实验安全模板的执行类别无效。");
-            return item with
-            {
-                ExecutionCategory = category,
-                Name = OptionalText(item.Name, 120),
-                StopRule = RequiredText(item.StopRule, "模板停止规则", 4000),
-                RollbackPlan = RequiredText(item.RollbackPlan, "模板回退方案", 4000)
-            };
-        }).GroupBy(static item => item.ExecutionCategory, StringComparer.Ordinal)
-            .Select(static group => group.Last()).ToArray();
-
         return value with
         {
             Code = code,
@@ -359,7 +445,6 @@ public sealed partial class ProcessResearchWorkflow
             Variables = variables,
             Constraints = constraints,
             OutcomeConstraints = outcomeConstraints,
-            SafetyTemplates = safetyTemplates,
             OptimizationFeatures = optimizationFeatures,
             OwnerUserId = NormalizeUser(value.OwnerUserId),
             MemberUserIds = value.MemberUserIds

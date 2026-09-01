@@ -12,8 +12,8 @@ The architecture must therefore:
 
 1. **Establish trustworthy facts first**: every analysis traces to a real run, actual conditions, process data, and quality outcomes.
 2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
-3. **Let production naturally form optimization samples**: completed recipe runs automatically link actual parameters, process context, and quality outcomes without a separately created experiment.
-4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, physical models, and controlled validation are replaceable tools.
+3. **Let production naturally form optimization samples**: completed recipe runs automatically link actual parameters, process context, and quality outcomes.
+4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
 5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
 The system is designed for one company on its factory network, shared by process, quality, equipment, and R&D teams.
@@ -24,7 +24,7 @@ The system is designed for one company on its factory network, shared by process
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
 ```
 
-The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; recipe optimization directly consumes normal production runs and recommends the next recipe within objectives, safety boundaries, and observed coverage. Controlled validation is used only for causal confirmation, extrapolation, or operating-region validation; it is not a prerequisite for daily optimization. Both read the same evidence.
+The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; recipe optimization directly consumes normal production runs and recommends the next recipe within objectives, safety boundaries, and observed coverage, then retains the engineer decision and actual outcome.
 
 The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
 
@@ -34,7 +34,7 @@ The current Web information architecture balances the decision chain with freque
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
 6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Recipe optimization**: optimization tasks, real-run observations, next-recipe recommendations, optional controlled validation, and process knowledge.
+7. **Recipe optimization**: optimization tasks, real-run observations, next-recipe recommendations, engineer decisions, and process knowledge.
 
 After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Recipe optimization.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
 
@@ -83,20 +83,20 @@ This document fixes stable business boundaries. [Production architecture](produc
 - Use a durable local queue for outages, platform restarts, and short backpressure.
 - Pull versioned acquisition configuration, validate it locally, and report applied state.
 
-Edge does not decide process causes, run product-level optimization, or become the formal record for experiments and quality outcomes.
+Edge does not decide process causes, run product-level optimization, or become the formal record for recipe decisions and quality outcomes.
 
 Discrete run identity must remain traceable across ConnectorHost restarts. If the connector starts while equipment is already active and no recoverable shop-floor run identity exists, Edge marks the segment as incomplete instead of presenting it as a complete run from a normal start. A single event deterministically rejected by Platform is quarantined with a local audit record and must not block later valid events.
 
 ### Platform
 
-- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, optimization tasks, recipe recommendations, controlled validations, evidence, and knowledge.
+- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, optimization tasks, recipe recommendations, engineer decisions, evidence, and knowledge.
 - Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
 - Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
 - Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
 - Admit inspection evidence to formal comparison and optimization only when it matches a published quality plan, has trusted identity, and satisfies independent-review requirements; versioned definitions determine non-numeric outcomes on the server.
 - Preserve inputs sent to numerical services and their returned results.
 
-Platform is the formal business system of record. A next-recipe recommendation is an independent append-only record and does not reuse an experiment identifier, run plan, or state machine. Controlled-validation state and formal conclusions must not exist only in Optimizer, Agent, or a browser.
+Platform is the formal business system of record. Next-recipe recommendations, engineer decisions, execution links, and quality outcomes are independent append-only records; they do not reuse a run-plan or equipment-command state machine and cannot exist only in Optimizer, Agent, or a browser.
 
 Chat uses `ChatConversation` and ordered `ChatMessage` records as its formal user-facing conversation model. URLs, history lists, refresh recovery, idempotent sends, and deletion are scoped to a Conversation. A user message and its pending assistant message are created in one transaction, while `ClientMessageId` prevents network retries from duplicating messages. `AgentRun` is only the execution detail behind an assistant message and retains plans, tool calls, model usage, and stream events; it no longer defines conversation identity.
 
@@ -149,7 +149,7 @@ Stable identifiers connect these facts:
 
 - `ExecutionId`: the real run identity in Platform;
 - `ExecutionId`: the correlation identity for field events or process executions;
-- `ExecutionKey`: the association between an R&D experiment plan and real execution;
+- `ExecutionKey`: the association between an R&D recommendation record and real execution;
 - `EquipmentId`, product/process object, and process specification version: minimum run identity;
 - planned and actually applied process specifications remain separate, and comparable cohorts use the actual specification dimension declared by the analysis plan;
 - content hash: the fixed analytical input and its provenance.
@@ -164,7 +164,7 @@ Every run preserves an immutable context snapshot. Versioned scenario configurat
 
 - **required for analysis**: absence excludes the run from a specified analysis;
 - **record when available**: retain for traceability, stratification, and later coverage assessment;
-- **validated for modeling**: repeated data or experiments support use in diagnosis, optimization, or applicability scope.
+- **validated for modeling**: sufficient, reviewable real-run evidence supports use in diagnosis, optimization, or applicability scope.
 
 The system must expose coverage, missingness, sample counts per level, and factor overlap. Data without overlap cannot pretend to separate equipment, mold, or material effects.
 
@@ -175,12 +175,12 @@ comparable runs → differences and first deviation → candidate cause
                                                      ↓
                                   counterevidence / confounding / missing data
                                                      ↓
-                                  falsifiable experiment → support / reject / inconclusive
+                                  continued real-run evidence → support / reject / inconclusive
 ```
 
 - Observational analysis may report differences, associations, and candidate causes.
 - Every candidate cites source runs, comparison baseline, analysis version, and limitations.
-- Only controllable or blockable candidates can automatically become experiment drafts.
+- Only controllable or blockable candidates can automatically become investigation drafts.
 - Causal promotion requires appropriate controls, repetition, blocking, randomization, or intervention evidence.
 - When identification conditions are absent, “insufficient evidence” is the correct result.
 
@@ -200,17 +200,14 @@ actual recipe + process context + valid quality outcome
        engineer confirmation through the existing production flow
 ```
 
-A production run does not become an experiment and requires no engineer reclassification. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale, but has no experiment identifier, run plan, experiment approval state, or equipment-dispatch command. A new recommendation requires a new input snapshot after another real run arrives.
-
-Controlled validation is a separate decision used only to test a causal hypothesis, explore beyond the observed parameter envelope, or confirm a releasable operating region. It has its own plan, approval, execution, and result state machine; uses only actually controllable variables; declares hard bounds, stopping, and fallback conditions; and accounts for validation conditions whose outcomes are not yet known. One successful point remains only a candidate process setting. An operating region also requires independent confirmation, repeatability, boundary or interaction validation, and an explicit applicability scope.
+A production run requires no engineer reclassification. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale; engineers then append adoption, modification, or rejection and its reason, link actual execution, and let parameter readback and inspection results freeze the outcome. A new recommendation requires a new input snapshot after another real run arrives.
 
 ## Consistency and replay
 
 - The same analytical input produces a stable content hash.
 - Data, features, analysis methods, models, and scenario configuration carry versions.
-- Experiment results are calculated from source data rather than accepted as trustworthy self-assertions.
-- Each experiment has at most one formal result.
-- Concurrent requests and retries do not create duplicate business experiments.
+- Decision outcomes are calculated from source data rather than accepted as trustworthy self-assertions.
+- Concurrent requests and retries do not create duplicate recommendation, decision, execution-link, or outcome records.
 - Historical data remain interpretable under their original versions and recomputable under new versions.
 - Optimizer or Agent failure does not stop acquisition, run records, or inspections.
 
@@ -223,9 +220,9 @@ A new process scenario provides:
 - process signals, stages, and versioned features;
 - quality objectives, inspection mappings, and safety constraints;
 - required and optional context fields;
-- a safe baseline, default experiment policy, and optional mechanism knowledge.
+- a safe baseline, default recommendation policy, and optional mechanism knowledge.
 
-It should not rewrite run identity, evidence relationships, experiment state machines, audit principles, or the stateless Optimizer protocol. Generality is supported only after a second, materially different real scenario works without changing those contracts.
+It should not rewrite run identity, evidence relationships, execution state machines, audit principles, or the stateless Optimizer protocol. Generality is supported only after a second, materially different real scenario works without changing those contracts.
 
 ## Agent capability and interoperability boundary
 
@@ -236,7 +233,7 @@ HTTP errors use `application/problem+json` with a stable `code`, request `traceI
 Capabilities open progressively by risk:
 
 - **Read**: query authorized runs, evidence, quality, context, and applicability.
-- **Propose**: create investigation, hypothesis, or experiment drafts without changing formal state.
+- **Propose**: create investigation, hypothesis, or investigation drafts without changing formal state.
 - **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
 - **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
 

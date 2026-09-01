@@ -18,7 +18,7 @@ const assetDefinitions = [
   {
     key: "datasets",
     title: "数据集快照",
-    description: "用于复算实验结果和模型训练的版本化输入。",
+    description: "用于复算真实运行结果和模型训练的版本化输入。",
     endpoint: "/api/v1/training-datasets",
     rowKey: row => `${row.datasetId}:${row.version}`,
     columns: [

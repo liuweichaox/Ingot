@@ -22,12 +22,11 @@
 
 - **Process diagnosis**: Comparing runs that satisfy comparability conditions to form candidate causes, counter-evidence, and evidence gaps, rather than asserting a root cause from history alone.
 - **Next recipe**: One recipe recommended inside objectives, safety boundaries, and observed coverage, with candidate process settings, prediction intervals, risks, and rationale.
-- **Controlled validation**: An independent validation with control, replication, and safety boundaries, created only when causal confirmation or out-of-coverage exploration is needed.
-- **Design of experiments (DOE)**: A statistical method that systematically arranges experiments under controlled conditions to separate factor effects.
+- **Candidate-coverage design (DOE)**: A statistical design method for understanding variable coverage and interaction; Ingot's current product loop admits only real runs and their quality outcomes.
 - **Response surface**: A surrogate model that approximates the relationship between targets and parameters with an interpretable function, suited to limited samples.
 - **Bayesian optimization**: A sequential optimization method for costly, stepwise decisions; it requires few variables, a quantifiable objective, and clear safety boundaries.
 - **Surrogate model**: A statistical model, such as a Gaussian process, that approximates the real process response from limited samples.
-- **Mechanism knowledge**: Reviewable knowledge from physical, chemical, or engineering principles used to constrain or explain recommendations without replacing experimental evidence.
+- **Mechanism knowledge**: Reviewable knowledge from physical, chemical, or engineering principles used to constrain or explain recommendations without replacing real-run evidence.
 
 ## Deployment and responsibilities
 

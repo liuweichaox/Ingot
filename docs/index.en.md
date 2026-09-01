@@ -15,7 +15,7 @@ The documentation can be read by task rather than in sequence.
 | Prepare production | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
 | Review how the system forms a recommendation | [System design](design.en.md) | [Analysis and optimization](optimization.en.md) |
 | Build process knowledge | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
-| Review effect claims | [Current status](status.en.md) | [Scenario validation](rollout.en.md) |
+| Review effect claims | [Current status](status.en.md) | [Analysis and optimization](optimization.en.md) |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | [System design](design.en.md) |
 
 ## Product loop
@@ -31,7 +31,7 @@ Process configuration → Field integration → Production runs → Quality mana
 3. **Production runs** record actual conditions, stages, trajectories, and manufacturing context.
 4. **Quality management** links inspections uniquely and subjects them to independent review.
 5. **Process diagnosis** checks whether the data are reliable, compares runs, and finds differences worth testing.
-6. **Recipe optimization** aggregates real recipe runs and recommends the next recipe within safety boundaries and observed coverage; controlled validation is optional when causal confirmation or extrapolation is needed.
+6. **Recipe optimization** aggregates real recipe runs, recommends the next recipe within safety boundaries and observed coverage, and records the engineer's adoption, modification, or rejection together with later actual-run outcomes.
 
 This order means “what must exist before the next step.” Navigation may follow day-to-day role needs, but analysis must still begin with trustworthy data.
 
@@ -60,7 +60,6 @@ See [Current status](status.en.md) for the complete boundary.
 ### Validation and production engineering
 
 - [Current status](status.en.md): what works today and what remains unproven
-- [Scenario validation](rollout.en.md): how historical replay, shadow validation, and controlled online experiments test value
 - [Production architecture](production-architecture.en.md): what a production deployment must satisfy
 
 ### Project governance

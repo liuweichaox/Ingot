@@ -23,6 +23,22 @@ public sealed class AgentProposalEnvelopeTests
         Assert.True(answer.Proposals[0].RequiresHumanConfirmation);
     }
 
+    [Fact]
+    public void ProductionEvidenceProposal_IsAcceptedWithoutGrantingWriteAccess()
+    {
+        var proposal = Proposal() with
+        {
+            Kind = AgentProposalKinds.ProductionEvidence,
+            Title = "关联后续真实生产运行",
+            Rationale = "应在工程师决定后关联实际运行和质量记录，以形成可追溯的结果证据。"
+        };
+
+        var valid = new DefaultAnalysisResultValidator().TryVerifyAnswer(
+            Answer(proposal), [ToolResult()], out var error);
+
+        Assert.True(valid, error);
+    }
+
     [Theory]
     [InlineData("persisted", true)]
     [InlineData("preview-only", false)]
@@ -122,15 +138,15 @@ public sealed class AgentProposalEnvelopeTests
 
     private static AnalysisAnswer Answer(AgentProposalEnvelope proposal) => new()
     {
-        Summary = "基于已读取运行形成一个待人工确认的实验草案。",
+        Summary = "基于已读取运行形成一条待人工确认的下一配方建议。",
         Proposals = [proposal]
     };
 
     private static AgentProposalEnvelope Proposal() => new()
     {
-        Kind = AgentProposalKinds.Experiment,
+        Kind = AgentProposalKinds.RecipeRecommendation,
         Title = "复核温度窗口",
-        Rationale = "运行记录显示该窗口值得通过受控实验复核，但尚不能视为因果结论。",
+        Rationale = "运行记录支持将该窗口作为下一配方候选，但尚不能视为因果结论。",
         DraftFields = new Dictionary<string, string>
         {
             ["stopRule"] = "出现安全约束或数据失效时停止。",

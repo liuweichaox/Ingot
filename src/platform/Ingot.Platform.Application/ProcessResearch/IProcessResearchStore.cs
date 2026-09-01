@@ -1,4 +1,4 @@
-// 定义研发项目、假设、实验、审核与验证证据的持久化端口。
+// 定义研发项目、假设、审核与真实运行证据的持久化端口。
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
@@ -57,96 +57,31 @@ public interface IProcessResearchStore
         ResearchRecipeRecommendation value,
         ResearchAuditEntry audit,
         CancellationToken ct = default);
-
-    Task<ResearchExperiment?> GetExperimentAsync(Guid experimentId, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchExperiment>> ListExperimentsAsync(
-        Guid projectId,
+    Task<ResearchRecipeRecommendationDecision?> GetRecipeRecommendationDecisionAsync(
+        Guid decisionId,
         CancellationToken ct = default);
-    Task<ResearchPage<ResearchExperiment>> ListExperimentsPageAsync(
-        Guid projectId,
-        string? cursor,
-        int limit,
-        CancellationToken ct = default);
-    Task<ResearchExperiment> SaveExperimentAsync(
-        ResearchExperiment value,
-        CancellationToken ct = default);
-    Task<ResearchExperiment> SaveExperimentTransactionAsync(
-        ResearchExperiment updatedExperiment,
-        ResearchAuditEntry audit,
-        CancellationToken ct = default);
-    Task<ResearchExperiment> SaveControlledDecisionTransactionAsync(
-        ResearchExperiment updatedExperiment,
-        ResearchAuditEntry audit,
-        CancellationToken ct = default);
-
-    Task<ResearchShadowRecommendation?> GetShadowRecommendationAsync(
+    Task<ResearchRecipeRecommendationDecision?> GetRecipeRecommendationDecisionByItemAsync(
         Guid recommendationId,
+        string recommendationKey,
         CancellationToken ct = default);
-    Task<ResearchShadowRecommendation?> GetShadowRecommendationBySuggestionAsync(
-        Guid experimentId,
-        string suggestionExecutionKey,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchShadowRecommendation>> ListShadowRecommendationsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchPage<ResearchShadowRecommendation>> ListShadowRecommendationsPageAsync(
+    Task<ResearchPage<ResearchRecipeRecommendationDecision>> ListRecipeRecommendationDecisionsPageAsync(
         Guid projectId,
         string? cursor,
         int limit,
         CancellationToken ct = default);
-    Task<ResearchShadowRecommendation> CreateShadowRecommendationAsync(
-        ResearchShadowRecommendation value,
+    Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(
+        ResearchRecipeRecommendationDecision value,
+        string? actualExecutionKey,
+        ResearchAuditEntry audit,
         CancellationToken ct = default);
-    Task<ResearchShadowRecommendation> AttachShadowOutcomeAsync(
-        ResearchShadowRecommendation value,
+    Task<ResearchRecipeRecommendationDecision> LinkRecipeRecommendationDecisionExecutionTransactionAsync(
+        Guid decisionId,
+        string actualExecutionKey,
+        ResearchAuditEntry audit,
         CancellationToken ct = default);
-
-    Task<ResearchHistoricalReplayReport?> GetHistoricalReplayReportAsync(
-        Guid reportId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchPage<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsPageAsync(
-        Guid projectId,
-        string? cursor,
-        int limit,
-        CancellationToken ct = default);
-    Task<ResearchHistoricalReplayReport> CreateHistoricalReplayReportAsync(
-        ResearchHistoricalReplayReport value,
-        CancellationToken ct = default);
-    Task<ResearchHistoricalReplayReport> ReviewHistoricalReplayReportAsync(
-        ResearchHistoricalReplayReport value,
-        CancellationToken ct = default);
-    Task<ResearchRollbackDrill?> GetRollbackDrillAsync(
-        Guid drillId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchRollbackDrill>> ListRollbackDrillsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchRollbackDrill> CreateRollbackDrillAsync(
-        ResearchRollbackDrill value,
-        CancellationToken ct = default);
-    Task<ResearchRollbackDrill> ReviewRollbackDrillAsync(
-        ResearchRollbackDrill value,
-        CancellationToken ct = default);
-    Task<ResearchExperimentResult?> GetExperimentResultAsync(
-        Guid resultId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchExperimentResult>> ListExperimentResultsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchPage<ResearchExperimentResult>> ListExperimentResultsPageAsync(
-        Guid projectId,
-        string? cursor,
-        int limit,
-        CancellationToken ct = default);
-    Task<ResearchExperimentResult> SaveExperimentResultAsync(
-        ResearchExperimentResult value,
-        CancellationToken ct = default);
-    Task<ResearchExperimentResult> SaveExperimentResultTransactionAsync(
-        ResearchExperimentResult result,
-        ResearchExperiment updatedExperiment,
+    Task<ResearchRecipeRecommendationDecision> AttachRecipeRecommendationOutcomeTransactionAsync(
+        Guid decisionId,
+        ResearchRecipeRecommendationOutcome outcome,
         ResearchAuditEntry audit,
         CancellationToken ct = default);
 
@@ -166,19 +101,6 @@ public interface IProcessResearchStore
         CancellationToken ct = default);
     Task<ResearchKnowledgeClaim> SaveKnowledgeClaimAsync(
         ResearchKnowledgeClaim value,
-        CancellationToken ct = default);
-
-    Task<ResearchTransferAssessment?> GetTransferAssessmentAsync(
-        Guid assessmentId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchTransferAssessment>> ListTransferAssessmentsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchTransferAssessment> CreateTransferAssessmentAsync(
-        ResearchTransferAssessment value,
-        CancellationToken ct = default);
-    Task<ResearchTransferAssessment> ReviewTransferAssessmentAsync(
-        ResearchTransferAssessment value,
         CancellationToken ct = default);
 
     Task AddAuditEntryAsync(ResearchAuditEntry value, CancellationToken ct = default);

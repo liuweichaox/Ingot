@@ -75,7 +75,7 @@ public sealed class ResearchObservationAssembler(
             return new ResearchObservationAssembly([], 0);
         var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
         var candidates = distinctIds.Select((executionId, index) => new CandidateRun(
-            new ExperimentRunPlan
+            new ProductionRunCandidate
             {
                 ExecutionKey = executionId,
                 Sequence = index + 1
@@ -85,28 +85,24 @@ public sealed class ResearchObservationAssembler(
         return await AssembleRunsAsync(project, candidates, scenarioPackage, ct).ConfigureAwait(false);
     }
 
-    public async Task<ResearchObservationAssembly> AssembleAsync(
+    public async Task<ResearchObservationAssembly> AssembleProductionRunAsync(
         ResearchProject project,
-        IReadOnlyList<ResearchExperiment> experiments,
+        string executionKey,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(executionKey))
+            throw new ProcessResearchRuleException("实际运行标识不能为空。");
         var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
-        var candidates = experiments
-            .Where(static experiment => experiment.Status != ResearchExperimentStatuses.Cancelled)
-            .Where(static experiment =>
-                experiment.Optimization?.Mode != ResearchOptimizationModes.Shadow)
-            .SelectMany(experiment => experiment.RunPlan.Select(run => new CandidateRun(
-                run,
-                experiment.CreatedAt,
-                experiment.UpdatedAt)))
-            .GroupBy(static value => value.Run.ExecutionKey, StringComparer.Ordinal)
-            .Select(static group => group
-                .OrderByDescending(static value => value.UpdatedAt)
-                .First())
-            .OrderBy(static value => value.CreatedAt)
-            .ThenBy(static value => value.Run.Sequence)
-            .ToArray();
-        return await AssembleRunsAsync(project, candidates, scenarioPackage, ct).ConfigureAwait(false);
+        var run = new ProductionRunCandidate
+        {
+            ExecutionKey = executionKey.Trim(),
+            Sequence = 1
+        };
+        return await AssembleRunsAsync(
+            project,
+            [new CandidateRun(run, project.CreatedAt, project.UpdatedAt)],
+            scenarioPackage,
+            ct).ConfigureAwait(false);
     }
 
     private async Task<ResearchObservationAssembly> AssembleRunsAsync(
@@ -138,6 +134,8 @@ public sealed class ResearchObservationAssembler(
         {
             ct.ThrowIfCancellationRequested();
             if (!executionsByRun.TryGetValue(candidate.Run.ExecutionKey, out var execution))
+                continue;
+            if (!MatchesProjectScope(project, execution))
                 continue;
             var inspectionPlan = InspectionPlanMatcher.Resolve(
                 inspectionPlans,
@@ -208,9 +206,24 @@ public sealed class ResearchObservationAssembler(
             ? value.Trim()
             : null;
 
+    private static bool MatchesProjectScope(
+        ResearchProject project,
+        ExecutionComparisonRow execution)
+    {
+        var context = project.Context;
+        return Matches(ContextValue(context, "product_family_code"), execution.ProductFamilyCode) &&
+            Matches(ContextValue(context, "product_code"), execution.ProductCode) &&
+            Matches(ContextValue(context, "equipment_id"), execution.EquipmentId) &&
+            Matches(ContextValue(context, "process_specification_id"), execution.ProcessSpecificationId) &&
+            Matches(ContextValue(context, "output_item_id"), execution.OutputItemId);
+    }
+
+    private static bool Matches(string? expected, string? actual)
+        => expected is null || string.Equals(expected, actual?.Trim(), StringComparison.Ordinal);
+
     private ResearchRunObservation BuildObservation(
         ResearchProject project,
-        ExperimentRunPlan run,
+        ProductionRunCandidate run,
         ExecutionComparisonRow execution,
         IReadOnlyList<InspectionRecord> records,
         ScenarioPackage? scenarioPackage)
@@ -292,7 +305,6 @@ public sealed class ResearchObservationAssembler(
         AddContext(context, "process_specification_id", execution.ProcessSpecificationId);
         AddContext(context, "process_specification_version", execution.ProcessSpecificationVersion);
         AddContext(context, "tooling_installation_id", execution.ToolingInstallationId);
-        AddContext(context, "tooling_assembly_id", execution.ToolingAssemblyId);
         AddContext(context, "tooling_assembly_id", execution.ToolingAssemblyId);
         AddContext(context, "assembly_revision_id", execution.AssemblyRevisionId);
         AddContext(context, "assembly_revision", execution.AssemblyRevision);
@@ -640,8 +652,15 @@ public sealed class ResearchObservationAssembler(
         return null;
     }
 
+    private sealed record ProductionRunCandidate
+    {
+        public required string ExecutionKey { get; init; }
+        public int Sequence { get; init; }
+        public IReadOnlyList<ResearchVariableSetting> Factors { get; init; } = [];
+    }
+
     private sealed record CandidateRun(
-        ExperimentRunPlan Run,
+        ProductionRunCandidate Run,
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
 

@@ -4,7 +4,7 @@
 
 ## Conclusion summary
 
-Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, and engineer-confirmed next-recipe recommendations generated directly from real recipe runs. Controlled validation is a separate optional workflow.
+Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, and engineer-confirmed next-recipe recommendations generated directly from real recipe runs.
 
 The repository claims only code, database contracts, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data, historical protocols, or effect results.
 
@@ -27,18 +27,17 @@ The repository currently covers:
 - linking equipment, product, specification, material, tooling, process curves, and quality outcomes to one run;
 - checking completeness, actual execution values, units, sources, and versions before analysis;
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;
-- automatically combining admitted real recipe runs with quality outcomes into optimization observations without requiring a user-created experiment;
-- generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch;
-- designing controlled validation with controls, repetition, and safety boundaries when needed;
+- automatically combining admitted real recipe runs with quality outcomes into optimization observations;
+- generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch, then append-only freezing the engineer's adoption, modification, or rejection, reason, actual recipe, and linked run;
 - selecting response-surface or Gaussian-process methods according to the data and degrading when evidence is insufficient;
-- preserving evidence, constraints, model versions, engineer review, and final outcomes for every recommendation;
+- preserving evidence, constraints, model versions, engineer decisions, and one-time frozen final outcomes from actual execution, parameter readback, and inspection records for every recommendation;
 - providing a permissioned analysis assistant plus backup, restore, monitoring, and basic failure-drill tooling.
 
 “Implemented” means repository code, database contracts, and tests exist. It does not mean the software fits every process or has produced a particular business benefit.
 
 ## Repository validation boundary
 
-The repository bundles no public or field-validation datasets, historical round protocols, result trajectories, or effect reports. Optimizer unit tests cover algorithm contracts, determinism, constraints, fail-closed behavior, and historical replay without future-result access. Scenario-specific effect comparisons run in the deployer's own environment.
+The repository bundles no public or field-effect datasets, prescribed round protocols, result trajectories, or effect reports. Optimizer unit tests cover algorithm contracts, determinism, constraints, and fail-closed behavior. Scenario-specific effect comparisons run in the deployer's own environment.
 
 ## Deployer responsibility
 
@@ -50,7 +49,6 @@ Deployers are responsible for:
 - reviewing, adopting, or rejecting recipe recommendations;
 - evaluating actual quality, cost, cycle-time, and production-safety effects.
 
-See [Scenario validation](rollout.en.md) for an optional evaluation method.
 
 ## Production-deployment boundary
 

@@ -239,7 +239,7 @@ test("危险操作有确认，证据边界和核心业务动作可见", async ({
   await page.goto("/comparisons");
   await page.getByRole("button", { name: "生成对比结论", exact: true }).click();
   await expect(page.getByText("观察结果只形成待验证候选", { exact: false })).toBeVisible();
-  await expect(page.getByText("因果结论仍需可选的受控验证确认", { exact: false })).toBeVisible();
+  await expect(page.getByText("因果结论须由后续真实生产运行和质量结果持续支持", { exact: false })).toBeVisible();
 
   await page.goto("/research-projects?create=1&executionId=RUN-2026-0821-005&comparisonExecutionIds=RUN-2026-0821-005,RUN-2026-0821-004");
   const projectDialog = page.getByRole("dialog");

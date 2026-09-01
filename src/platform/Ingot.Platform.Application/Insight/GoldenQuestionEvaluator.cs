@@ -71,7 +71,7 @@ public sealed class GoldenQuestionEvaluator
         Add("causal-guard", !hasStructuredCausalClaim &&
             !answerValues.Any(AnalysisTextPolicy.ContainsUnsupportedCausalClaim) &&
             !forbidden.Any(term => AnswerText(run).Contains(term, StringComparison.OrdinalIgnoreCase)),
-            "未经受控实验验证的回答不得包含因果断言或审核禁用文本。");
+            "未经可比较真实运行确认的回答不得包含因果断言或审核禁用文本。");
 
         return new GoldenQuestionEvaluation
         {

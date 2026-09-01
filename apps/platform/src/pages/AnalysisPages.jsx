@@ -235,7 +235,7 @@ export function ExecutionComparisonPage() {
           maximumHypotheses: 3,
         },
       );
-      notify(`已将运行对比转为 ${created.length} 条候选假设；请补充验证标准后再让优化器设计实验。`);
+      notify(`已将运行对比转为 ${created.length} 条候选假设；请补充验证标准，并用后续真实运行结果持续复核。`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -267,7 +267,7 @@ export function ExecutionComparisonPage() {
     .map(candidate => ({
       ...candidate,
       sourceLabel: candidate.sourceKind === "control-parameter" ? "实际工艺规范" : "过程轨迹",
-      actionabilityLabel: candidate.actionability === "controllable" ? "可直接实验" : "需映射控制量",
+      actionabilityLabel: candidate.actionability === "controllable" ? "可形成下一配方建议" : "需映射控制量",
       stabilityLabel: Number.isFinite(Number(candidate.stabilitySelectionRate))
         ? `${Math.round(Number(candidate.stabilitySelectionRate) * 100)}%`
         : "样本不足",
@@ -278,11 +278,6 @@ export function ExecutionComparisonPage() {
   const firstDeviationRows = (investigation?.firstDeviations || []).map(item => ({
     ...item,
     phaseLabel: item.phaseName || item.phaseCode || "全运行",
-  }));
-  const experimentRows = (investigation?.nextExperiments || []).map(item => ({
-    ...item,
-    blockingLabel: (item.blockingFactors || []).join("、") || "无已识别区组因素",
-    designLabel: `${item.minimumLevels} 水平 × ${item.minimumBlocks} 区组 × 每条件 ${item.repeatsPerCondition} 次`,
   }));
   return (
     <Page title="运行对比">
@@ -318,7 +313,7 @@ export function ExecutionComparisonPage() {
         <>
           <Alert tone={investigation?.status === "ready" ? "success" : "warning"} title="对比结论">
             {investigation?.status === "ready"
-              ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可以进入受控验证。`
+              ? `已找到 ${firstDeviationRows.length} 个优先偏离和 ${causeRows.length} 个候选原因，可带入配方优化并持续积累真实生产证据。`
               : `对比计算已成功，但当前只能作为探索性证据。${(investigation?.missingData || []).length ? ` 还缺少：${investigation.missingData.join("；")}` : " 需要更多质量结果和重复运行。"}`}
           </Alert>
           <AnalysisReadinessCard diagnosis={result.diagnosis} />
@@ -364,17 +359,6 @@ export function ExecutionComparisonPage() {
                 {(investigation?.missingData || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.missingData.map(item => <li key={item}>{item}</li>)}</ul> : <p className="text-sm text-emerald-700">当前调查所需的关键数据项已覆盖。</p>}
               </div>
             </div>
-            {experimentRows.length > 0 && (
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-semibold text-slate-900">下一步验证实验</h4>
-                <DataTable rows={experimentRows} keyField="candidateId" columns={[
-                  { key: "variableCode", label: "可控变量" },
-                  { key: "designLabel", label: "最低设计" },
-                  { key: "blockingLabel", label: "区组因素" },
-                  { key: "rationale", label: "验证方法" },
-                ]} />
-              </div>
-            )}
             <ConclusionBoundary>{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</ConclusionBoundary>
           </Card>
           <details className="rounded-lg border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看参与对比的 {comparedProcessExecutions.length} 条运行</summary><div className="border-t border-slate-100 p-5"><Card title="运行概况">
@@ -393,7 +377,7 @@ export function ExecutionComparisonPage() {
               ]}
             />
           </Card></div></details>
-          <Card title="将追因结果带入配方优化" description="系统只把有证据的关联转为候选原因；因果结论仍需可选的受控验证确认。">
+          <Card title="将追因结果带入配方优化" description="系统只把有证据的关联转为候选原因；因果结论须由后续真实生产运行和质量结果持续支持。">
             {!hypothesisGenerationReady && <Alert tone="warning" title="暂不能批量生成候选假设">当前证据仍处于探索阶段。补充质量结果、重复运行和上下文变量，并在样本外验证通过后再转入研发。</Alert>}
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <Field label="优化任务"><Select value={researchProjectId} onChange={event => setResearchProjectId(event.target.value)}><option value="">选择优化任务</option>{researchProjects.filter(item => !["completed", "archived"].includes(item.status)).map(item => <option key={item.projectId} value={item.projectId}>{item.name}</option>)}</Select></Field>
@@ -445,8 +429,8 @@ export function ExecutionComparisonPage() {
                     <ConclusionBoundary key={candidate.candidateId} title={candidate.displayName}>
                       这是观察性候选，不是已验证原因。
                       {(candidate.possibleConfounders || []).length
-                        ? ` 当前可能受${candidate.confoundersLabel}混杂，必须通过受控实验拆解。`
-                        : " 当前未识别出明确混杂因素，仍需经过受控重复实验验证。"}
+                        ? ` 当前可能受${candidate.confoundersLabel}混杂，需要在后续真实运行中持续分层核对。`
+                        : " 当前未识别出明确混杂因素，仍需通过后续真实运行结果复核。"}
                       {(result.diagnosis?.knownUnmeasuredConfounders || []).length
                         ? ` 已知但本次未记录的因素包括：${result.diagnosis.knownUnmeasuredConfounders.map(item => item.name).join("、")}。`
                         : ""}

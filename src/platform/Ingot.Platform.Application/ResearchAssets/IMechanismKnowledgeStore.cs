@@ -3,7 +3,7 @@ using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>持久化版本化机理知识，并分别记录配方建议和受控验证的知识使用。</summary>
+/// <summary>持久化版本化机理知识，并记录配方建议与真实运行结果的知识使用。</summary>
 public interface IMechanismKnowledgeStore
 {
     Task<MechanismClaimVersion?> GetClaimAsync(Guid claimId, int? version = null, CancellationToken ct = default);
@@ -23,7 +23,7 @@ public interface IMechanismKnowledgeStore
     Task<bool> LifecycleEvidenceUsedAsync(Guid claimId, string referenceId, CancellationToken ct = default);
     Task<bool> LifecycleActorUsedAsync(Guid claimId, string userId, CancellationToken ct = default);
     Task<MechanismClaimVersion> TransitionAsync(MechanismClaimLifecycleDecision decision, CancellationToken ct = default);
-    Task<bool> ExperimentResultValidatesClaimAsync(
+    Task<bool> RecipeRecommendationOutcomeSupportsClaimAsync(
         Guid projectId,
         MechanismClaimVersion claim,
         Guid validationHypothesisId,

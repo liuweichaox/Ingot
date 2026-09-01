@@ -179,7 +179,7 @@ export function CreateProjectDrawer({ open, saving, form, setForm, onClose, onSu
       open={open}
       onClose={onClose}
       title="创建配方优化任务"
-      description="确定配方运行范围、质量目标和安全边界；无需另外建立实验。"
+      description="确定配方运行范围、质量目标和安全边界；后续证据直接来自真实生产运行。"
       size="xl"
       footer={<><Button disabled={saving} onClick={onClose}>取消</Button><Button variant="primary" disabled={saving} type="submit" form="research-project-form">{saving ? "正在创建…" : "创建项目"}</Button></>}
     >

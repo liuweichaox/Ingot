@@ -20,7 +20,7 @@ controls / instruments / vision / inspection / MES
                                       └─ Platform Web (independent React frontend)
 ```
 
-Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat runs, knowledge extraction, analysis backfills, experiment materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
+Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat runs, knowledge extraction, analysis backfills, additional validation materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
 The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs now share PostgreSQL with business evidence, so they no longer prevent an external orchestrator from scaling API replicas behind a load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
 
@@ -230,7 +230,7 @@ Back up at least:
 A recovery exercise verifies more than service startup:
 
 - run, context, and inspection linkage remains intact;
-- experiments, evidence, and reviews are readable;
+- additional validations, evidence, and reviews are readable;
 - Edge backlog replays without duplicates;
 - historical observations rebuild under their original versions;
 - a known project reproduces the same analytical input hash.
@@ -254,7 +254,7 @@ A recovery exercise verifies more than service startup:
 - Restrict the equipment network to required addresses and protocols.
 - Apply access control to attachments, knowledge, and backup directories.
 - Separate roles for quality entry and review.
-- Require engineer approval before an experiment enters field execution.
+- Require engineer approval before an additional validation enters field execution.
 - Keep equipment interlocks and field safety independent of model recommendations.
 - Report security issues privately under `SECURITY.md`.
 
@@ -262,7 +262,7 @@ A recovery exercise verifies more than service startup:
 
 Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
 
-First run the read-only business-workflow verifier against the target deployment. It checks versioned configuration, a running real source, complete tooling, production context, run-to-inspection linkage, data admission, candidate guardrails, experiment results, and role separation:
+First run the read-only business-workflow verifier against the target deployment. It checks versioned configuration, a running real source, complete tooling, production context, run-to-inspection linkage, data admission, candidate guardrails, execution outcomes, and role separation:
 
 ```bash
 export INGOT_PLATFORM_URL=https://ingot.example.com

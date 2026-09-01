@@ -2,6 +2,7 @@
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "../ui/components";
 
+// 编辑业务字典定义；页面只提交结构化注册表数据，不承担运行证据或优化决策流程。
 const codePattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const dataTypes = [
   ["double", "小数"],
@@ -780,7 +781,7 @@ function ScenarioPackageEditor({ form, onChange, readOnly, lockIdentity }) {
           </div>)}
         </div>
       </Card>
-      <Card title="场景安全约束" description="这里只记录场景默认边界；项目和实验仍需工程师确认。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "constraints", scenarioConstraint())}>添加约束</Button> : undefined}>
+      <Card title="场景安全约束" description="这里只记录场景默认边界；项目中的实际运行仍需工程师确认。" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "constraints", scenarioConstraint())}>添加约束</Button> : undefined}>
         <div className="grid gap-4">
           {form.constraints.length === 0 && <p className="text-sm text-slate-500">尚未配置默认约束。</p>}
           {form.constraints.map((item, index) => <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">

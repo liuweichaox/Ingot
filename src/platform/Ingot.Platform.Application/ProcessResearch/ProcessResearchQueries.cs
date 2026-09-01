@@ -25,28 +25,12 @@ public sealed class ProcessResearchQueries(IProcessResearchStore research)
     public Task<ResearchPage<ResearchRecipeRecommendation>> ListRecipeRecommendationsPageAsync(
         Guid projectId, string? cursor, int limit, CancellationToken ct = default)
         => research.ListRecipeRecommendationsPageAsync(projectId, cursor, limit, ct);
-    public Task<ResearchExperiment?> GetExperimentAsync(Guid id, CancellationToken ct = default)
-        => research.GetExperimentAsync(id, ct);
-    public Task<IReadOnlyList<ResearchExperiment>> ListExperimentsAsync(Guid projectId, CancellationToken ct = default)
-        => research.ListExperimentsAsync(projectId, ct);
-    public Task<ResearchPage<ResearchExperiment>> ListExperimentsPageAsync(
+    public Task<ResearchRecipeRecommendationDecision?> GetRecipeRecommendationDecisionAsync(
+        Guid id, CancellationToken ct = default)
+        => research.GetRecipeRecommendationDecisionAsync(id, ct);
+    public Task<ResearchPage<ResearchRecipeRecommendationDecision>> ListRecipeRecommendationDecisionsPageAsync(
         Guid projectId, string? cursor, int limit, CancellationToken ct = default)
-        => research.ListExperimentsPageAsync(projectId, cursor, limit, ct);
-    public Task<ResearchPage<ResearchExperimentResult>> ListExperimentResultsPageAsync(
-        Guid projectId, string? cursor, int limit, CancellationToken ct = default)
-        => research.ListExperimentResultsPageAsync(projectId, cursor, limit, ct);
-    public Task<ResearchShadowRecommendation?> GetShadowRecommendationAsync(Guid id, CancellationToken ct = default)
-        => research.GetShadowRecommendationAsync(id, ct);
-    public Task<ResearchPage<ResearchShadowRecommendation>> ListShadowRecommendationsPageAsync(
-        Guid projectId, string? cursor, int limit, CancellationToken ct = default)
-        => research.ListShadowRecommendationsPageAsync(projectId, cursor, limit, ct);
-    public Task<ResearchHistoricalReplayReport?> GetHistoricalReplayReportAsync(Guid id, CancellationToken ct = default)
-        => research.GetHistoricalReplayReportAsync(id, ct);
-    public Task<ResearchPage<ResearchHistoricalReplayReport>> ListHistoricalReplayReportsPageAsync(
-        Guid projectId, string? cursor, int limit, CancellationToken ct = default)
-        => research.ListHistoricalReplayReportsPageAsync(projectId, cursor, limit, ct);
-    public Task<ResearchRollbackDrill?> GetRollbackDrillAsync(Guid id, CancellationToken ct = default)
-        => research.GetRollbackDrillAsync(id, ct);
+        => research.ListRecipeRecommendationDecisionsPageAsync(projectId, cursor, limit, ct);
     public Task<ResearchOperatingRegion?> GetOperatingRegionAsync(Guid id, CancellationToken ct = default)
         => research.GetOperatingRegionAsync(id, ct);
     public Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
@@ -54,8 +38,6 @@ public sealed class ProcessResearchQueries(IProcessResearchStore research)
         => research.ListOperatingRegionsAsync(projectId, ct);
     public Task<ResearchKnowledgeClaim?> GetKnowledgeClaimAsync(Guid id, CancellationToken ct = default)
         => research.GetKnowledgeClaimAsync(id, ct);
-    public Task<ResearchTransferAssessment?> GetTransferAssessmentAsync(Guid id, CancellationToken ct = default)
-        => research.GetTransferAssessmentAsync(id, ct);
     public Task<ResearchPage<ResearchAuditEntry>> ListAuditEntriesPageAsync(
         Guid projectId, string? cursor, int limit, CancellationToken ct = default)
         => research.ListAuditEntriesPageAsync(projectId, cursor, limit, ct);

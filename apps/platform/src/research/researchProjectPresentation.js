@@ -26,7 +26,7 @@ export function mechanismEvidenceLabel(value) {
   return ({
     "knowledge-source": "原始知识来源",
     "knowledge-fragment": "可定位知识片段",
-    "experiment-result": "正式验证结果",
+    "recipe-recommendation-outcome": "真实运行结果",
   })[value] || value;
 }
 

@@ -143,13 +143,15 @@ public static class AgentProposalKinds
 {
     public const string Investigation = "investigation";
     public const string Hypothesis = "hypothesis";
-    public const string Experiment = "experiment";
+    public const string RecipeRecommendation = "recipe-recommendation";
+    public const string ProductionEvidence = "production-evidence";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         Investigation,
         Hypothesis,
-        Experiment
+        RecipeRecommendation,
+        ProductionEvidence
     };
 }
 

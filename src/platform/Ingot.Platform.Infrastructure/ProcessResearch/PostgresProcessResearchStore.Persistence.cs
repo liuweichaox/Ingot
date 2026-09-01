@@ -148,59 +148,6 @@ public sealed partial class PostgresProcessResearchStore
         }
     }
 
-    private static async Task SaveExperimentCoreAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        ResearchExperiment value,
-        CancellationToken ct)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            INSERT INTO research_experiments
-              (experiment_id, project_id, status, revision, payload, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (experiment_id) DO UPDATE SET
-              status = EXCLUDED.status,
-              revision = EXCLUDED.revision,
-              payload = EXCLUDED.payload,
-              updated_at = EXCLUDED.updated_at
-            WHERE research_experiments.revision = EXCLUDED.revision - 1
-            """;
-        command.Parameters.AddWithValue(value.ExperimentId);
-        command.Parameters.AddWithValue(value.ProjectId);
-        command.Parameters.AddWithValue(value.Status);
-        command.Parameters.AddWithValue(value.Revision);
-        AddJson(command, value);
-        command.Parameters.AddWithValue(value.CreatedAt);
-        command.Parameters.AddWithValue(value.UpdatedAt);
-        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
-            throw new ProcessResearchRuleException(
-                "实验已被其他人修改，请刷新后重试。");
-
-        await using var deleteRuns = connection.CreateCommand();
-        deleteRuns.Transaction = transaction;
-        deleteRuns.CommandText = "DELETE FROM research_experiment_runs WHERE experiment_id = $1";
-        deleteRuns.Parameters.AddWithValue(value.ExperimentId);
-        await deleteRuns.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        foreach (var run in value.RunPlan)
-        {
-            await using var addRun = connection.CreateCommand();
-            addRun.Transaction = transaction;
-            addRun.CommandText =
-                """
-                INSERT INTO research_experiment_runs(experiment_id, execution_key, sequence, payload)
-                VALUES ($1, $2, $3, $4)
-                """;
-            addRun.Parameters.AddWithValue(value.ExperimentId);
-            addRun.Parameters.AddWithValue(run.ExecutionKey);
-            addRun.Parameters.AddWithValue(run.Sequence);
-            AddJson(addRun, run);
-            await addRun.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
-    }
-
     private static async Task InsertAuditAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,

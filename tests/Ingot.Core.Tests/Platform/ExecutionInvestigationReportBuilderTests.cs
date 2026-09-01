@@ -10,7 +10,7 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ExecutionInvestigationReportBuilderTests
 {
     [Fact]
-    public void Build_ProducesAuditableSectionsAndBlockedExperiment()
+    public void Build_ProducesAuditableSectionsAndBlockedEvidenceAction()
     {
         var target = Row("FAIL-1", "FAIL", "PRESS-B") with
         {
@@ -72,11 +72,11 @@ public sealed class ExecutionInvestigationReportBuilderTests
         Assert.Contains(report.CounterEvidence, value => value.Kind == "observational-only");
         Assert.Contains(report.CounterEvidence, value => value.Kind == "confounding");
         Assert.Contains("equipment_id", report.Confounders);
-        var experiment = Assert.Single(report.NextExperiments);
-        Assert.Equal(2, experiment.MinimumLevels);
-        Assert.Equal(2, experiment.MinimumBlocks);
-        Assert.Equal(2, experiment.RepeatsPerCondition);
-        Assert.Contains("equipment_id", experiment.BlockingFactors);
+        var action = Assert.Single(report.NextEvidenceActions);
+        Assert.Equal(2, action.MinimumLevels);
+        Assert.Equal(2, action.MinimumBlocks);
+        Assert.Equal(2, action.RepeatsPerCondition);
+        Assert.Contains("equipment_id", action.BlockingFactors);
     }
 
     [Fact]

@@ -32,7 +32,7 @@ export function AnalysisHubPage({ identity }) {
   const summaryItems = [
     { label: "待分析运行", value: targetExecutions.length, hint: "质量异常或数据不可用", icon: CircleStackIcon, accent: "text-rose-700 bg-rose-50 ring-rose-200" },
     { label: "数据问题", value: dataIssueCount, hint: "需要补齐或降级处理", icon: ShieldExclamationIcon, accent: "text-amber-700 bg-amber-50 ring-amber-200" },
-    ...(canAccessResearch ? [{ label: "验证中项目", value: activeProjects.length, hint: "仍需工程决策或实验", icon: BeakerIcon, accent: "text-trajectory-700 bg-trajectory-50 ring-trajectory-100" }] : []),
+    ...(canAccessResearch ? [{ label: "进行中项目", value: activeProjects.length, hint: "等待工程师决定或运行结果", icon: BeakerIcon, accent: "text-trajectory-700 bg-trajectory-50 ring-trajectory-100" }] : []),
   ];
 
   return (
@@ -92,7 +92,7 @@ export function AnalysisHubPage({ identity }) {
         </Card>
 
         {canAccessResearch && (
-          <Card className="xl:self-start" title="待验证项目" description="候选原因只有经过工程审核与实验验证，才能提升结论强度。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/research-projects">查看全部项目</Link>}>
+          <Card className="xl:self-start" title="进行中项目" description="建议需要经过工程师决定、实际生产运行和质量结果闭环，才能沉淀为可靠结论。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/research-projects">查看全部项目</Link>}>
             {projectsResponse.loading && !projectsResponse.data ? (
               <p className="py-10 text-center text-sm text-slate-500">正在读取研发项目…</p>
             ) : activeProjects.length ? (

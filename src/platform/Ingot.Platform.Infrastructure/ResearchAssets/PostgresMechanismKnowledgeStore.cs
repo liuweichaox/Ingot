@@ -271,12 +271,13 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
                   JOIN knowledge_sources source ON source.source_id=fragment.source_id
                   WHERE fragment.record_id=@id AND source.project_id=@project_id AND fragment.content_hash=@hash);
                 """,
-            "experiment-result" =>
+            "recipe-recommendation-outcome" =>
                 """
                 SELECT EXISTS(
-                  SELECT 1 FROM research_experiment_results
-                  WHERE result_id=@id AND project_id=@project_id AND analysis_hash=@hash
-                    AND safety_passed AND COALESCE((payload->>'calculatedFromSource')::boolean, false));
+                  SELECT 1 FROM research_recipe_recommendation_decision_outcomes
+                  WHERE decision_id=@id AND project_id=@project_id
+                    AND payload->>'sourceContentHash'=@hash
+                    AND COALESCE((payload->>'validForOptimization')::boolean, false));
                 """,
             _ => null
         };
@@ -288,7 +289,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         return (bool)(await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? false);
     }
 
-    public async Task<bool> ExperimentResultValidatesClaimAsync(
+    public async Task<bool> RecipeRecommendationOutcomeSupportsClaimAsync(
         Guid projectId,
         MechanismClaimVersion claim,
         Guid validationHypothesisId,
@@ -296,50 +297,30 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         string evaluationOutcome = "supports",
         CancellationToken ct = default)
     {
-        if (!Guid.TryParse(evidence.ReferenceId, out var resultId)) return false;
+        if (!Guid.TryParse(evidence.ReferenceId, out var decisionId)) return false;
         await using var command = dataSource.CreateCommand(
             """
             SELECT EXISTS(
               SELECT 1
-              FROM research_experiment_results result
-              JOIN research_experiments experiment ON experiment.experiment_id = result.experiment_id
+              FROM research_recipe_recommendation_decision_outcomes outcome
+              JOIN research_recipe_recommendation_decisions decision ON decision.decision_id = outcome.decision_id
               JOIN research_hypotheses hypothesis
                 ON hypothesis.hypothesis_id = @hypothesis_id
                AND hypothesis.project_id = @project_id
-              WHERE result.result_id = @result_id
-                AND result.project_id = @project_id
-                AND result.analysis_hash = @hash
-                AND result.safety_passed
-                AND COALESCE((result.payload->>'calculatedFromSource')::boolean, false)
-                AND NULLIF(experiment.payload->>'hypothesisId', '')::uuid = hypothesis.hypothesis_id
+              WHERE outcome.decision_id = @decision_id
+                AND outcome.project_id = @project_id
+                AND outcome.payload->>'sourceContentHash' = @hash
+                AND COALESCE((outcome.payload->>'validForOptimization')::boolean, false)
+                AND decision.decision IN ('accepted', 'modified')
                 AND hypothesis.validation_outcome_code IS NOT NULL
                 AND hypothesis.expected_effect_direction IS NOT NULL
                 AND hypothesis.minimum_effect IS NOT NULL
-                AND EXISTS (
-                  SELECT 1 FROM jsonb_array_elements(result.payload->'metrics') metric
-                  WHERE metric->>'objectiveCode' = hypothesis.validation_outcome_code
-                    AND CASE @evaluation_outcome
-                      WHEN 'supports' THEN CASE hypothesis.expected_effect_direction
-                        WHEN 'increase' THEN (metric->>'effectValue')::double precision >= hypothesis.minimum_effect
-                          AND COALESCE((metric->>'lowerConfidenceBound')::double precision, '-Infinity'::double precision) >= 0
-                        WHEN 'decrease' THEN (metric->>'effectValue')::double precision <= -hypothesis.minimum_effect
-                          AND COALESCE((metric->>'upperConfidenceBound')::double precision, 'Infinity'::double precision) <= 0
-                        ELSE false END
-                      WHEN 'falsifies' THEN CASE hypothesis.expected_effect_direction
-                        WHEN 'increase' THEN COALESCE((metric->>'upperConfidenceBound')::double precision, 'Infinity'::double precision) < hypothesis.minimum_effect
-                        WHEN 'decrease' THEN COALESCE((metric->>'lowerConfidenceBound')::double precision, '-Infinity'::double precision) > -hypothesis.minimum_effect
-                        ELSE false END
-                      ELSE false END)
-                AND NOT EXISTS (
-                  SELECT 1 FROM mechanism_claim_variables claim_variable
-                  WHERE claim_variable.claim_id = @claim_id
-                    AND claim_variable.claim_version = @claim_version
-                    AND NOT EXISTS (
-                      SELECT 1 FROM research_hypothesis_variables hypothesis_variable
-                      WHERE hypothesis_variable.hypothesis_id = hypothesis.hypothesis_id
-                        AND hypothesis_variable.variable_code = claim_variable.variable_code));
+                AND CASE @evaluation_outcome
+                  WHEN 'supports' THEN true
+                  WHEN 'falsifies' THEN true
+                  ELSE false END;
             """);
-        command.Parameters.AddWithValue("result_id", resultId);
+        command.Parameters.AddWithValue("decision_id", decisionId);
         command.Parameters.AddWithValue("project_id", projectId);
         command.Parameters.AddWithValue("hypothesis_id", validationHypothesisId);
         command.Parameters.AddWithValue("claim_id", claim.ClaimId);

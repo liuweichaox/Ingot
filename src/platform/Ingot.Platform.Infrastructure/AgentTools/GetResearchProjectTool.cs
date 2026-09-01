@@ -18,7 +18,7 @@ public sealed class GetResearchProjectTool(
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
         Description =
-            "读取工艺研发项目的目标、变量、假设、实验、工艺窗口和知识声明，用于组织下一步研发分析。",
+            "读取工艺研发项目的目标、变量、假设、真实运行证据、工艺窗口和知识声明，用于组织下一步研发分析。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -62,7 +62,7 @@ public sealed class GetResearchProjectTool(
                 Tool = Definition.Name,
                 Summary =
                     $"研发项目“{workspace.Project.Name}”包含 {workspace.Hypotheses.Count} 条假设、" +
-                    $"{workspace.Experiments.Count} 个实验和 {validatedWindows} 个已验证工艺窗口。",
+                    $"{workspace.RecipeRecommendationFlows.Count} 条配方建议闭环和 {validatedWindows} 个已验证工艺窗口。",
                 Data = JsonSerializer.SerializeToElement(workspace),
                 RelatedRecords =
                 [

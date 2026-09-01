@@ -23,7 +23,7 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [upload, setUpload] = useState({ title: "", sourceKind: "document", file: null });
-  const [workspace, setWorkspace] = useState({ hypotheses: [], experimentResults: [] });
+  const [workspace, setWorkspace] = useState({ recipeRecommendationFlows: [] });
   const [reviewAction, setReviewAction] = useState(null);
   const [lifecycleAction, setLifecycleAction] = useState(null);
   const [resolutionAction, setResolutionAction] = useState(null);
@@ -37,7 +37,7 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
       ]);
       setClaims(claimPayload?.data || []);
       setConflicts(conflictPayload?.data || []);
-      setWorkspace(projectWorkspace || { hypotheses: [], experimentResults: [] });
+      setWorkspace(projectWorkspace || { recipeRecommendationFlows: [] });
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -80,13 +80,18 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
       return changed ? { ...current, applicability } : current;
     });
   }, [applicabilityCatalog]);
-  const eligibleResults = useMemo(() => {
-    if (!lifecycleAction?.validationHypothesisId) return [];
-    const experimentIds = new Set((workspace.experiments || [])
-      .filter(item => item.hypothesisId === lifecycleAction.validationHypothesisId && item.status === "completed")
-      .map(item => item.experimentId));
-    return (workspace.experimentResults || []).filter(item => experimentIds.has(item.experimentId) && item.safetyPassed && item.calculatedFromSource);
-  }, [lifecycleAction?.validationHypothesisId, workspace.experimentResults, workspace.experiments]);
+  const eligibleResults = useMemo(() => (workspace.recipeRecommendationFlows || [])
+    .map(flow => ({
+      decision: flow.decision || flow.engineerDecision,
+      outcome: flow.outcome || flow.decision?.outcome || flow.engineerDecision?.outcome,
+    }))
+    .filter(item => item.decision?.decision !== "rejected" && item.outcome?.validForOptimization !== false)
+    .map(item => ({
+      resultId: item.decision?.decisionId,
+      executionKey: item.decision?.actualExecutionKey,
+      analysisHash: item.outcome?.sourceContentHash,
+    }))
+    .filter(item => item.resultId && item.analysisHash), [workspace.recipeRecommendationFlows]);
 
   function chooseVariable(section, index, variableCode) {
     const variable = projectVariableByCode.get(variableCode);
@@ -203,20 +208,20 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
   function beginTransition(claim) {
     const targetStatus = ({ reviewed: "supported", supported: "validated", validated: "active", active: "retired" })[claim.status];
     if (!targetStatus) return;
-    setLifecycleAction({ claimId: claim.claimId, targetStatus, validationHypothesisId: "", resultId: "", evaluationSummary: "", comment: "" });
+    setLifecycleAction({ claimId: claim.claimId, targetStatus, resultId: "", evaluationSummary: "", comment: "" });
   }
 
   async function submitTransition(event) {
     event.preventDefault();
-    const result = workspace.experimentResults?.find(item => item.resultId === lifecycleAction.resultId);
+    const result = eligibleResults.find(item => item.resultId === lifecycleAction.resultId);
     setBusy(true); setError("");
     try {
       await postJson(`${base}/${encodeURIComponent(lifecycleAction.claimId)}/lifecycle`, {
         targetStatus: lifecycleAction.targetStatus,
-        evidenceKind: result ? "experiment-result" : null,
+        evidenceKind: result ? "recipe-recommendation-outcome" : null,
         referenceId: result?.resultId || null,
         contentHash: result?.analysisHash || null,
-        validationHypothesisId: lifecycleAction.validationHypothesisId || null,
+        validationHypothesisId: null,
         evaluationOutcome: lifecycleAction.targetStatus === "falsified" ? "falsifies" : "supports",
         evaluationSummary: lifecycleAction.evaluationSummary || null,
         comment: lifecycleAction.comment,
@@ -268,7 +273,7 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="声明名称"><Input required value={form.name} onChange={field(setForm, "name")} /></Field>
             <Field label="机理类型"><Select value={form.mechanismType} onChange={field(setForm, "mechanismType")}>{mechanismTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-            <Field label="证据等级"><Select value={form.evidenceLevel} onChange={field(setForm, "evidenceLevel")}><option value="engineering-observation">工程观察</option><option value="documented-rule">受控文件</option><option value="experimental">实验结果</option><option value="model-assisted-draft">模型辅助草稿</option></Select></Field>
+            <Field label="证据等级"><Select value={form.evidenceLevel} onChange={field(setForm, "evidenceLevel")}><option value="engineering-observation">工程观察</option><option value="documented-rule">受控文件</option><option value="production-outcome">真实运行结果</option><option value="model-assisted-draft">模型辅助草稿</option></Select></Field>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label="机理陈述"><Textarea required rows={4} value={form.statement} onChange={field(setForm, "statement")} placeholder="什么变量通过什么作用影响什么结果。" /></Field>
@@ -331,20 +336,20 @@ export function MechanismKnowledgeWorkbench({ projectId, sources = [], reloadAss
         </form>
       </Card>
 
-      <Card title="声明审核与生效" description="草稿不能影响实验建议；声明必须依次经过独立审核、两份不同正式实验结果支持与验证，最后才能激活。">
+      <Card title="声明审核与生效" description="草稿不能影响下一配方建议；声明必须依次经过独立审核和不同真实运行结果支持，最后才能激活。">
         {claims.length === 0 ? <EmptyState title="暂无机理声明" description="先从上方创建一条带引用和反证条件的声明。" /> : <div className="space-y-3">{claims.map(claim => <article className="rounded-xl border border-slate-200 p-4" key={claim.claimId}>
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium text-slate-900">{claim.name}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{claim.statement}</p></div><StatusBadge value={claim.status} /></div>
           <p className="mt-2 text-xs text-slate-500">版本 {claim.version} · {labelForType(claim.mechanismType)} · {claim.variables.length} 个变量 · {claim.evidence.length} 条证据 · 哈希 {claim.contentHash.slice(0, 12)}</p>
           {claim.status === "draft" && <div className="mt-3 flex gap-2"><Button variant="primary" disabled={busy} onClick={() => setReviewAction({ claimId: claim.claimId, decision: "approve", comment: "" })}>通过审核</Button><Button variant="danger" disabled={busy} onClick={() => setReviewAction({ claimId: claim.claimId, decision: "reject", comment: "" })}>驳回</Button></div>}
-          {claim.status === "reviewed" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>登记支持实验</Button></div>}
-          {claim.status === "supported" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>登记独立验证实验</Button></div>}
-          {claim.status === "validated" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>激活用于实验设计</Button></div>}
+          {claim.status === "reviewed" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>登记支持运行结果</Button></div>}
+          {claim.status === "supported" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>登记独立运行结果</Button></div>}
+          {claim.status === "validated" && <div className="mt-3"><Button variant="primary" disabled={busy} onClick={() => beginTransition(claim)}>激活用于建议生成</Button></div>}
           {claim.status === "active" && <div className="mt-3"><Button variant="danger" disabled={busy} onClick={() => beginTransition(claim)}>退休该声明</Button></div>}
-          {["reviewed", "supported", "validated", "active"].includes(claim.status) && <div className="mt-2"><Button variant="danger" disabled={busy} onClick={() => setLifecycleAction({ claimId: claim.claimId, targetStatus: "falsified", validationHypothesisId: "", resultId: "", evaluationSummary: "", comment: "" })}>登记反证实验</Button></div>}
+          {["reviewed", "supported", "validated", "active"].includes(claim.status) && <div className="mt-2"><Button variant="danger" disabled={busy} onClick={() => setLifecycleAction({ claimId: claim.claimId, targetStatus: "falsified", resultId: "", evaluationSummary: "", comment: "" })}>登记反证运行结果</Button></div>}
         </article>)}</div>}
         {reviewAction && <form className="mt-4 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4" onSubmit={submitReview}><Field label={reviewAction.decision === "approve" ? "审核意见" : "驳回原因"}><Textarea required={reviewAction.decision === "reject"} value={reviewAction.comment} onChange={event => setReviewAction(current => ({ ...current, comment: event.target.value }))} /></Field><div className="flex gap-2"><Button type="submit" variant="primary" disabled={busy}>确认提交</Button><Button type="button" onClick={() => setReviewAction(null)}>取消</Button></div></form>}
         {lifecycleAction && <form className="mt-4 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4" onSubmit={submitTransition}>
-          {(lifecycleAction.targetStatus === "supported" || lifecycleAction.targetStatus === "validated" || lifecycleAction.targetStatus === "falsified") && <div className="grid gap-3 md:grid-cols-2"><Field label="验证假设"><Select required value={lifecycleAction.validationHypothesisId} onChange={event => setLifecycleAction(current => ({ ...current, validationHypothesisId: event.target.value, resultId: "" }))}><option value="">请选择已预注册效应的正式假设</option>{(workspace.hypotheses || []).filter(item => item.validationOutcomeCode && item.expectedEffectDirection && Number(item.minimumEffect) > 0).map(item => <option key={item.hypothesisId} value={item.hypothesisId}>{item.statement}</option>)}</Select></Field><Field label="正式实验结果"><Select required value={lifecycleAction.resultId} onChange={event => setLifecycleAction(current => ({ ...current, resultId: event.target.value }))}><option value="">请选择该假设的安全结果</option>{eligibleResults.map(item => <option key={item.resultId} value={item.resultId}>{item.resultId} · {String(item.analysisHash || "").slice(0, 12)}</option>)}</Select></Field><Field label={lifecycleAction.targetStatus === "falsified" ? "结果如何反证该声明" : "结果如何支持该声明"}><Textarea required value={lifecycleAction.evaluationSummary} onChange={event => setLifecycleAction(current => ({ ...current, evaluationSummary: event.target.value }))} /></Field></div>}
+          {(lifecycleAction.targetStatus === "supported" || lifecycleAction.targetStatus === "validated" || lifecycleAction.targetStatus === "falsified") && <div className="grid gap-3 md:grid-cols-2"><Field label="真实运行结果"><Select required value={lifecycleAction.resultId} onChange={event => setLifecycleAction(current => ({ ...current, resultId: event.target.value }))}><option value="">请选择已完成闭环的真实运行结果</option>{eligibleResults.map(item => <option key={item.resultId} value={item.resultId}>{item.executionKey || item.resultId} · {String(item.analysisHash || "").slice(0, 12)}</option>)}</Select></Field><Field label={lifecycleAction.targetStatus === "falsified" ? "结果如何反证该声明" : "结果如何支持该声明"}><Textarea required value={lifecycleAction.evaluationSummary} onChange={event => setLifecycleAction(current => ({ ...current, evaluationSummary: event.target.value }))} /></Field></div>}
           <Field label="决定说明"><Textarea required value={lifecycleAction.comment} onChange={event => setLifecycleAction(current => ({ ...current, comment: event.target.value }))} /></Field><div className="flex gap-2"><Button type="submit" variant="primary" disabled={busy}>确认提交</Button><Button type="button" onClick={() => setLifecycleAction(null)}>取消</Button></div>
         </form>}
       </Card>

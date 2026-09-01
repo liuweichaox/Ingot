@@ -176,7 +176,7 @@ public sealed class DatasetQualityValidationRunnerTests
             DatasetId = "test-heat-treatment",
             Industry = "metallurgy",
             Process = "aging",
-            DataKind = "measured-experiment",
+            DataKind = "measured-production-run",
             IsMeasuredData = true,
             SourceUri = "https://example.org/dataset",
             License = "CC BY 4.0",

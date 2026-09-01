@@ -310,7 +310,7 @@ export default function App({ identity, logout }) {
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/research-projects/")
-        ? ["项目工作区", "围绕当前问题推进假设、实验、验证和知识复用"]
+        ? ["项目工作区", "围绕真实生产证据推进配方建议与工程师闭环"]
         : location.pathname.startsWith("/configuration/ingestion-tasks/")
           ? ["配置数据源", "配置设备连接、工艺映射和发布前验证"]
           : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];

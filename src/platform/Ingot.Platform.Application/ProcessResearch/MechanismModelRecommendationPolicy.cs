@@ -7,6 +7,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+// 将已激活的机理模型版本冻结为建议输入，不负责模型训练或设备控制。
 internal sealed record AppliedMechanismModels(
     IReadOnlyList<MechanismModelApplicationReference> References,
     IReadOnlyList<OptimizerDerivedFeatureInput> DerivedFeatures)
@@ -17,7 +18,7 @@ internal sealed record AppliedMechanismModels(
             References.OrderBy(static value => value.FusionId, StringComparer.Ordinal))));
 }
 
-internal static class MechanismModelExperimentPolicy
+internal static class MechanismModelRecommendationPolicy
 {
     public static AppliedMechanismModels Select(
         ResearchProject project,

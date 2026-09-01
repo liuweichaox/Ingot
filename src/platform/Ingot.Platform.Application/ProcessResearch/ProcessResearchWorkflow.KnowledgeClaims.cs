@@ -9,6 +9,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+// 研发工作流的知识声明写入边界；声明须由建议决策关联的真实运行结果支持。
 public sealed partial class ProcessResearchWorkflow
 {
     public async Task<ResearchKnowledgeClaim> SaveKnowledgeClaimAsync(
@@ -28,37 +29,7 @@ public sealed partial class ProcessResearchWorkflow
                     OperatingRegionValidationLevels.Laboratory or
                     OperatingRegionValidationLevels.Production))
                 throw new ProcessResearchRuleException(
-                    "知识声明只能引用经过跨区组重复实验验证的工艺操作域。");
-        }
-        ResearchTransferAssessment? referencedTransfer = null;
-        if (request.TransferAssessmentId is { } assessmentId)
-        {
-            referencedTransfer = await store.GetTransferAssessmentAsync(assessmentId, ct)
-                .ConfigureAwait(false);
-            if (referencedTransfer is null || referencedTransfer.ProjectId != projectId ||
-                referencedTransfer.Status != ResearchTransferAssessmentStatuses.Reviewed ||
-                referencedTransfer.Outcome != ResearchTransferOutcomes.Beneficial ||
-                referencedTransfer.TargetProjectRevision != project.Revision)
-                throw new ProcessResearchRuleException(
-                    "知识声明只能引用目标项目当前版本中经过独立复核且有收益的迁移评估。");
-            var sourceOperatingRegion = await store.GetOperatingRegionAsync(
-                referencedTransfer.SourceOperatingRegionId, ct).ConfigureAwait(false);
-            if (sourceOperatingRegion?.Status != OperatingRegionStatuses.Validated ||
-                sourceOperatingRegion.ValidationLevel != OperatingRegionValidationLevels.Production ||
-                sourceOperatingRegion.AnalysisHash != referencedTransfer.SourceOperatingRegionAnalysisHash)
-                throw new ProcessResearchRuleException("迁移评估引用的源工艺操作域已经失效。");
-            var repeated = (await store.ListTransferAssessmentsAsync(projectId, ct)
-                    .ConfigureAwait(false))
-                .Where(value => value.SourceOperatingRegionId == referencedTransfer.SourceOperatingRegionId &&
-                                value.Status == ResearchTransferAssessmentStatuses.Reviewed &&
-                                value.Outcome == ResearchTransferOutcomes.Beneficial &&
-                                value.TargetProjectRevision == project.Revision)
-                .Select(static value => value.TransferResultId)
-                .Distinct()
-                .Count();
-            if (repeated < 2)
-                throw new ProcessResearchRuleException(
-                    "迁移知识至少需要两次不同实测结果相对从零对照取得经复核收益。");
+                    "知识声明只能引用经过跨区组重复真实运行确认的工艺操作域。");
         }
         var now = DateTimeOffset.UtcNow;
         var existing = request.ClaimId == Guid.Empty
@@ -80,23 +51,13 @@ public sealed partial class ProcessResearchWorkflow
                 referencedOperatingRegion.AnalysisHash,
                 now));
         }
-        if (referencedTransfer is not null)
-        {
-            evidence.Add(CreateEvidence(
-                projectId,
-                EvidenceKinds.TransferAssessment,
-                referencedTransfer.AssessmentId.ToString(),
-                "知识声明引用的重复收益迁移评估。",
-                referencedTransfer.RecordHash,
-                now));
-        }
         var saved = await store.SaveKnowledgeClaimAsync(
             request with
             {
                 ClaimId = existing?.ClaimId ??
                           (request.ClaimId == Guid.Empty ? Guid.CreateVersion7() : request.ClaimId),
                 ProjectId = projectId,
-                TransferAssessmentId = referencedTransfer?.AssessmentId,
+                TransferAssessmentId = null,
                 Statement = RequiredText(request.Statement, "知识声明", 8000),
                 Applicability = RequiredText(request.Applicability, "知识适用范围", 8000),
                 Status = ResearchKnowledgeStatuses.Draft,

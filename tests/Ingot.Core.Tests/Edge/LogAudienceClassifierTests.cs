@@ -60,25 +60,28 @@ public sealed class LogAudienceClassifierTests
                 await command.ExecuteNonQueryAsync();
             }
 
-            using var service = new SqliteLogViewService(Options.Create(new LogOptions { DatabasePath = databasePath }));
-            var (operatorEntries, operatorTotal) = await service.GetLogsAsync(
-                audience: LogAudiences.Operator,
-                skip: 0,
-                take: 1);
-            var (systemEntries, systemTotal) = await service.GetLogsAsync(
-                audience: LogAudiences.System,
-                skip: 0,
-                take: 10);
+            using (var service = new SqliteLogViewService(Options.Create(new LogOptions { DatabasePath = databasePath })))
+            {
+                var (operatorEntries, operatorTotal) = await service.GetLogsAsync(
+                    audience: LogAudiences.Operator,
+                    skip: 0,
+                    take: 1);
+                var (systemEntries, systemTotal) = await service.GetLogsAsync(
+                    audience: LogAudiences.System,
+                    skip: 0,
+                    take: 10);
 
-            Assert.Equal(2, operatorTotal);
-            Assert.Single(operatorEntries);
-            Assert.Equal("设备采集", operatorEntries[0].Category);
-            Assert.Equal(1, systemTotal);
-            Assert.Single(systemEntries);
-            Assert.Equal("started", systemEntries[0].Message);
+                Assert.Equal(2, operatorTotal);
+                Assert.Single(operatorEntries);
+                Assert.Equal("设备采集", operatorEntries[0].Category);
+                Assert.Equal(1, systemTotal);
+                Assert.Single(systemEntries);
+                Assert.Equal("started", systemEntries[0].Message);
+            }
         }
         finally
         {
+            SqliteConnection.ClearAllPools();
             File.Delete(databasePath);
         }
     }

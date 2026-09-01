@@ -2,6 +2,7 @@ using System.Text.Json;
 
 namespace Ingot.Contracts.Events;
 
+// 定义只读生产运行对比的跨层契约，不包含运行计划或设备控制命令。
 public sealed record ExecutionSelectionComparisonRequest
 {
     public required string BaselineProcessExecutionId { get; init; }
@@ -115,9 +116,9 @@ public sealed record ExecutionInvestigationReport
     public IReadOnlyList<ExecutionCounterEvidence> CounterEvidence { get; init; } = [];
     public IReadOnlyList<string> Confounders { get; init; } = [];
     public IReadOnlyList<string> MissingData { get; init; } = [];
-    public IReadOnlyList<ExecutionValidationExperiment> NextExperiments { get; init; } = [];
+    public IReadOnlyList<ExecutionEvidenceAction> NextEvidenceActions { get; init; } = [];
     public string ConclusionGuardrail { get; init; } =
-        "当前结果是观察性候选，必须经过受控重复实验才能升级为已验证原因。";
+        "当前结果是观察性候选，必须经过跨区组重复真实运行才能升级为已验证原因。";
 }
 
 public sealed record ExecutionInvestigationDataQuality
@@ -160,7 +161,7 @@ public sealed record ExecutionCounterEvidence
     public required string Statement { get; init; }
 }
 
-public sealed record ExecutionValidationExperiment
+public sealed record ExecutionEvidenceAction
 {
     public required string CandidateId { get; init; }
     public required string VariableCode { get; init; }

@@ -272,7 +272,6 @@ public sealed class ResearchValidationPreregistrationService(
             project.Variables,
             project.Constraints,
             project.OutcomeConstraints,
-            project.SafetyTemplates,
             project.OptimizationFeatures,
             Context = project.Context
                 .Where(static pair => pair.Key != ResearchContextAdmissionEvaluator.PolicyHashContextKey)

@@ -132,6 +132,45 @@ public abstract partial class ProcessResearchWorkflowTestBase
             => Task.FromResult<ExecutionComparisonResult?>(result);
     }
 
+    protected sealed class MutableExecutionComparisonService : IExecutionComparisonService
+    {
+        private readonly Dictionary<string, ExecutionComparisonRow> rows =
+            new(StringComparer.Ordinal);
+
+        public void Set(ExecutionComparisonRow row) => rows[row.ExecutionId] = row;
+
+        public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
+            string executionId,
+            CancellationToken ct = default,
+            string? siteId = null)
+            => Task.FromResult(rows.GetValueOrDefault(executionId));
+
+        public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
+            IReadOnlyCollection<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null)
+            => Task.FromResult<IReadOnlyDictionary<string, ExecutionComparisonRow>>(
+                rows.Where(value => executionIds.Contains(value.Key, StringComparer.Ordinal))
+                    .ToDictionary(static value => value.Key, static value => value.Value,
+                        StringComparer.Ordinal));
+
+        public Task<ExecutionComparisonResult?> CompareWithHistoryAsync(
+            string executionId,
+            int limit,
+            CancellationToken ct = default,
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
+            => Task.FromResult<ExecutionComparisonResult?>(null);
+
+        public Task<ExecutionComparisonResult?> CompareSelectedAsync(
+            string baselineProcessExecutionId,
+            IReadOnlyList<string> executionIds,
+            CancellationToken ct = default,
+            string? siteId = null,
+            IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
+            => Task.FromResult<ExecutionComparisonResult?>(null);
+    }
+
     protected static ExecutionComparisonResult Comparison(
         string readinessMode,
         double crossValidationScore,

@@ -10,7 +10,7 @@ The visible domains are:
 - Production runs;
 - Quality management;
 - Process diagnosis;
-- Process R&D;
+- Recipe optimization;
 - System administration.
 
 The working path is:
@@ -21,9 +21,9 @@ connect field sources
 → inspect a real run
 → review quality and data trust
 → compare evidence
-→ form and validate a candidate cause
-→ review a next experiment
-→ preserve the result and its scope
+→ generate a next recipe recommendation
+→ record the engineer's decision
+→ link the subsequent production run and freeze its quality outcome
 ```
 
 The UI uses business forms, shows missingness and provenance, and does not expose raw JSON editors as normal product workflows. Numerical recommendations require engineer review before execution.

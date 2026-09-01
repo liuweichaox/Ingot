@@ -393,7 +393,7 @@ public sealed record ProcessDiagnosisResponse
     public IReadOnlyList<string> Limitations { get; init; } = [];
 }
 
-/// <summary>调用建议、实验设计、诊断和历史回放四类优化能力。</summary>
+/// <summary>调用配方建议、诊断和历史运行分析能力。</summary>
 public interface IProcessOptimizerClient
 {
     Task<OptimizerSuggestionResponse> SuggestAsync(

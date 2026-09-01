@@ -4,6 +4,7 @@ using Ingot.Contracts.Events;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>从可比较的真实生产运行中计算稳健诊断摘要，不对设备或配方发出控制指令。</summary>
 public sealed class ExecutionDiagnosisEngine
 {
     public const string AlgorithmVersion = "robust-stratified-v1";
@@ -26,7 +27,7 @@ public sealed class ExecutionDiagnosisEngine
                 Limitations =
                 [
                     "至少需要一个合格过程执行和一个不合格过程执行，才能筛选质量候选原因。",
-                    "观察性关联不能替代受控实验。"
+                    "观察性关联不能替代可比较的重复真实运行。"
                 ]
             };
         }
@@ -62,7 +63,7 @@ public sealed class ExecutionDiagnosisEngine
                 confounders.Count == 0
                     ? "当前比较未发现明显的离散上下文分布差异。"
                     : $"设备、产品、工艺规范或工装总成分布仍可能混杂结果：{string.Join("、", confounders)}。",
-                "候选原因必须映射为可控变量并经过跨区组重复实验验证。"
+                "候选原因必须映射为可控变量并经过跨区组重复真实运行确认。"
             ]
         };
     }

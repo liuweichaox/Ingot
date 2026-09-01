@@ -8,13 +8,14 @@ using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+// 将已审核且适用的机理知识约束投影到下一配方建议，不负责知识审批或运行执行。
 internal sealed record AppliedMechanismKnowledge(
     IReadOnlyList<MechanismClaimVersion> Claims,
     IReadOnlyList<MechanismClaimConstraint> HardConstraints,
     IReadOnlyList<MechanismClaimConstraint> RankingConstraints,
     IReadOnlyList<MechanismForbiddenCombination> ForbiddenCombinations);
 
-internal static class MechanismKnowledgeExperimentPolicy
+internal static class MechanismKnowledgeRecommendationPolicy
 {
     public static string SnapshotHash(AppliedMechanismKnowledge knowledge)
         => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
@@ -168,22 +169,6 @@ internal static class MechanismKnowledgeExperimentPolicy
             if (matches)
                 throw new ProcessResearchRuleException(
                     $"优化建议命中生效机理禁止组合：{combination.Name}。");
-        }
-    }
-
-    public static void ValidateHardConstraints(
-        ResearchExperiment experiment,
-        AppliedMechanismKnowledge knowledge)
-    {
-        foreach (var run in experiment.RunPlan)
-        {
-            ValidateHardConstraints(new OptimizerSuggestionOutput
-            {
-                RecommendedParameters = run.Factors.ToDictionary(
-                    static value => value.VariableCode,
-                    static value => value.Value,
-                    StringComparer.Ordinal)
-            }, knowledge);
         }
     }
 

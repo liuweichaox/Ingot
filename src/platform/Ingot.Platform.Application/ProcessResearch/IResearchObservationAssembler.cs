@@ -1,4 +1,4 @@
-// 定义真实生产运行与可选受控验证进入优化观察的应用边界。
+// 定义真实生产运行进入优化观察的应用边界。
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
@@ -22,10 +22,11 @@ public interface IResearchObservationAssembler
         CancellationToken ct = default);
 
     /// <summary>
-    /// 为显式受控验证计划装配指定运行。该入口不属于日常配方优化的前置流程。
+    /// 为一条已关联的真实生产运行装配证据，保持建议、实际运行和质量结果的可追溯关系。
     /// </summary>
-    Task<ResearchObservationAssembly> AssembleAsync(
+    Task<ResearchObservationAssembly> AssembleProductionRunAsync(
         ResearchProject project,
-        IReadOnlyList<ResearchExperiment> experiments,
+        string executionKey,
         CancellationToken ct = default);
+
 }

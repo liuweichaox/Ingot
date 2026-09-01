@@ -150,7 +150,7 @@ else
 fi
 
 compatibility_hits=$(grep -rnE \
-  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ResearchExperimentAutomationHostedService|ResearchExperimentCommandException|ResearchExperimentPlanValidationException|ApiProblemDetailsResultFilter' \
+  'SqliteAgentStore|LegacySqliteAgentRunImporter|IAgentRunImportStore|ImportLegacySqlite|Chat:DatabasePath|IBatchedEventLog|CompatibleDateTimeOffsetConverter|ApiProblemDetailsResultFilter' \
   src apps/platform/src docker-compose.app.yml scripts/run-platform-api.ps1 \
   --include='*.cs' --include='*.csproj' --include='*.json' --include='*.js' \
   --include='*.jsx' --include='*.yml' --include='*.ps1' \
@@ -253,11 +253,10 @@ unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastruc
   -type f -name '*.cs' \
   ! -name 'PostgresProcessResearchStore.cs' \
   ! -name 'PostgresProcessResearchStore.Audit.cs' \
-  ! -name 'PostgresProcessResearchStore.Experiments.cs' \
   ! -name 'PostgresProcessResearchStore.Hypotheses.cs' \
   ! -name 'PostgresProcessResearchStore.Persistence.cs' \
-  ! -name 'PostgresProcessResearchStore.Results.cs' \
-  ! -name 'PostgresProcessResearchStore.Validation.cs' \
+  ! -name 'PostgresProcessResearchStore.OperatingKnowledge.cs' \
+  ! -name 'PostgresProcessResearchStore.Recommendations.cs' \
   ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
   ! -name 'ProcessOptimizerClient.cs' \
   ! -name 'ResearchResultMaterializationHostedService.cs' \
@@ -453,12 +452,6 @@ diagram_require docs/architecture/system-architecture.svg \
   '非独立部署单元' \
   'architecture-diagram-zh'
 diagram_reject docs/architecture/system-architecture.svg \
-  '实验设计 · 受约束优化' \
-  'architecture-diagram-zh'
-diagram_reject docs/architecture/system-architecture.svg \
-  '批准实验' \
-  'architecture-diagram-zh'
-diagram_reject docs/architecture/system-architecture.svg \
   'INGOT 当前应用运行边界|虚线框或虚线连接表示可选能力' \
   'architecture-diagram-zh'
 
@@ -482,12 +475,6 @@ diagram_require docs/architecture/system-architecture.en.svg \
   'architecture-diagram-en'
 diagram_require docs/architecture/system-architecture.en.svg \
   'not a deployment unit' \
-  'architecture-diagram-en'
-diagram_reject docs/architecture/system-architecture.en.svg \
-  'Experiment design · constrained optimization' \
-  'architecture-diagram-en'
-diagram_reject docs/architecture/system-architecture.en.svg \
-  'approves experiments' \
   'architecture-diagram-en'
 diagram_reject docs/architecture/system-architecture.en.svg \
   'INGOT CURRENT APPLICATION RUNTIME BOUNDARY|Dashed items are optional capabilities' \

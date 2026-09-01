@@ -8,7 +8,7 @@ This document defines production topology, failure models, data semantics, and s
 
 Production support does not mean connecting a model directly to a PLC, and it does not mean replacing PostgreSQL with another time-series database. Production capability has two independent levels:
 
-1. **Production observation and decision support**: continuously collect real recipe runs and provide traceability, comparison, diagnosis, next-recipe recommendations, and optional controlled validation without directly changing equipment state.
+1. **Production observation and decision support**: continuously collect real recipe runs and provide traceability, comparison, diagnosis, next-recipe recommendations, and optional supplementary evidence review without directly changing equipment state.
 2. **Controlled action**: only after the first level has operated reliably and a specific scenario has passed admission, deliver an approved structured action to Edge for deterministic validation, bounds enforcement, stop, and rollback outside the field interlocks.
 
 The default delivery target is the first level. The second requires separate certification by equipment class and action type; analysis capability never grants it automatically.
@@ -47,12 +47,12 @@ PostgreSQL stores:
 - identities, permissions, sites, and equipment catalogues;
 - process configurations, analysis plans, and versions;
 - process executions, context, and inspection relationships;
-- recipe-optimization tasks, independent recipe recommendations, controlled validations, approvals, and state machines;
+- recipe-optimization tasks, independent recipe recommendations, supplementary evidence reviews, approvals, and state machines;
 - Agent runs, input snapshots, recommendations, and evidence hashes;
 - controlled actions, execution receipts, stop, and rollback outcomes;
 - data-retention, evidence-pinning, and audit policies.
 
-A time-series database may hold raw signals, process frames, and aggregates, but it cannot be the only record of approvals, experiment state, or execution receipts. If the time-series store is unavailable, curve queries and new analysis may pause; no parallel formal state may appear in a browser, Agent, or Optimizer.
+A time-series database may hold raw signals, process frames, and aggregates, but it cannot be the only record of approvals, execution state, or execution receipts. If the time-series store is unavailable, curve queries and new analysis may pause; no parallel formal state may appear in a browser, Agent, or Optimizer.
 
 ### 3. TimescaleDB is the only current implementation; capacity evidence triggers storage evolution
 

@@ -3,6 +3,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>将运行对比、诊断和数据质量边界组织为可审计的调查报告。</summary>
 public sealed class ExecutionInvestigationReportBuilder
 {
     public ExecutionInvestigationReport Build(
@@ -81,7 +82,7 @@ public sealed class ExecutionInvestigationReportBuilder
             CounterEvidence = BuildCounterEvidence(candidates),
             Confounders = confounders,
             MissingData = BuildMissingData(target, historical, firstDeviations, candidates),
-            NextExperiments = BuildExperiments(candidates, confounders)
+            NextEvidenceActions = BuildEvidenceActions(candidates, confounders)
         };
     }
 
@@ -175,13 +176,13 @@ public sealed class ExecutionInvestigationReportBuilder
         return missing;
     }
 
-    private static IReadOnlyList<ExecutionValidationExperiment> BuildExperiments(
+    private static IReadOnlyList<ExecutionEvidenceAction> BuildEvidenceActions(
         IReadOnlyList<ExecutionCauseCandidate> candidates,
         IReadOnlyList<string> confounders)
         => candidates
             .Where(static item => item.Actionability == ExecutionCauseActionability.Controllable)
             .Take(3)
-            .Select(candidate => new ExecutionValidationExperiment
+            .Select(candidate => new ExecutionEvidenceAction
             {
                 CandidateId = candidate.CandidateId,
                 VariableCode = candidate.VariableCode,

@@ -143,6 +143,30 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
+    public async Task ResearchEvidenceForeignKeys_ShouldBeValidatedAndNonCascading()
+    {
+        await postgres.EnsureSchemaAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT count(*) = 4
+                   AND bool_and(convalidated)
+                   AND bool_and(confdeltype = 'a')
+            FROM pg_constraint
+            WHERE conname IN (
+              'rr_recommendations_project_fk',
+              'rr_decisions_project_recommendation_fk',
+              'rr_decision_executions_project_decision_fk',
+               'rr_decision_outcomes_project_decision_fk');
+            """,
+            connection);
+
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
+
+    [LinuxDockerFact]
     public async Task TimeSeriesRetention_ShouldPruneFramesAndValuesTogether()
     {
         await postgres.EnsureSchemaAsync();

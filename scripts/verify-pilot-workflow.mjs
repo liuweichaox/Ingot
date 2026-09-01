@@ -224,22 +224,23 @@ async function main() {
       "候选原因与证据边界",
       candidates.length > 0 && /候选|验证|因果|candidate|validation|causal/i.test(guardrail),
       `基线运行=${comparisonTarget?.executionId || "none"}；候选=${candidates.length}；边界说明=${guardrail || "none"}`,
-      "让运行对比返回候选、反证/混杂信息，并明确要求受控实验后才能形成因果结论。",
+      "让运行对比返回候选、反证/混杂信息，并明确说明候选必须通过工程师决定后的真实生产运行和质量结果复核。",
     );
 
     const projectsPayload = await request("/api/v1/research-projects?limit=100");
     const projects = rows(projectsPayload);
+    const activeProject = projects.find(project => project.status === "active") || projects[0];
     let researchDetail = null;
-    if (projects[0]?.projectId) researchDetail = await request(`/api/v1/research-projects/${encodeURIComponent(projects[0].projectId)}`);
+    if (activeProject?.projectId) researchDetail = await request(`/api/v1/research-projects/${encodeURIComponent(activeProject.projectId)}`);
     addCheck(
-      "research-validation",
-      "研发假设与实验验证",
+      "recipe-recommendation-loop",
+      "下一配方建议闭环",
       projects.length > 0
-        && (researchDetail?.hypotheses || []).length > 0
-        && (researchDetail?.experiments || []).length > 0
-        && (researchDetail?.experimentResults || []).length > 0,
-      `项目=${projects.length}；假设=${researchDetail?.hypotheses?.length || 0}；实验=${researchDetail?.experiments?.length || 0}；结果=${researchDetail?.experimentResults?.length || 0}`,
-      "从候选建立研发项目，登记可证伪假设、实验计划和经过审核的实验结果。",
+        && (researchDetail?.recipeRecommendationFlows || []).length > 0
+        && (researchDetail?.recipeRecommendationFlows || []).some(flow => flow.decision)
+        && (researchDetail?.recipeRecommendationFlows || []).some(flow => flow.actualExecutionKey && flow.outcome),
+      `项目=${projects.length}；验收任务=${activeProject?.projectId || "none"}；建议=${researchDetail?.recipeRecommendationFlows?.length || 0}；已决定=${researchDetail?.recipeRecommendationFlows?.filter(flow => flow.decision).length || 0}；已闭环=${researchDetail?.recipeRecommendationFlows?.filter(flow => flow.actualExecutionKey && flow.outcome).length || 0}`,
+      "从真实运行证据生成下一配方建议，冻结工程师决定，并关联后续生产运行和质量结果。",
     );
 
     let users = [];

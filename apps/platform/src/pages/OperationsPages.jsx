@@ -99,7 +99,7 @@ export function WorkbenchPage({ identity }) {
     };
   const engineeringAction = {
       title: activeOptimizationProjects ? `${activeOptimizationProjects} 个配方优化任务正在推进` : "从真实配方运行开始优化",
-      description: activeOptimizationProjects ? "查看新增运行、下一配方建议或可选受控验证。" : "确定目标和安全边界，后续运行会自动进入优化证据。",
+      description: activeOptimizationProjects ? "查看新增运行、下一配方建议及其质量结果。" : "确定目标和安全边界，后续运行会自动进入优化证据。",
       to: "/research-projects",
       tone: activeOptimizationProjects ? "border-l-blue-500" : "border-l-amber-500",
       action: activeOptimizationProjects ? "进入优化" : "创建任务",

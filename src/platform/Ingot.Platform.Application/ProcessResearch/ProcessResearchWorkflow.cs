@@ -9,14 +9,12 @@ using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
+/// <summary>编排研发项目、假设和知识声明的可审计业务规则，不生成或执行运行计划。</summary>
 public sealed partial class ProcessResearchWorkflow(
     IProcessResearchStore store,
-    ResearchExperimentCommands experimentCommands,
     IProcessConfigurationStore? processConfigurations = null,
     IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
 {
-    internal ResearchExperimentCommands ExperimentCommands { get; } = experimentCommands;
-
     private async Task<ResearchProject> RequireProjectAsync(Guid projectId, CancellationToken ct)
         => await store.GetProjectAsync(projectId, ct).ConfigureAwait(false)
            ?? throw new ProcessResearchRuleException("研发项目不存在。");
@@ -57,21 +55,6 @@ public sealed partial class ProcessResearchWorkflow(
 
     private static string Sha256(string value)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-
-    private static ResearchExperimentExecution BuildExecution(ResearchExperiment experiment)
-        => new()
-        {
-            DispatchId = Guid.CreateVersion7(),
-            Commands = experiment.RunPlan.Select(run => new ExperimentExecutionCommand
-            {
-                CommandId = Guid.CreateVersion7(),
-                ExecutionKey = run.ExecutionKey,
-                Sequence = run.Sequence,
-                BlockKey = run.BlockKey,
-                ReplicateKey = run.ReplicateKey,
-                RequestedFactors = run.Factors
-            }).ToArray()
-        };
 
     [GeneratedRegex("^[a-z][a-z0-9._-]*$", RegexOptions.CultureInvariant)]
     private static partial Regex CodePattern();

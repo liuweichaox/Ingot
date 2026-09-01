@@ -145,11 +145,11 @@ public sealed class MechanismKnowledgeServiceTests
         claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Supported,
-            EvidenceKind = "experiment-result",
+            EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = firstResult,
             ContentHash = new string('b', 64),
             ValidationHypothesisId = Guid.CreateVersion7(),
-            EvaluationSummary = "实验结果覆盖声明变量并观察到预期方向。"
+            EvaluationSummary = "真实运行结果覆盖声明变量并观察到预期方向。"
         }, "validator-a");
         Assert.Equal(MechanismClaimStatuses.Supported, claim.Status);
 
@@ -157,7 +157,7 @@ public sealed class MechanismKnowledgeServiceTests
             projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
             {
                 TargetStatus = MechanismClaimStatuses.Validated,
-                EvidenceKind = "experiment-result",
+                EvidenceKind = "recipe-recommendation-outcome",
                 ReferenceId = firstResult,
                 ContentHash = new string('b', 64),
                 ValidationHypothesisId = Guid.CreateVersion7(),
@@ -167,14 +167,14 @@ public sealed class MechanismKnowledgeServiceTests
         claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Validated,
-            EvidenceKind = "experiment-result",
+            EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = Guid.CreateVersion7().ToString(),
             ContentHash = new string('c', 64),
             ValidationHypothesisId = Guid.CreateVersion7(),
-            EvaluationSummary = "独立实验再次观察到预期方向。"
+            EvaluationSummary = "独立真实运行再次观察到预期方向。"
         }, "validator-b");
         claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
-        { TargetStatus = MechanismClaimStatuses.Active, Comment = "两轮实验均支持。" }, "approver");
+        { TargetStatus = MechanismClaimStatuses.Active, Comment = "两轮真实运行均支持。" }, "approver");
 
         Assert.Equal(MechanismClaimStatuses.Active, claim.Status);
     }
@@ -192,12 +192,12 @@ public sealed class MechanismKnowledgeServiceTests
         claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Falsified,
-            EvidenceKind = "experiment-result",
+            EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = Guid.CreateVersion7().ToString(),
             ContentHash = new string('d', 64),
             ValidationHypothesisId = Guid.CreateVersion7(),
             EvaluationOutcome = "falsifies",
-            EvaluationSummary = "实验置信区间明确未达到预注册最小效应。",
+            EvaluationSummary = "真实运行结果明确未达到预注册最小效应。",
             Comment = "终止该声明。"
         }, "validator");
 
@@ -373,7 +373,7 @@ public sealed class MechanismKnowledgeServiceTests
         public Task<bool> LifecycleActorUsedAsync(Guid claimId, string userId, CancellationToken ct = default)
             => Task.FromResult(lifecycleActors.Contains((claimId, userId)));
 
-        public Task<bool> ExperimentResultValidatesClaimAsync(
+        public Task<bool> RecipeRecommendationOutcomeSupportsClaimAsync(
             Guid projectId,
             MechanismClaimVersion claim,
             Guid validationHypothesisId,

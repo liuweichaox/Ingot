@@ -9,6 +9,7 @@ using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
+/// <summary>管理机理知识的版本、审阅和适用范围，不反向编排配方优化工作流。</summary>
 public sealed class MechanismKnowledgeService(
     IMechanismKnowledgeStore store,
     IResearchProjectContextReader projectReader)
@@ -223,20 +224,20 @@ public sealed class MechanismKnowledgeService(
         if (target is MechanismClaimStatuses.Supported or MechanismClaimStatuses.Validated || isFalsification)
         {
             evidenceKind = Required(request.EvidenceKind, "验证证据类型", 80).ToLowerInvariant();
-            if (evidenceKind != "experiment-result")
-                throw new ResearchAssetRuleException("支持和验证升级必须引用正式实验结果。");
-            referenceId = Required(request.ReferenceId, "实验结果引用", 500);
-            contentHash = Required(request.ContentHash, "实验分析哈希", 64).ToLowerInvariant();
+            if (evidenceKind != "recipe-recommendation-outcome")
+                throw new ResearchAssetRuleException("支持和验证升级必须引用已冻结的配方建议实际运行结果。");
+            referenceId = Required(request.ReferenceId, "配方建议决定引用", 500);
+            contentHash = Required(request.ContentHash, "真实运行结果哈希", 64).ToLowerInvariant();
             if (!Regex.IsMatch(contentHash, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant))
-                throw new ResearchAssetRuleException("实验分析哈希必须是 64 位 SHA-256。");
+                throw new ResearchAssetRuleException("真实运行结果哈希必须是 64 位 SHA-256。");
             if (request.ValidationHypothesisId is not { } validationHypothesisId)
-                throw new ResearchAssetRuleException("支持和验证升级必须指定该实验验证的研发假设。");
+                throw new ResearchAssetRuleException("支持和验证升级必须指定关联的研发假设。");
             var evaluationOutcome = Required(request.EvaluationOutcome, "证据评价结论", 20).ToLowerInvariant();
             var expectedOutcome = isFalsification ? "falsifies" : "supports";
             if (evaluationOutcome != expectedOutcome)
                 throw new ResearchAssetRuleException(isFalsification
-                    ? "反证声明必须引用置信区间明确不满足预注册效应的实验。"
-                    : "只有明确支持声明的实验评价才能升级。");
+                    ? "反证声明必须引用明确不满足预注册效应的真实运行结果。"
+                    : "只有明确支持声明的真实运行结果评价才能升级。");
             var evaluationSummary = Required(request.EvaluationSummary, "证据评价说明", 4000);
             var evidence = new MechanismClaimEvidence
             {
@@ -244,12 +245,12 @@ public sealed class MechanismKnowledgeService(
                 ReferenceId = referenceId,
                 ContentHash = contentHash
             };
-            if (!await store.ExperimentResultValidatesClaimAsync(
+            if (!await store.RecipeRecommendationOutcomeSupportsClaimAsync(
                     projectId, claim, validationHypothesisId, evidence, evaluationOutcome, ct).ConfigureAwait(false))
                 throw new ResearchAssetRuleException(
-                    "实验结果必须来自绑定该声明全部变量的正式假设验证实验，并通过安全与源数据校验。");
+                    "真实运行结果必须来自已完成的配方建议闭环，并通过安全与源数据校验。");
             if (await store.LifecycleEvidenceUsedAsync(claimId, referenceId, ct).ConfigureAwait(false))
-                throw new ResearchAssetRuleException("同一实验结果不能重复用于机理知识升级。");
+                throw new ResearchAssetRuleException("同一真实运行结果不能重复用于机理知识升级。");
         }
         if (target == MechanismClaimStatuses.Active)
         {

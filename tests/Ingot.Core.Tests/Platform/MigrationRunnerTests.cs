@@ -20,7 +20,11 @@ public sealed class MigrationRunnerTests
             ["0008"] = "7cc3cf8e45b18080d5dc595805d905efac5702fc53bc3834715d03b3ebdd3130",
             ["0009"] = "3093625e88223a477f685b06516b831d62f19248aa74f91950662d42e265bd43",
             ["0010"] = "cec8d49b86a41924a4475b69b74fba86bbe69b5ad146b0062a333d4184ecaf5b",
-            ["0011"] = "60130e9bc1bb8379bddb515ad8ba1664ec67438d37171fd847fa80ca0e90685f"
+            ["0011"] = "60130e9bc1bb8379bddb515ad8ba1664ec67438d37171fd847fa80ca0e90685f",
+            ["0012"] = "5602c217d27cc0d21df812c54492e2fa1bbf0d4deb43f55bb4fe5b942ba9a427",
+            ["0013"] = "2bd1756ca36b7d7fde0c08be27b89f4d9723dd07f6641a29cf6d613a6ca4f0f7",
+            ["0014"] = "f6430252aed8b0e07b96d3bfb9962d85d4592cee380ae47ffb668ec4e23c9e54",
+            ["0015"] = "0a64f6a61abd2ef22a9100539ef7d6df0b8a9fab39c9e708b96fee01a5dfdae5"
         };
 
     [Fact]

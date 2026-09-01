@@ -135,7 +135,7 @@ export function EdgeDetailPage() {
           { title: "连接数据源", description: edgeStatus(edge) === "online" ? "现场节点持续在线。" : "等待节点恢复心跳。", state: edgeStatus(edge) === "online" ? "done" : "current" },
           { title: "采集并上行", description: runningTasks > 0 ? `${runningTasks} 个任务正在采集，${outboxBacklog > 0 ? `${formatInteger(outboxBacklog)} 条事件等待上行。` : "当前没有积压事件。"}` : "尚无运行中的采集任务。", state: runningTasks > 0 && outboxBacklog === 0 ? "done" : "current" },
           { title: "映射工艺语义", description: `${processSignalCount} 条过程信号、${controlParameterMappingCount} 个控制参数${lifecycleTaskCount > 0 ? "，已配置过程执行边界。" : "；尚未配置过程执行边界。"}`, state: processSignalCount > 0 && controlParameterMappingCount > 0 && lifecycleTaskCount > 0 ? "done" : "current" },
-          { title: "验证闭环证据", description: deliveryReady ? "采集端条件已具备；请在运行记录与质量任务中确认实际关联，再进入追因和实验。" : "补齐当前步骤后，再用运行记录与质量任务验证证据是否完整。", state: deliveryReady ? "current" : "upcoming" },
+          { title: "验证闭环证据", description: deliveryReady ? "采集端条件已具备；请在运行记录与质量任务中确认实际关联，再进入追因和配方优化。" : "补齐当前步骤后，再用运行记录与质量任务验证证据是否完整。", state: deliveryReady ? "current" : "upcoming" },
         ]}
       />
       <Card

@@ -4,7 +4,7 @@
 
 ## What core problem does Ingot solve?
 
-A shared run identity links actual recipes, process curves, and quality outcomes so engineers can review field facts in one place. Normal production runs become optimization observations that support the next recipe within safety boundaries and observed coverage; controlled validation is designed separately when causal confirmation is needed.
+A shared run identity links actual recipes, process curves, and quality outcomes so engineers can review field facts in one place. Normal production runs become optimization observations that support the next recipe within safety boundaries and observed coverage; supplementary evidence review is designed separately when causal confirmation is needed.
 
 ## Is Ingot a data-acquisition system?
 
@@ -12,11 +12,11 @@ Data acquisition is not Ingot's only responsibility. Acquisition receives raw da
 
 ## Does Ingot replace process engineers?
 
-No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and approve separate controlled validation when it is needed.
+No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and approve separate supplementary evidence review when it is needed.
 
 ## Can the system find root causes automatically?
 
-Historical data cannot establish a root cause by itself; it can only identify associations between factors. Material, equipment, time, and tooling may change together and create confounding. The system records these limits and supports controlled, repeated experiments. A candidate becomes a validated cause only when experimental results and engineering judgment support it.
+Historical data cannot establish a root cause by itself; it can only identify associations between factors. Material, equipment, time, and tooling may change together and create confounding. The system records these limits and supports controlled, repeated additional validations. A candidate becomes a validated cause only when evidence-based results and engineering judgment support it.
 
 ## Why does the system record conditions, runs, and inspections together?
 
@@ -36,35 +36,35 @@ Material, tooling, and equipment context may affect quality or may serve only tr
 
 ## Why not always use the most complex model?
 
-Model complexity does not establish reliability. With limited samples or confounded conditions, controlled validation often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or experiments and does not generate an unsupported conclusion.
+Model complexity does not establish reliability. With limited samples or confounded conditions, supplementary evidence review often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data or additional validations and does not generate an unsupported conclusion.
 
 ## What responsibilities does the language model have?
 
-A large language model (LLM) parses questions, queries authorized records, and generates explanations of calculated results. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or experimental validation and may not generate facts without sources.
+A large language model (LLM) parses questions, queries authorized records, and generates explanations of calculated results. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or evidence-based validation and may not generate facts without sources.
 
 ## As foundation models and agents become more capable, what does Ingot become?
 
-Ingot's product position does not change with foundation-model capability. Language models remain replaceable components, while Ingot preserves run records, evidence sources, experiment state, approvals, and final conclusions. See the [Roadmap](project-plan.en.md).
+Ingot's product position does not change with foundation-model capability. Language models remain replaceable components, while Ingot preserves run records, evidence sources, execution state, approvals, and final conclusions. See the [Roadmap](project-plan.en.md).
 
-## Does adding MCP make an agent safe to drive experiments?
+## Does adding MCP make an agent safe to drive additional validations?
 
 No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Project access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
 
 ## When is Bayesian optimization appropriate?
 
-Bayesian optimization applies when individual experiments are costly and each result can guide subsequent experiment selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
+Bayesian optimization applies when individual additional validations are costly and each result can guide subsequent additional validation selection. The controllable-variable count must be limited, objectives measurable, and safety boundaries explicit. When variables are numerous, the process drifts rapidly, feedback is delayed, or key factors are unmeasured, the problem scope or data must be improved first.
 
-## Can existing recipe runs be analyzed without creating an experiment?
+## Can existing recipe runs be analyzed without creating an additional validation?
 
-Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more runs or create separate controlled validation.
+Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more runs or create separate supplementary evidence review.
 
 ## Can the system generate multiple recipe recommendations at once?
 
-Daily optimization returns one next recipe by default to minimize field judgment and operating cost. Formal controlled validation can still generate multiple validation conditions according to field capacity. Unfinished validation conditions remain pending points so they are not scheduled twice.
+Daily optimization returns one next recipe by default to minimize field judgment and operating cost. Formal supplementary evidence review can still generate multiple validation conditions according to field capacity. Unfinished validation conditions remain pending points so they are not scheduled twice.
 
 ## Are recipe recommendations written automatically to controls?
 
-No. A next-recipe recommendation is not an experiment plan and creates no approval or equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
+No. A next-recipe recommendation is not an recommendation record and creates no approval or equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
 
 ## Does an optimization or language-model outage stop acquisition?
 
@@ -74,12 +74,12 @@ No. Field acquisition, run records, and inspections continue; generation of new 
 
 Validation data, protocols, and results are tied to a specific scenario, objective, and decision rule, and historical rounds quickly become hard to maintain. The repository keeps product code, general contracts, synthetic tests, and validation methods only. Users manage their evaluation data and results outside the repository.
 
-## How is a reduction in experiment count validated?
+## How is a reduction in run count validated?
 
-Before results are reviewed, the validation plan fixes the target, starting data, experiment budget, comparison methods, and pass criteria. Every executed experiment is included in cost. Historical review, shadow use, and controlled online experiments respectively evaluate historical efficiency, recommendation stability on a new project, and experiment count and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
+Before results are reviewed, the validation plan fixes the target, starting data, run budget, comparison methods, and pass criteria. Every executed additional validation is included in cost. Historical review, shadow use, and actual online runs respectively evaluate historical efficiency, recommendation stability on a new project, and run count and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
 
 The repository provides historical replay and method-comparison capabilities but bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
 
 ## Is the documentation now finalized?
 
-Core value, product boundaries, evidence principles, and stable architecture are fixed. Algorithms, default experiment parameters, menus, implementation status, roadmap, and validation results continue to evolve without redefining the core value or bypassing evidence boundaries.
+Core value, product boundaries, evidence principles, and stable architecture are fixed. Algorithms, default recommendation parameters, menus, implementation status, roadmap, and validation results continue to evolve without redefining the core value or bypassing evidence boundaries.

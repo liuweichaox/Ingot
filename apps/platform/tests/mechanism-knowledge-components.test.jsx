@@ -42,8 +42,6 @@ describe("机理知识工作台", () => {
             ],
           },
           hypotheses: [],
-          experiments: [],
-          experimentResults: [],
         }));
       }
       return Promise.reject(new Error(`未处理的测试请求：${path}`));
