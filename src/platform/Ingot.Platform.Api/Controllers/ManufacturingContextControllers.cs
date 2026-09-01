@@ -187,14 +187,24 @@ public sealed class ToolingAssembliesController(
     [HttpPost("{toolingAssemblyId}/revisions")]
     public async Task<IActionResult> CreateRevision(
         string toolingAssemblyId,
-        [FromBody] ToolingAssemblyRevision? request,
+        [FromBody] CreateToolingAssemblyRevisionRequest? request,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        request = request is null ? null : request with { ToolingAssemblyId = toolingAssemblyId.Trim() };
-        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
+        var candidate = request is null
+            ? null
+            : new ToolingAssemblyRevision
+            {
+                ToolingAssemblyId = toolingAssemblyId.Trim(),
+                ToolingTypeVersion = request.ToolingTypeVersion,
+                Revision = 1,
+                Members = request.Members,
+                CreatedBy = ResolveUserId(),
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+        if (!ManufacturingContextValidator.TryValidate(candidate, out var normalized, out var error))
             return InvalidRequest(error);
         try { return Ok(await store.CreateAssemblyRevisionAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
@@ -231,14 +241,29 @@ public sealed class ToolingInstallationsController(
     }
 
     [HttpPost]
-    public async Task<IActionResult> Install([FromBody] ToolingInstallation? request, CancellationToken ct)
+    public Task<IActionResult> Install([FromBody] ReplaceToolingInstallationRequest? request, CancellationToken ct)
+        => Replace(request, ct);
+
+    [HttpPost("~/api/v1/tooling-installations:replace")]
+    public async Task<IActionResult> Replace([FromBody] ReplaceToolingInstallationRequest? request, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
+        if (request is null)
+            return InvalidRequest("工装替换请求不能为空。");
+        var candidate = new ToolingInstallation
+        {
+            EquipmentId = request.EquipmentId,
+            AssemblyRevisionId = request.AssemblyRevisionId,
+            InstalledAt = request.InstalledAt,
+            Source = request.Source,
+            CommandId = request.CommandId,
+            Actor = ResolveUserId()
+        };
+        if (!ManufacturingContextValidator.TryValidate(candidate, out var normalized, out var error))
             return InvalidRequest(error);
-        try { return Ok(await store.CreateInstallationAsync(normalized!, ct).ConfigureAwait(false)); }
+        try { return Ok(await store.ReplaceInstallationAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
@@ -256,7 +281,7 @@ public sealed class ToolingInstallationsController(
             var item = await store.RemoveInstallationAsync(
                 installationId,
                 request?.At ?? DateTimeOffset.UtcNow,
-                request?.Actor,
+                ResolveUserId(),
                 ct).ConfigureAwait(false);
             return item is null ? ResourceNotFound() : Ok(item);
         }
@@ -305,12 +330,39 @@ public sealed class ProductionContextsController(
     }
 
     [HttpPost]
-    public async Task<IActionResult> Start([FromBody] ProductionContext? request, CancellationToken ct)
+    public Task<IActionResult> Start([FromBody] ReplaceProductionContextRequest? request, CancellationToken ct)
+        => Replace(request, ct);
+
+    [HttpPost("~/api/v1/production-contexts:replace")]
+    public async Task<IActionResult> Replace([FromBody] ReplaceProductionContextRequest? request, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        if (!ManufacturingContextValidator.TryValidate(request, out var normalized, out var error))
+        if (request is null)
+            return InvalidRequest("生产切换请求不能为空。");
+        var candidate = new ProductionContext
+        {
+            EquipmentId = request.EquipmentId,
+            ProductFamilyCode = request.ProductFamilyCode,
+            ProductCode = request.ProductCode,
+            ProcessSpecificationId = request.ProcessSpecificationId,
+            ProcessSpecificationVersion = request.ProcessSpecificationVersion,
+            ToolingInstallationId = request.ToolingInstallationId,
+            ValidFrom = request.ValidFrom,
+            Source = request.Source,
+            CommandId = request.CommandId,
+            ExternalOrderRef = request.ExternalOrderRef,
+            ExternalBatchRef = request.ExternalBatchRef,
+            MaterialLotRef = request.MaterialLotRef,
+            MaterialSpecification = request.MaterialSpecification,
+            MaintenanceStatus = request.MaintenanceStatus,
+            CalibrationStatus = request.CalibrationStatus,
+            CalibrationRef = request.CalibrationRef,
+            CalibrationValidUntil = request.CalibrationValidUntil,
+            Actor = ResolveUserId()
+        };
+        if (!ManufacturingContextValidator.TryValidate(candidate, out var normalized, out var error))
             return InvalidRequest(error);
         if (!int.TryParse(normalized!.ProcessSpecificationVersion, out var processSpecificationVersion) || processSpecificationVersion < 1)
             return InvalidRequest("ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。");
@@ -326,7 +378,7 @@ public sealed class ProductionContextsController(
         };
         if (!ProcessAnalysisResolver.MatchesSelector(processSpecification.ContextSelector, selectorContext))
             return InvalidRequest("工艺规范的适用条件与当前产品或设备不匹配。");
-        try { return Ok(await store.StartProductionContextAsync(normalized!, ct).ConfigureAwait(false)); }
+        try { return Ok(await store.ReplaceProductionContextAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }
 
@@ -344,7 +396,7 @@ public sealed class ProductionContextsController(
             var item = await store.CloseProductionContextAsync(
                 contextId,
                 request?.At ?? DateTimeOffset.UtcNow,
-                request?.Actor,
+                ResolveUserId(),
                 ct).ConfigureAwait(false);
             return item is null ? ResourceNotFound() : Ok(item);
         }
@@ -362,4 +414,4 @@ public sealed class ProductionContextsController(
     }
 }
 
-public sealed record CloseIntervalRequest(DateTimeOffset? At, string? Actor);
+public sealed record CloseIntervalRequest(DateTimeOffset? At);

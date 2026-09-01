@@ -146,6 +146,62 @@ public sealed class ProcessSpecificationsController(
         return value is null ? ResourceNotFound() : Ok(value);
     }
 
+    [HttpPost("{processSpecificationId}/{baseVersion:int}/drafts")]
+    public async Task<IActionResult> CreateNextDraft(
+        string processSpecificationId,
+        int baseVersion,
+        [FromBody] CreateProcessSpecificationDraftRequest? request,
+        CancellationToken ct)
+    {
+        var denied = DeniedConfigurationWrite();
+        if (denied is not null)
+            return denied;
+        if (baseVersion < 1)
+            return InvalidRequest("基准工艺规范版本必须大于 0。");
+        if (!ProcessConfigurationValidator.TryValidate(request, out var normalizedRequest, out var error))
+            return InvalidRequest(error);
+
+        var id = Normalize(processSpecificationId);
+        var baseline = await store.GetProcessSpecificationAsync(id, baseVersion, ct).ConfigureAwait(false);
+        if (baseline is null)
+            return ResourceNotFound();
+        if (baseline.Status != ConfigurationStatuses.Published)
+            return StateConflict("只能从已发布工艺规范创建下一版草稿。", ("baseline", baseline));
+        var model = await store.GetDataModelAsync(baseline.DataModelId, baseline.DataModelVersion, ct).ConfigureAwait(false);
+        if (model is null)
+            return StateConflict("基准工艺规范引用的工艺数据模型版本不存在。", ("baseline", baseline));
+
+        var candidate = baseline with
+        {
+            Version = baseline.Version + 1,
+            BasedOnVersion = baseline.Version,
+            Status = ConfigurationStatuses.Draft,
+            Values = MergeValues(baseline.Values, normalizedRequest!.ParameterOverrides),
+            ChangeReason = normalizedRequest.ChangeReason,
+            MechanismNotes = normalizedRequest.MechanismNotes,
+            EvidenceReferences = normalizedRequest.EvidenceReferences,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        if (!ProcessConfigurationValidator.TryValidate(candidate, out var normalizedCandidate, out error))
+            return InvalidRequest(error);
+        if (ValidateValues(normalizedCandidate!, model, baseline) is { } validationError)
+            return InvalidRequest(validationError);
+
+        var result = await store.CreateNextProcessSpecificationDraftAsync(id, baseVersion, normalizedRequest, ct).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            var message = result.Conflict switch
+            {
+                "baseline-not-published" => "基准工艺规范已不再是可用于修订的已发布版本。",
+                "draft-already-exists" => "该已发布版本已有下一版草稿，不能创建并列草稿。",
+                _ => "工艺规范版本已发生并发变更，请重新打开基准版本后再试。"
+            };
+            return StateConflict(message);
+        }
+        var draft = result.Draft!;
+        return CreatedAtAction(nameof(Get), new { processSpecificationId = draft.ProcessSpecificationId, version = draft.Version }, draft);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Upsert([FromBody] ProcessSpecification? request, CancellationToken ct)
     {
@@ -154,23 +210,34 @@ public sealed class ProcessSpecificationsController(
             return denied;
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
+        var existing = await store.GetProcessSpecificationAsync(normalized!.ProcessSpecificationId, normalized.Version, ct).ConfigureAwait(false);
+        if (existing is null)
+        {
+            if (normalized.Status == ConfigurationStatuses.Published)
+                return InvalidRequest("新工艺规范必须先以草稿创建，不能直接发布。");
+            if (normalized.Version != 1 || normalized.BasedOnVersion.HasValue)
+                return InvalidRequest("后续工艺规范版本必须从已发布基线通过下一版草稿命令创建。");
+        }
+        else if (existing.BasedOnVersion != normalized.BasedOnVersion)
+        {
+            return StateConflict("草稿的沿用版本不可修改；请从指定已发布版本重新创建草稿。", ("existing", existing));
+        }
         var model = await store.GetDataModelAsync(normalized!.DataModelId, normalized.DataModelVersion, ct)
             .ConfigureAwait(false);
         if (model is null)
             return InvalidRequest("引用的工艺数据模型版本不存在。");
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
             return InvalidRequest("发布工艺规范前，引用的工艺数据模型必须已经发布。");
-        var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
-        var unknown = normalized.Values.FirstOrDefault(item => !definitions.ContainsKey(item.Code));
-        if (unknown is not null)
-            return InvalidRequest($"控制参数未在工艺数据模型中定义：{unknown.Code}。");
-        var missing = definitions.Values.FirstOrDefault(item => !item.Nullable && normalized.Values.All(value => value.Code != item.Code));
-        if (missing is not null)
-            return InvalidRequest($"缺少必填控制参数：{missing.Code}。");
-        var invalid = normalized.Values.FirstOrDefault(item => !MatchesDataType(item.Value, definitions[item.Code].DataType));
-        if (invalid is not null)
-            return InvalidRequest($"控制参数 {invalid.Code} 的值不符合 {definitions[invalid.Code].DataType} 类型。");
-        var existing = await store.GetProcessSpecificationAsync(normalized.ProcessSpecificationId, normalized.Version, ct).ConfigureAwait(false);
+        ProcessSpecification? baseline = null;
+        if (normalized.BasedOnVersion.HasValue)
+        {
+            baseline = await store.GetProcessSpecificationAsync(normalized.ProcessSpecificationId, normalized.BasedOnVersion.Value, ct)
+                .ConfigureAwait(false);
+            if (baseline?.Status != ConfigurationStatuses.Published)
+                return StateConflict("草稿必须沿用同一工艺规范的已发布基线。", ("basedOnVersion", normalized.BasedOnVersion));
+        }
+        if (ValidateValues(normalized, model, baseline) is { } validationError)
+            return InvalidRequest(validationError);
         if (existing is not null && existing.Status != ConfigurationStatuses.Draft)
         {
             if (existing.Status == ConfigurationStatuses.Published && normalized.Status == ConfigurationStatuses.Retired)
@@ -200,8 +267,71 @@ public sealed class ProcessSpecificationsController(
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
     private static bool SamePayload<T>(T left, T right)
         => JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
-    private static bool MatchesDataType(JsonElement value, string dataType)
-        => value.ValueKind == JsonValueKind.Null || dataType switch
+    private static string? ValidateValues(
+        ProcessSpecification specification,
+        ProcessDataModel model,
+        ProcessSpecification? baseline = null)
+    {
+        var definitions = model.ControlParameters.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        var unknown = specification.Values.FirstOrDefault(item => !definitions.ContainsKey(item.Code));
+        if (unknown is not null)
+            return $"控制参数未在工艺数据模型中定义：{unknown.Code}。";
+        var missing = definitions.Values.FirstOrDefault(item =>
+            !item.Nullable && (specification.Values.All(value => value.Code != item.Code) ||
+                               specification.Values.First(value => value.Code == item.Code).Value.ValueKind == JsonValueKind.Null));
+        if (missing is not null)
+            return $"缺少必填控制参数：{missing.Code}。";
+        foreach (var value in specification.Values)
+        {
+            var definition = definitions[value.Code];
+            if (!MatchesDataType(value.Value, definition.DataType, definition.Nullable))
+                return $"控制参数 {value.Code} 的值不符合 {definition.DataType} 类型。";
+            if (ValidateNumericBoundary(value, definition) is { } boundaryError)
+                return boundaryError;
+        }
+        if (baseline is null)
+            return null;
+        var baselineValues = baseline.Values.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        foreach (var value in specification.Values)
+        {
+            if (definitions[value.Code].ChangeAllowed || !baselineValues.TryGetValue(value.Code, out var baselineValue))
+                continue;
+            if (value.Value.GetRawText() != baselineValue.Value.GetRawText())
+                return $"控制参数 {value.Code} 不允许在下一版工艺规范中变更。";
+        }
+        return null;
+    }
+
+    private static string? ValidateNumericBoundary(ControlParameterValue value, ControlParameterDefinition definition)
+    {
+        if (value.Value.ValueKind == JsonValueKind.Null || definition.DataType is "string" or "boolean")
+            return null;
+        if (!value.Value.TryGetDouble(out var number) || !double.IsFinite(number))
+            return $"控制参数 {value.Code} 的数值无效。";
+        if (definition.Minimum is { } minimum && number < minimum ||
+            definition.Maximum is { } maximum && number > maximum)
+            return $"控制参数 {value.Code} 超出允许范围。";
+        if (definition.Step is not { } step)
+            return null;
+        var origin = definition.Minimum ?? 0d;
+        var multiple = (number - origin) / step;
+        if (Math.Abs(multiple - Math.Round(multiple)) > 1e-9 * Math.Max(1d, Math.Abs(multiple)))
+            return $"控制参数 {value.Code} 不符合步长 {step}。";
+        return null;
+    }
+
+    private static IReadOnlyList<ControlParameterValue> MergeValues(
+        IReadOnlyList<ControlParameterValue> baseline,
+        IReadOnlyList<ControlParameterValue> overrides)
+    {
+        var values = baseline.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        foreach (var item in overrides)
+            values[item.Code] = item;
+        return values.Values.OrderBy(item => item.Code, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool MatchesDataType(JsonElement value, string dataType, bool nullable)
+        => value.ValueKind == JsonValueKind.Null ? nullable : dataType switch
         {
             "integer" => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out _),
             "boolean" => value.ValueKind is JsonValueKind.True or JsonValueKind.False,

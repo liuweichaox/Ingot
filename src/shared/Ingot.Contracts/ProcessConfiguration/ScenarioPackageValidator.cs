@@ -22,8 +22,7 @@ public static partial class ScenarioPackageValidator
         if (!ValidCode(dataModelId) || value.DataModelVersion < 1 ||
             !ValidCode(analysisPlanId) || value.AnalysisPlanVersion < 1)
             return Fail("工艺配置必须引用有效的工艺数据模型和分析方案版本。", out error);
-        if (!TryReferences(value.IngestionTasks, "数据摄取任务", out var ingestionTasks, out error) ||
-            !TryReferences(value.KnowledgeAssets, "知识资产", out var knowledge, out error))
+        if (!TryReferences(value.IngestionTasks, "数据摄取任务", out var ingestionTasks, out error))
             return false;
         VersionedConfigurationReference? qualityPlan = null;
         if (value.QualityPlan is not null)
@@ -98,7 +97,6 @@ public static partial class ScenarioPackageValidator
             QualityPlan = qualityPlan,
             ContextFields = contextFields,
             Constraints = constraints,
-            KnowledgeAssets = knowledge,
             Terminology = terminology,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt.ToUniversalTime()
         };

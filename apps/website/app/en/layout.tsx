@@ -9,12 +9,12 @@ const origin = "https://ingotstack.com";
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
   title: "Ingot — Open-source Process Diagnosis & Optimization",
-  description: "An open-source process diagnosis and optimization system that turns real recipe runs into observations and recommends the next recipe within safety boundaries and observed coverage.",
+  description: "An open-source process diagnosis and optimization system that uses real production runs, quality outcomes, and diagnostic evidence to support the next process-specification revision.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "process diagnosis", "recipe optimization", "process optimization", "process engineer decisions",
-    "production runs", "next recipe", "constrained optimization",
-    "operating region", "process data", "Bayesian optimization", "process knowledge",
+    "production runs", "next recipe", "process specification",
+    "version lineage", "process data", "mechanism notes", "engineering decisions",
   ],
   alternates: {
     canonical: "/en/",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Ingot — From run evidence to the next recipe.",
-    description: "Connect real recipe runs and continuously recommend the next recipe within safety boundaries and observed coverage.",
+    description: "Connect real production runs and revise the next process specification from quality and diagnostic evidence.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Ingot — Open-source Process Diagnosis & Optimization",
-    description: "Use traceable real runs for process diagnosis, next-recipe recommendations, and constrained optimization.",
+    description: "Use traceable real runs for process diagnosis and next process-specification revision.",
     images: ["/og.png"],
   },
 };

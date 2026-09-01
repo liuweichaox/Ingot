@@ -15,21 +15,19 @@ async function html(pathname = "/") {
 
 const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package-approval|FactoryScene3D|制造生产数据与工艺分析系统|Connected production history/i;
 
-test("Chinese home uses the canonical diagnosis-and-optimization narrative", async () => {
+test("Chinese home presents the production-to-specification-revision flow", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
-  assert.match(source, /开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据/);
+  assert.match(source, /开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师修订下一版工艺规范/);
   assert.doesNotMatch(source, /面向工艺工程师的开源工艺追因与优化系统/);
-  assert.match(source, /从运行证据/);
-  assert.match(source, /到下一份配方/);
-  assert.match(source, /受约束优化/);
-  assert.match(source, /RECIPE OPTIMIZATION · RUN-042/);
-  assert.match(source, /无需先建立实验，也无需工程师重新归类配方/);
-  assert.match(source, /先确认数据是否可靠，再选择分析与优化方法/);
-  for (const stage of ["建立运行证据", "形成优化观察", "推荐下一份配方", "继续从生产学习"]) {
+  assert.match(source, /从真实运行/);
+  assert.match(source, /到下一版工艺规范/);
+  assert.match(source, /SPECIFICATION REVISION · RUN-042/);
+  assert.match(source, /先确认数据是否可靠，再形成可审计的工艺修订/);
+  for (const stage of ["建立运行证据", "完成工艺追因", "修订下一版规范", "继续从生产回流"]) {
     assert.match(source, new RegExp(stage));
   }
-  assert.match(source, /优化能力持续升级，证据边界始终不变/);
+  assert.match(source, /工艺能力持续升级，证据边界始终不变/);
   assert.match(source, /可在厂内自托管/);
   assert.match(source, /真实工厂收益验证尚未完成/);
   assert.doesNotMatch(source, /自动发现确定根因|已经减少\s*\d+%|FX3U|光学镜片|模压/);
@@ -38,21 +36,20 @@ test("Chinese home uses the canonical diagnosis-and-optimization narrative", asy
   assert.doesNotMatch(source, retired);
 });
 
-test("English home uses the same diagnosis-and-optimization narrative", async () => {
+test("English home presents the production-to-specification-revision flow", async () => {
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
   assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
   assert.match(source, /system that turns linked equipment, production, and inspection data into trustworthy evidence/i);
   assert.doesNotMatch(source, /system for process engineers/i);
-  assert.match(source, /From run evidence/);
-  assert.match(source, /to the next recipe/);
-  assert.match(source, /No experiment setup or manual recipe reclassification is required/);
-  assert.match(source, /constrained optimization/i);
-  assert.match(source, /Confirm that the data are trustworthy before choosing an analysis or optimization method/);
-  for (const stage of ["Build run evidence", "Form observations", "Recommend the next recipe", "Keep learning from production"]) {
+  assert.match(source, /From real runs/);
+  assert.match(source, /to the next process specification/);
+  assert.match(source, /SPECIFICATION REVISION · RUN-042/);
+  assert.match(source, /Confirm that data are trustworthy before forming an auditable revision/);
+  for (const stage of ["Build run evidence", "Complete process diagnosis", "Revise the next specification", "Return through production"]) {
     assert.match(source, new RegExp(stage));
   }
-  assert.match(source, /Optimization capabilities evolve/);
+  assert.match(source, /Process capabilities evolve/);
   assert.match(source, /self-hostable inside the plant/);
   assert.match(source, /real-factory benefit validation remains incomplete/i);
   assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|molding|one real lens/i);

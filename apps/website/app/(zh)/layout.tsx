@@ -13,12 +13,12 @@ export const metadata: Metadata = {
     languages: { "zh-CN": "/", en: "/en/" },
   },
   title: "Ingot — 开源工艺追因与优化系统",
-  description: "开源工艺追因与优化系统，让真实配方运行自动形成优化观察，并在安全边界和历史覆盖内推荐下一份配方。",
+  description: "开源工艺追因与优化系统，用真实生产运行、质量结果和工艺追因证据支持工程师修订下一版工艺规范。",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "工艺追因", "配方优化", "工艺优化", "工艺工程师决策",
-    "生产运行", "下一份配方", "受约束优化", "工艺操作域",
-    "过程数据", "贝叶斯优化", "工艺知识",
+    "生产运行", "下一版配方", "工艺规范", "工艺版本",
+    "过程数据", "机理依据", "工程师决策",
   ],
   icons: {
     icon: "/brand/ingot-mark-dark.svg",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Ingot — 从运行证据，到下一份配方",
-    description: "连接真实配方运行，在安全边界和历史覆盖内持续推荐下一份配方。",
+    description: "连接真实生产运行，基于质量与追因证据修订下一版工艺规范。",
     url: origin,
     type: "website",
     locale: "zh_CN",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Ingot — 开源工艺追因与优化系统",
-    description: "用可追溯真实运行支持工艺追因、下一配方建议和受约束优化。",
+    description: "用可追溯真实运行支持工艺追因与下一版工艺规范修订。",
     images: ["/og.zh.png"],
   },
 };

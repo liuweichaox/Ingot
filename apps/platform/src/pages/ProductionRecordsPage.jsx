@@ -72,12 +72,54 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
     setOpen(true);
   }
 
+  function openReplacement(row) {
+    const value = structuredClone(row);
+    setEditorMode("replace");
+    setEditorBase(value);
+    setEditor(createProductionEditor(resource, value));
+    setActionError("");
+    setOpen(true);
+  }
+
   async function save() {
     setSaving(true);
     setActionError("");
     try {
       const value = parseProductionEditor(resource, editor, editorBase);
-      await postJson(resource.endpoint, resource.prepare ? resource.prepare(value) : value);
+      const prepared = resource.prepare ? resource.prepare(value) : value;
+      const request = section === "installation"
+        ? {
+          equipmentId: prepared.equipmentId,
+          assemblyRevisionId: prepared.assemblyRevisionId,
+          installedAt: prepared.installedAt,
+          source: prepared.source,
+          commandId: prepared.commandId,
+        }
+        : section === "context"
+          ? {
+            equipmentId: prepared.equipmentId,
+            productFamilyCode: prepared.productFamilyCode,
+            productCode: prepared.productCode,
+            processSpecificationId: prepared.processSpecificationId,
+            processSpecificationVersion: String(prepared.processSpecificationVersion),
+            toolingInstallationId: prepared.toolingInstallationId,
+            validFrom: prepared.validFrom,
+            source: prepared.source,
+            commandId: prepared.commandId,
+            externalOrderRef: prepared.externalOrderRef || null,
+            externalBatchRef: prepared.externalBatchRef || null,
+            materialLotRef: prepared.materialLotRef || null,
+            materialSpecification: prepared.materialSpecification || null,
+            maintenanceStatus: prepared.maintenanceStatus || null,
+            calibrationStatus: prepared.calibrationStatus || null,
+            calibrationRef: prepared.calibrationRef || null,
+            calibrationValidUntil: prepared.calibrationValidUntil,
+          }
+          : prepared;
+      const endpoint = section === "installation"
+        ? "/api/v1/tooling-installations:replace"
+        : section === "context" ? "/api/v1/production-contexts:replace" : resource.endpoint;
+      await postJson(endpoint, request);
       setOpen(false);
       await reload();
       notify(section === "context" ? "生产配置已生效，新开始的运行会自动关联。" : `${resource.title}已保存。`);
@@ -143,6 +185,8 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
       align: "right",
       render: (_value, row) => (
         <div className="flex min-w-max justify-end gap-1">
+          {section === "context" && !row.validTo && <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openReplacement(row)}>基于此配置切换</Button>}
+          {section === "installation" && !row.removedAt && <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openReplacement(row)}>替换工装</Button>}
           {!["context", "installation"].includes(section) && <Button variant="ghost" className="px-2" onClick={() => openEditor(row)}>{section === "type" ? "新版本维护" : "编辑"}</Button>}
           {resource.lifecycle?.visible(row) && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => lifecycle(row)}>{resource.lifecycle.label}</Button>}
           {resource.deleteUrl && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>删除</Button>}
@@ -187,7 +231,10 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
                             <p className="font-semibold text-slate-950">{row.equipmentId}</p>
                             <p className="mt-1 text-sm text-slate-600">{row.productCode} · {row.productFamilyCode || "未填写系列"}</p>
                           </div>
-                          <StatusBadge value="active" />
+                          <div className="flex items-center gap-2">
+                            <StatusBadge value="active" />
+                            {canWrite && <Button variant="ghost" className="min-h-8 px-2 text-trajectory-700" onClick={() => openReplacement(row)}>切换此设备配置</Button>}
+                          </div>
                         </div>
                         <dl className="mt-4 grid gap-x-4 gap-y-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-2">
                           {[
@@ -246,9 +293,11 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
         open={open}
         onClose={() => setOpen(false)}
         closeOnBackdrop={false}
-        title={editorMode === "create" ? resource.createLabel : editorMode === "version" ? "新版本维护" : `编辑${resource.title}`}
-        description={resource.drawerDescription || "填写业务信息后保存，平台会校验引用并保留历史。"}
-        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || !editorValid}>{saving ? "保存中" : section === "context" ? "确认并生效" : "保存"}</Button></>}
+        title={editorMode === "create" ? resource.createLabel : editorMode === "version" ? "新版本维护" : editorMode === "replace" ? section === "context" ? "切换生产配置" : "替换已装工装" : `编辑${resource.title}`}
+        description={editorMode === "replace"
+          ? section === "context" ? "以当前记录为起点调整下一次生产配置。保存后旧记录结束，新记录只对后续运行生效。" : "以当前装卸记录为起点替换工装。保存后旧记录结束，后续运行关联新工装。"
+          : resource.drawerDescription || "填写业务信息后保存，平台会校验引用并保留历史。"}
+        footer={<><Button onClick={() => setOpen(false)}>取消</Button><Button variant="primary" onClick={save} disabled={saving || !editorValid}>{saving ? "保存中" : editorMode === "replace" ? section === "context" ? "确认切换" : "确认替换" : section === "context" ? "确认并生效" : "保存"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <ProductionRecordForm

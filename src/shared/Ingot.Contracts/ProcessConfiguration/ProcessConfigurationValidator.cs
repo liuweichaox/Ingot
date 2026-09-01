@@ -51,17 +51,16 @@ public static partial class ProcessConfigurationValidator
             return Fail("工艺规范版本必须引用有效的工艺数据模型版本。", out error);
         if (value.BasedOnVersion.HasValue && (value.BasedOnVersion < 1 || value.BasedOnVersion == value.Version))
             return Fail("沿用版本必须是不同的正整数版本。", out error);
+        var changeReason = Clean(value.ChangeReason);
+        if (value.BasedOnVersion.HasValue && changeReason is null)
+            return Fail("修订下一版工艺规范时必须说明修订理由。", out error);
+        if (changeReason?.Length > 2_000 || Clean(value.MechanismNotes)?.Length > 4_000)
+            return Fail("修订理由或机理说明过长。", out error);
         if (!TryNormalizeSelector(value.ContextSelector, out var selector, out error))
             return false;
-        var values = new List<ControlParameterValue>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in value.Values)
-        {
-            var code = NormalizeCode(item.Code);
-            if (!ValidCode(code) || !seen.Add(code))
-                return Fail($"控制参数编码无效或重复：{item.Code}。", out error);
-            values.Add(item with { Code = code });
-        }
+        if (!TryNormalizeControlParameterValues(value.Values, out var values, out error) ||
+            !TryNormalizeEvidenceReferences(value.EvidenceReferences, requireAtLeastOne: false, out var evidenceReferences, out error))
+            return false;
         normalized = value with
         {
             ProcessSpecificationId = id,
@@ -70,7 +69,40 @@ public static partial class ProcessConfigurationValidator
             Status = value.Status.Trim().ToLowerInvariant(),
             ContextSelector = selector,
             Values = values,
+            ChangeReason = changeReason,
+            MechanismNotes = Clean(value.MechanismNotes),
+            EvidenceReferences = evidenceReferences,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt
+        };
+        error = string.Empty;
+        return true;
+    }
+
+    public static bool TryValidate(
+        CreateProcessSpecificationDraftRequest? value,
+        out CreateProcessSpecificationDraftRequest? normalized,
+        out string error)
+    {
+        normalized = null;
+        if (value is null)
+            return Fail("下一版工艺规范请求不能为空。", out error);
+
+        var changeReason = Clean(value.ChangeReason);
+        if (changeReason is null)
+            return Fail("修订下一版工艺规范时必须说明修订理由。", out error);
+        var mechanismNotes = Clean(value.MechanismNotes);
+        if (changeReason.Length > 2_000 || mechanismNotes?.Length > 4_000)
+            return Fail("修订理由或机理说明过长。", out error);
+        if (!TryNormalizeControlParameterValues(value.ParameterOverrides, out var overrides, out error) ||
+            !TryNormalizeEvidenceReferences(value.EvidenceReferences, requireAtLeastOne: true, out var evidenceReferences, out error))
+            return false;
+
+        normalized = value with
+        {
+            ChangeReason = changeReason,
+            MechanismNotes = mechanismNotes,
+            ParameterOverrides = overrides,
+            EvidenceReferences = evidenceReferences
         };
         error = string.Empty;
         return true;
@@ -229,13 +261,102 @@ public static partial class ProcessConfigurationValidator
                 result = [];
                 return Fail($"控制参数编码无效、重复或缺少来源字段：{item.Code}。", out error);
             }
+            var dataType = NormalizeDataType(item.DataType);
+            if (!TryNormalizeParameterBounds(item, dataType, out var minimum, out var maximum, out var step, out error))
+            {
+                result = [];
+                return false;
+            }
             values.Add(item with
             {
                 Code = code,
                 DisplayName = item.DisplayName.Trim(),
-                DataType = NormalizeDataType(item.DataType),
-                Unit = Clean(item.Unit)
+                DataType = dataType,
+                Unit = Clean(item.Unit),
+                Minimum = minimum,
+                Maximum = maximum,
+                Step = step
             });
+        }
+        result = values;
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryNormalizeParameterBounds(
+        ControlParameterDefinition parameter,
+        string dataType,
+        out double? minimum,
+        out double? maximum,
+        out double? step,
+        out string error)
+    {
+        minimum = parameter.Minimum;
+        maximum = parameter.Maximum;
+        step = parameter.Step;
+        if (minimum is { } min && !double.IsFinite(min) ||
+            maximum is { } max && !double.IsFinite(max) ||
+            step is { } interval && (!double.IsFinite(interval) || interval <= 0))
+            return Fail($"控制参数 {parameter.Code} 的边界或步长无效。", out error);
+        if (minimum is { } lower && maximum is { } upper && lower > upper)
+            return Fail($"控制参数 {parameter.Code} 的最小值不能大于最大值。", out error);
+        if (dataType is "boolean" or "string" && (minimum.HasValue || maximum.HasValue || step.HasValue))
+            return Fail($"非数值控制参数 {parameter.Code} 不能定义数值边界或步长。", out error);
+        if (dataType == "integer" &&
+            (minimum is { } integerMinimum && Math.Truncate(integerMinimum) != integerMinimum ||
+             maximum is { } integerMaximum && Math.Truncate(integerMaximum) != integerMaximum ||
+             step is { } integerStep && Math.Truncate(integerStep) != integerStep))
+            return Fail($"整数控制参数 {parameter.Code} 的边界和步长必须是整数。", out error);
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryNormalizeControlParameterValues(
+        IReadOnlyList<ControlParameterValue> source,
+        out IReadOnlyList<ControlParameterValue> result,
+        out string error)
+    {
+        var values = new List<ControlParameterValue>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in source)
+        {
+            var code = NormalizeCode(item.Code);
+            if (!ValidCode(code) || !seen.Add(code))
+            {
+                result = [];
+                return Fail($"控制参数编码无效或重复：{item.Code}。", out error);
+            }
+            values.Add(item with { Code = code });
+        }
+        result = values;
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryNormalizeEvidenceReferences(
+        IReadOnlyList<ProcessSpecificationEvidenceReference> source,
+        bool requireAtLeastOne,
+        out IReadOnlyList<ProcessSpecificationEvidenceReference> result,
+        out string error)
+    {
+        var values = new List<ProcessSpecificationEvidenceReference>();
+        var seenReferences = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var reference in source)
+        {
+            var kind = reference.Kind?.Trim().ToLowerInvariant() ?? string.Empty;
+            var referenceId = reference.ReferenceId?.Trim() ?? string.Empty;
+            if (kind is not ("process-execution" or "inspection-record" or "analysis-report") ||
+                referenceId.Length is < 1 or > 240 || !seenReferences.Add($"{kind}:{referenceId}"))
+            {
+                result = [];
+                return Fail("修订证据引用无效或重复。", out error);
+            }
+            values.Add(reference with { Kind = kind, ReferenceId = referenceId });
+        }
+        if (requireAtLeastOne && values.Count == 0)
+        {
+            result = [];
+            return Fail("修订下一版工艺规范时必须引用至少一条证据。", out error);
         }
         result = values;
         error = string.Empty;

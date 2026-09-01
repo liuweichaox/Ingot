@@ -281,8 +281,9 @@ footer { border-top: 1px solid var(--line); padding: 38px 0 52px; }
 .footer-inner div { display: flex; gap: 18px; color: var(--muted); font-size: 12px; }
 
 .screenshots { background: var(--ink-2); }
-.shots-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; }
+.shots-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 56px; }
 .shot { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.shot.featured { grid-column: 1 / -1; }
 .shot img { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--line); }
 .shot figcaption { padding: 16px 18px 18px; }
 .shot strong { display: block; font-size: 15px; }

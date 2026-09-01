@@ -42,6 +42,119 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
     public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
         => GetAsync<ProcessSpecification>("process_specification_versions", "process_specification_id", processSpecificationId, version, ct);
 
+    public async Task<ProcessSpecificationDraftCreationResult> CreateNextProcessSpecificationDraftAsync(
+        string processSpecificationId,
+        int baseVersion,
+        CreateProcessSpecificationDraftRequest request,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var normalizedId = NormalizeIdentifier(processSpecificationId);
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Serializes derivations of one specification while allowing other specifications to proceed.
+            await using (var lockCommand = connection.CreateCommand())
+            {
+                lockCommand.Transaction = transaction;
+                lockCommand.CommandText = "SELECT pg_advisory_xact_lock(hashtext(@key));";
+                lockCommand.Parameters.AddWithValue("key", normalizedId);
+                await lockCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+
+            ProcessSpecification? baseline;
+            await using (var baselineCommand = connection.CreateCommand())
+            {
+                baselineCommand.Transaction = transaction;
+                baselineCommand.CommandText = """
+                    SELECT payload::text
+                    FROM process_specification_versions
+                    WHERE process_specification_id = @key AND version = @version AND status = @published
+                    FOR SHARE;
+                    """;
+                baselineCommand.Parameters.AddWithValue("key", normalizedId);
+                baselineCommand.Parameters.AddWithValue("version", baseVersion);
+                baselineCommand.Parameters.AddWithValue("published", ConfigurationStatuses.Published);
+                var payload = await baselineCommand.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                baseline = payload is null or DBNull
+                    ? null
+                    : JsonSerializer.Deserialize<ProcessSpecification>((string)payload, JsonOptions);
+            }
+            if (baseline is null)
+            {
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                return new ProcessSpecificationDraftCreationResult { Conflict = "baseline-not-published" };
+            }
+
+            await using (var siblingCommand = connection.CreateCommand())
+            {
+                siblingCommand.Transaction = transaction;
+                siblingCommand.CommandText = """
+                    SELECT 1
+                    FROM process_specification_versions
+                    WHERE process_specification_id = @key
+                      AND status = @draft
+                      AND payload ->> 'basedOnVersion' = @base_version
+                    LIMIT 1;
+                    """;
+                siblingCommand.Parameters.AddWithValue("key", normalizedId);
+                siblingCommand.Parameters.AddWithValue("draft", ConfigurationStatuses.Draft);
+                siblingCommand.Parameters.AddWithValue("base_version", baseVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (await siblingCommand.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null)
+                {
+                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                    return new ProcessSpecificationDraftCreationResult { Conflict = "draft-already-exists" };
+                }
+            }
+
+            var nextVersion = 1;
+            await using (var versionCommand = connection.CreateCommand())
+            {
+                versionCommand.Transaction = transaction;
+                versionCommand.CommandText = "SELECT COALESCE(MAX(version), 0) + 1 FROM process_specification_versions WHERE process_specification_id = @key;";
+                versionCommand.Parameters.AddWithValue("key", normalizedId);
+                nextVersion = Convert.ToInt32(await versionCommand.ExecuteScalarAsync(ct).ConfigureAwait(false), System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var draft = baseline with
+            {
+                Version = nextVersion,
+                BasedOnVersion = baseVersion,
+                Status = ConfigurationStatuses.Draft,
+                Values = MergeValues(baseline.Values, request.ParameterOverrides),
+                ChangeReason = request.ChangeReason,
+                MechanismNotes = request.MechanismNotes,
+                EvidenceReferences = request.EvidenceReferences,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+            await using (var insertCommand = connection.CreateCommand())
+            {
+                insertCommand.Transaction = transaction;
+                insertCommand.CommandText = """
+                    INSERT INTO process_specification_versions(
+                        process_specification_id, version, data_model_id, data_model_version, status, payload, updated_at)
+                    VALUES (@key, @version, @model_id, @model_version, @status, @payload, @updated_at);
+                    """;
+                insertCommand.Parameters.AddWithValue("key", draft.ProcessSpecificationId);
+                insertCommand.Parameters.AddWithValue("version", draft.Version);
+                insertCommand.Parameters.AddWithValue("model_id", draft.DataModelId);
+                insertCommand.Parameters.AddWithValue("model_version", draft.DataModelVersion);
+                insertCommand.Parameters.AddWithValue("status", draft.Status);
+                insertCommand.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, JsonSerializer.Serialize(draft, JsonOptions));
+                insertCommand.Parameters.AddWithValue("updated_at", draft.UpdatedAt.UtcDateTime);
+                await insertCommand.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return new ProcessSpecificationDraftCreationResult { Draft = draft };
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            return new ProcessSpecificationDraftCreationResult { Conflict = "version-conflict" };
+        }
+    }
+
     public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
         => DeleteAsync("process_specification_versions", "process_specification_id", processSpecificationId, version, ct);
 
@@ -146,4 +259,14 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
 
     private static string NormalizeIdentifier(string value)
         => value.Trim().ToLowerInvariant();
+
+    private static IReadOnlyList<ControlParameterValue> MergeValues(
+        IReadOnlyList<ControlParameterValue> baseline,
+        IReadOnlyList<ControlParameterValue> overrides)
+    {
+        var values = baseline.ToDictionary(item => item.Code, StringComparer.Ordinal);
+        foreach (var item in overrides)
+            values[item.Code] = item;
+        return values.Values.OrderBy(item => item.Code, StringComparer.Ordinal).ToArray();
+    }
 }

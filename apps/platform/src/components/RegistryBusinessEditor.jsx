@@ -1,6 +1,6 @@
 
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, Field, Input, Select, Textarea } from "../ui/components";
+import { Alert, Button, Card, DateTimeField, Field, Input, Select, Textarea } from "../ui/components";
 
 // 编辑业务字典定义；页面只提交结构化注册表数据，不承担运行证据或优化决策流程。
 const codePattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -87,6 +87,10 @@ function controlParameter(value = {}) {
     dataType: value.dataType || "double",
     unit: value.unit || "",
     nullable: value.nullable !== false,
+    minimum: value.minimum ?? "",
+    maximum: value.maximum ?? "",
+    step: value.step ?? "",
+    changeAllowed: value.changeAllowed !== false,
   };
 }
 
@@ -196,6 +200,9 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         status: versionedStatus(value, version),
         contextPairs: pairsFromObject(value.contextSelector),
         values: (value.values || []).map(controlParameterValue),
+        changeReason: value.changeReason || "",
+        mechanismNotes: value.mechanismNotes || "",
+        evidenceReferences: value.evidenceReferences || [],
       };
     case "analysisPlan":
       return {
@@ -226,7 +233,6 @@ export function createRegistryBusinessForm(kind, value = {}, version) {
         qualityPlan: value.qualityPlan ? modelValue(value.qualityPlan.id, value.qualityPlan.version) : "",
         contextFields: (value.contextFields || []).map(scenarioContextField),
         constraints: (value.constraints || []).map(scenarioConstraint),
-        knowledgeAssets: (value.knowledgeAssets || []).map(versionedReference),
         terminologyPairs: pairsFromObject(value.terminology),
       };
     default:
@@ -285,6 +291,10 @@ export function registryBusinessPayload(kind, form) {
         code: item.code.trim(),
         displayName: item.displayName.trim(),
         unit: item.unit.trim() || null,
+        minimum: numberOrNull(item.minimum),
+        maximum: numberOrNull(item.maximum),
+        step: numberOrNull(item.step),
+        changeAllowed: item.changeAllowed,
       })),
     };
   }
@@ -299,6 +309,9 @@ export function registryBusinessPayload(kind, form) {
       dataModelVersion: selectedModel.version,
       status: form.status,
       contextSelector: objectFromPairs(form.contextPairs),
+      changeReason: form.changeReason.trim() || null,
+      mechanismNotes: form.mechanismNotes.trim() || null,
+      evidenceReferences: form.evidenceReferences,
       values: form.values.map(item => {
         const value = item.dataType === "boolean" ? item.value === "true"
           : item.dataType === "integer" || item.dataType === "double" ? Number(item.value)
@@ -371,7 +384,6 @@ export function registryBusinessPayload(kind, form) {
         minimum: numberOrNull(item.minimum),
         maximum: numberOrNull(item.maximum),
       })),
-      knowledgeAssets: references(form.knowledgeAssets),
       terminology: objectFromPairs(form.terminologyPairs),
     };
   }
@@ -381,8 +393,7 @@ export function registryBusinessPayload(kind, form) {
 export function registryBusinessValidation(kind, form) {
   const identity = kind === "processModel" ? form.modelId
     : kind === "processSpecificationVersion" ? form.processSpecificationId
-      : kind === "scenarioPackage" ? form.packageId
-        : form.planId;
+      : form.planId;
   if (!codePattern.test(identity.trim())) return "代码只能使用小写字母、数字、点、下划线和连字符。";
   if (!Number.isInteger(Number(form.version)) || Number(form.version) < 1) return "版本必须是大于 0 的整数。";
   if (!form.name.trim()) return "请填写名称。";
@@ -399,6 +410,7 @@ export function registryBusinessValidation(kind, form) {
   }
   if (kind === "processSpecificationVersion") {
     if (!form.dataModel) return "请选择工艺数据字典。";
+    if (form.basedOnVersion && !form.changeReason.trim()) return "请说明本次修订理由。";
     if (form.values.some(item => !item.code || item.value === "")) return "控制参数需选择参数并填写值。";
   }
   if (kind === "analysisPlan") {
@@ -494,8 +506,8 @@ function QualityPlanEditor({ form, onChange, readOnly, lockIdentity }) {
       <Card title="生效规则" description="优先级越高，多个方案同时匹配时越先采用。">
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="优先级"><Input type="number" value={form.priority} disabled={readOnly} onChange={event => updateAt(form, onChange, "priority", event.target.value)} /></Field>
-          <Field label="生效时间"><Input type="datetime-local" value={form.effectiveFrom} disabled={readOnly} onChange={event => updateAt(form, onChange, "effectiveFrom", event.target.value)} /></Field>
-          <Field label="结束时间"><Input type="datetime-local" value={form.effectiveTo} disabled={readOnly} onChange={event => updateAt(form, onChange, "effectiveTo", event.target.value)} /></Field>
+          <Field label="生效时间"><DateTimeField value={form.effectiveFrom} disabled={readOnly} onChange={value => updateAt(form, onChange, "effectiveFrom", value)} /></Field>
+          <Field label="结束时间"><DateTimeField value={form.effectiveTo} disabled={readOnly} onChange={value => updateAt(form, onChange, "effectiveTo", value)} /></Field>
         </div>
       </Card>
       <Card title="适用范围" description="只填写需要限制的条件；全部留空表示不限定。">
@@ -570,14 +582,18 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
     >
       <div className="grid gap-4">
         {form[field].length === 0 && <p className="text-sm text-slate-500">尚未添加。</p>}
-        {form[field].map((item, index) => (
+      {form[field].map((item, index) => (
           <div key={index} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
             <Field label="数据代码"><Input value={item.code} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { code: event.target.value })} /></Field>
             <Field label="显示名称"><Input value={item.displayName} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { displayName: event.target.value })} /></Field>
             <Field label="数据类型"><DataTypeSelect value={item.dataType} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { dataType: event.target.value })} /></Field>
             <Field label="单位"><Input value={item.unit} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { unit: event.target.value })} /></Field>
             {includeCategory && <Field label="用途分类"><Select value={item.category} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { category: event.target.value })}><option value="process">过程值</option><option value="stage">阶段号</option><option value="setpoint">设定值</option><option value="state">状态</option><option value="quality">质量</option></Select></Field>}
+            {field === "controlParameters" && ["double", "integer"].includes(item.dataType) && <Field label="下限"><Input type="number" step={item.dataType === "integer" ? "1" : "any"} value={item.minimum} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { minimum: event.target.value })} /></Field>}
+            {field === "controlParameters" && ["double", "integer"].includes(item.dataType) && <Field label="上限"><Input type="number" step={item.dataType === "integer" ? "1" : "any"} value={item.maximum} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { maximum: event.target.value })} /></Field>}
+            {field === "controlParameters" && ["double", "integer"].includes(item.dataType) && <Field label="调整步长"><Input type="number" min={item.dataType === "integer" ? "1" : undefined} step={item.dataType === "integer" ? "1" : "any"} value={item.step} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { step: event.target.value })} /></Field>}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={item.nullable} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { nullable: event.target.checked })} />允许空值</label>
+            {field === "controlParameters" && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={item.changeAllowed} disabled={readOnly} onChange={event => updateRow(form, onChange, field, index, { changeAllowed: event.target.checked })} />允许后续修订</label>}
             {!readOnly && (field !== "dataItems" || form[field].length > 1) && <Button variant="ghost" className="justify-self-start text-rose-700" onClick={() => removeRow(form, onChange, field, index)}>移除</Button>}
           </div>
         ))}
@@ -601,17 +617,25 @@ function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) 
   const selected = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selected.id && item.version === selected.version);
   const parameters = model?.controlParameters || [];
+  const selectableModels = models.filter(item => item.status === "published" || modelValue(item.modelId, item.version) === form.dataModel);
   return (
     <div className="grid gap-5">
       {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="工艺规范代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
       <Card title="工艺规范来源">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
-          <Field label="沿用自版本"><Input type="number" min="1" value={form.basedOnVersion} disabled={readOnly} onChange={event => updateAt(form, onChange, "basedOnVersion", event.target.value)} placeholder="没有可留空" /></Field>
+          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="修订基准"><Input value={form.basedOnVersion ? `V${form.basedOnVersion}（受控修订创建）` : "首次创建"} disabled /></Field>
         </div>
       </Card>
       <PairEditor title="适用条件" description="例如产品系列或设备范围。" pairs={form.contextPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "contextPairs", value)} />
+      <Card title="修订依据" description="修订理由、机理说明和引用证据会随该规范版本保存。">
+        <div className="grid gap-4">
+          <Field label="修订理由"><Textarea value={form.changeReason} disabled={readOnly} onChange={event => updateAt(form, onChange, "changeReason", event.target.value)} placeholder="说明本次修订要解决的质量或工艺问题" /></Field>
+          <Field label="机理依据"><Textarea value={form.mechanismNotes} disabled={readOnly} onChange={event => updateAt(form, onChange, "mechanismNotes", event.target.value)} placeholder="记录已知机理、边界条件或工程判断" /></Field>
+          {form.evidenceReferences.length > 0 && <p className="text-sm text-slate-600">引用证据：{form.evidenceReferences.map(item => item.referenceId).join(" · ")}</p>}
+        </div>
+      </Card>
       <Card title="控制参数" actions={!readOnly ? <Button onClick={() => addRow(form, onChange, "values", controlParameterValue())}>添加参数</Button> : undefined}>
         <div className="grid gap-3">
           {form.values.length === 0 && <p className="text-sm text-slate-500">尚未设置参数。</p>}
@@ -628,7 +652,7 @@ function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) 
                 </Select>
                 {parameter?.dataType === "boolean" ? (
                   <Select value={item.value} disabled={readOnly} aria-label={`参数值 ${index + 1}`} onChange={event => updateRow(form, onChange, "values", index, { value: event.target.value })}><option value="">请选择</option><option value="true">是</option><option value="false">否</option></Select>
-                ) : <Input type={["double", "integer"].includes(parameter?.dataType) ? "number" : "text"} step={parameter?.dataType === "double" ? "any" : undefined} value={item.value} disabled={readOnly} aria-label={`参数值 ${index + 1}`} onChange={event => updateRow(form, onChange, "values", index, { value: event.target.value })} />}
+                ) : <Input type={["double", "integer"].includes(parameter?.dataType) ? "number" : "text"} min={parameter?.minimum} max={parameter?.maximum} step={parameter?.step ?? (parameter?.dataType === "double" ? "any" : parameter?.dataType === "integer" ? 1 : undefined)} value={item.value} disabled={readOnly} aria-label={`参数值 ${index + 1}`} onChange={event => updateRow(form, onChange, "values", index, { value: event.target.value })} />}
                 {!readOnly && <Button variant="ghost" className="text-rose-700" onClick={() => removeRow(form, onChange, "values", index)}>移除</Button>}
               </div>
             );
@@ -645,13 +669,14 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
   const selected = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selected.id && item.version === selected.version);
   const dataItems = model?.acquisition?.dataItems || [];
+  const selectableModels = models.filter(item => item.status === "published" || modelValue(item.modelId, item.version) === form.dataModel);
   return (
     <div className="grid gap-5">
       {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="planId" idLabel="方案代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card title="分析方式">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={models} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="分析范围"><Select value={form.analysisScope} disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisScope", event.target.value)}><option value="production-execution">单次生产运行</option><option value="production-run">生产运行段</option><option value="analysis-window">自定义时间窗口</option></Select></Field>
           <Field label="曲线对齐方式"><Select value={form.alignmentMode} disabled={readOnly} onChange={event => updateAt(form, onChange, "alignmentMode", event.target.value)}><option value="stage-relative">按工艺阶段</option><option value="elapsed">按经过时间</option><option value="normalized">按归一化进度</option></Select></Field>
           <Field label="质量分组字段"><Input value={form.cohortDimension} disabled={readOnly} onChange={event => updateAt(form, onChange, "cohortDimension", event.target.value)} placeholder="例如 quality.outcome" /></Field>

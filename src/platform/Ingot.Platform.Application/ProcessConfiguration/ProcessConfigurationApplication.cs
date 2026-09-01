@@ -19,6 +19,12 @@ public sealed class ProcessConfigurationApplication(IProcessConfigurationStore c
         => configurations.GetProcessSpecificationAsync(id, version, ct);
     public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default)
         => configurations.UpsertProcessSpecificationAsync(value, ct);
+    public Task<ProcessSpecificationDraftCreationResult> CreateNextProcessSpecificationDraftAsync(
+        string id,
+        int baseVersion,
+        CreateProcessSpecificationDraftRequest request,
+        CancellationToken ct = default)
+        => configurations.CreateNextProcessSpecificationDraftAsync(id, baseVersion, request, ct);
     public Task<bool> DeleteProcessSpecificationAsync(string id, int version, CancellationToken ct = default)
         => configurations.DeleteProcessSpecificationAsync(id, version, ct);
 

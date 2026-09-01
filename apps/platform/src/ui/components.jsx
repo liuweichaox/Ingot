@@ -1,6 +1,6 @@
 // 提供平台统一、可访问且具备稳定列表标识的基础界面组件。
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon, ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { CalendarDaysIcon, ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon, ClockIcon, ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import {
   createSortedRowModel,
   rowSortingFeature,
@@ -340,6 +340,49 @@ export function Input({ className, ...props }) {
       )}
       {...props}
     />
+  );
+}
+
+function toLocalDateTimeValue(value) {
+  if (!value) return "";
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return text.slice(0, 16);
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 16);
+}
+
+// Retains native calendar accessibility while presenting date and time as one field.
+export function DateTimeField({ value, onChange, disabled = false, required = false, className, ...props }) {
+  const localValue = toLocalDateTimeValue(value);
+  const [date = "", time = ""] = localValue.split("T");
+  const emit = (nextDate, nextTime) => onChange?.(nextDate ? `${nextDate}T${nextTime || "00:00"}` : "");
+  return (
+    <div className={cx("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,.72fr)] overflow-hidden rounded-md border border-slate-300 bg-white shadow-[0_1px_2px_rgba(7,16,14,.025)] transition focus-within:border-trajectory-500 focus-within:ring-2 focus-within:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50", className)}>
+      <div className="flex min-w-0 items-center border-r border-slate-200 px-2.5">
+        <CalendarDaysIcon className="mr-2 size-4 shrink-0 text-slate-400" aria-hidden="true" />
+        <input
+          {...props}
+          aria-label={props["aria-label"] ? `${props["aria-label"]}日期` : "日期"}
+          type="date"
+          required={required}
+          value={date}
+          disabled={disabled}
+          onChange={event => emit(event.target.value, time)}
+          className="h-9 min-w-0 w-full bg-transparent text-[13px] text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-600"
+        />
+      </div>
+      <div className="flex min-w-0 items-center px-2.5">
+        <ClockIcon className="mr-2 size-4 shrink-0 text-slate-400" aria-hidden="true" />
+        <input
+          aria-label={props["aria-label"] ? `${props["aria-label"]}时间` : "时间"}
+          type="time"
+          value={time}
+          disabled={disabled || !date}
+          onChange={event => emit(date, event.target.value)}
+          className="h-9 min-w-0 w-full bg-transparent text-[13px] text-slate-900 outline-none disabled:cursor-not-allowed disabled:text-slate-600"
+        />
+      </div>
+    </div>
   );
 }
 

@@ -46,6 +46,9 @@ public sealed class ManufacturingContextApplication(IManufacturingContextStore c
     public Task<ToolingInstallation> CreateInstallationAsync(
         ToolingInstallation value, CancellationToken ct = default)
         => contexts.CreateInstallationAsync(value, ct);
+    public Task<ToolingInstallation> ReplaceInstallationAsync(
+        ToolingInstallation value, CancellationToken ct = default)
+        => contexts.ReplaceInstallationAsync(value, ct);
     public Task<ToolingInstallation?> RemoveInstallationAsync(
         Guid id, DateTimeOffset removedAt, string? actor, CancellationToken ct = default)
         => contexts.RemoveInstallationAsync(id, removedAt, actor, ct);
@@ -58,6 +61,9 @@ public sealed class ManufacturingContextApplication(IManufacturingContextStore c
     public Task<ProductionContext> StartProductionContextAsync(
         ProductionContext value, CancellationToken ct = default)
         => contexts.StartProductionContextAsync(value, ct);
+    public Task<ProductionContext> ReplaceProductionContextAsync(
+        ProductionContext value, CancellationToken ct = default)
+        => contexts.ReplaceProductionContextAsync(value, ct);
     public Task<ProductionContext?> CloseProductionContextAsync(
         Guid id, DateTimeOffset validTo, string? actor, CancellationToken ct = default)
         => contexts.CloseProductionContextAsync(id, validTo, actor, ct);

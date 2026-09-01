@@ -17,6 +17,7 @@ function ToolingRevisionComposition({ revision, template, components, componentT
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <StatusBadge value={`Rev.${revision.revision}`} />
+        <span>结构 v{revision.toolingTypeVersion}</span>
         <span>配置时间 {formatTime(revision.createdAt)}</span>
         {installation && <span>当前装在 {installation.equipmentId}</span>}
       </div>
@@ -66,15 +67,27 @@ export function ToolingAssembliesPage({ canWrite = true }) {
   const errors = [assembliesApi.error, revisionsApi.error, templatesApi.error, componentsApi.error, componentTypesApi.error, installationsApi.error].filter(Boolean);
   const loading = [assembliesApi, revisionsApi, templatesApi, componentsApi, componentTypesApi].some(api => api.loading && !api.data);
   const [assetOpen, setAssetOpen] = useState(false);
+  const [assetMode, setAssetMode] = useState("create");
   const [assetForm, setAssetForm] = useState({ toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" });
   const [revisionTarget, setRevisionTarget] = useState(null);
+  const [revisionTypeVersion, setRevisionTypeVersion] = useState("");
   const [memberSelection, setMemberSelection] = useState({});
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
 
-  const latestTemplateByCode = useMemo(() => {
+  const templatesByCodeAndVersion = useMemo(() => {
     const result = new Map();
     templates.forEach(template => {
+      const versions = result.get(template.toolingTypeCode) || new Map();
+      versions.set(Number(template.version), template);
+      result.set(template.toolingTypeCode, versions);
+    });
+    return result;
+  }, [templates]);
+  const latestActiveTemplateByCode = useMemo(() => {
+    const result = new Map();
+    templates.forEach(template => {
+      if (template.status === "inactive") return;
       const previous = result.get(template.toolingTypeCode);
       if (!previous || Number(template.version) > Number(previous.version)) result.set(template.toolingTypeCode, template);
     });
@@ -104,10 +117,12 @@ export function ToolingAssembliesPage({ canWrite = true }) {
     setActionError("");
     try {
       await postJson("/api/v1/tooling-assemblies", assetForm);
+      const wasEditing = assetMode === "edit";
       setAssetOpen(false);
+      setAssetMode("create");
       setAssetForm({ toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" });
       await reloadAll();
-      notify("工装总成已建立，请继续创建首个配置版本。", "success");
+      notify(wasEditing ? "工装总成身份信息已更新。" : "工装总成已建立，请继续创建首个配置版本。", "success");
     } catch (requestError) {
       setActionError(requestError.message);
     } finally {
@@ -115,28 +130,55 @@ export function ToolingAssembliesPage({ canWrite = true }) {
     }
   }
 
+  function openCreateAssembly() {
+    setAssetMode("create");
+    setAssetForm({ toolingAssemblyId: "", toolingTypeCode: "", name: "", status: "active" });
+    setActionError("");
+    setAssetOpen(true);
+  }
+
+  function openAssemblyIdentityEditor(assembly) {
+    setAssetMode("edit");
+    setAssetForm({
+      toolingAssemblyId: assembly.toolingAssemblyId,
+      toolingTypeCode: assembly.toolingTypeCode,
+      name: assembly.name,
+      status: assembly.status,
+    });
+    setActionError("");
+    setAssetOpen(true);
+  }
+
   function openRevision(assembly) {
     const previous = (revisionsByMold.get(assembly.toolingAssemblyId) || [])[0];
+    const previousTemplate = previous
+      ? templatesByCodeAndVersion.get(assembly.toolingTypeCode)?.get(Number(previous.toolingTypeVersion))
+      : null;
+    const defaultTemplate = previousTemplate?.status !== "inactive"
+      ? previousTemplate
+      : latestActiveTemplateByCode.get(assembly.toolingTypeCode);
     setRevisionTarget(assembly);
+    setRevisionTypeVersion(defaultTemplate ? String(defaultTemplate.version) : "");
     setMemberSelection(Object.fromEntries((previous?.members || []).map(member => [member.roleCode, member.componentId])));
     setActionError("");
   }
 
   async function saveRevision() {
     if (!revisionTarget) return;
-    const template = latestTemplateByCode.get(revisionTarget.toolingTypeCode);
-    const previous = (revisionsByMold.get(revisionTarget.toolingAssemblyId) || [])[0];
+    const template = templatesByCodeAndVersion
+      .get(revisionTarget.toolingTypeCode)
+      ?.get(Number(revisionTypeVersion));
     setSaving(true);
     setActionError("");
     try {
       await postJson(`/api/v1/tooling-assemblies/${encodeURIComponent(revisionTarget.toolingAssemblyId)}/revisions`, {
-        toolingAssemblyId: revisionTarget.toolingAssemblyId,
-        revision: Number(previous?.revision || 0) + 1,
-        members: (template?.roles || []).map(role => ({ roleCode: role.code, componentId: memberSelection[role.code] })),
-        createdBy: "operator",
-        createdAt: new Date().toISOString(),
+        toolingTypeVersion: template?.version,
+        members: (template?.roles || [])
+          .filter(role => memberSelection[role.code])
+          .map(role => ({ roleCode: role.code, componentId: memberSelection[role.code] })),
       });
       setRevisionTarget(null);
+      setRevisionTypeVersion("");
       setMemberSelection({});
       await reloadAll();
       notify("新的不可变配置版本已建立；历史版本保持不变。", "success");
@@ -147,16 +189,27 @@ export function ToolingAssembliesPage({ canWrite = true }) {
     }
   }
 
-  const revisionTemplate = revisionTarget ? latestTemplateByCode.get(revisionTarget.toolingTypeCode) : null;
-  const selectedIds = new Set(Object.values(memberSelection).filter(Boolean));
-  const revisionValid = Boolean(revisionTemplate?.roles?.length) && revisionTemplate.roles.every(role => memberSelection[role.code]) &&
-    selectedIds.size === revisionTemplate.roles.length;
-  const activeTemplates = [...latestTemplateByCode.values()].filter(template => template.status !== "inactive");
+  const revisionTemplate = revisionTarget
+    ? templatesByCodeAndVersion.get(revisionTarget.toolingTypeCode)?.get(Number(revisionTypeVersion))
+    : null;
+  const revisionMembers = (revisionTemplate?.roles || [])
+    .map(role => memberSelection[role.code])
+    .filter(Boolean);
+  const selectedIds = new Set(revisionMembers);
+  const revisionValid = Boolean(revisionTemplate?.roles?.length) &&
+    revisionTemplate.roles.filter(role => role.required).every(role => memberSelection[role.code]) &&
+    revisionMembers.length > 0 && selectedIds.size === revisionMembers.length;
+  const activeTemplates = [...latestActiveTemplateByCode.values()];
+  const revisionTemplates = revisionTarget
+    ? templates
+      .filter(template => template.toolingTypeCode === revisionTarget.toolingTypeCode && template.status !== "inactive")
+      .sort((left, right) => Number(right.version) - Number(left.version))
+    : [];
 
   return (
     <Page
       title="实际工装总成"
-      actions={canWrite ? <Button variant="primary" onClick={() => { setActionError(""); setAssetOpen(true); }}>新建工装总成</Button> : undefined}
+      actions={canWrite ? <Button variant="primary" onClick={openCreateAssembly}>新建工装总成</Button> : undefined}
     >
       <RequestError
         error={errors[0]}
@@ -167,7 +220,7 @@ export function ToolingAssembliesPage({ canWrite = true }) {
         title="工装总成数据的正确关系"
         description="组件分类说明“是什么”，工装结构定义说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
         steps={[
-          { title: "登记组件资产", description: "每个模芯、模架使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
+          { title: "登记组件资产", description: "每件可更换组件使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
           { title: "建立工装总成配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
           { title: "装入生产设备", description: "安装后新运行自动关联工装总成及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
         ]}
@@ -179,14 +232,16 @@ export function ToolingAssembliesPage({ canWrite = true }) {
           {assemblies.map(assembly => {
             const assemblyRevisions = revisionsByMold.get(assembly.toolingAssemblyId) || [];
             const latest = assemblyRevisions[0];
-            const template = latestTemplateByCode.get(assembly.toolingTypeCode);
+            const template = latest
+              ? templatesByCodeAndVersion.get(assembly.toolingTypeCode)?.get(Number(latest.toolingTypeVersion))
+              : latestActiveTemplateByCode.get(assembly.toolingTypeCode);
             const installation = latest ? activeInstallationByRevision.get(latest.assemblyRevisionId) : null;
             return (
               <Card
                 key={assembly.toolingAssemblyId}
                 title={assembly.name}
                 description={`${assembly.toolingAssemblyId} · ${template?.name || assembly.toolingTypeCode}`}
-                actions={canWrite ? <Button onClick={() => openRevision(assembly)}>{latest ? "更换组件并创建新版本" : "建立首个配置版本"}</Button> : undefined}
+                actions={canWrite ? <div className="flex gap-1"><Button variant="ghost" className="px-2" onClick={() => openAssemblyIdentityEditor(assembly)}>编辑身份</Button><Button onClick={() => openRevision(assembly)}>{latest ? "更换组件并创建新版本" : "建立首个配置版本"}</Button></div> : undefined}
               >
                 <ToolingRevisionComposition
                   revision={latest}
@@ -203,7 +258,9 @@ export function ToolingAssembliesPage({ canWrite = true }) {
                         <ToolingRevisionComposition
                           key={revision.assemblyRevisionId}
                           revision={revision}
-                          template={template}
+                          template={templatesByCodeAndVersion
+                            .get(assembly.toolingTypeCode)
+                            ?.get(Number(revision.toolingTypeVersion))}
                           components={components}
                           componentTypes={componentTypes}
                           installation={activeInstallationByRevision.get(revision.assemblyRevisionId)}
@@ -220,18 +277,24 @@ export function ToolingAssembliesPage({ canWrite = true }) {
       <Drawer
         open={assetOpen}
         onClose={() => setAssetOpen(false)}
-        title="新建工装总成"
-        description="建立长期稳定的工装总成身份；具体成员在下一步配置版本中选择。"
-        footer={<><Button onClick={() => setAssetOpen(false)}>取消</Button><Button variant="primary" disabled={saving || !assetForm.toolingAssemblyId.trim() || !assetForm.name.trim() || !assetForm.toolingTypeCode} onClick={saveAsset}>{saving ? "保存中" : "保存并继续"}</Button></>}
+        title={assetMode === "edit" ? "编辑工装总成身份" : "新建工装总成"}
+        description={assetMode === "edit" ? "可以维护名称和启用状态；工装结构与组件配置版本保持固定，确保运行追溯准确。" : "建立长期稳定的工装总成身份；具体成员在下一步配置版本中选择。"}
+        footer={<><Button onClick={() => setAssetOpen(false)}>取消</Button><Button variant="primary" disabled={saving || !assetForm.toolingAssemblyId.trim() || !assetForm.name.trim() || !assetForm.toolingTypeCode} onClick={saveAsset}>{saving ? "保存中" : assetMode === "edit" ? "保存身份信息" : "保存并继续"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <div className="grid gap-4">
-          <Field label="工装总成编号"><Input value={assetForm.toolingAssemblyId} onChange={event => setAssetForm(current => ({ ...current, toolingAssemblyId: event.target.value }))} /></Field>
+          <Field label="工装总成编号"><Input value={assetForm.toolingAssemblyId} disabled={assetMode === "edit"} onChange={event => setAssetForm(current => ({ ...current, toolingAssemblyId: event.target.value }))} /></Field>
           <Field label="工装总成名称"><Input value={assetForm.name} onChange={event => setAssetForm(current => ({ ...current, name: event.target.value }))} /></Field>
           <Field label="工装结构">
-            <Select value={assetForm.toolingTypeCode} onChange={event => setAssetForm(current => ({ ...current, toolingTypeCode: event.target.value }))}>
+            <Select value={assetForm.toolingTypeCode} disabled={assetMode === "edit"} onChange={event => setAssetForm(current => ({ ...current, toolingTypeCode: event.target.value }))}>
               <option value="">请选择</option>
               {activeTemplates.map(template => <option key={template.toolingTypeCode} value={template.toolingTypeCode}>{template.name} · v{template.version}</option>)}
+            </Select>
+          </Field>
+          <Field label="状态">
+            <Select value={assetForm.status} onChange={event => setAssetForm(current => ({ ...current, status: event.target.value }))}>
+              <option value="active">启用</option>
+              <option value="inactive">停用</option>
             </Select>
           </Field>
         </div>
@@ -245,12 +308,18 @@ export function ToolingAssembliesPage({ canWrite = true }) {
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
         <div className="grid gap-4">
+          <Field label="工装结构版本" hint="配置版本会锁定此结构版本；后续结构调整不会改变既有配置。">
+            <Select value={revisionTypeVersion} onChange={event => setRevisionTypeVersion(event.target.value)}>
+              <option value="">请选择结构版本</option>
+              {revisionTemplates.map(template => <option key={template.version} value={template.version}>{template.name} · v{template.version}</option>)}
+            </Select>
+          </Field>
           {(revisionTemplate?.roles || []).map(role => {
             const options = components.filter(component => component.status !== "retired" && role.acceptedComponentTypeCodes.includes(component.componentTypeCode));
             return (
-              <Field key={role.code} label={role.name} hint={`允许：${role.acceptedComponentTypeCodes.map(code => componentTypes.find(type => type.componentTypeCode === code)?.name || code).join("、")}`}>
+              <Field key={role.code} label={role.required ? role.name : `${role.name}（可选）`} hint={`允许：${role.acceptedComponentTypeCodes.map(code => componentTypes.find(type => type.componentTypeCode === code)?.name || code).join("、")}`}>
                 <Select value={memberSelection[role.code] || ""} onChange={event => setMemberSelection(current => ({ ...current, [role.code]: event.target.value }))}>
-                  <option value="">请选择组件资产</option>
+                  <option value="">{role.required ? "请选择组件资产" : "不装配此位置"}</option>
                   {options.map(component => (
                     <option key={component.componentId} value={component.componentId} disabled={selectedIds.has(component.componentId) && memberSelection[role.code] !== component.componentId}>
                       {component.name} · {component.serialNo}

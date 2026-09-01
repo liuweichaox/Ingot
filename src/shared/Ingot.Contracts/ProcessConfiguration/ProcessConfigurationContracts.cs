@@ -47,6 +47,37 @@ public sealed record ControlParameterDefinition
     public string DataType { get; init; } = "double";
     public string? Unit { get; init; }
     public bool Nullable { get; init; } = true;
+    public double? Minimum { get; init; }
+    public double? Maximum { get; init; }
+    public double? Step { get; init; }
+    public bool ChangeAllowed { get; init; } = true;
+}
+
+public sealed record ProcessSpecificationEvidenceReference
+{
+    public required string Kind { get; init; }
+    public required string ReferenceId { get; init; }
+}
+
+/// <summary>
+/// The only command for deriving a new process-specification version from an
+/// already published baseline. Identity, version and model are inherited by
+/// the server and are deliberately absent from this request.
+/// </summary>
+public sealed record CreateProcessSpecificationDraftRequest
+{
+    public required string ChangeReason { get; init; }
+    public string? MechanismNotes { get; init; }
+    public IReadOnlyList<ProcessSpecificationEvidenceReference> EvidenceReferences { get; init; } = [];
+    public IReadOnlyList<ControlParameterValue> ParameterOverrides { get; init; } = [];
+}
+
+public sealed record ProcessSpecificationDraftCreationResult
+{
+    public ProcessSpecification? Draft { get; init; }
+    public string? Conflict { get; init; }
+
+    public bool Succeeded => Draft is not null;
 }
 
 public sealed record ProcessSpecification
@@ -60,6 +91,9 @@ public sealed record ProcessSpecification
     public string Status { get; init; } = ConfigurationStatuses.Draft;
     public IReadOnlyDictionary<string, string> ContextSelector { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<ControlParameterValue> Values { get; init; } = [];
+    public string? ChangeReason { get; init; }
+    public string? MechanismNotes { get; init; }
+    public IReadOnlyList<ProcessSpecificationEvidenceReference> EvidenceReferences { get; init; } = [];
     public DateTimeOffset UpdatedAt { get; init; }
 }
 

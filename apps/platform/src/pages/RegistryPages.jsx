@@ -14,13 +14,11 @@ export function ConfigurationHubPage() {
   const analysisResponse = useApi("/api/v1/process-analysis-plans");
   const definitionResponse = useApi("/api/v1/inspection-definitions");
   const qualityResponse = useApi("/api/v1/inspection-plans");
-  const scenarioResponse = useApi("/api/v1/scenario-packages");
   const readiness = [
     { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据字典和工艺规范已发布", pendingHint: "发布数据字典和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
     { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "数据源配置已发布", pendingHint: "发布至少一个数据源配置", to: "/configuration/ingestion-tasks", action: "配置数据来源", responses: [ingestionResponse] },
     { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析规则已发布", pendingHint: "发布运行分析规则", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
     { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
-    { title: "组合发布", ready: extractRows(scenarioResponse.data).some(item => item.status === "published"), readyHint: "工艺配置已发布", pendingHint: "发布工艺配置", to: "/configuration/scenario-packages", action: "发布配置", responses: [scenarioResponse] },
   ].map(item => ({
     ...item,
     loading: item.responses.some(response => response.loading && !response.data),
@@ -92,14 +90,6 @@ export function ConfigurationHubPage() {
 }
 
 const registryPages = {
-  scenarios: {
-    kind: "scenarioPackage",
-    title: "配置发布", description: "版本化组合工艺数据、现场接入、运行分析、质量规则、上下文策略和安全约束。", endpoint: "/api/v1/scenario-packages", key: "packageId",
-    columns: [["packageId", "场景"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建配置版本",
-    template: { packageId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisPlanId: "", analysisPlanVersion: 1, ingestionTasks: [], qualityPlan: null, contextFields: [], constraints: [], knowledgeAssets: [], terminology: {}, updatedAt: "" },
-    deleteUrl: value => `/api/v1/scenario-packages/${encodeURIComponent(value.packageId)}/${value.version}`,
-  },
   processModels: {
     kind: "processModel",
     title: "工艺数据字典", description: "定义工艺变量、阶段号和控制参数结构，不包含来源地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
@@ -158,6 +148,7 @@ function RegistryPage({ definition, canWrite = true }) {
   const [open, setOpen] = useState(false);
   const [nextDraftOpen, setNextDraftOpen] = useState(false);
   const [nextDraftSource, setNextDraftSource] = useState(null);
+  const [nextDraftForm, setNextDraftForm] = useState(createNextSpecificationDraftForm);
   const [mode, setMode] = useState("create");
   const [inspectionForm, setInspectionForm] = useState(() => inspectionDefinitionForm());
   const [businessForm, setBusinessForm] = useState(() => createRegistryBusinessForm(definition.kind));
@@ -169,6 +160,7 @@ function RegistryPage({ definition, canWrite = true }) {
   const hasBusinessEditor = Boolean(definition.kind) && !isInspectionDefinition;
   const inspectionValidation = isInspectionDefinition ? inspectionDefinitionValidation(inspectionForm) : "";
   const businessValidation = hasBusinessEditor ? registryBusinessValidation(definition.kind, businessForm) : "";
+  const nextDraftValidation = validateNextSpecificationDraft(nextDraftForm);
   const editorValidation = inspectionValidation || businessValidation;
 
   function openCreate() {
@@ -207,15 +199,8 @@ function RegistryPage({ definition, canWrite = true }) {
   }
 
   function openNextDraft(row) {
-    const versions = rows
-      .filter(item => item.processSpecificationId === row.processSpecificationId)
-      .map(item => Number(item.version) || 0);
-    const nextVersion = Math.max(...versions, 0) + 1;
     setNextDraftSource(row);
-    setBusinessForm({
-      ...createRegistryBusinessForm(definition.kind, row, nextVersion),
-      basedOnVersion: String(row.version),
-    });
+    setNextDraftForm(createNextSpecificationDraftForm());
     setEditorError("");
     setShowValidation(false);
     setNextDraftOpen(true);
@@ -245,19 +230,21 @@ function RegistryPage({ definition, canWrite = true }) {
   }
 
   async function createNextDraft() {
-    if (businessValidation) {
+    if (nextDraftValidation || !nextDraftSource) {
       setShowValidation(true);
       return;
     }
     setSaving(true);
     setEditorError("");
     try {
-      const payload = registryBusinessPayload(definition.kind, businessForm);
-      payload.updatedAt = new Date().toISOString();
-      await postJson(definition.endpoint, payload);
+      const result = await postJson(
+        `/api/v1/process-specifications/${encodeURIComponent(nextDraftSource.processSpecificationId)}/${nextDraftSource.version}/drafts`,
+        nextSpecificationDraftPayload(nextDraftForm),
+      );
+      const draft = result?.draft || result;
       setNextDraftOpen(false);
       await reload();
-      notify(`已创建 ${payload.processSpecificationId} V${payload.version} 草稿。`);
+      notify(`已创建 ${draft.processSpecificationId} V${draft.version} 修订草稿。`);
     } catch (saveError) {
       setEditorError(saveError.message);
     } finally {
@@ -316,13 +303,13 @@ function RegistryPage({ definition, canWrite = true }) {
       render: (_value, row) => (
         <div className="flex min-w-max flex-wrap gap-1" onClick={event => event.stopPropagation()}>
           <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
-            {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看" : "维护"}
+            {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看版本" : "编辑草稿"}
           </Button>
           {canWrite && isProcessSpecification && row.status === "published" && (
-            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openNextDraft(row)}>下一版配方</Button>
+            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openNextDraft(row)}>创建修订草稿</Button>
           )}
-          {canWrite && !isProcessSpecification && (
-            <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>沿用为新版本</Button>
+          {canWrite && !isProcessSpecification && (isInspectionDefinition || row.status !== "draft") && (
+            <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>创建修订版本</Button>
           )}
           {canWrite && !isInspectionDefinition && row.status === "published" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
           {canWrite && (isInspectionDefinition || row.status === "draft") && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>{isInspectionDefinition ? "删除未引用版本" : "删除草稿"}</Button>}
@@ -360,10 +347,10 @@ function RegistryPage({ definition, canWrite = true }) {
         closeOnBackdrop={false}
         title={mode === "create"
           ? `创建${definition.title}`
-          : mode === "version" ? "沿用为新版本"
+          : mode === "version" ? "创建修订版本"
             : editorReadOnly ? `查看${definition.title}` : `维护${definition.title}`}
         description={isInspectionDefinition
-          ? mode === "maintain" ? "查看该版本的基本信息和检测特性。" : "填写基本信息并配置一个或多个检测特性。"
+          ? mode === "maintain" ? "检测定义版本一经保存即不可覆盖；需要变更时创建修订版本。" : "填写基本信息并配置一个或多个检测特性。"
           : hasBusinessEditor
             ? editorReadOnly ? "查看该版本的业务配置。" : "按业务字段完成配置，保存前会检查必填项和引用。"
           : "编辑完整版本内容。保存前会由平台执行结构、引用与状态校验。"}
@@ -396,26 +383,51 @@ function RegistryPage({ definition, canWrite = true }) {
         open={nextDraftOpen}
         onClose={() => setNextDraftOpen(false)}
         closeOnBackdrop={false}
-        title="下一版配方"
-        description="保留当前规范的完整参数与适用条件，仅调整确认需要变化的控制参数。"
-        footer={<><Button onClick={() => setNextDraftOpen(false)}>取消</Button><Button variant="primary" onClick={createNextDraft} disabled={saving}>{saving ? "创建中" : `创建 V${businessForm.version || ""} 草稿`}</Button></>}
+        title="修订工艺规范"
+        description="以已发布规范为唯一基准，引用实际运行证据后只提交发生变化的控制参数。"
+        footer={<><Button onClick={() => setNextDraftOpen(false)}>取消</Button><Button variant="primary" onClick={createNextDraft} disabled={saving || Boolean(nextDraftValidation)}>{saving ? "创建中" : "创建修订草稿"}</Button></>}
         size="xl"
       >
         {editorError && <Alert tone="danger">{editorError}</Alert>}
         {nextDraftSource && <NextSpecificationDraftEditor
           source={nextDraftSource}
-          form={businessForm}
-          onChange={setBusinessForm}
+          form={nextDraftForm}
+          onChange={setNextDraftForm}
           models={extractRows(processModelsResponse.data)}
           modelError={processModelsResponse.error}
           executions={extractRows(executionsResponse.data)}
           executionsLoading={executionsResponse.loading}
-          validation={showValidation ? businessValidation : ""}
+          validation={showValidation ? nextDraftValidation : ""}
         />}
       </Drawer>
       {confirmationDialog}
     </Page>
   );
+}
+
+function createNextSpecificationDraftForm() {
+  return { changeReason: "", mechanismNotes: "", evidenceReferences: [], parameterOverrides: [] };
+}
+
+function validateNextSpecificationDraft(form) {
+  if (!form.changeReason.trim()) return "请说明本次修订理由。";
+  if (form.evidenceReferences.length === 0) return "创建修订草稿前必须引用至少一条实际运行证据。";
+  if (form.parameterOverrides.some(item => !item.code || item.value === "")) return "参数修订值不能为空。";
+  return "";
+}
+
+function nextSpecificationDraftPayload(form) {
+  return {
+    changeReason: form.changeReason.trim(),
+    mechanismNotes: form.mechanismNotes.trim() || null,
+    evidenceReferences: form.evidenceReferences,
+    parameterOverrides: form.parameterOverrides.map(item => ({
+      code: item.code,
+      value: item.dataType === "boolean" ? item.value === "true"
+        : ["double", "integer"].includes(item.dataType) ? Number(item.value)
+          : item.value,
+    })),
+  };
 }
 
 function NextSpecificationDraftEditor({ source, form, onChange, models, modelError, executions, executionsLoading, validation }) {
@@ -424,55 +436,92 @@ function NextSpecificationDraftEditor({ source, form, onChange, models, modelErr
   const model = models.find(item => item.modelId === modelId && Number(item.version) === modelVersion);
   const parameters = model?.controlParameters || [];
   const sourceValues = new Map((source.values || []).map(item => [item.code, item.value]));
+  const parameterEntries = [...new Map([
+    ...[...sourceValues.keys()].map(code => [code, { code, displayName: code, dataType: typeof sourceValues.get(code) === "number" ? "double" : "string" }]),
+    ...parameters.map(parameter => [parameter.code, parameter]),
+  ]).values()];
   const matchingExecutions = executions.filter(item =>
     item.processSpecificationId === source.processSpecificationId &&
     String(item.processSpecificationVersion) === String(source.version));
-  const passCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "PASS").length;
-  const failCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "FAIL").length;
+  const passCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "COMPLETE").length;
+  const failCount = matchingExecutions.filter(item => String(item.qualityStatus).toUpperCase() === "FAILED").length;
+  const evidenceExecutions = matchingExecutions.filter(item => ["COMPLETE", "FAILED"].includes(String(item.qualityStatus).toUpperCase()));
+  const pendingQualityCount = matchingExecutions.length - evidenceExecutions.length;
+  const selectedEvidenceIds = new Set(form.evidenceReferences.map(item => item.referenceId));
 
-  function updateValue(index, value) {
+  function updateParameterOverride(parameter, value) {
+    const current = sourceValues.get(parameter.code);
+    const isUnchanged = String(current ?? "") === String(value ?? "");
     onChange({
       ...form,
-      values: form.values.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item),
+      parameterOverrides: isUnchanged
+        ? form.parameterOverrides.filter(item => item.code !== parameter.code)
+        : [...form.parameterOverrides.filter(item => item.code !== parameter.code), { code: parameter.code, value, dataType: parameter.dataType || "string" }],
     });
+  }
+
+  function update(field, value) {
+    onChange({ ...form, [field]: value });
+  }
+
+  function toggleEvidence(executionId, checked) {
+    update("evidenceReferences", checked
+      ? [...form.evidenceReferences, { kind: "process-execution", referenceId: executionId }]
+      : form.evidenceReferences.filter(item => item.referenceId !== executionId));
   }
 
   return (
     <div className="grid gap-5">
       {validation && <Alert tone="warning">{validation}</Alert>}
       {modelError && <Alert tone="warning">无法读取控制参数定义：{modelError}</Alert>}
-      <section className="grid gap-3 border-b border-slate-200 pb-5 sm:grid-cols-3" aria-label="下一版配方基准">
+      <section className="grid gap-3 border-b border-slate-200 pb-5 sm:grid-cols-2" aria-label="工艺规范修订基准">
         <div><p className="data-label">基准版本</p><p className="mt-1 text-sm font-semibold text-slate-900">{source.processSpecificationId} · V{source.version}</p></div>
-        <div><p className="data-label">新草稿</p><p className="mt-1 text-sm font-semibold text-slate-900">V{form.version}</p></div>
         <div><p className="data-label">适用条件</p><p className="mt-1 text-sm font-semibold text-slate-900">{Object.values(source.contextSelector || {}).filter(Boolean).join(" · ") || "未限定"}</p></div>
       </section>
-      <Card title="运行依据" description="仅列出实际使用当前规范版本的已完成运行。">
+      <Card title="运行依据" description="仅质量结论明确的实际运行会作为证据引用保存；待确认运行单独保留，不混入修订依据。">
         {executionsLoading ? <p className="text-sm text-slate-500">正在读取运行记录…</p> : (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <div><p className="data-label">已完成运行</p><p className="mt-1 text-2xl font-semibold text-slate-950">{matchingExecutions.length}</p></div>
-            <div><p className="data-label">质量合格</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{passCount}</p></div>
-            <div><p className="data-label">质量不合格</p><p className="mt-1 text-2xl font-semibold text-rose-700">{failCount}</p></div>
+            <div><p className="data-label">质量完成</p><p className="mt-1 text-2xl font-semibold text-emerald-700">{passCount}</p></div>
+            <div><p className="data-label">质量失败</p><p className="mt-1 text-2xl font-semibold text-rose-700">{failCount}</p></div>
+            <div><p className="data-label">待确认</p><p className="mt-1 text-2xl font-semibold text-amber-700">{pendingQualityCount}</p></div>
           </div>
         )}
         {!executionsLoading && matchingExecutions.length > 0 && <p className="mt-4 text-sm text-slate-600">{matchingExecutions.map(item => item.executionId).join(" · ")}</p>}
-        {!executionsLoading && matchingExecutions.length === 0 && <p className="text-sm text-slate-500">尚无可作为依据的已完成运行；仍可按既有变更流程创建草稿。</p>}
+        {!executionsLoading && matchingExecutions.length === 0 && <p className="text-sm text-slate-500">尚无该规范版本的已完成运行，暂不能从这里创建修订草稿。</p>}
       </Card>
-      <Card title="参数调整" description="未修改的参数会按当前规范原样带入下一版草稿。">
+      <Card title="修订说明" description="把工程判断和机理依据写进规范版本，供后续运行追溯。">
+        <div className="grid gap-4">
+          <Field label="修订理由" required><Textarea value={form.changeReason} onChange={event => update("changeReason", event.target.value)} placeholder="例如：针对保压阶段引起的面形偏差修订" /></Field>
+          <Field label="机理依据"><Textarea value={form.mechanismNotes} onChange={event => update("mechanismNotes", event.target.value)} placeholder="记录参数作用、已知边界和工程判断" /></Field>
+          <p className="text-sm text-slate-600">至少引用一条质量结论明确的实际运行。选择的运行会随修订草稿固化。</p>
+          {evidenceExecutions.length > 1 && <label className="flex items-start gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={form.evidenceReferences.length === evidenceExecutions.length} onChange={event => update("evidenceReferences", event.target.checked ? evidenceExecutions.map(item => ({ kind: "process-execution", referenceId: item.executionId })) : [])} />引用全部 {evidenceExecutions.length} 条可用运行</label>}
+          <div className="grid gap-2">
+            {evidenceExecutions.map(item => <label key={item.executionId} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"><span className="flex items-center gap-2"><input aria-label={`引用运行 ${item.executionId}`} type="checkbox" checked={selectedEvidenceIds.has(item.executionId)} onChange={event => toggleEvidence(item.executionId, event.target.checked)} />{item.executionId}</span><StatusBadge value={item.qualityStatus} /></label>)}
+            {!executionsLoading && evidenceExecutions.length === 0 && <p className="text-sm text-amber-700">没有可引用的质量结论明确运行。</p>}
+          </div>
+        </div>
+      </Card>
+      <Card title="参数调整" description="只提交发生变化且允许修订的控制参数；其余参数由服务端从基准规范继承。">
         <div className="grid gap-3">
-          {form.values.map((item, index) => {
-            const parameter = parameters.find(value => value.code === item.code);
-            const current = sourceValues.get(item.code);
-            const changed = String(current ?? "") !== String(item.value ?? "");
-            const isBoolean = item.dataType === "boolean" || parameter?.dataType === "boolean";
+          {parameterEntries.map(parameter => {
+            const current = sourceValues.get(parameter.code);
+            const override = form.parameterOverrides.find(item => item.code === parameter.code);
+            const nextValue = override?.value ?? String(current ?? "");
+            const changed = Boolean(override);
+            const isBoolean = parameter.dataType === "boolean";
+            const numeric = ["double", "integer"].includes(parameter.dataType);
+            const changeAllowed = parameter.changeAllowed !== false;
+            const bounds = [parameter.minimum != null ? `下限 ${parameter.minimum}` : "", parameter.maximum != null ? `上限 ${parameter.maximum}` : "", parameter.step != null ? `步长 ${parameter.step}` : ""].filter(Boolean).join(" · ");
             return (
-              <div key={item.code || index} className="grid gap-2 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_10rem_11rem] md:items-end">
-                <div><p className="text-sm font-medium text-slate-900">{parameter?.displayName || item.code}</p><p className="mt-0.5 text-xs text-slate-500">当前：{String(current ?? "未设置")}{parameter?.unit ? ` ${parameter.unit}` : ""}</p></div>
-                <Field label="下一版">
+              <div key={parameter.code} className="grid gap-2 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_10rem_11rem] md:items-end">
+                <div><p className="text-sm font-medium text-slate-900">{parameter.displayName || parameter.code}</p><p className="mt-0.5 text-xs text-slate-500">当前：{String(current ?? "未设置")}{parameter.unit ? ` ${parameter.unit}` : ""}{bounds ? `；${bounds}` : ""}</p></div>
+                <Field label="修订值">
                   {isBoolean
-                    ? <Select aria-label={`下一版 ${parameter?.displayName || item.code}`} value={item.value} onChange={event => updateValue(index, event.target.value)}><option value="true">是</option><option value="false">否</option></Select>
-                    : <Input aria-label={`下一版 ${parameter?.displayName || item.code}`} type={["double", "integer"].includes(item.dataType || parameter?.dataType) ? "number" : "text"} step={item.dataType === "double" || parameter?.dataType === "double" ? "any" : undefined} value={item.value} onChange={event => updateValue(index, event.target.value)} />}
+                    ? <Select aria-label={`修订值 ${parameter.displayName || parameter.code}`} value={nextValue} disabled={!changeAllowed} onChange={event => updateParameterOverride(parameter, event.target.value)}><option value="true">是</option><option value="false">否</option></Select>
+                    : <Input aria-label={`修订值 ${parameter.displayName || parameter.code}`} type={numeric ? "number" : "text"} min={numeric ? parameter.minimum : undefined} max={numeric ? parameter.maximum : undefined} step={numeric ? (parameter.step ?? (parameter.dataType === "integer" ? 1 : "any")) : undefined} value={nextValue} disabled={!changeAllowed} onChange={event => updateParameterOverride(parameter, event.target.value)} />}
                 </Field>
-                <p className={`pb-2 text-sm font-medium ${changed ? "text-trajectory-700" : "text-slate-400"}`}>{changed ? "已调整" : "保持不变"}</p>
+                <p className={`pb-2 text-sm font-medium ${changed ? "text-trajectory-700" : "text-slate-400"}`}>{!changeAllowed ? "基准固定" : changed ? "已调整" : "保持不变"}</p>
               </div>
             );
           })}
@@ -591,7 +640,6 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
 }
 
 export const ProcessDataModelsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processModels} canWrite={canWrite} />;
-export const ScenarioPackagesPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.scenarios} canWrite={canWrite} />;
 export const ProcessSpecificationsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processSpecifications} canWrite={canWrite} />;
 export const ProcessAnalysisPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plans} canWrite={canWrite} />;
 export const InspectionDefinitionsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.definitions} canWrite={canWrite} />;

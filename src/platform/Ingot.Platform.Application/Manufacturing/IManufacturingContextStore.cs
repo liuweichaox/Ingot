@@ -27,11 +27,13 @@ public interface IManufacturingContextStore
     Task<bool> DeleteAssemblyRevisionAsync(Guid assemblyRevisionId, CancellationToken ct = default);
 
     Task<ToolingInstallation> CreateInstallationAsync(ToolingInstallation value, CancellationToken ct = default);
+    Task<ToolingInstallation> ReplaceInstallationAsync(ToolingInstallation value, CancellationToken ct = default);
     Task<ToolingInstallation?> RemoveInstallationAsync(Guid installationId, DateTimeOffset removedAt, string? actor, CancellationToken ct = default);
     Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
     Task<bool> DeleteInstallationAsync(Guid installationId, CancellationToken ct = default);
 
     Task<ProductionContext> StartProductionContextAsync(ProductionContext value, CancellationToken ct = default);
+    Task<ProductionContext> ReplaceProductionContextAsync(ProductionContext value, CancellationToken ct = default);
     Task<ProductionContext?> CloseProductionContextAsync(Guid contextId, DateTimeOffset validTo, string? actor, CancellationToken ct = default);
     Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
     Task<bool> DeleteProductionContextAsync(Guid contextId, CancellationToken ct = default);

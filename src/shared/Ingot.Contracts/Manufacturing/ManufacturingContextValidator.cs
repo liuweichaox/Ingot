@@ -63,8 +63,6 @@ public static partial class ManufacturingContextValidator
             var roleName = Normalize(role.Name);
             if (roleName is null || roleName.Length > 200)
                 return Fail("Role.Name 不能为空且最长 200 个字符。", out error);
-            if (role.MaxCount is < 1 or > 100)
-                return Fail("Role.MaxCount 必须在 1 到 100 之间。", out error);
             var acceptedComponentTypes = new List<string>();
             foreach (var componentTypeCode in role.AcceptedComponentTypeCodes ?? [])
             {
@@ -165,6 +163,8 @@ public static partial class ManufacturingContextValidator
             return Fail("工装总成版本不能为空。", out error);
         if (!TryId(value.ToolingAssemblyId, "ToolingAssemblyId", out var toolingAssemblyId, out error))
             return false;
+        if (value.ToolingTypeVersion <= 0)
+            return Fail("ToolingTypeVersion 必须大于 0。", out error);
         if (value.Revision <= 0)
             return Fail("Revision 必须大于 0。", out error);
         if (value.Members is null || value.Members.Count is 0 or > 100)

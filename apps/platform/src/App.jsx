@@ -41,7 +41,6 @@ const sections = [
       { label: "基础配置", items: [["/configuration", "配置总览"], ["/configuration/process-data-models", "数据字典"], ["/configuration/process-specifications", "工艺规范"], ["/configuration/process-analysis-plans", "分析规则"]] },
       { label: "质量配置", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
       { label: "工装配置", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
-      { label: "发布管理", items: [["/configuration/scenario-packages", "配置发布"]] },
     ],
   },
   {
@@ -92,15 +91,14 @@ const pageDetails = {
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
   "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
   "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
-  "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量、工装与最终发布"],
-  "/configuration/scenario-packages": ["配置发布", "版本化组合工艺数据、采集、分析、质量、上下文和约束"],
+  "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量与工装配置"],
   "/configuration/process-analysis-plans": ["分析规则", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
   "/configuration/process-data-models": ["数据字典", "定义工艺变量、阶段号和控制参数，供现场数据源统一映射"],
   "/configuration/process-specifications": ["工艺规范", "维护引用数据模型的完整工艺规范版本"],
   "/configuration/ingestion-tasks": ["采集配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
-  "/configuration/component-types": ["组件分类", "维护模芯、模架等物理资产类别；上模和下模由装配位置决定"],
+  "/configuration/component-types": ["组件分类", "维护可复用物理资产的业务分类；装配位置由工装结构定义"],
   "/configuration/components": ["组件台账", "登记具有独立资产编号和序列号的可更换物理组件"],
   "/configuration/tooling-types": ["工装结构", "定义工装总成结构、装配位置和各位置允许的组件分类"],
   "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
@@ -486,7 +484,6 @@ function AppRoutes({ identity, canConfigure }) {
       <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.ModelServiceConfigurationPage /></RequireRole>} />
       <Route path="/data-quality" element={<Pages.DataQualityPage />} />
       <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
-      <Route path="/configuration/scenario-packages" element={<Pages.ScenarioPackagesPage canWrite={canConfigure} />} />
       <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage canWrite={canConfigure} />} />
       <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage canWrite={canConfigure} />} />
       <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage canWrite={canConfigure} />} />

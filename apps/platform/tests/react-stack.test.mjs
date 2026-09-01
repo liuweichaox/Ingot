@@ -62,7 +62,7 @@ test("all platform routes remain available after the React migration", () => {
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
-    "/comparisons", "/data-quality", "/configuration/scenario-packages",
+    "/comparisons", "/data-quality",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
     "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
@@ -71,6 +71,7 @@ test("all platform routes remain available after the React migration", () => {
   }
   assert.doesNotMatch(app, /\/research-projects/);
   assert.doesNotMatch(app, /\/research-assets/);
+  assert.doesNotMatch(app, /\/configuration\/scenario-packages/);
   for (const retiredAlias of ["/production-setup", "/quality-plans", "/process-improvement", "/profiles", "/users"]) {
     assert.doesNotMatch(app, new RegExp(`path="${retiredAlias.replaceAll("/", "\\/")}"`));
   }
@@ -102,7 +103,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
-  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\][\s\S]*\["\/configuration\/scenario-packages", "配置发布"\]/);
+  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
@@ -214,7 +215,7 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /质量待办/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(pages, /下一版配方/);
+  assert.match(pages, /修订工艺规范/);
   assert.match(pages, /运行依据/);
   assert.match(app, /<ToastHost \/>/);
 });
@@ -261,7 +262,7 @@ test("inspection definitions use the characteristic contract and business fields
 });
 
 test("all versioned configuration registries use business forms instead of JSON editors", () => {
-  for (const kind of ["processModel", "processSpecificationVersion", "analysisPlan", "qualityPlan", "scenarioPackage"]) {
+  for (const kind of ["processModel", "processSpecificationVersion", "analysisPlan", "qualityPlan"]) {
     assert.match(pages, new RegExp(`kind: "${kind}"`));
     assert.match(registryEditor, new RegExp(`kind === "${kind}"`));
   }
@@ -269,20 +270,13 @@ test("all versioned configuration registries use business forms instead of JSON 
   assert.match(registryEditor, /function ProcessModelEditor/);
   assert.match(registryEditor, /function ProcessSpecificationEditor/);
   assert.match(registryEditor, /function AnalysisPlanEditor/);
-  assert.match(registryEditor, /function ScenarioPackageEditor/);
   assert.match(registryEditor, /requiresAttachment: item\.requiresAttachment \|\| item\.requiresReview/);
   assert.doesNotMatch(pages, /label="版本定义"/);
 });
 
-test("user-facing terminology presents scenario packages as configuration publishing", () => {
-  assert.match(app, /\["\/configuration\/scenario-packages", "配置发布"\]/);
-  assert.match(app, /"\/configuration\/scenario-packages": \["配置发布"/);
-  assert.match(pages, /title: "配置发布"/);
-  assert.match(pages, /createLabel: "创建配置版本"/);
-  assert.match(registryEditor, /idLabel="工艺配置代码"/);
-  for (const source of [app, pages, registryEditor]) {
-    assert.doesNotMatch(source, /场景包|工艺场景配置/);
-  }
+test("product flow does not expose an orphan configuration-publishing workspace", () => {
+  assert.doesNotMatch(app, /scenario-packages|配置发布/);
+  assert.doesNotMatch(pages, /title: "配置发布"|createLabel: "创建配置版本"/);
 });
 
 test("device acquisition has its own page instead of a generic registry drawer", () => {
@@ -352,8 +346,13 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
 
 test("local authentication has a complete login and session-expiry experience", () => {
   assert.match(main, /<AuthGate>/);
-  assert.match(authGate, /从运行证据，/);
-  assert.match(authGate, /到下一份配方。/);
+  assert.match(authGate, /PROCESS DIAGNOSIS · SPECIFICATION REVISION/);
+  assert.match(authGate, /从真实运行，/);
+  assert.match(authGate, /到下一版工艺规范。/);
+  assert.match(authGate, /ENGINEERING DECISION · EVIDENCE/);
+  assert.match(authGate, /结论可复用/);
+  assert.match(authGate, /真实运行、质量结果、工艺追因与工艺规范版本/);
+  assert.doesNotMatch(authGate, /下一份配方/);
   assert.match(authGate, /\/api\/v1\/auth\/me/);
   assert.match(authGate, /\/api\/v1\/auth\/login/);
   assert.match(authGate, /ingot:unauthorized/);

@@ -17,7 +17,6 @@ public sealed record ToolingRoleDefinition
     public required string Code { get; init; }
     public required string Name { get; init; }
     public bool Required { get; init; } = true;
-    public int MaxCount { get; init; } = 1;
     public int SortOrder { get; init; }
 
     public IReadOnlyList<string> AcceptedComponentTypeCodes { get; init; } = [];
@@ -65,10 +64,19 @@ public sealed record ToolingAssemblyRevision
 {
     public Guid AssemblyRevisionId { get; init; }
     public required string ToolingAssemblyId { get; init; }
+    // The exact tooling structure version this assembly revision was built against.
+    public int ToolingTypeVersion { get; init; }
     public int Revision { get; init; } = 1;
     public IReadOnlyList<ToolingAssemblyMember> Members { get; init; } = [];
     public string? CreatedBy { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
+}
+
+// The route owns the assembly identity; the server owns revision sequencing and audit facts.
+public sealed record CreateToolingAssemblyRevisionRequest
+{
+    public int ToolingTypeVersion { get; init; }
+    public IReadOnlyList<ToolingAssemblyMember> Members { get; init; } = [];
 }
 
 public sealed record ToolingInstallation
@@ -83,6 +91,16 @@ public sealed record ToolingInstallation
     [JsonPropertyName("userId")]
     public string? Actor { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
+}
+
+// Commands deliberately exclude identifiers, lifecycle end times, and the actor. The server owns those facts.
+public sealed record ReplaceToolingInstallationRequest
+{
+    public required string EquipmentId { get; init; }
+    public Guid AssemblyRevisionId { get; init; }
+    public DateTimeOffset InstalledAt { get; init; }
+    public string Source { get; init; } = "manual";
+    public string? CommandId { get; init; }
 }
 
 public sealed record ProductionContext
@@ -112,6 +130,28 @@ public sealed record ProductionContext
     [JsonPropertyName("userId")]
     public string? Actor { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
+}
+
+// A production switch always creates the next active context and closes the previous one atomically.
+public sealed record ReplaceProductionContextRequest
+{
+    public required string EquipmentId { get; init; }
+    public required string ProductFamilyCode { get; init; }
+    public required string ProductCode { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public required string ProcessSpecificationVersion { get; init; }
+    public Guid ToolingInstallationId { get; init; }
+    public DateTimeOffset ValidFrom { get; init; }
+    public string Source { get; init; } = "manual";
+    public string? CommandId { get; init; }
+    public string? ExternalOrderRef { get; init; }
+    public string? ExternalBatchRef { get; init; }
+    public string? MaterialLotRef { get; init; }
+    public string? MaterialSpecification { get; init; }
+    public string? MaintenanceStatus { get; init; }
+    public string? CalibrationStatus { get; init; }
+    public string? CalibrationRef { get; init; }
+    public DateTimeOffset? CalibrationValidUntil { get; init; }
 }
 
 public sealed record ResolvedProductionContext

@@ -1,7 +1,7 @@
 // 提供生产配置记录的编辑模型、校验和表单控件。
 import { useMemo } from "react";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, Field, Input, Select, WorkflowGuide, notify } from "../ui/components";
+import { Alert, Button, Card, DateTimeField, Field, Input, Select, WorkflowGuide, notify } from "../ui/components";
 import { formatTime } from "./shared";
 import { productionFieldLabels, productionResources } from "./manufacturingResources";
 
@@ -134,6 +134,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
     const hasMachine = Boolean(editor.equipmentId);
     const hasProduct = Boolean(editor.productCode?.trim() && editor.productFamilyCode?.trim());
     const hasProcessSpecification = Boolean(editor.processSpecificationId);
+    const hasToolingInstallation = Boolean(editor.toolingInstallationId);
     return (
       <div className="grid gap-5">
         <WorkflowGuide
@@ -142,7 +143,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
           steps={[
             { title: "选择生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
             { title: "确认产品与工艺规范", description: "填写产品身份并选择已发布工艺规范。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
-            { title: "检查并生效", description: "核对工装和物料批次后保存。", state: hasMachine && hasProduct && hasProcessSpecification ? "current" : "upcoming" },
+            { title: "确认工装并生效", description: "选择当前已装工装后保存。", state: hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation ? "current" : "upcoming" },
           ]}
         />
         <Card title="1. 选择生产设备" description="只显示已经通过现场节点上报过数据的设备。">
@@ -172,7 +173,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
         </Card>
         <Card title="3. 补充现场信息" description="多个设备填写相同生产批次或工件编号后，可以跨设备追溯；这些字段会固化到后续运行。">
           <div className="grid gap-4 sm:grid-cols-2">
-            <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} onChange={onChange} />
+            <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} required onChange={onChange} />
             <Field label="外部工单" hint="来自 MES、ERP 或现场工单，可选">
               <Input value={editor.externalOrderRef || ""} onChange={event => onChange("externalOrderRef", event.target.value)} />
             </Field>
@@ -192,10 +193,10 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
               <Input value={editor.calibrationStatus || ""} onChange={event => onChange("calibrationStatus", event.target.value)} />
             </Field>
             <Field label="校准记录"><Input value={editor.calibrationRef || ""} onChange={event => onChange("calibrationRef", event.target.value)} /></Field>
-            <Field label="校准有效期"><Input type="datetime-local" value={editor.calibrationValidUntil || ""} onChange={event => onChange("calibrationValidUntil", event.target.value)} /></Field>
+            <Field label="校准有效期"><DateTimeField value={editor.calibrationValidUntil || ""} onChange={value => onChange("calibrationValidUntil", value)} /></Field>
           </div>
         </Card>
-        {hasMachine && hasProduct && hasProcessSpecification && (
+        {hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation && (
           <Alert tone="success" title="可以生效">
             保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和工艺规范 {editor.processSpecificationId} v{editor.processSpecificationVersion}。
           </Alert>
@@ -223,7 +224,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
             </Field>
           );
         }
-        if (["equipmentId", "toolingInstallationId", "assemblyRevisionId", "componentTypeCode", "toolingTypeCode"].includes(key)) {
+        if ((resource.referenceFields || []).includes(key)) {
           return <ProductionReferenceField key={key} fieldKey={key} value={editor[key]} editor={editor} onChange={onChange} required={required} />;
         }
         if (key === "attributes") return <AttributeFields key={key} value={editor[key] || []} onChange={value => onChange(key, value)} />;
@@ -249,6 +250,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
         return (
           <Field key={key} label={label}>
             <Input
+              aria-label={label}
               required={required}
               type={typeof initial === "number" ? "number" : "text"}
               min={typeof initial === "number" ? 1 : undefined}
@@ -320,7 +322,7 @@ function ToolingRoleFields({ value, onChange }) {
       description="定义工装由哪些组件位置组成。"
       actions={(
         <div className="flex flex-wrap gap-2">
-          {value.length === 0 && <Button variant="ghost" onClick={applyMoldingTemplate}>应用模压结构示例</Button>}
+          {value.length === 0 && <Button variant="ghost" onClick={applyMoldingTemplate}>套用精密模压示例</Button>}
           <Button onClick={add}>添加装配位置</Button>
         </div>
       )}

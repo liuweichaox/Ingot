@@ -6,6 +6,9 @@ import { MemoryRouter } from "react-router";
 import { SystemStatusIndicator } from "../src/App";
 import { mergeRunIssues } from "../src/pages/OperationsPages";
 import { PlatformUptimeMetric } from "../src/pages/AdministrationPages";
+import { ProductionRecordsPage } from "../src/pages/ProductionRecordsPage";
+import { isProductionEditorValid } from "../src/pages/ProductionRecordForm";
+import { productionResources } from "../src/pages/manufacturingResources";
 import { ConfigurationHubPage, ProcessSpecificationsPage } from "../src/pages/RegistryPages";
 import { DataTable, EmptyState, Field, Input } from "../src/ui/components";
 
@@ -121,11 +124,10 @@ describe("生产界面状态反馈", () => {
     render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
 
     await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "0"));
-    expect(screen.getByText("还需完成 5 项")).toBeInTheDocument();
-    expect(screen.getAllByText("待完成")).toHaveLength(5);
+    expect(screen.getByText("还需完成 4 项")).toBeInTheDocument();
+    expect(screen.getAllByText("待完成")).toHaveLength(4);
     screen.getAllByText("待完成").forEach(badge => expect(badge).toHaveClass("bg-amber-50"));
     expect(screen.getByRole("link", { name: /配置数据来源/ })).toHaveAttribute("href", "/configuration/ingestion-tasks");
-    expect(screen.getByRole("link", { name: /发布配置/ })).toHaveAttribute("href", "/configuration/scenario-packages");
   });
 
   it("用规范状态值呈现准备度检查中的黄色徽标", () => {
@@ -133,7 +135,7 @@ describe("生产界面状态反馈", () => {
 
     render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
 
-    expect(screen.getAllByText("检查中")).toHaveLength(5);
+    expect(screen.getAllByText("检查中")).toHaveLength(4);
     screen.getAllByText("检查中").forEach(badge => expect(badge).toHaveClass("bg-amber-50"));
   });
 
@@ -143,7 +145,7 @@ describe("生产界面状态反馈", () => {
     render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
 
     const badges = await screen.findAllByText("无法检查");
-    expect(badges).toHaveLength(5);
+    expect(badges).toHaveLength(4);
     badges.forEach(badge => expect(badge).toHaveClass("bg-rose-50"));
   });
 
@@ -154,9 +156,47 @@ describe("生产界面状态反馈", () => {
 
     render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
 
-    await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "5"));
-    expect(screen.getAllByText("已准备")).toHaveLength(5);
+    await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "4"));
+    expect(screen.getAllByText("已准备")).toHaveLength(4);
     screen.getAllByText("已准备").forEach(badge => expect(badge).toHaveClass("bg-emerald-50"));
+  });
+
+  it("允许新增任意组件分类，不预设模压分类", async () => {
+    let createdPayload;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      if (options.method === "POST") {
+        createdPayload = JSON.parse(options.body);
+        return Promise.resolve(jsonResponse(createdPayload));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+
+    render(<MemoryRouter><ProductionRecordsPage section="componentType" /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "新增组件分类" }));
+    expect(screen.queryByText("模芯")).toBeNull();
+    expect(screen.queryByText("模架")).toBeNull();
+    fireEvent.change(screen.getByLabelText("组件类型代码"), { target: { value: "thermal-sleeve" } });
+    fireEvent.change(screen.getByLabelText("名称"), { target: { value: "加热套" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => expect(createdPayload).toEqual(expect.objectContaining({
+      componentTypeCode: "thermal-sleeve",
+      name: "加热套",
+      status: "active",
+    })));
+  });
+
+  it("生产切换必须绑定当前已装工装", () => {
+    const editor = {
+      ...productionResources.context.template,
+      equipmentId: "PRESS-01",
+      productFamilyCode: "LENS",
+      productCode: "LENS-A",
+      processSpecificationId: "spec-lens-a",
+    };
+    expect(isProductionEditorValid(productionResources.context, editor)).toBe(false);
+    expect(isProductionEditorValid(productionResources.context, { ...editor, toolingInstallationId: "install-01" })).toBe(true);
   });
 
   it("从已发布工艺规范的运行依据创建下一版草稿", async () => {
@@ -176,8 +216,10 @@ describe("生产界面状态反馈", () => {
       updatedAt: "2026-08-31T08:00:00Z",
     };
     let createdPayload;
+    let createdUrl;
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
       if (options.method === "POST") {
+        createdUrl = String(url);
         createdPayload = JSON.parse(options.body);
         return Promise.resolve(jsonResponse(createdPayload));
       }
@@ -191,35 +233,32 @@ describe("生产界面状态反馈", () => {
         ],
       }]));
       if (String(url).includes("/process-executions")) return Promise.resolve(jsonResponse([
-        { executionId: "RUN-005", processSpecificationId: "spec-lens-a", processSpecificationVersion: 5, qualityStatus: "PASS" },
-        { executionId: "RUN-004", processSpecificationId: "spec-lens-a", processSpecificationVersion: 4, qualityStatus: "FAIL" },
-        { executionId: "RUN-OTHER", processSpecificationId: "spec-other", processSpecificationVersion: 5, qualityStatus: "PASS" },
+        { executionId: "RUN-005", processSpecificationId: "spec-lens-a", processSpecificationVersion: 5, qualityStatus: "COMPLETE" },
+        { executionId: "RUN-004", processSpecificationId: "spec-lens-a", processSpecificationVersion: 4, qualityStatus: "FAILED" },
+        { executionId: "RUN-OTHER", processSpecificationId: "spec-other", processSpecificationVersion: 5, qualityStatus: "COMPLETE" },
       ]));
       return Promise.resolve(jsonResponse([]));
     }));
 
     render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "下一版配方" }));
-    expect(await screen.findByText("RUN-005")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "创建修订草稿" }));
+    expect(await screen.findByLabelText("引用运行 RUN-005")).toBeInTheDocument();
     expect(screen.queryByText("RUN-004")).toBeNull();
     expect(screen.queryByText("RUN-OTHER")).toBeNull();
-    fireEvent.change(screen.getByLabelText("下一版 保压温度"), { target: { value: "525" } });
-    fireEvent.click(screen.getByRole("button", { name: "创建 V6 草稿" }));
+    fireEvent.change(screen.getByLabelText("修订理由"), { target: { value: "针对面形偏差调整保压温度" } });
+    fireEvent.click(screen.getByLabelText("引用运行 RUN-005"));
+    fireEvent.change(await screen.findByLabelText("修订值 保压温度"), { target: { value: "525" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建修订草稿" }));
 
-    await waitFor(() => expect(createdPayload).toEqual(expect.objectContaining({
-      processSpecificationId: "spec-lens-a",
-      version: 6,
-      name: "镜片模压标准配方",
-      status: "draft",
-      basedOnVersion: 5,
-      dataModelId: "model-lens",
-      dataModelVersion: 2,
-      contextSelector: { product_family_code: "LENS" },
-      values: [
+    await waitFor(() => expect(createdPayload).toEqual({
+      changeReason: "针对面形偏差调整保压温度",
+      mechanismNotes: null,
+      evidenceReferences: [{ kind: "process-execution", referenceId: "RUN-005" }],
+      parameterOverrides: [
         { code: "holding.temperature", value: 525 },
-        { code: "holding.pressure", value: 18.5 },
       ],
-    })));
+    }));
+    expect(createdUrl).toBe("/api/v1/process-specifications/spec-lens-a/5/drafts");
   });
 });

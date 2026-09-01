@@ -4,12 +4,12 @@ Bilingual static website for Ingot. Public copy follows [`docs/brand.md`](../../
 
 The home page must:
 
-- use “Open-source Process Diagnosis & Optimization” as the product category and “From run evidence to the next recipe.” as the lead line;
-- use “recipe optimization” for the default workflow, “constrained optimization” for the numerical capability, and “next-recipe recommendation” for system output;
+- use “Open-source Process Diagnosis & Optimization” as the product category and “From real runs to the next process specification.” as the lead line;
+- present the default workflow as process-specification revision: diagnosis evidence supports an engineer-created next-version draft;
 - lead with real data supporting process-engineer decisions;
-- show acquisition, context, production runs, inspections, diagnosis, optimization observations, and next-recipe recommendations as one evidence chain;
-- state that normal production requires no experiment setup or manual recipe reclassification, while controlled validation remains a separate optional workflow;
-- explain that methods are selected by the question rather than presenting one algorithm as the product;
+- show acquisition, context, production runs, inspections, diagnosis, and next-version specification drafts as one evidence chain;
+- preserve the boundary that production parameters are never changed automatically;
+- explain that process knowledge is attached to a specification revision together with its rationale and evidence references;
 - preserve the engineer's authority and the boundary between association and validated cause;
 - distinguish implemented capability from historical replay, shadow evidence, and online validation;
 - remain independent of a specific equipment model, material, or process;

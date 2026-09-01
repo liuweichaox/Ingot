@@ -25,7 +25,6 @@ public sealed record ScenarioPackage
     public VersionedConfigurationReference? QualityPlan { get; init; }
     public IReadOnlyList<ScenarioContextFieldPolicy> ContextFields { get; init; } = [];
     public IReadOnlyList<ScenarioConstraintDefinition> Constraints { get; init; } = [];
-    public IReadOnlyList<VersionedConfigurationReference> KnowledgeAssets { get; init; } = [];
     public IReadOnlyDictionary<string, string> Terminology { get; init; } = new Dictionary<string, string>();
     public DateTimeOffset UpdatedAt { get; init; }
 }

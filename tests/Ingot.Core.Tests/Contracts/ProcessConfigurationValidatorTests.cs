@@ -45,6 +45,56 @@ public sealed class ProcessConfigurationValidatorTests
     }
 
     [Fact]
+    public void DataModel_NormalizesControlParameterOperatingBounds()
+    {
+        var value = DataModel() with
+        {
+            ControlParameters =
+            [
+                new ControlParameterDefinition
+                {
+                    Code = "press.load",
+                    DisplayName = "压力",
+                    Minimum = 10,
+                    Maximum = 30,
+                    Step = 0.5,
+                    ChangeAllowed = false
+                }
+            ]
+        };
+
+        Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
+        var parameter = Assert.Single(normalized!.ControlParameters);
+        Assert.Equal(10, parameter.Minimum);
+        Assert.Equal(30, parameter.Maximum);
+        Assert.Equal(0.5, parameter.Step);
+        Assert.False(parameter.ChangeAllowed);
+    }
+
+    [Fact]
+    public void DataModel_RejectsInvalidControlParameterBounds()
+    {
+        var value = DataModel() with
+        {
+            ControlParameters =
+            [
+                new ControlParameterDefinition
+                {
+                    Code = "press.load",
+                    DisplayName = "压力",
+                    DataType = "integer",
+                    Minimum = 30,
+                    Maximum = 10,
+                    Step = 0.5
+                }
+            ]
+        };
+
+        Assert.False(ProcessConfigurationValidator.TryValidate(value, out _, out var error));
+        Assert.Contains("最小值", error);
+    }
+
+    [Fact]
     public void DataModel_AcceptsOneIntegerStageNumberDataItem()
     {
         var value = DataModel() with
@@ -114,7 +164,7 @@ public sealed class ProcessConfigurationValidatorTests
     }
 
     [Fact]
-    public void ProcessSpecification_AcceptsTypedValuesWithoutChangeReason()
+    public void ProcessSpecification_RequiresChangeReasonWhenBasedOnAnotherVersion()
     {
         using var document = JsonDocument.Parse("128.5");
         var value = new ProcessSpecification
@@ -124,6 +174,7 @@ public sealed class ProcessConfigurationValidatorTests
             BasedOnVersion = 6,
             Name = "镜片 A 工艺规范",
             DataModelId = "optical-molding.demo",
+            ChangeReason = "修订保压窗口以处理面形偏差",
             Values =
             [
                 new ControlParameterValue { Code = "work.set_pressure", Value = document.RootElement.Clone() }
@@ -133,7 +184,43 @@ public sealed class ProcessConfigurationValidatorTests
         Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
         Assert.Equal("rcp-lens-a", normalized!.ProcessSpecificationId);
         Assert.Equal(128.5, normalized.Values[0].Value.GetDouble());
-        Assert.DoesNotContain("reason", JsonSerializer.Serialize(normalized), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("修订保压窗口以处理面形偏差", normalized.ChangeReason);
+    }
+
+    [Fact]
+    public void NextDraftRequest_RequiresEvidenceAndNormalizesOverrides()
+    {
+        using var document = JsonDocument.Parse("128.5");
+        var value = new CreateProcessSpecificationDraftRequest
+        {
+            ChangeReason = " 调整压力窗口 ",
+            EvidenceReferences =
+            [
+                new ProcessSpecificationEvidenceReference
+                {
+                    Kind = " PROCESS-EXECUTION ",
+                    ReferenceId = " run-001 "
+                }
+            ],
+            ParameterOverrides =
+            [
+                new ControlParameterValue { Code = " PRESS.LOAD ", Value = document.RootElement.Clone() }
+            ]
+        };
+
+        Assert.True(ProcessConfigurationValidator.TryValidate(value, out var normalized, out var error), error);
+        Assert.Equal("调整压力窗口", normalized!.ChangeReason);
+        Assert.Equal("process-execution", normalized.EvidenceReferences[0].Kind);
+        Assert.Equal("press.load", normalized.ParameterOverrides[0].Code);
+    }
+
+    [Fact]
+    public void NextDraftRequest_RejectsMissingEvidence()
+    {
+        var value = new CreateProcessSpecificationDraftRequest { ChangeReason = "调整压力窗口" };
+
+        Assert.False(ProcessConfigurationValidator.TryValidate(value, out _, out var error));
+        Assert.Contains("至少一条证据", error);
     }
 
     [Fact]

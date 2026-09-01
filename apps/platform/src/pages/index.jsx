@@ -9,7 +9,6 @@ export { AnalysisHubPage } from "./AnalysisHubPage";
 export {
   ConfigurationHubPage,
   ProcessDataModelsPage,
-  ScenarioPackagesPage,
   ProcessSpecificationsPage,
   ProcessAnalysisPlansPage,
   InspectionDefinitionsPage,

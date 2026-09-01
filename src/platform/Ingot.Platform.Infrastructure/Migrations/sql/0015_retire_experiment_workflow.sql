@@ -37,6 +37,15 @@ FROM research_shadow_recommendation_outcomes
 ON CONFLICT DO NOTHING;
 
 INSERT INTO research_retired_workflow_records(record_kind, record_id, project_id, payload)
+SELECT 'retired-advisory-execution', recommendation_id::text, project_id,
+       jsonb_build_object(
+           'recommendationId', recommendation_id,
+           'actualExecutionKey', actual_execution_key,
+           'linkedAt', linked_at)
+FROM research_shadow_recommendation_executions
+ON CONFLICT DO NOTHING;
+
+INSERT INTO research_retired_workflow_records(record_kind, record_id, project_id, payload)
 SELECT 'retired-region-link', operating_region_id::text || ':' || result_id::text, project_id,
        jsonb_build_object('operatingRegionId', operating_region_id, 'resultId', result_id)
 FROM research_operating_region_results
@@ -67,6 +76,7 @@ ALTER TABLE recommendation_knowledge_usage
     REFERENCES research_recipe_recommendations(recommendation_id)
     ON DELETE CASCADE;
 
+DROP TABLE research_shadow_recommendation_executions;
 DROP TABLE research_shadow_recommendation_outcomes;
 DROP TABLE research_shadow_recommendations;
 DROP TABLE research_operating_region_results;

@@ -96,6 +96,7 @@ public sealed class ManufacturingContextValidatorTests
             new ToolingAssemblyRevision
             {
                 ToolingAssemblyId = "MOLD-01",
+                ToolingTypeVersion = 1,
                 Members =
                 [
                     new ToolingAssemblyMember { RoleCode = "upper_core", ComponentId = "UP-01" },
@@ -107,6 +108,25 @@ public sealed class ManufacturingContextValidatorTests
 
         Assert.False(ok);
         Assert.Contains("每个角色只能出现一次", error);
+    }
+
+    [Fact]
+    public void AssemblyRevision_RequiresExactToolingTypeVersion()
+    {
+        var ok = ManufacturingContextValidator.TryValidate(
+            new ToolingAssemblyRevision
+            {
+                ToolingAssemblyId = "MOLD-01",
+                Members =
+                [
+                    new ToolingAssemblyMember { RoleCode = "upper_core", ComponentId = "UP-01" }
+                ]
+            },
+            out var _,
+            out var error);
+
+        Assert.False(ok);
+        Assert.Contains("ToolingTypeVersion", error);
     }
 
     [Fact]

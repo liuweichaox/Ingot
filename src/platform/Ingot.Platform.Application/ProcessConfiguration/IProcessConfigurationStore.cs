@@ -16,6 +16,13 @@ public interface IProcessConfigurationStore
     Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default);
     Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default);
     Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default);
+    Task<ProcessSpecificationDraftCreationResult> CreateNextProcessSpecificationDraftAsync(
+        string processSpecificationId,
+        int baseVersion,
+        CreateProcessSpecificationDraftRequest request,
+        CancellationToken ct = default)
+        => Task.FromException<ProcessSpecificationDraftCreationResult>(
+            new NotSupportedException("This process-configuration store does not support atomic draft creation."));
     Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default);
 
     Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default);
