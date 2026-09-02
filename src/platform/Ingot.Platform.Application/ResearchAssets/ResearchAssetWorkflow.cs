@@ -6,7 +6,8 @@ namespace Ingot.Platform.Application.ResearchAssets;
 
 public sealed class ResearchAssetWorkflow(
     IResearchAssetStore store,
-    IProcessConfigurationStore processConfiguration)
+    IProcessConfigurationStore processConfiguration,
+    IKnowledgeEmbeddingQueue? embeddingQueue = null)
 {
     public async Task<TrainingDatasetVersion> RegisterDatasetAsync(
         TrainingDatasetVersion request,
@@ -313,6 +314,8 @@ public sealed class ResearchAssetWorkflow(
             targetStatus,
             userId,
             ct).ConfigureAwait(false);
+        if (targetStatus == KnowledgeSourceStatuses.Reviewed && embeddingQueue is not null)
+            await embeddingQueue.EnqueueAsync(sourceId, userId, ct).ConfigureAwait(false);
         return updated;
     }
 
@@ -345,6 +348,8 @@ public sealed class ResearchAssetWorkflow(
             userId,
             ct,
             new Dictionary<string, string> { ["recordId"] = saved.RecordId.ToString() }).ConfigureAwait(false);
+        if (source.Status == KnowledgeSourceStatuses.Reviewed && saved.HumanReviewed && embeddingQueue is not null)
+            await embeddingQueue.EnqueueAsync(source.SourceId, userId, ct).ConfigureAwait(false);
         return saved;
     }
 

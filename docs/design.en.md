@@ -126,6 +126,8 @@ Platform separates policy from implementation by use case: `Platform.Application
 - Organize facts, cite sources, explain limits, and suggest next steps.
 - Never compute or invent numerical process settings itself and never turn language probability into an engineering conclusion.
 
+Agent uses two separate evidence paths. Structured production facts such as runs, inspections, configuration, and optimization always come from authorized business tools. Document knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed sources and fragments inside the authorized project, site, product, and equipment scope. PostgreSQL combines full-text and similarity matching with optional semantic-vector ranking, returning fragment-level source, page or sheet, source SHA, and content hash. When semantic embeddings are disabled, unavailable, or fail for a query, retrieval falls back to keywords. Retrieved material is read-only evidence for an answer; it cannot replace a current production-data query, establish root cause, or modify equipment.
+
 ### Web
 
 - Organize engineering work around business objects, runs, inspections, and optimization tasks.

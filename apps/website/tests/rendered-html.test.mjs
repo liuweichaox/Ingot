@@ -15,6 +15,30 @@ async function html(pathname = "/") {
 
 const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package-approval|FactoryScene3D|制造生产数据与工艺分析系统|Connected production history/i;
 
+test("Chinese and English homes expose the workbench story and engineering loop", async () => {
+  for (const pathname of ["/", "/en/"]) {
+    const source = await html(pathname);
+    assert.match(source, /<div class="product-frame hero-product">[\s\S]*?<img[^>]+src="\/screenshots\/workbench\.png"/i);
+    assert.match(source, /<section class="story section" id="product"/i);
+    assert.match(source, /class="product-frame story-product"[^>]*data-step="0"/i);
+    assert.match(source, /<section class="closed-loop section" id="loop"/i);
+    assert.match(source, /class="loop-rail"[^>]*aria-label="(?:工程闭环|Engineering loop)"/i);
+    assert.match(source, /class="[^"]*\bloop-step\b[^"]*"/i);
+    assert.match(source, /<section class="screen-gallery" id="screenshots">/i);
+    for (const screenshot of ["production-run.png", "diagnosis.png", "optimization.png", "next-recipe.png"]) {
+      assert.match(source, new RegExp(`/screenshots/${screenshot}`));
+    }
+  }
+});
+
+test("source does not enable mandatory scroll snap", async () => {
+  const [tsx, css] = await Promise.all([
+    readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.doesNotMatch(`${tsx}\n${css}`, /scroll-snap-type\s*:[^;]*\bmandatory\b/i);
+});
+
 test("Chinese home presents the production-to-specification-revision flow", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
@@ -24,6 +48,9 @@ test("Chinese home presents the production-to-specification-revision flow", asyn
   assert.match(source, /到下一版工艺规范/);
   assert.match(source, /SPECIFICATION REVISION · RUN-042/);
   assert.match(source, /先确认数据是否可靠，再形成可审计的工艺修订/);
+  assert.match(source, /无需先建立实验，也无需工程师重新归类配方/);
+  assert.match(source, /已复核工艺资料片段/);
+  assert.match(source, /片段级引用/);
   for (const stage of ["建立运行证据", "完成工艺追因", "修订下一版规范", "继续从生产回流"]) {
     assert.match(source, new RegExp(stage));
   }
@@ -46,6 +73,9 @@ test("English home presents the production-to-specification-revision flow", asyn
   assert.match(source, /to the next process specification/);
   assert.match(source, /SPECIFICATION REVISION · RUN-042/);
   assert.match(source, /Confirm that data are trustworthy before forming an auditable revision/);
+  assert.match(source, /No experiment setup or manual recipe reclassification is required/);
+  assert.match(source, /reviewed process-document references/i);
+  assert.match(source, /Fragment citations/);
   for (const stage of ["Build run evidence", "Complete process diagnosis", "Revise the next specification", "Return through production"]) {
     assert.match(source, new RegExp(stage));
   }
@@ -59,7 +89,8 @@ test("English home presents the production-to-specification-revision flow", asyn
 
 test("public source uses brand assets instead of an inline logo and links project surfaces", async () => {
   const source = await readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8");
-  assert.match(source, /ingot-lockup-dark\.svg/);
+    assert.match(source, /ingot-lockup-dark\.svg/);
+    assert.match(source, /ingot-lockup\.svg/);
   assert.match(source, /github\.com\/liuweichaox\/Ingot/);
   assert.match(source, /docs\.ingotstack\.com/);
   assert.doesNotMatch(source, /function Mark|<svg/i);

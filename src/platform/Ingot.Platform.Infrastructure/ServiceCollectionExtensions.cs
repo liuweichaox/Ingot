@@ -134,6 +134,15 @@ public static class ServiceCollectionExtensions
 
         services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
         services.AddSingleton<IResearchAssetStore, PostgresResearchAssetStore>();
+        services.Configure<KnowledgeEmbeddingOptions>(configuration.GetSection("KnowledgeEmbedding"));
+        services.AddHttpClient("knowledge-embeddings");
+        services.AddSingleton<IKnowledgeEmbeddingClient, OpenAiCompatibleKnowledgeEmbeddingClient>();
+        services.AddSingleton<PostgresKnowledgeEmbeddingJobStore>();
+        services.AddSingleton<IKnowledgeEmbeddingQueue>(provider =>
+            provider.GetRequiredService<PostgresKnowledgeEmbeddingJobStore>());
+        services.AddSingleton<IKnowledgeEmbeddingJobStore>(provider =>
+            provider.GetRequiredService<PostgresKnowledgeEmbeddingJobStore>());
+        services.AddSingleton<IProcessKnowledgeSearch, PostgresProcessKnowledgeSearch>();
         services.AddSingleton<ResearchAssetApplication>();
         services.AddSingleton<ResearchAssetWorkflow>();
         services.AddSingleton<MechanismModelService>();
@@ -218,12 +227,31 @@ public static class ServiceCollectionExtensions
                                 value.MaxRetryDelay >= value.InitialRetryDelay,
                 "知识提取 Worker 的租约、心跳、重试次数或退避配置无效。")
             .ValidateOnStart();
+        services.Configure<KnowledgeEmbeddingWorkerOptions>(configuration.GetSection("KnowledgeEmbeddingWorker"));
+        services.AddOptions<KnowledgeEmbeddingOptions>()
+            .Validate(
+                static value => !value.Enabled ||
+                                (!string.IsNullOrWhiteSpace(value.Model) && value.Dimensions == 1536 &&
+                                 value.RequestTimeout > TimeSpan.Zero),
+                "知识嵌入模型、维度或请求超时配置无效。")
+            .ValidateOnStart();
+        services.AddOptions<KnowledgeEmbeddingWorkerOptions>()
+            .Validate(
+                static value => value.LeaseTimeout > TimeSpan.Zero && value.MaxAttempts > 0 &&
+                                value.InitialRetryDelay >= TimeSpan.Zero &&
+                                value.MaxRetryDelay >= value.InitialRetryDelay &&
+                                value.RecordPageSize is > 0 and <= 500 &&
+                                value.ReconciliationInterval > TimeSpan.Zero,
+                "知识嵌入 Worker 的租约、重试次数或退避配置无效。")
+            .ValidateOnStart();
         services.AddHostedService<TimeSeriesRetentionHostedService>();
         services.AddHostedService<EventIngestKeyPruneHostedService>();
         services.AddHostedService<ProcessExecutionAnalysisRecomputeHostedService>();
         services.AddHostedService<ExecutionBoundaryProjectionHostedService>();
         services.AddHostedService(provider => provider.GetRequiredService<ProcessExecutionAnalysisBackfillService>());
         services.AddHostedService<KnowledgeExtractionWorker>();
+        services.AddHostedService<KnowledgeEmbeddingBackfillService>();
+        services.AddHostedService<KnowledgeEmbeddingWorker>();
         return services;
     }
 }

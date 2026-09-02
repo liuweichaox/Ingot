@@ -24,9 +24,15 @@ Each recommendation freezes the knowledge versions, source hashes, and applicabi
 - Mechanism explanation states its evidence level and never presents association as a definitive root cause.
 - A recommendation retains its exact knowledge snapshot; later knowledge edits never rewrite it.
 
+## Knowledge Retrieval
+
+Document knowledge reaches the analysis assistant through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard project and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
+
+The semantic index is rebuildable derived state. It does not change review status or become formal business evidence. Embeddings are disabled by default. When enabled, they reuse the protected model-service configuration and require an OpenAI-compatible `/embeddings` endpoint. If that service is unavailable or a query embedding fails, the system falls back to PostgreSQL keyword retrieval without relaxing authorization or review gates.
+
 ## Current Boundary
 
-The current path supports sources, fragments, claims, applicability, hard constraints, conflicts, versions, and recommendation-use traceability. Real-run decisions and quality outcomes progressively support or weaken knowledge; the repository does not claim proof of a particular mechanism or field benefit.
+The current path supports sources, fragments, claims, applicability, hard constraints, conflicts, versions, recommendation-use traceability, and scope-controlled hybrid retrieval for the analysis assistant. Real-run decisions and quality outcomes progressively support or weaken knowledge. A retrieval match does not establish a claim, and the repository does not claim proof of a particular mechanism or field benefit.
 
 ## Related Documents
 

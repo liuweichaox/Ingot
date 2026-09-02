@@ -20,7 +20,7 @@ controls / instruments / vision / inspection / MES
                                       └─ Platform Web (independent React frontend)
 ```
 
-Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat runs, knowledge extraction, analysis backfills, recipe-outcome materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
+Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat and Agent runs, knowledge extraction and embedding indexes, analysis backfills, recipe-outcome materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
 The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs now share PostgreSQL with business evidence, so they no longer prevent an external orchestrator from scaling API replicas behind a load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
 
@@ -84,7 +84,9 @@ Never commit `.env` or real equipment credentials. Inject device passwords and c
 
 ### Model service
 
-When enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, model IDs, and API key once under System Administration > Model Services. Chat and model-assisted mechanism drafts reuse this configuration whenever they need a model; there is no second endpoint, model, or API-key configuration. Switching compatible services changes page configuration only, not Ingot source code. The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. One DeepSeek configuration uses `Provider=DeepSeek`, `Protocol=Responses`, `BaseUrl=https://api.deepseek.com`, and currently available DeepSeek model IDs. Platform probes only the model list during startup; a feature sends only the permission-controlled context required for its model call. Before enabling an external service, confirm that these materials may be sent to its service region. Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
+When enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, Chat model IDs, and API key once under System Administration > Model Services. Chat, model-assisted mechanism drafts, and optional knowledge embeddings reuse the same protected endpoint and key. Knowledge embeddings do not create a second provider credential, but `INGOT_KNOWLEDGE_EMBEDDING_MODEL` selects the embedding model independently. Switching compatible services does not require an Ingot source-code change. The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. Platform probes only the model list during startup; a feature sends only the permission-controlled context required for its model call. Before enabling an external service, confirm that these materials may be sent to its service region. Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
+
+Document retrieval always provides a PostgreSQL keyword path. Semantic retrieval is disabled by default. Set `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true` only when the configured model service supports an OpenAI-compatible `/embeddings` endpoint and reviewed document fragments may be sent to that service. Operators can also tune `INGOT_KNOWLEDGE_EMBEDDING_MODEL`, `INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`, `INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY`, and `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`. The Worker builds indexes asynchronously for reviewed fragments and backfills historical gaps. A query-embedding or service failure falls back to keywords without relaxing project, site, applicability, or review filters.
 
 The model service is not a startup dependency for acquisition, inspection, or numerical optimization. Content sent to it remains subject to authorized tools and business permissions.
 
@@ -113,7 +115,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` removes containers and networks but retains named volumes by default. Do not add `--volumes` without a backup and an explicit reset decision. After source changes, use `up -d --build`; after `.env`-only changes, use `up -d` to recreate affected containers.
 
-The first build downloads large SDK, PyTorch, and database images. Startup is complete only after `platform-migrate` exits successfully and PostgreSQL, Platform API, Platform Worker, Optimizer, Web, and ConnectorHost are all `healthy`.
+The first build downloads large SDK, PyTorch, and database images. The database image must provide TimescaleDB, `pg_trgm`, and `vector`; migrations create full-text/similarity and HNSW vector indexes. Startup is complete only after `platform-migrate` exits successfully and PostgreSQL, Platform API, Platform Worker, Optimizer, Web, and ConnectorHost are all `healthy`.
 
 | Symptom | Check first | Common cause and response |
 |---|---|---|
@@ -181,7 +183,8 @@ Production monitoring includes:
 - run completeness and actual-setting, context, and inspection linkage coverage;
 - PostgreSQL connectivity, disk, migration, and slow transactions;
 - Optimizer readiness, failures, and computation time;
-- Agent tool failures, unavailable models, and authorization denials.
+- Agent tool failures, unavailable models, and authorization denials;
+- knowledge-embedding queue age, retries, dead letters, and coverage for the configured embedding model.
 
 Alerts identify an actionable object such as an Edge, equipment, configuration version, or run rather than only “system error.”
 
@@ -217,6 +220,8 @@ Restore replaces the current PostgreSQL database and all four file volumes, so i
 ```
 
 The backup uses `pg_dump --format=custom`; it supports logical restore and migration validation but is not PITR. Sites with a smaller RPO must additionally configure PostgreSQL base backups, continuous WAL archiving, off-host retention, and regular point-in-time recovery exercises. Backup directories contain business records and attachments and require production-equivalent access control.
+
+Knowledge vectors and embedding jobs are included in PostgreSQL backups but remain rebuildable derived state. Restoring to a PostgreSQL instance without the `vector` extension fails migration or restore validation. The target must first provide Schema-compatible TimescaleDB, `pg_trgm`, and `vector` extensions.
 
 Back up at least:
 

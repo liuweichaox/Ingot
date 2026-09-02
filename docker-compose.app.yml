@@ -110,6 +110,9 @@ services:
       - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
+      - KnowledgeEmbedding__Enabled=${INGOT_KNOWLEDGE_EMBEDDING_ENABLED:-false}
+      - KnowledgeEmbedding__Model=${INGOT_KNOWLEDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      - KnowledgeEmbedding__RequestTimeout=${INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT:-00:00:30}
       - Cors__AllowedOrigins__0=http://localhost:3000
     depends_on:
       platform-migrate:
@@ -157,6 +160,13 @@ services:
       - KnowledgeExtractionWorker__HeartbeatInterval=${INGOT_KNOWLEDGE_EXTRACTION_HEARTBEAT_INTERVAL:-00:01:00}
       - KnowledgeExtractionWorker__InitialRetryDelay=${INGOT_KNOWLEDGE_EXTRACTION_INITIAL_RETRY_DELAY:-00:00:30}
       - KnowledgeExtractionWorker__MaxRetryDelay=${INGOT_KNOWLEDGE_EXTRACTION_MAX_RETRY_DELAY:-00:30:00}
+      - KnowledgeEmbedding__Enabled=${INGOT_KNOWLEDGE_EMBEDDING_ENABLED:-false}
+      - KnowledgeEmbedding__Model=${INGOT_KNOWLEDGE_EMBEDDING_MODEL:-text-embedding-3-small}
+      - KnowledgeEmbedding__RequestTimeout=${INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT:-00:00:30}
+      - KnowledgeEmbeddingWorker__MaxAttempts=${INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS:-5}
+      - KnowledgeEmbeddingWorker__LeaseTimeout=${INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT:-00:15:00}
+      - KnowledgeEmbeddingWorker__InitialRetryDelay=${INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY:-00:00:30}
+      - KnowledgeEmbeddingWorker__MaxRetryDelay=${INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY:-00:30:00}
       - PlatformWorkerPulse__Interval=${INGOT_PLATFORM_WORKER_HEARTBEAT_INTERVAL:-00:00:05}
       - PlatformWorkerPulse__StaleAfter=${INGOT_PLATFORM_WORKER_HEARTBEAT_STALE_AFTER:-00:00:30}
       - Postgres__MinPoolSize=${INGOT_POSTGRES_MIN_POOL_SIZE:-2}

@@ -633,6 +633,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         KnowledgeRecord value,
         CancellationToken ct = default)
     {
+        value = KnowledgeContentFingerprint.NormalizeAndStamp(value);
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -679,7 +680,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             AddNullable(command, "sheet_name", NpgsqlDbType.Text, value.Citation?.SheetName);
             AddNullable(command, "cell_range", NpgsqlDbType.Text, value.Citation?.CellRange);
             AddNullable(command, "citation_region", NpgsqlDbType.Text, value.Citation?.Region);
-            AddNullable(command, "content_hash", NpgsqlDbType.Text, value.Citation?.ContentHash);
+            command.Parameters.AddWithValue("content_hash", KnowledgeContentFingerprint.ComputeHash(value.Content));
             command.Parameters.AddWithValue("updated_at", value.ReviewedAt ?? value.CreatedAt);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
@@ -718,6 +719,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         }
         foreach (var value in records)
         {
+            var normalizedValue = KnowledgeContentFingerprint.NormalizeAndStamp(value);
             await using var insert = new NpgsqlCommand(
                 """
                 INSERT INTO knowledge_fragments(
@@ -729,34 +731,34 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
                   @created_by,@created_at,@reviewed_by,@reviewed_at,@method,@version,@confidence,
                   @location_kind,@page_number,@sheet_name,@cell_range,@citation_region,@content_hash,@updated_at);
                 """, connection, transaction);
-            insert.Parameters.AddWithValue("id", value.RecordId);
+            insert.Parameters.AddWithValue("id", normalizedValue.RecordId);
             insert.Parameters.AddWithValue("source_id", source.SourceId);
-            insert.Parameters.AddWithValue("category", value.Category);
-            AddNullable(insert, "page_or_sheet", NpgsqlDbType.Text, value.PageOrSheet);
-            AddNullable(insert, "region", NpgsqlDbType.Text, value.Region);
-            insert.Parameters.AddWithValue("content", value.Content);
-            insert.Parameters.AddWithValue("human_reviewed", value.HumanReviewed);
-            insert.Parameters.AddWithValue("created_by", value.CreatedBy);
-            insert.Parameters.AddWithValue("created_at", value.CreatedAt);
-            AddNullable(insert, "reviewed_by", NpgsqlDbType.Text, value.ReviewedBy);
-            AddNullable(insert, "reviewed_at", NpgsqlDbType.TimestampTz, value.ReviewedAt);
-            insert.Parameters.AddWithValue("method", value.ExtractionMethod);
-            insert.Parameters.AddWithValue("version", value.ExtractorVersion);
-            AddNullable(insert, "confidence", NpgsqlDbType.Double, value.ExtractionConfidence);
-            AddNullable(insert, "location_kind", NpgsqlDbType.Text, value.Citation?.LocationKind);
-            AddNullable(insert, "page_number", NpgsqlDbType.Integer, value.Citation?.PageNumber);
-            AddNullable(insert, "sheet_name", NpgsqlDbType.Text, value.Citation?.SheetName);
-            AddNullable(insert, "cell_range", NpgsqlDbType.Text, value.Citation?.CellRange);
-            AddNullable(insert, "citation_region", NpgsqlDbType.Text, value.Citation?.Region);
-            AddNullable(insert, "content_hash", NpgsqlDbType.Text, value.Citation?.ContentHash);
-            insert.Parameters.AddWithValue("updated_at", value.CreatedAt);
+            insert.Parameters.AddWithValue("category", normalizedValue.Category);
+            AddNullable(insert, "page_or_sheet", NpgsqlDbType.Text, normalizedValue.PageOrSheet);
+            AddNullable(insert, "region", NpgsqlDbType.Text, normalizedValue.Region);
+            insert.Parameters.AddWithValue("content", normalizedValue.Content);
+            insert.Parameters.AddWithValue("human_reviewed", normalizedValue.HumanReviewed);
+            insert.Parameters.AddWithValue("created_by", normalizedValue.CreatedBy);
+            insert.Parameters.AddWithValue("created_at", normalizedValue.CreatedAt);
+            AddNullable(insert, "reviewed_by", NpgsqlDbType.Text, normalizedValue.ReviewedBy);
+            AddNullable(insert, "reviewed_at", NpgsqlDbType.TimestampTz, normalizedValue.ReviewedAt);
+            insert.Parameters.AddWithValue("method", normalizedValue.ExtractionMethod);
+            insert.Parameters.AddWithValue("version", normalizedValue.ExtractorVersion);
+            AddNullable(insert, "confidence", NpgsqlDbType.Double, normalizedValue.ExtractionConfidence);
+            AddNullable(insert, "location_kind", NpgsqlDbType.Text, normalizedValue.Citation?.LocationKind);
+            AddNullable(insert, "page_number", NpgsqlDbType.Integer, normalizedValue.Citation?.PageNumber);
+            AddNullable(insert, "sheet_name", NpgsqlDbType.Text, normalizedValue.Citation?.SheetName);
+            AddNullable(insert, "cell_range", NpgsqlDbType.Text, normalizedValue.Citation?.CellRange);
+            AddNullable(insert, "citation_region", NpgsqlDbType.Text, normalizedValue.Citation?.Region);
+            insert.Parameters.AddWithValue("content_hash", KnowledgeContentFingerprint.ComputeHash(normalizedValue.Content));
+            insert.Parameters.AddWithValue("updated_at", normalizedValue.CreatedAt);
             await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            foreach (var (code, text) in value.StructuredValues)
+            foreach (var (code, text) in normalizedValue.StructuredValues)
             {
                 await using var structured = new NpgsqlCommand(
                     "INSERT INTO knowledge_fragment_values(fragment_id,value_code,value_text) VALUES(@id,@code,@text);",
                     connection, transaction);
-                structured.Parameters.AddWithValue("id", value.RecordId);
+                structured.Parameters.AddWithValue("id", normalizedValue.RecordId);
                 structured.Parameters.AddWithValue("code", code);
                 structured.Parameters.AddWithValue("text", text);
                 await structured.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -945,6 +947,78 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         foreach (var index in Enumerable.Range(0, rows.Count))
             rows[index] = rows[index] with { StructuredValues = await ReadFragmentValuesAsync(rows[index].RecordId, ct).ConfigureAwait(false) };
         return rows;
+    }
+
+    public async Task<ResearchAssetPage<KnowledgeRecord>> ListKnowledgeRecordsForEmbeddingPageAsync(
+        Guid sourceId,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default)
+    {
+        var take = Math.Clamp(limit, 1, 500);
+        Guid? afterRecordId = null;
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            if (!Guid.TryParse(cursor, out var parsedCursor))
+                throw new ArgumentException("知识片段分页 cursor 无效。", nameof(cursor));
+            afterRecordId = parsedCursor;
+        }
+
+        await using var command = _dataSource.CreateCommand(
+            """
+            SELECT record_id, category, page_or_sheet, region, content, human_reviewed,
+              created_by, created_at, reviewed_by, reviewed_at, extraction_method,
+              extractor_version, extraction_confidence, location_kind, page_number,
+              sheet_name, cell_range, citation_region, content_hash
+            FROM knowledge_fragments
+            WHERE source_id=@source_id AND (@after_record_id IS NULL OR record_id > @after_record_id)
+            ORDER BY record_id
+            LIMIT @take;
+            """);
+        command.Parameters.AddWithValue("source_id", sourceId);
+        AddNullable(command, "after_record_id", NpgsqlDbType.Uuid, afterRecordId);
+        command.Parameters.AddWithValue("take", take + 1);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var rows = new List<KnowledgeRecord>(take + 1);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var citation = reader.IsDBNull(13) ? null : new KnowledgeCitation
+            {
+                LocationKind = reader.GetString(13),
+                PageNumber = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                SheetName = reader.IsDBNull(15) ? null : reader.GetString(15),
+                CellRange = reader.IsDBNull(16) ? null : reader.GetString(16),
+                Region = reader.IsDBNull(17) ? null : reader.GetString(17),
+                ContentHash = reader.IsDBNull(18) ? "" : reader.GetString(18)
+            };
+            rows.Add(new KnowledgeRecord
+            {
+                RecordId = reader.GetGuid(0),
+                SourceId = sourceId,
+                Category = reader.GetString(1),
+                PageOrSheet = reader.IsDBNull(2) ? null : reader.GetString(2),
+                Region = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Content = reader.GetString(4),
+                HumanReviewed = reader.GetBoolean(5),
+                CreatedBy = reader.GetString(6),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(7),
+                ReviewedBy = reader.IsDBNull(8) ? null : reader.GetString(8),
+                ReviewedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
+                ExtractionMethod = reader.GetString(10),
+                ExtractorVersion = reader.GetString(11),
+                ExtractionConfidence = reader.IsDBNull(12) ? null : reader.GetDouble(12),
+                Citation = citation
+            });
+        }
+
+        var hasMore = rows.Count > take;
+        if (hasMore)
+            rows.RemoveAt(rows.Count - 1);
+        return new ResearchAssetPage<KnowledgeRecord>
+        {
+            Data = rows,
+            NextCursor = hasMore ? rows[^1].RecordId.ToString() : null
+        };
     }
 
     public async Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default)

@@ -49,6 +49,7 @@ PostgreSQL 保存：
 - 过程执行、上下文和检验关系；
 - 配方优化任务、独立配方建议、补充证据审查、审批和状态机；
 - Agent 运行、输入快照、建议和证据哈希；
+- 已复核知识片段、检索任务，以及可重建的全文/相似词和向量索引；
 - 受控动作、执行回执、停止与回滚结果；
 - 数据保留、证据固定和审计策略。
 
@@ -83,8 +84,8 @@ flowchart LR
     subgraph Cell["站点生产单元"]
         LB["入口负载均衡"]
         Api["Platform API × N\n无状态"]
-        Worker["Platform Worker × N\n租约任务"]
-        Control["PostgreSQL HA\n正式业务记录源"]
+        Worker["Platform Worker × N\nAgent 运行 · 知识索引 · 其他租约任务"]
+        Control["PostgreSQL HA\n正式记录 · 全文/向量派生索引"]
         Series["条件性独立时序数据平面\n仅在容量闸门证明需要后建设"]
         Files["对象/文件存储\n附件 · 知识 · 冷归档"]
         Optimizer["Optimizer × N\n无业务状态"]
@@ -109,6 +110,8 @@ flowchart LR
 ```
 
 虚线橙色节点是条件性目标能力，不属于当前 Compose：独立时序数据平面只有在容量、恢复时间或成本闸门证明现有 PostgreSQL/TimescaleDB 服务不足后才建设；Edge Safety Executor 只有在受控行动证据闸门通过后才建设。当前附件和工艺知识仍使用 Platform 持久文件卷，目标对象存储是生产化替换路径，不是第二份正式业务状态。
+
+知识来源、审核状态和引用元数据属于正式记录；全文、相似词和向量索引只是可重建派生状态。向量服务不可用时，分析助手必须保留相同授权与审核过滤并退回关键词检索，不能因此形成另一套知识记录源。
 
 ### 站点生产单元
 

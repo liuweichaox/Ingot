@@ -315,7 +315,7 @@ export function ModelServiceConfigurationPage() {
   return (
     <Page title="模型服务">
       <Alert tone="info" title="密钥只写入，不回显">
-        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。Chat 与机理语义草稿按需共用此连接；留空表示保留现有密钥，替换后旧密钥立即失效于后续模型调用。
+        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。Chat、机理语义草稿与可选知识嵌入按需共用此连接；知识嵌入还需部署方显式启用并配置支持 /embeddings 的模型。留空表示保留现有密钥，替换后旧密钥立即失效于后续模型调用。
       </Alert>
       <RequestError error={error} title="模型服务配置不可用" onRetry={reload} />
       {actionError && <Alert tone="danger">{actionError}</Alert>}

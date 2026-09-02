@@ -31,9 +31,9 @@ The repository currently covers:
 - generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch, then append-only freezing the engineer's adoption, modification, or rejection, reason, actual recipe, and linked run;
 - selecting response-surface or Gaussian-process methods according to the data and degrading when evidence is insufficient;
 - preserving evidence, constraints, model versions, engineer decisions, and one-time frozen final outcomes from actual execution, parameter readback, and inspection records for every recommendation;
-- providing a permissioned analysis assistant plus backup, restore, monitoring, and basic failure-drill tooling.
+- providing a permissioned analysis assistant in which authorized tools query structured production facts and reviewed process documents use project- and applicability-scoped keyword plus optional semantic retrieval with fragment-level citations, together with backup, restore, monitoring, and basic failure-drill tooling.
 
-“Implemented” means repository code, database contracts, and tests exist. It does not mean the software fits every process or has produced a particular business benefit.
+“Implemented” means repository code, database contracts, and tests exist. It does not mean the software fits every process or has produced a particular business benefit. The repository also does not claim a completed retrieval-quality benchmark or proof that document retrieval shortens field-analysis cycles.
 
 ## Repository validation boundary
 

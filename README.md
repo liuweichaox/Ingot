@@ -136,7 +136,7 @@ npm --prefix apps/platform run demo
 
 ![Ingot 运行时组件、代码归属、记录源与跨服务数据流](docs/architecture/system-architecture.svg)
 
-Platform API 是工厂业务记录和证据装配的正式记录源；Optimizer 是无业务状态的数值服务；Agent 与 Platform API 同进程运行，只能通过授权的只读分析工具访问结构化事实；Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
+Platform API 是工厂业务记录和证据装配的正式记录源，负责接收 Chat 消息并建立排队任务；独立 Platform Worker 通过 PostgreSQL 租约执行持久 Agent 运行。Optimizer 是无业务状态的数值服务；Agent 只能通过授权的只读分析工具查询结构化事实，并从项目与适用范围内已复核知识片段中进行带引用的关键词与可选语义检索。Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
 
 ## 仓库结构
 
@@ -144,7 +144,7 @@ Platform API 是工厂业务记录和证据装配的正式记录源；Optimizer 
 |---|---|
 | `src/edge` | 现场协议、采集生命周期、语义映射、离线缓冲与重放 |
 | `src/platform` | 业务 API、正式记录、证据装配、权限与后台任务 |
-| `src/agent` | 模型辅助的问题解析、只读工具调用与证据说明 |
+| `src/agent` | 模型辅助的问题解析、只读工具调用、范围受控知识检索与证据说明 |
 | `src/shared` | 领域模型、跨模块契约和稳定标识 |
 | `optimizer` | 实验设计、代理模型、约束判断与序贯优化数值服务 |
 | `apps/platform` | React/Vite 工程工作台 |

@@ -12,7 +12,7 @@ Dependency selection is based on the engineering problem, license compatibility,
 | Product frontend | React, Vite, Headless UI, Plotly.js, oidc-client-ts | MIT / Apache-2.0 |
 | Website and documentation | Next.js, remark, rehype, Tailwind CSS | MIT |
 | Data import | ClosedXML, PdfPig, MatFileHandler | MIT / Apache-2.0 |
-| Data and time-series storage | PostgreSQL, TimescaleDB | PostgreSQL / Apache-2.0 |
+| Data, time-series, and knowledge-retrieval storage | PostgreSQL, TimescaleDB, pgvector (with PostgreSQL's `pg_trgm` extension) | PostgreSQL / Apache-2.0 |
 
 ## Introduction requirements
 

@@ -110,6 +110,11 @@ public interface IResearchAssetStore
     Task<IReadOnlyList<KnowledgeRecord>> ListKnowledgeRecordsAsync(
         Guid sourceId,
         CancellationToken ct = default);
+    Task<ResearchAssetPage<KnowledgeRecord>> ListKnowledgeRecordsForEmbeddingPageAsync(
+        Guid sourceId,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default);
 
     Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default);
     Task<IReadOnlyList<ResearchAssetAuditEntry>> ListAuditEntriesAsync(

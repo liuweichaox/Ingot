@@ -12,7 +12,7 @@
 | 产品前端 | React、Vite、Headless UI、Plotly.js、oidc-client-ts | MIT / Apache-2.0 |
 | 官网与文档站 | Next.js、remark、rehype、Tailwind CSS | MIT |
 | 数据导入 | ClosedXML、PdfPig、MatFileHandler | MIT / Apache-2.0 |
-| 数据与时序存储 | PostgreSQL、TimescaleDB | PostgreSQL / Apache-2.0 |
+| 数据、时序与知识检索存储 | PostgreSQL、TimescaleDB、pgvector（含 PostgreSQL `pg_trgm` 扩展） | PostgreSQL / Apache-2.0 |
 
 ## 引入要求
 

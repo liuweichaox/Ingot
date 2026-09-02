@@ -20,7 +20,7 @@
                                       └─ Platform Web（独立 React 前端）
 ```
 
-Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker 负责持久 Chat 运行、知识提取、分析回填、补充取证固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
+Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker 负责持久 Chat/Agent 运行、知识提取与嵌入索引、分析回填、补充取证固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
 
 仓库自带的 Compose 是单 API 实例参考拓扑，不宣称高可用。Agent 运行已经与业务证据一起进入 PostgreSQL，因此不再阻止外部编排器在共享数据库和负载均衡器之后扩展 API；正式多副本部署仍需自行提供入口负载均衡、数据库高可用和容量验收。
 
@@ -86,7 +86,9 @@ https://platform.example.com/auth/logout-callback
 
 ### 模型服务
 
-启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、模型标识和 API key；Chat 与机理知识语义草稿在需要模型时直接复用这套配置，不存在第二套地址、模型或密钥配置。更换兼容模型服务只修改页面配置，不修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。DeepSeek 的一个配置示例是 `Provider=DeepSeek`、`Protocol=Responses`、`BaseUrl=https://api.deepseek.com`，并使用当前可用的 DeepSeek 模型标识。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
+启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
+
+文档检索始终提供 PostgreSQL 关键词路径。语义检索默认关闭；只有配置的模型服务支持 OpenAI-compatible `/embeddings` 且允许向该服务发送已复核文档片段时，才设置 `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true`。可调整 `INGOT_KNOWLEDGE_EMBEDDING_MODEL`、`INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`、`INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY` 和 `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`。Worker 会为已复核片段异步建索引并回填历史缺口；查询嵌入或服务失败时自动退回关键词检索，不放宽项目、站点、适用范围和审核过滤。
 
 模型服务不是采集、检验或数值优化的启动依赖。发送给模型的内容必须经过授权工具和业务权限控制。
 
@@ -115,7 +117,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` 停止并移除容器和网络，但默认保留命名数据卷；不要在没有备份和明确重置意图时添加 `--volumes`。修改源代码后使用 `up -d --build`；只修改 `.env` 时使用 `up -d` 重新创建受影响容器。
 
-首次构建会下载较大的 SDK、PyTorch 和数据库镜像。必须等 `platform-migrate` 成功退出，且 PostgreSQL、Platform API、Platform Worker、Optimizer、Web 和 ConnectorHost 均为 `healthy` 后，才算启动完成。
+首次构建会下载较大的 SDK、PyTorch 和数据库镜像。数据库镜像必须同时提供 TimescaleDB、`pg_trgm` 和 `vector` 扩展；迁移会创建全文/相似词与 HNSW 向量索引。必须等 `platform-migrate` 成功退出，且 PostgreSQL、Platform API、Platform Worker、Optimizer、Web 和 ConnectorHost 均为 `healthy` 后，才算启动完成。
 
 | 现象 | 先检查 | 常见原因与处理 |
 |---|---|---|
@@ -186,7 +188,8 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 - 运行完整、实际参数、上下文和检验关联覆盖；
 - PostgreSQL 连接、磁盘、迁移和慢事务；
 - Optimizer 就绪、请求失败和计算时间；
-- Agent 工具失败、模型不可用和授权拒绝。
+- Agent 工具失败、模型不可用和授权拒绝；
+- 知识嵌入任务的排队时长、重试、死信和当前嵌入模型覆盖率。
 
 报警应指向可操作对象，例如具体 Edge、设备、配置版本或运行，而不是只显示“系统异常”。
 
@@ -222,6 +225,8 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 ```
 
 备份格式使用 `pg_dump --format=custom`，适合逻辑恢复和迁移验证，但不是 PITR。需要更小 RPO 的现场还必须由部署方配置 PostgreSQL 基础备份、持续 WAL 归档、异机保留和定期时间点恢复演练。备份目录包含业务和附件数据，权限不得低于生产系统本身。
+
+知识向量和嵌入任务随 PostgreSQL 一起备份，但它们属于可重建派生状态。恢复到不包含 `vector` 扩展的 PostgreSQL 实例会使迁移或恢复校验失败；目标实例必须先提供与当前 Schema 兼容的 TimescaleDB、`pg_trgm` 和 `vector` 扩展。
 
 至少备份：
 

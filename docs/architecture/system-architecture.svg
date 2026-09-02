@@ -62,9 +62,9 @@
     <text x="720" y="622" font-size="10.5" fill="#94A3B8" text-anchor="middle">不是独立服务</text>
 
     <rect x="932" y="540" width="326" height="92" rx="10" fill="#FFFFFF" stroke="#E8AD56" stroke-width="1.3" stroke-dasharray="5 4"/>
-    <text x="1095" y="566" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Agent（API 进程内，可选）</text>
-    <text x="1095" y="586" font-size="11" fill="#64748B" text-anchor="middle">问题解析 · 授权只读工具 · 证据说明</text>
-    <text x="1095" y="604" font-size="11" fill="#64748B" text-anchor="middle">运行快照写入 Platform PostgreSQL</text>
+    <text x="1095" y="566" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">Agent 核心（可选类库）</text>
+    <text x="1095" y="586" font-size="11" fill="#64748B" text-anchor="middle">授权只读工具 · 已复核知识检索 · 引用</text>
+    <text x="1095" y="604" font-size="11" fill="#64748B" text-anchor="middle">API 接收 Chat · Worker 执行持久运行</text>
     <text x="1095" y="622" font-size="10.5" fill="#94A3B8" text-anchor="middle">src/agent · 非独立部署单元</text>
   </g>
 
@@ -73,7 +73,7 @@
     <rect x="118" y="752" width="70" height="18" rx="9" fill="#0F766E"/>
     <text x="153" y="765" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">PLATFORM</text>
     <text x="280" y="795" font-size="17" font-weight="700" fill="#0F172A" text-anchor="middle">Platform Worker</text>
-    <text x="280" y="814" font-size="11.5" fill="#334155" text-anchor="middle">投影与重算 · 保留维护</text>
+    <text x="280" y="814" font-size="11.5" fill="#334155" text-anchor="middle">Chat/Agent 运行 · 投影与重算</text>
     <text x="280" y="831" font-size="11.5" fill="#334155" text-anchor="middle">结果固化 · 知识处理</text>
     <text x="280" y="845" font-size="10" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="middle">独立后台进程 · src/platform</text>
   </g>
@@ -82,8 +82,8 @@
     <rect x="538" y="752" width="70" height="18" rx="9" fill="#475569"/>
     <text x="573" y="765" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">DATABASE</text>
     <text x="720" y="795" font-size="16" font-weight="700" fill="#0F172A" text-anchor="middle">PostgreSQL 17 + TimescaleDB 扩展</text>
-    <text x="720" y="816" font-size="12" fill="#334155" text-anchor="middle">正式业务记录 · Agent 快照 · 时序事件与过程数据</text>
-    <text x="720" y="836" font-size="10.5" fill="#94A3B8" text-anchor="middle">当前 Compose 中是同一数据库服务</text>
+    <text x="720" y="816" font-size="11.5" fill="#334155" text-anchor="middle">正式记录 · Agent 快照 · 已复核知识 · 时序数据</text>
+    <text x="720" y="836" font-size="10.5" fill="#94A3B8" text-anchor="middle">TimescaleDB · pg_trgm · pgvector/HNSW 派生索引</text>
   </g>
   <g>
     <rect x="980" y="738" width="360" height="112" rx="12" fill="#FFFBEB" stroke="#A16207" stroke-width="1.5"/>
@@ -125,11 +125,11 @@
   <text x="1180" y="706" font-size="11.5" fill="#A16207">HTTP 数值请求/结果</text>
   <line x1="720" y1="674" x2="720" y2="736" stroke="#64748B" stroke-width="1.8" marker-start="url(#arrowGray)" marker-end="url(#arrowGray)"/>
   <path d="M1240,674 C1240,700 1360,700 1360,760 L1360,858 C1360,886 1200,878 1170,908" fill="none" stroke="#64748B" stroke-width="1.8" marker-start="url(#arrowGray)" marker-end="url(#arrowGray)"/>
-  <text x="1348" y="802" font-size="11" fill="#475569" text-anchor="end">附件/知识</text>
+  <text x="1348" y="880" font-size="11" fill="#475569" text-anchor="end">附件/知识</text>
   <line x1="462" y1="794" x2="518" y2="794" stroke="#64748B" stroke-width="1.8" marker-start="url(#arrowGray)" marker-end="url(#arrowGray)"/>
   <text x="490" y="785" font-size="10.5" fill="#475569" text-anchor="middle">读写</text>
   <path d="M360,850 L360,878 L920,878 L1030,908" fill="none" stroke="#64748B" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrowGray)"/>
-  <text x="760" y="871" font-size="11" fill="#475569" text-anchor="middle">知识文件处理</text>
+  <text x="760" y="871" font-size="11" fill="#475569" text-anchor="middle">知识抽取 · 嵌入回填 · 索引</text>
   <path d="M462,962 L490,962 L490,820 L518,820" fill="none" stroke="#64748B" stroke-width="1.8" marker-end="url(#arrowGray)"/>
   <text x="478" y="900" font-size="10.5" fill="#475569" text-anchor="end">迁移/引导</text>
 

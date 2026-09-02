@@ -274,7 +274,11 @@ function ChatAnswer({ answer, onFollowUp }) {
               <Link key={`${item.kind}:${item.id}`} to={item.url} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100">
                 {item.label}
               </Link>
-            ) : null)}
+            ) : (
+              <span key={`${item.kind}:${item.id}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] font-medium text-slate-700">
+                {item.label}
+              </span>
+            ))}
           </div>
         </div>
       )}

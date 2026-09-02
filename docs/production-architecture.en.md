@@ -49,6 +49,7 @@ PostgreSQL stores:
 - process executions, context, and inspection relationships;
 - recipe-optimization tasks, independent recipe recommendations, supplementary evidence reviews, approvals, and state machines;
 - Agent runs, input snapshots, recommendations, and evidence hashes;
+- reviewed knowledge fragments, retrieval jobs, and rebuildable full-text/similarity and vector indexes;
 - controlled actions, execution receipts, stop, and rollback outcomes;
 - data-retention, evidence-pinning, and audit policies.
 
@@ -83,8 +84,8 @@ flowchart LR
     subgraph Cell["Site production cell"]
         LB["Ingress load balancer"]
         Api["Platform API × N\nstateless"]
-        Worker["Platform Worker × N\nleased jobs"]
-        Control["PostgreSQL HA\nformal business record"]
+        Worker["Platform Worker × N\nAgent runs · knowledge indexes · other leased jobs"]
+        Control["PostgreSQL HA\nformal records · derived text/vector indexes"]
         Series["conditional independent time-series plane\nonly after the capacity gate proves a need"]
         Files["Object/file storage\nattachments · knowledge · cold archive"]
         Optimizer["Optimizer × N\nno business state"]
@@ -109,6 +110,8 @@ flowchart LR
 ```
 
 Dashed orange nodes are conditional target capabilities, not current Compose services. An independent time-series plane is built only after capacity, recovery-time, or cost gates prove the existing PostgreSQL/TimescaleDB service insufficient. Edge Safety Executor is built only after controlled-action evidence gates pass. Attachments and process knowledge currently remain on Platform persistent file volumes; target object storage is a production replacement path, not a second source of formal business state.
+
+Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, the analysis assistant retains the same authorization and review filters and falls back to keywords rather than creating another knowledge system of record.
 
 ### Site production cell
 

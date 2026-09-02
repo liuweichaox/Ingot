@@ -10,7 +10,9 @@ using Ingot.Platform.Infrastructure.ResearchAssets;
 namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed partial class SearchProcessKnowledgeTool(
-    IResearchAssetStore store) : IAnalysisTool
+    IResearchAssetStore store,
+    IResearchProjectContextReader projects,
+    IProcessKnowledgeSearch? search = null) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -47,64 +49,63 @@ public sealed partial class SearchProcessKnowledgeTool(
                     int.TryParse(limitText, out var parsedLimit)
             ? Math.Clamp(parsedLimit, 1, 20)
             : 8;
-        var terms = BuildTerms(query);
         var projectId = context.Request.PageContext is { Kind: "research-project" } pageContext &&
                         Guid.TryParse(pageContext.Id, out var parsedProjectId)
-            ? parsedProjectId.ToString()
+            ? (Guid?)parsedProjectId
             : null;
-        var sources = (await store.ListKnowledgeSourcesAsync(ct).ConfigureAwait(false))
-            .Where(source =>
-                projectId is not null &&
-                source.ContextSelector.TryGetValue("research-project-id", out var value) &&
-                string.Equals(value, projectId, StringComparison.OrdinalIgnoreCase))
-            .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
-            .Where(source => MatchesContext(source.ContextSelector, "product_family_code", productFamilyCode))
-            .Where(source => MatchesContext(source.ContextSelector, "equipment_id", equipmentId))
-            .ToArray();
-        var matches = new List<KnowledgeMatch>();
-        foreach (var source in sources)
+        if (projectId is null)
+            return Insufficient(query, "知识检索必须在工艺研发项目上下文中执行。", productFamilyCode, equipmentId);
+        var project = await projects.GetProjectAsync(projectId.Value, ct).ConfigureAwait(false);
+        var normalizedUserId = context.UserId.Trim().ToLowerInvariant();
+        if (project is null ||
+            !(string.Equals(project.OwnerUserId, normalizedUserId, StringComparison.Ordinal) ||
+              project.MemberUserIds.Contains(normalizedUserId, StringComparer.Ordinal)))
+            return Insufficient(query, "研发项目不存在或当前用户无权访问。", productFamilyCode, equipmentId);
+        try
         {
-            var records = await store.ListKnowledgeRecordsAsync(source.SourceId, ct).ConfigureAwait(false);
-            matches.AddRange(records
-                .Where(static record => record.HumanReviewed)
-                .Select(record => new KnowledgeMatch(
-                    source,
-                    record,
-                    Score(record, source, terms)))
-                .Where(static match => match.Score > 0));
+            context.AccessScope.EnsureAuthorizedSite(project.SiteCode);
         }
-        var selected = matches
-            .OrderByDescending(static match => match.Score)
-            .ThenByDescending(static match => match.Record.ReviewedAt ?? match.Record.CreatedAt)
-            .Take(limit)
-            .ToArray();
-        var limitations = new List<string>();
-        if (sources.Length == 0)
-            limitations.Add("当前适用范围内没有已复核的工艺知识来源。");
-        else if (selected.Length == 0)
+        catch (UnauthorizedAccessException)
+        {
+            return Insufficient(query, "当前用户无权访问该研发项目所在站点。", productFamilyCode, equipmentId);
+        }
+
+        var result = search is null
+            ? await SearchFallbackAsync(projectId.Value, query, productFamilyCode, equipmentId, limit, ct).ConfigureAwait(false)
+            : await search.SearchAsync(new ProcessKnowledgeSearchRequest
+            {
+                ResearchProjectId = projectId.Value,
+                Query = query.Trim(),
+                AllowAllSites = context.AccessScope.AllowAllSites,
+                SiteIds = context.AccessScope.SiteIds,
+                ProductFamilyCode = NullIfBlank(productFamilyCode),
+                EquipmentId = NullIfBlank(equipmentId),
+                Limit = limit
+            }, ct).ConfigureAwait(false);
+        var selected = result.Hits;
+        var limitations = result.Limitations.ToList();
+        if (selected.Count == 0)
             limitations.Add("已复核知识中没有与当前问题直接匹配的记录，不能据此形成现场结论。");
         var related = selected
-            .Select(static match => match.Source)
-            .DistinctBy(static source => source.SourceId)
-            .Select(static source => new RelatedRecordRef
+            .Select(match => new RelatedRecordRef
             {
-                Kind = "process-knowledge",
-                Id = source.SourceId.ToString(),
-                Label = source.Title,
-                Url = source.ContextSelector.TryGetValue("research-project-id", out var sourceProjectId)
-                    ? $"/research-projects?projectId={sourceProjectId}&sourceId={source.SourceId}"
-                    : "/research-projects"
+                Kind = "process-knowledge-record",
+                Id = match.Record.RecordId.ToString(),
+                Label = match.Record.PageOrSheet is null
+                    ? match.Source.Title
+                    : $"{match.Source.Title} · {match.Record.PageOrSheet}"
             })
             .ToArray();
         return new AnalysisToolResult
         {
             Tool = Definition.Name,
-            Summary = selected.Length == 0
+            Summary = selected.Count == 0
                 ? "没有找到可用于当前问题的已复核工艺知识。"
-                : $"找到 {selected.Length} 条已复核工艺知识记录，来自 {related.Length} 个来源。",
+                : $"找到 {selected.Count} 条已复核工艺知识记录，来自 {selected.Select(static hit => hit.Source.SourceId).Distinct().Count()} 个来源。",
             Data = JsonSerializer.SerializeToElement(new
             {
                 query = query.Trim(),
+                retrievalMode = result.RetrievalMode,
                 appliedContext = new
                 {
                     researchProjectId = projectId,
@@ -117,6 +118,7 @@ public sealed partial class SearchProcessKnowledgeTool(
                     sourceTitle = match.Source.Title,
                     sourceKind = match.Source.SourceKind,
                     fileName = match.Source.FileName,
+                    sourceSha256 = match.Source.Sha256,
                     recordId = match.Record.RecordId,
                     category = match.Record.Category,
                     pageOrSheet = match.Record.PageOrSheet,
@@ -124,16 +126,83 @@ public sealed partial class SearchProcessKnowledgeTool(
                     content = match.Record.Content,
                     structuredValues = match.Record.StructuredValues,
                     reviewedBy = match.Record.ReviewedBy,
-                    reviewedAt = match.Record.ReviewedAt
+                    reviewedAt = match.Record.ReviewedAt,
+                    retrievalMethod = match.RetrievalMethod,
+                    score = match.Score,
+                    contentHash = match.Record.Citation?.ContentHash,
+                    citation = match.Record.Citation
                 })
             }),
             RelatedRecords = related,
             Limitations = limitations,
-            Outcome = selected.Length > 0
+            Outcome = selected.Count > 0
                 ? AnalysisToolOutcomes.Sufficient
                 : AnalysisToolOutcomes.InsufficientData
         };
     }
+
+    private async Task<ProcessKnowledgeSearchResult> SearchFallbackAsync(
+        Guid projectId,
+        string query,
+        string? productFamilyCode,
+        string? equipmentId,
+        int limit,
+        CancellationToken ct)
+    {
+        var terms = BuildTerms(query);
+        var sources = (await store.ListKnowledgeSourcesAsync(projectId, ct).ConfigureAwait(false))
+            .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
+            .Where(source => MatchesContext(source.ContextSelector, "product_family_code", productFamilyCode))
+            .Where(source => MatchesContext(source.ContextSelector, "equipment_id", equipmentId))
+            .ToArray();
+        var matches = new List<ProcessKnowledgeSearchHit>();
+        foreach (var source in sources)
+        {
+            var records = await store.ListKnowledgeRecordsAsync(source.SourceId, ct).ConfigureAwait(false);
+            matches.AddRange(records
+                .Where(static record => record.HumanReviewed)
+                .Select(record => new ProcessKnowledgeSearchHit
+                {
+                    Source = source,
+                    Record = record,
+                    Score = Score(record, source, terms),
+                    RetrievalMethod = "keyword-fallback"
+                })
+                .Where(static match => match.Score > 0));
+        }
+        return new ProcessKnowledgeSearchResult
+        {
+            Hits = matches.OrderByDescending(static match => match.Score)
+                .ThenByDescending(static match => match.Record.ReviewedAt ?? match.Record.CreatedAt)
+                .Take(limit)
+                .ToArray(),
+            RetrievalMode = "keyword-fallback",
+            Limitations = ["数据库混合检索未启用，已使用兼容关键词检索。"]
+        };
+    }
+
+    private AnalysisToolResult Insufficient(
+        string query,
+        string limitation,
+        string? productFamilyCode,
+        string? equipmentId)
+        => new()
+        {
+            Tool = Definition.Name,
+            Summary = "没有找到可用于当前问题的已复核工艺知识。",
+            Data = JsonSerializer.SerializeToElement(new
+            {
+                query = query.Trim(),
+                appliedContext = new
+                {
+                    productFamilyCode = NullIfBlank(productFamilyCode),
+                    equipmentId = NullIfBlank(equipmentId)
+                },
+                records = Array.Empty<object>()
+            }),
+            Limitations = [limitation],
+            Outcome = AnalysisToolOutcomes.InsufficientData
+        };
 
     private static bool MatchesContext(
         IReadOnlyDictionary<string, string> context,
@@ -184,11 +253,6 @@ public sealed partial class SearchProcessKnowledgeTool(
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private sealed record KnowledgeMatch(
-        KnowledgeSource Source,
-        KnowledgeRecord Record,
-        double Score);
 
     [GeneratedRegex(@"[\s,，。！？；;:：/\\|()\[\]{}]+", RegexOptions.CultureInvariant)]
     private static partial Regex SeparatorPattern();

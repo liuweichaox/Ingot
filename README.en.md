@@ -136,7 +136,7 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 
 ![Ingot runtime components, code ownership, systems of record, and cross-service data flows](docs/architecture/system-architecture.en.svg)
 
-Platform API is the system of record for factory business records and evidence assembly. Optimizer is a stateless numerical service. Agent runs in the Platform API process and accesses structured facts only through authorized read-only analysis tools. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
+Platform API is the system of record for factory business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through project- and applicability-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
 
 ## Repository structure
 
@@ -144,7 +144,7 @@ Platform API is the system of record for factory business records and evidence a
 |---|---|
 | `src/edge` | Field protocols, acquisition lifecycle, semantic mapping, offline buffering, and replay |
 | `src/platform` | Business API, systems of record, evidence assembly, authorization, and background work |
-| `src/agent` | Model-assisted question parsing, read-only tool calls, and evidence explanation |
+| `src/agent` | Model-assisted question parsing, read-only tool calls, scope-controlled knowledge retrieval, and evidence explanation |
 | `src/shared` | Domain models, cross-module contracts, and stable identifiers |
 | `optimizer` | Experiment design, surrogate models, constraint evaluation, and sequential optimization service |
 | `apps/platform` | React/Vite engineering workbench |
