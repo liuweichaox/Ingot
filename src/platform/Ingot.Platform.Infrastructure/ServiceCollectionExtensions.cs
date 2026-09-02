@@ -17,6 +17,7 @@ using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
+using Ingot.Platform.Infrastructure.Identity;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.Migrations;
 using Ingot.Platform.Infrastructure.ModelServices;
@@ -62,6 +63,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PostgresAgentRunStore>();
         services.AddSingleton<IAgentRunStore>(provider =>
             provider.GetRequiredService<PostgresAgentRunStore>());
+        services.TryAddSingleton<IAgentRunAuthorization, LocalAgentRunAuthorization>();
         services.AddSingleton<PostgresChatConversationStore>();
         services.AddSingleton<IChatConversationStore>(provider =>
             provider.GetRequiredService<PostgresChatConversationStore>());

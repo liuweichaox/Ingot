@@ -294,7 +294,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             return captured is null ? evt : evt with { Context = MergeCapturedContext(captured, evt.Context) };
         }
 
-        var resolved = await _manufacturingContexts.ResolveAsync(evt.Subject.Id, evt.OccurredAt, ct)
+        var resolved = await _manufacturingContexts.ResolveAsync(siteId, evt.Subject.Id, evt.OccurredAt, ct)
             .ConfigureAwait(false);
         var context = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal);
         context["execution_id"] = executionId;

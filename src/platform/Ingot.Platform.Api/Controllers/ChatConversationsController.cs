@@ -1,5 +1,6 @@
 // 提供以会话和消息为中心的 Chat API；AgentRun 仅作为助手消息的执行明细。
 using Ingot.Contracts.Agents;
+using Ingot.Agent;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Chat;
 using Ingot.Platform.Application.ProcessResearch;
@@ -12,6 +13,7 @@ namespace Ingot.Platform.Api.Controllers;
 public sealed class ChatConversationsController(
     ChatConversationApplication chat,
     ProcessResearchQueries research,
+    IAgentRuntime runtime,
     PlatformUserResolver userResolver) : PlatformApiController
 {
     [HttpGet]
@@ -20,9 +22,16 @@ public sealed class ChatConversationsController(
         [FromQuery] DateTimeOffset? before = null,
         CancellationToken ct = default)
     {
-        if (!TryActor(out var userId, out _, out var unauthorized))
+        if (!TryActor(out var userId, out var identity, out var unauthorized))
             return unauthorized!;
-        return Ok(await chat.ListAsync(userId!, before, limit, ct).ConfigureAwait(false));
+        var page = await chat.ListAsync(userId!, before, limit, ct).ConfigureAwait(false);
+        var items = new List<ChatConversationSummary>(page.Items.Count);
+        foreach (var conversation in page.Items)
+        {
+            if (await CanReadConversationAsync(conversation, userId!, identity!, ct).ConfigureAwait(false))
+                items.Add(conversation);
+        }
+        return Ok(page with { Items = items });
     }
 
     [HttpGet("{conversationId}")]
@@ -32,10 +41,15 @@ public sealed class ChatConversationsController(
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
     {
-        if (!TryActor(out var userId, out _, out var unauthorized))
+        if (!TryActor(out var userId, out var identity, out var unauthorized))
             return unauthorized!;
         try
         {
+            var summary = await chat.GetSummaryAsync(conversationId, userId!, ct).ConfigureAwait(false);
+            if (summary is null)
+                return ResourceNotFound();
+            if (!await CanReadConversationAsync(summary, userId!, identity!, ct).ConfigureAwait(false))
+                return AuthorizationDenied();
             var value = await chat.GetAsync(conversationId, userId!, beforeSequence, limit, ct)
                 .ConfigureAwait(false);
             return value is null ? ResourceNotFound() : Ok(value);
@@ -128,10 +142,15 @@ public sealed class ChatConversationsController(
     [HttpDelete("{conversationId}")]
     public async Task<IActionResult> Delete(string conversationId, CancellationToken ct)
     {
-        if (!TryActor(out var userId, out _, out var unauthorized))
+        if (!TryActor(out var userId, out var identity, out var unauthorized))
             return unauthorized!;
         try
         {
+            var conversation = await chat.GetSummaryAsync(conversationId, userId!, ct).ConfigureAwait(false);
+            if (conversation is null)
+                return ResourceNotFound();
+            if (!await CanReadConversationAsync(conversation, userId!, identity!, ct).ConfigureAwait(false))
+                return AuthorizationDenied();
             return await chat.DeleteAsync(conversationId, userId!, ct).ConfigureAwait(false)
                 ? NoContent()
                 : ResourceNotFound();
@@ -179,6 +198,35 @@ public sealed class ChatConversationsController(
                 ((string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
                   project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal)) &&
                  identity.CanAccessSite(project.SiteCode)));
+    }
+
+    private async Task<bool> CanReadConversationAsync(
+        ChatConversationSummary conversation,
+        string userId,
+        PlatformIdentity identity,
+        CancellationToken ct)
+    {
+        if (!await CanUsePageContextAsync(conversation.PageContext, identity, ct).ConfigureAwait(false))
+            return false;
+        var runs = await runtime.GetConversationAsync(
+                ProductEntryPoints.Chat, userId, conversation.ConversationId, ct)
+            .ConfigureAwait(false);
+        return runs.All(run => CanAccessRun(run.UserId, run.AccessScope, identity));
+    }
+
+    private static bool CanAccessRun(
+        string ownerUserId,
+        AgentRunAccessScopeSnapshot? capturedScope,
+        PlatformIdentity identity)
+    {
+        if (!string.Equals(ownerUserId, identity.UserId, StringComparison.OrdinalIgnoreCase) ||
+            capturedScope is null ||
+            capturedScope.Version != AgentRunAccessScopeSnapshot.CurrentVersion)
+            return false;
+        if (identity.HasAnyRole(PlatformRoles.PlatformAdministrator))
+            return true;
+        return !capturedScope.AllowAllSites && capturedScope.SiteIds.Count > 0 &&
+               capturedScope.SiteIds.All(identity.CanAccessSite);
     }
 
     private static AgentRunAccessScopeSnapshot AccessScope(PlatformIdentity identity)

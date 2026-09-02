@@ -26,7 +26,7 @@ public sealed class ConnectorEventsController(
 
         var edgeId = identity.GetEdgeId();
         var sourcePrefix = $"edge/{edgeId}/";
-        var accepted = new List<object>(events.Count);
+        var normalizedEvents = new List<ProductionEvent>(events.Count);
         foreach (var incoming in events)
         {
             if (incoming is null || string.IsNullOrWhiteSpace(incoming.Source))
@@ -48,10 +48,12 @@ public sealed class ConnectorEventsController(
             });
             if (!ProductionEventValidator.TryValidate(normalized, requirePersistedSequence: false, out var error))
                 return BadRequest(new { error, eventId = incoming.EventId });
-            var persisted = await sink.EmitAsync(normalized, ct).ConfigureAwait(false);
-            accepted.Add(new { persisted.EventId, persisted.Seq });
+            normalizedEvents.Add(normalized);
         }
-        return Accepted(new { count = accepted.Count, events = accepted });
+
+        var persistedEvents = await sink.EmitBatchAsync(normalizedEvents, ct).ConfigureAwait(false);
+        var accepted = persistedEvents.Select(item => new { item.EventId, item.Seq }).ToArray();
+        return Accepted(new { count = accepted.Length, events = accepted });
     }
 
     private bool IsAuthorized()

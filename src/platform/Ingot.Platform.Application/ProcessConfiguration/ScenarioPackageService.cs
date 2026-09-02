@@ -68,7 +68,19 @@ public sealed class ScenarioPackageService(
             }
         }
 
-        return Success(await configurations.UpsertScenarioPackageAsync(package, ct).ConfigureAwait(false));
+        var saved = await configurations.TryUpsertScenarioPackageAsync(package, ct).ConfigureAwait(false);
+        if (saved.Succeeded)
+            return Success(saved.Value!);
+        if (saved.Existing is not null && SamePayload(
+                saved.Existing with { UpdatedAt = default },
+                package with { UpdatedAt = default }))
+            return Success(saved.Existing);
+        return new ScenarioPackageOperationResult
+        {
+            Status = ScenarioPackageOperationStatus.Conflict,
+            Error = "工艺配置版本已发生并发状态变化，请重新加载后再试。",
+            Existing = saved.Existing
+        };
     }
 
     public async Task<ScenarioPackageOperationResult> DeleteAsync(
@@ -90,9 +102,21 @@ public sealed class ScenarioPackageService(
             };
         }
 
-        return await configurations.DeleteScenarioPackageAsync(existing.PackageId, version, ct).ConfigureAwait(false)
-            ? Success(existing)
-            : new ScenarioPackageOperationResult { Status = ScenarioPackageOperationStatus.NotFound };
+        var deleted = await configurations.TryDeleteScenarioPackageAsync(existing.PackageId, version, ct)
+            .ConfigureAwait(false);
+        return deleted.Status switch
+        {
+            ProcessConfigurationMutationStatus.Applied => Success(existing),
+            ProcessConfigurationMutationStatus.NotFound => new ScenarioPackageOperationResult
+            {
+                Status = ScenarioPackageOperationStatus.NotFound
+            },
+            _ => new ScenarioPackageOperationResult
+            {
+                Status = ScenarioPackageOperationStatus.Conflict,
+                Error = "工艺配置状态已发生变化，请重新加载后再试。"
+            }
+        };
     }
 
     private async Task<string?> ValidateReferencesAsync(ScenarioPackage package, CancellationToken ct)

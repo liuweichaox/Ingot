@@ -63,7 +63,7 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
       optionLabel: row => `${row.subjectId}${row.edgeId ? ` · 由 ${row.edgeId} 采集` : ""}`,
     },
     toolingInstallationId: {
-      endpoint: "/api/v1/tooling-installations?activeOnly=true",
+      endpoint: `/api/v1/tooling-installations?activeOnly=true${editor.siteId ? `&siteId=${encodeURIComponent(editor.siteId)}` : ""}`,
       label: "当前已装工装",
       filter: row => !editor.equipmentId || row.equipmentId === editor.equipmentId,
       optionValue: row => row.installationId,
@@ -141,22 +141,30 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
           title="完成这 3 步即可生效"
           description="必填内容完成后，底部按钮会自动变为可用。"
           steps={[
-            { title: "选择生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
+            { title: "选择站点和生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
             { title: "确认产品与工艺规范", description: "填写产品身份并选择已发布工艺规范。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
             { title: "确认工装并生效", description: "选择当前已装工装后保存。", state: hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation ? "current" : "upcoming" },
           ]}
         />
-        <Card title="1. 选择生产设备" description="只显示已经通过现场节点上报过数据的设备。">
-          <ProductionReferenceField
-            fieldKey="equipmentId"
-            value={editor.equipmentId}
-            editor={editor}
-            required
-            onChange={(key, value) => {
-              onChange(key, value);
-              onChange("toolingInstallationId", "");
-            }}
-          />
+        <Card title="1. 选择站点和生产设备" description="只显示已经通过现场节点上报过数据的设备。">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="站点">
+              <Input required value={editor.siteId || ""} placeholder="例如 SITE-001" onChange={event => {
+                onChange("siteId", event.target.value);
+                onChange("toolingInstallationId", "");
+              }} />
+            </Field>
+            <ProductionReferenceField
+              fieldKey="equipmentId"
+              value={editor.equipmentId}
+              editor={editor}
+              required
+              onChange={(key, value) => {
+                onChange(key, value);
+                onChange("toolingInstallationId", "");
+              }}
+            />
+          </div>
         </Card>
         <Card title="2. 确认产品与工艺规范" description="产品编号用于追溯实物，产品系列用于同类分析。">
           <div className="grid gap-4 sm:grid-cols-2">

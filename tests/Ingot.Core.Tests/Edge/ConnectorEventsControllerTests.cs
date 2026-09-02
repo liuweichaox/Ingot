@@ -14,7 +14,7 @@ namespace Ingot.Core.Tests.Edge;
 public sealed class ConnectorEventsControllerTests
 {
     [Fact]
-    public async Task Ingest_NormalizesPersistenceFieldsBeforeValidation()
+    public async Task Ingest_NormalizesPersistenceFieldsBeforeBatchValidation()
     {
         var sink = new CapturingEventSink();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(
@@ -41,10 +41,38 @@ public sealed class ConnectorEventsControllerTests
         var result = await controller.Ingest([incoming], CancellationToken.None);
 
         Assert.IsType<AcceptedResult>(result);
-        Assert.NotNull(sink.Captured);
-        Assert.NotEqual(default, sink.Captured.RecordedAt);
-        Assert.Equal(0, sink.Captured.Seq);
-        Assert.Equal("edge/EDGE-001/connector/SOURCE-01", sink.Captured.Source);
+        var captured = Assert.Single(sink.BatchCaptured);
+        Assert.NotEqual(default, captured.RecordedAt);
+        Assert.Equal(0, captured.Seq);
+        Assert.Equal("edge/EDGE-001/connector/SOURCE-01", captured.Source);
+    }
+
+    [Fact]
+    public async Task Ingest_InvalidEventLaterInBatch_DoesNotPersistEarlierEvents()
+    {
+        var sink = new CapturingEventSink();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters"
+            }).Build();
+        var controller = new ConnectorEventsController(sink, new StubEdgeIdentityProvider(), configuration)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        controller.Request.Headers.Authorization = "Bearer connector-token-with-at-least-24-characters";
+        var valid = ProductionEvent.Create(
+            "equipment.heartbeat",
+            DateTimeOffset.UtcNow,
+            "connector/SOURCE-01",
+            new ObjectRef("equipment", "FURNACE-01"));
+        var invalid = valid with { EventId = Guid.CreateVersion7().ToString(), Source = "" };
+
+        var result = await controller.Ingest([valid, invalid], CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(sink.BatchCaptured);
+        Assert.Equal(0, sink.BatchCalls);
     }
 
     [Fact]
@@ -89,19 +117,21 @@ public sealed class ConnectorEventsControllerTests
 
     private sealed class CapturingEventSink : IEventSink
     {
-        public ProductionEvent? Captured { get; private set; }
+        public List<ProductionEvent> BatchCaptured { get; } = [];
+        public int BatchCalls { get; private set; }
 
         public ValueTask<ProductionEvent> EmitAsync(ProductionEvent evt, CancellationToken ct = default)
-        {
-            Captured = evt;
-            return ValueTask.FromResult(evt with { Seq = 1 });
-        }
+            => ValueTask.FromResult(evt with { Seq = 1 });
 
         public ValueTask<IReadOnlyList<ProductionEvent>> EmitBatchAsync(
             IReadOnlyList<ProductionEvent> events,
             CancellationToken ct = default)
-            => ValueTask.FromResult<IReadOnlyList<ProductionEvent>>(
+        {
+            BatchCalls++;
+            BatchCaptured.AddRange(events);
+            return ValueTask.FromResult<IReadOnlyList<ProductionEvent>>(
                 events.Select((item, index) => item with { Seq = index + 1 }).ToArray());
+        }
     }
 
     private sealed class StubEdgeIdentityProvider : IEdgeIdentityProvider

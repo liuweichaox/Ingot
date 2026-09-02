@@ -106,21 +106,69 @@ public interface IAgentRunStore
 /// <summary>由生产存储实现的持久运行队列；租约允许 Worker 崩溃后重新领取只读任务。</summary>
 public interface IDurableAgentRunStore : IAgentRunStore
 {
-    Task<AgentRunSnapshot?> ClaimNextAsync(
+    Task<ClaimedAgentRun?> ClaimNextAsync(
         string leaseOwner,
         TimeSpan leaseDuration,
         CancellationToken ct = default);
 
     Task<bool> RenewLeaseAsync(
-        string runId,
-        string leaseOwner,
+        AgentRunLease lease,
         TimeSpan leaseDuration,
         CancellationToken ct = default);
 
     Task ReleaseLeaseAsync(
-        string runId,
-        string leaseOwner,
+        AgentRunLease lease,
         CancellationToken ct = default);
+
+    /// <summary>仅在当前 fencing 租约仍有效时更新运行快照。</summary>
+    Task<bool> UpdateLeasedAsync(
+        AgentRunSnapshot run,
+        AgentRunLease lease,
+        CancellationToken ct = default);
+
+    /// <summary>仅在当前 fencing 租约仍有效时追加运行事件。</summary>
+    Task<AgentStreamEvent?> AppendLeasedEventAsync(
+        string runId,
+        AgentRunLease lease,
+        string type,
+        object? data,
+        CancellationToken ct = default);
+
+    /// <summary>请求取消；运行中的任务由持有当前租约的 Worker 收尾。</summary>
+    Task<AgentRunSnapshot?> RequestCancellationAsync(
+        string runId,
+        string userId,
+        string reason,
+        CancellationToken ct = default);
+}
+
+/// <summary>数据库在一次领取时签发的不可复用 fencing 租约。</summary>
+public sealed record AgentRunLease(string RunId, string Owner, long Generation);
+
+/// <summary>持久队列领取结果，包括快照和本次 Worker 独占的 fencing 租约。</summary>
+public sealed record ClaimedAgentRun(AgentRunSnapshot Run, AgentRunLease Lease);
+
+/// <summary>Worker 执行前重新解析任务所属用户的当前访问范围。</summary>
+public interface IAgentRunAuthorization
+{
+    Task<AgentAccessScope?> ResolveCurrentScopeAsync(
+        string userId,
+        AgentRunAccessScopeSnapshot capturedScope,
+        CancellationToken ct = default);
+}
+
+/// <summary>非持久运行无需跨进程复核；生产宿主必须覆盖此实现。</summary>
+public sealed class CapturedAgentRunAuthorization : IAgentRunAuthorization
+{
+    public Task<AgentAccessScope?> ResolveCurrentScopeAsync(
+        string userId,
+        AgentRunAccessScopeSnapshot capturedScope,
+        CancellationToken ct = default)
+        => Task.FromResult<AgentAccessScope?>(new AgentAccessScope
+        {
+            AllowAllSites = capturedScope.AllowAllSites,
+            SiteIds = new HashSet<string>(capturedScope.SiteIds, StringComparer.OrdinalIgnoreCase)
+        });
 }
 
 /// <summary>由独立 Worker 驱动一次持久队列领取与执行。</summary>

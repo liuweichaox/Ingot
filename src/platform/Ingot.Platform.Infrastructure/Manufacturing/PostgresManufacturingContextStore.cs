@@ -304,7 +304,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{value.EquipmentId}", ct).ConfigureAwait(false);
+        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{value.SiteId}:{value.EquipmentId}", ct).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(value.CommandId))
         {
@@ -320,7 +320,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             }
         }
 
-        var active = await GetActiveInstallationForEquipmentAsync(connection, transaction, value.EquipmentId, ct)
+        var active = await GetActiveInstallationForEquipmentAsync(connection, transaction, value.SiteId, value.EquipmentId, ct)
             .ConfigureAwait(false);
         if (active is not null)
         {
@@ -335,12 +335,13 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO tooling_installations(
-              installation_id, equipment_id, assembly_revision_id, installed_at, removed_at,
+              installation_id, site_id, equipment_id, assembly_revision_id, installed_at, removed_at,
               source, command_id, payload, created_at)
-            VALUES (@id, @equipment, @revision, @installed_at, @removed_at,
+            VALUES (@id, @site, @equipment, @revision, @installed_at, @removed_at,
                     @source, @command_id, @payload, @created_at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.InstallationId);
+        command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("revision", value.AssemblyRevisionId);
         command.Parameters.AddWithValue("installed_at", value.InstalledAt.UtcDateTime);
@@ -355,6 +356,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public async Task<ToolingInstallation?> RemoveInstallationAsync(
+        string siteId,
         Guid installationId,
         DateTimeOffset removedAt,
         string? actor,
@@ -363,12 +365,12 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var existing = await GetInstallationAsync(connection, transaction, installationId, ct).ConfigureAwait(false);
+        var existing = await GetInstallationAsync(connection, transaction, siteId, installationId, ct).ConfigureAwait(false);
         if (existing is null)
             return null;
         if (existing.RemovedAt.HasValue)
             return existing;
-        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{existing.EquipmentId}", ct)
+        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{existing.SiteId}:{existing.EquipmentId}", ct)
             .ConfigureAwait(false);
         var updated = await CloseInstallationAsync(
             connection,
@@ -382,32 +384,43 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(
+        string? siteId = null,
         string? equipmentId = null,
         bool activeOnly = false,
         CancellationToken ct = default)
     {
         const string sql = "SELECT payload::text FROM tooling_installations " +
-                           "WHERE (@equipment = '' OR equipment_id = @equipment) " +
+                           "WHERE (@site = '' OR site_id = @site) " +
+                           "AND (@equipment = '' OR equipment_id = @equipment) " +
                            "AND (NOT @active OR removed_at IS NULL) ORDER BY installed_at DESC;";
         return ListAsync<ToolingInstallation>(sql, command =>
         {
+            command.Parameters.AddWithValue("site", siteId?.Trim() ?? "");
             command.Parameters.AddWithValue("equipment", equipmentId?.Trim() ?? "");
             command.Parameters.AddWithValue("active", activeOnly);
         }, ct);
     }
 
-    public async Task<bool> DeleteInstallationAsync(Guid installationId, CancellationToken ct = default)
+    public async Task<bool> DeleteInstallationAsync(string siteId, Guid installationId, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         if (await ExistsAsync(
-                "SELECT 1 FROM production_contexts WHERE tooling_installation_id = @id LIMIT 1;",
-                command => command.Parameters.AddWithValue("id", installationId), ct).ConfigureAwait(false))
+                "SELECT 1 FROM production_contexts WHERE tooling_installation_id = @id AND site_id = @site LIMIT 1;",
+                command =>
+                {
+                    command.Parameters.AddWithValue("id", installationId);
+                    command.Parameters.AddWithValue("site", siteId);
+                }, ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException("该工装装卸记录已被生产配置引用，不能删除；错误记录应先结束并保留追溯。");
         }
         return await DeleteAsync(
-            "DELETE FROM tooling_installations WHERE installation_id = @id;",
-            command => command.Parameters.AddWithValue("id", installationId), ct).ConfigureAwait(false);
+            "DELETE FROM tooling_installations WHERE installation_id = @id AND site_id = @site;",
+            command =>
+            {
+                command.Parameters.AddWithValue("id", installationId);
+                command.Parameters.AddWithValue("site", siteId);
+            }, ct).ConfigureAwait(false);
     }
 
     public async Task<ProductionContext> StartProductionContextAsync(
@@ -424,7 +437,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             throw new InvalidOperationException("生产切换只能创建当前有效的生产上下文。");
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{value.EquipmentId}", ct).ConfigureAwait(false);
+        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{value.SiteId}:{value.EquipmentId}", ct).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(value.CommandId))
         {
             await AcquireAdvisoryLockAsync(connection, transaction, $"production-command:{value.CommandId}", ct)
@@ -441,7 +454,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         }
         await EnsureInstallationMatchesAsync(connection, transaction, value, ct).ConfigureAwait(false);
 
-        var active = await GetActiveProductionContextForEquipmentAsync(connection, transaction, value.EquipmentId, ct)
+        var active = await GetActiveProductionContextForEquipmentAsync(connection, transaction, value.SiteId, value.EquipmentId, ct)
             .ConfigureAwait(false);
         if (active is not null)
         {
@@ -459,10 +472,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO production_contexts(
-              context_id, equipment_id, tooling_installation_id, valid_from, valid_to, source, command_id, payload, updated_at)
-            VALUES (@id, @equipment, @installation, @valid_from, @valid_to, @source, @command_id, @payload, @updated_at);
+              context_id, site_id, equipment_id, tooling_installation_id, valid_from, valid_to, source, command_id, payload, updated_at)
+            VALUES (@id, @site, @equipment, @installation, @valid_from, @valid_to, @source, @command_id, @payload, @updated_at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.ContextId);
+        command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("installation", value.ToolingInstallationId);
         command.Parameters.AddWithValue("valid_from", value.ValidFrom.UtcDateTime);
@@ -477,6 +491,7 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public async Task<ProductionContext?> CloseProductionContextAsync(
+        string siteId,
         Guid contextId,
         DateTimeOffset validTo,
         string? actor,
@@ -485,12 +500,12 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await InitializeAsync(ct).ConfigureAwait(false);
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var existing = await GetProductionContextForUpdateAsync(connection, transaction, contextId, ct).ConfigureAwait(false);
+        var existing = await GetProductionContextForUpdateAsync(connection, transaction, siteId, contextId, ct).ConfigureAwait(false);
         if (existing is null)
             return null;
         if (existing.ValidTo.HasValue)
             return existing;
-        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{existing.EquipmentId}", ct)
+        await AcquireAdvisoryLockAsync(connection, transaction, $"equipment:{existing.SiteId}:{existing.EquipmentId}", ct)
             .ConfigureAwait(false);
         var updated = await CloseProductionContextAsync(
             connection,
@@ -504,35 +519,47 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     public Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(
+        string? siteId = null,
         string? equipmentId = null,
         bool activeOnly = false,
         CancellationToken ct = default)
     {
         const string sql = "SELECT payload::text FROM production_contexts " +
-                           "WHERE (@equipment = '' OR equipment_id = @equipment) " +
+                           "WHERE (@site = '' OR site_id = @site) " +
+                           "AND (@equipment = '' OR equipment_id = @equipment) " +
                            "AND (NOT @active OR valid_to IS NULL) ORDER BY valid_from DESC;";
         return ListAsync<ProductionContext>(sql, command =>
         {
+            command.Parameters.AddWithValue("site", siteId?.Trim() ?? "");
             command.Parameters.AddWithValue("equipment", equipmentId?.Trim() ?? "");
             command.Parameters.AddWithValue("active", activeOnly);
         }, ct);
     }
 
-    public async Task<bool> DeleteProductionContextAsync(Guid contextId, CancellationToken ct = default)
+    public async Task<bool> DeleteProductionContextAsync(string siteId, Guid contextId, CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
         if (await ExistsAsync(
-                "SELECT 1 FROM production_events WHERE context->>'production_context_id' = @id LIMIT 1;",
-                command => command.Parameters.AddWithValue("id", contextId.ToString("D")), ct).ConfigureAwait(false))
+                "SELECT 1 FROM production_events WHERE site_id = @site AND context->>'production_context_id' = @id LIMIT 1;",
+                command =>
+                {
+                    command.Parameters.AddWithValue("site", siteId);
+                    command.Parameters.AddWithValue("id", contextId.ToString("D"));
+                }, ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException("该生产配置已被生产事件固化引用，不能删除；请结束其生效区间。");
         }
         return await DeleteAsync(
-            "DELETE FROM production_contexts WHERE context_id = @id;",
-            command => command.Parameters.AddWithValue("id", contextId), ct).ConfigureAwait(false);
+            "DELETE FROM production_contexts WHERE context_id = @id AND site_id = @site;",
+            command =>
+            {
+                command.Parameters.AddWithValue("id", contextId);
+                command.Parameters.AddWithValue("site", siteId);
+            }, ct).ConfigureAwait(false);
     }
 
     public async Task<ResolvedProductionContext?> ResolveAsync(
+        string siteId,
         string equipmentId,
         DateTimeOffset at,
         CancellationToken ct = default)
@@ -545,12 +572,13 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             JOIN tooling_installations ti ON ti.installation_id = pc.tooling_installation_id
             JOIN tooling_assembly_revisions ar ON ar.assembly_revision_id = ti.assembly_revision_id
             JOIN tooling_assemblies a ON a.tooling_assembly_id = ar.tooling_assembly_id
-            WHERE pc.equipment_id = @equipment
+            WHERE pc.site_id = @site AND pc.equipment_id = @equipment
               AND pc.valid_from <= @at AND (pc.valid_to IS NULL OR pc.valid_to > @at)
               AND ti.installed_at <= @at AND (ti.removed_at IS NULL OR ti.removed_at > @at)
             ORDER BY pc.valid_from DESC
             LIMIT 1;
             """);
+        command.Parameters.AddWithValue("site", siteId.Trim());
         command.Parameters.AddWithValue("equipment", equipmentId.Trim());
         command.Parameters.AddWithValue("at", at.UtcDateTime);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -624,14 +652,16 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     private static async Task<ToolingInstallation?> GetInstallationAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         Guid id,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
-            "SELECT payload::text FROM tooling_installations WHERE installation_id = @id FOR UPDATE;",
+            "SELECT payload::text FROM tooling_installations WHERE installation_id = @id AND site_id = @site FOR UPDATE;",
             connection,
             transaction);
         command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("site", siteId);
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return value is null or DBNull ? null : Deserialize<ToolingInstallation>((string)value);
     }
@@ -639,17 +669,19 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     private static async Task<ToolingInstallation?> GetActiveInstallationForEquipmentAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string equipmentId,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
             SELECT payload::text FROM tooling_installations
-            WHERE equipment_id = @equipment AND removed_at IS NULL
+            WHERE site_id = @site AND equipment_id = @equipment AND removed_at IS NULL
             LIMIT 1 FOR UPDATE;
             """,
             connection,
             transaction);
+        command.Parameters.AddWithValue("site", siteId);
         command.Parameters.AddWithValue("equipment", equipmentId);
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return value is null or DBNull ? null : Deserialize<ToolingInstallation>((string)value);
@@ -677,17 +709,19 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     private static async Task<ProductionContext?> GetActiveProductionContextForEquipmentAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         string equipmentId,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
             """
             SELECT payload::text FROM production_contexts
-            WHERE equipment_id = @equipment AND valid_to IS NULL
+            WHERE site_id = @site AND equipment_id = @equipment AND valid_to IS NULL
             LIMIT 1 FOR UPDATE;
             """,
             connection,
             transaction);
+        command.Parameters.AddWithValue("site", siteId);
         command.Parameters.AddWithValue("equipment", equipmentId);
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return value is null or DBNull ? null : Deserialize<ProductionContext>((string)value);
@@ -696,22 +730,28 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     private static async Task<ProductionContext?> GetProductionContextForUpdateAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
+        string siteId,
         Guid contextId,
         CancellationToken ct)
     {
         await using var command = new NpgsqlCommand(
-            "SELECT payload::text FROM production_contexts WHERE context_id = @id FOR UPDATE;",
+            "SELECT payload::text FROM production_contexts WHERE context_id = @id AND site_id = @site FOR UPDATE;",
             connection,
             transaction);
         command.Parameters.AddWithValue("id", contextId);
+        command.Parameters.AddWithValue("site", siteId);
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return value is null or DBNull ? null : Deserialize<ProductionContext>((string)value);
     }
 
-    private async Task<ProductionContext?> GetProductionContextAsync(Guid id, CancellationToken ct)
+    private async Task<ProductionContext?> GetProductionContextAsync(string siteId, Guid id, CancellationToken ct)
         => await GetAsync<ProductionContext>(
-            "SELECT payload::text FROM production_contexts WHERE context_id = @id;",
-            command => command.Parameters.AddWithValue("id", id), ct).ConfigureAwait(false);
+            "SELECT payload::text FROM production_contexts WHERE context_id = @id AND site_id = @site;",
+            command =>
+            {
+                command.Parameters.AddWithValue("id", id);
+                command.Parameters.AddWithValue("site", siteId);
+            }, ct).ConfigureAwait(false);
 
     private static async Task<ProductionContext?> GetProductionContextByCommandIdAsync(
         NpgsqlConnection connection,
@@ -729,7 +769,8 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
     }
 
     private static bool SameProductionCommand(ProductionContext left, ProductionContext right)
-        => string.Equals(left.EquipmentId, right.EquipmentId, StringComparison.Ordinal) &&
+        => string.Equals(left.SiteId, right.SiteId, StringComparison.Ordinal) &&
+           string.Equals(left.EquipmentId, right.EquipmentId, StringComparison.Ordinal) &&
            string.Equals(left.ProductFamilyCode, right.ProductFamilyCode, StringComparison.Ordinal) &&
            string.Equals(left.ProductCode, right.ProductCode, StringComparison.Ordinal) &&
            string.Equals(left.ProcessSpecificationId, right.ProcessSpecificationId, StringComparison.Ordinal) &&
@@ -747,7 +788,8 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
            left.CalibrationValidUntil == right.CalibrationValidUntil;
 
     private static bool SameInstallationCommand(ToolingInstallation left, ToolingInstallation right)
-        => string.Equals(left.EquipmentId, right.EquipmentId, StringComparison.Ordinal) &&
+        => string.Equals(left.SiteId, right.SiteId, StringComparison.Ordinal) &&
+           string.Equals(left.EquipmentId, right.EquipmentId, StringComparison.Ordinal) &&
            left.AssemblyRevisionId == right.AssemblyRevisionId &&
            left.InstalledAt == right.InstalledAt &&
            string.Equals(left.Source, right.Source, StringComparison.Ordinal);
@@ -957,11 +999,12 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             SELECT 1 FROM tooling_installations
-            WHERE equipment_id = @equipment
+            WHERE site_id = @site AND equipment_id = @equipment
               AND installed_at < COALESCE(@removed_at, 'infinity'::timestamptz)
               AND COALESCE(removed_at, 'infinity'::timestamptz) > @installed_at
             LIMIT 1;
             """, connection, transaction);
+        command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("installed_at", value.InstalledAt.UtcDateTime);
         command.Parameters.AddWithValue("removed_at", (object?)value.RemovedAt?.UtcDateTime ?? DBNull.Value);
@@ -978,10 +1021,11 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         await using var command = new NpgsqlCommand(
             """
             SELECT 1 FROM tooling_installations
-            WHERE installation_id = @id AND equipment_id = @equipment
+            WHERE installation_id = @id AND site_id = @site AND equipment_id = @equipment
               AND installed_at <= @at AND (removed_at IS NULL OR removed_at > @at);
             """, connection, transaction);
         command.Parameters.AddWithValue("id", value.ToolingInstallationId);
+        command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("at", value.ValidFrom.UtcDateTime);
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)

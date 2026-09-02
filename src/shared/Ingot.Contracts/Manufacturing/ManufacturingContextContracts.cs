@@ -82,6 +82,7 @@ public sealed record CreateToolingAssemblyRevisionRequest
 public sealed record ToolingInstallation
 {
     public Guid InstallationId { get; init; }
+    public required string SiteId { get; init; }
     public required string EquipmentId { get; init; }
     public Guid AssemblyRevisionId { get; init; }
     public DateTimeOffset InstalledAt { get; init; }
@@ -96,6 +97,7 @@ public sealed record ToolingInstallation
 // Commands deliberately exclude identifiers, lifecycle end times, and the actor. The server owns those facts.
 public sealed record ReplaceToolingInstallationRequest
 {
+    public required string SiteId { get; init; }
     public required string EquipmentId { get; init; }
     public Guid AssemblyRevisionId { get; init; }
     public DateTimeOffset InstalledAt { get; init; }
@@ -106,6 +108,7 @@ public sealed record ReplaceToolingInstallationRequest
 public sealed record ProductionContext
 {
     public Guid ContextId { get; init; }
+    public required string SiteId { get; init; }
     public required string EquipmentId { get; init; }
     public required string ProductFamilyCode { get; init; }
     public required string ProductCode { get; init; }
@@ -135,6 +138,7 @@ public sealed record ProductionContext
 // A production switch always creates the next active context and closes the previous one atomically.
 public sealed record ReplaceProductionContextRequest
 {
+    public required string SiteId { get; init; }
     public required string EquipmentId { get; init; }
     public required string ProductFamilyCode { get; init; }
     public required string ProductCode { get; init; }

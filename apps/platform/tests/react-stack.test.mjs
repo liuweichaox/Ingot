@@ -236,6 +236,13 @@ test("forms expose clear labels, edit intent, and required upload fields", () =>
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
 });
 
+test("chat explains delayed worker pickup instead of spinning indefinitely", () => {
+  assert.match(pages, /queueDelayRunId/);
+  assert.match(pages, /api\/v1\/chat\/runs\/\$\{encodeURIComponent\(runId\)\}/);
+  assert.match(pages, /后台 Worker 尚未领取此任务/);
+  assert.match(pages, /clearQueueDelayWarning\(\)/);
+});
+
 test("production forms use business fields and paginate long histories", () => {
   assert.match(pages, /function ProductionRecordForm/);
   assert.match(pages, /function isProductionEditorValid/);

@@ -229,14 +229,20 @@ public sealed class ToolingInstallationsController(
 {
     [HttpGet]
     public async Task<IActionResult> List(
+        [FromQuery] string? siteId,
         [FromQuery] string? equipmentId,
         [FromQuery] bool activeOnly,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
-        return denied ?? Ok(new
+        if (denied is not null)
+            return denied;
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: true, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
+        return Ok(new
         {
-            data = await store.ListInstallationsAsync(equipmentId, activeOnly, ct).ConfigureAwait(false)
+            data = await store.ListInstallationsAsync(authorizedSiteId, equipmentId, activeOnly, ct).ConfigureAwait(false)
         });
     }
 
@@ -252,8 +258,12 @@ public sealed class ToolingInstallationsController(
             return denied;
         if (request is null)
             return InvalidRequest("工装替换请求不能为空。");
+        var siteFailure = ResolveSiteScope(request.SiteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
         var candidate = new ToolingInstallation
         {
+            SiteId = authorizedSiteId!,
             EquipmentId = request.EquipmentId,
             AssemblyRevisionId = request.AssemblyRevisionId,
             InstalledAt = request.InstalledAt,
@@ -271,14 +281,19 @@ public sealed class ToolingInstallationsController(
     public async Task<IActionResult> Remove(
         Guid installationId,
         [FromBody] CloseIntervalRequest? request,
+        [FromQuery] string? siteId,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
         try
         {
             var item = await store.RemoveInstallationAsync(
+                authorizedSiteId!,
                 installationId,
                 request?.At ?? DateTimeOffset.UtcNow,
                 ResolveUserId(),
@@ -289,13 +304,27 @@ public sealed class ToolingInstallationsController(
     }
 
     [HttpDelete("{installationId:guid}")]
-    public async Task<IActionResult> Delete(Guid installationId, CancellationToken ct)
+    public async Task<IActionResult> Delete(Guid installationId, [FromQuery] string? siteId, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteInstallationAsync(installationId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
+        try { return await store.DeleteInstallationAsync(authorizedSiteId!, installationId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
+    }
+
+    private IActionResult? ResolveSiteScope(string? requestedSiteId, bool allowAllForAdministrator, out string? siteId)
+    {
+        var failure = PlatformSiteScope.Resolve(ResolveIdentity()!, requestedSiteId, allowAllForAdministrator, out siteId);
+        return failure switch
+        {
+            SiteScopeFailure.Forbidden => AuthorizationDenied("当前身份无权访问该站点。", ("siteId", requestedSiteId)),
+            SiteScopeFailure.Missing => InvalidRequest("必须指定当前身份有权访问的 siteId。"),
+            _ => null
+        };
     }
 }
 
@@ -308,24 +337,33 @@ public sealed class ProductionContextsController(
 {
     [HttpGet]
     public async Task<IActionResult> List(
+        [FromQuery] string? siteId,
         [FromQuery] string? equipmentId,
         [FromQuery] bool activeOnly,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
-        return denied ?? Ok(new
+        if (denied is not null)
+            return denied;
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: true, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
+        return Ok(new
         {
-            data = await store.ListProductionContextsAsync(equipmentId, activeOnly, ct).ConfigureAwait(false)
+            data = await store.ListProductionContextsAsync(authorizedSiteId, equipmentId, activeOnly, ct).ConfigureAwait(false)
         });
     }
 
     [HttpGet("current/{equipmentId}")]
-    public async Task<IActionResult> Current(string equipmentId, [FromQuery] DateTimeOffset? at, CancellationToken ct)
+    public async Task<IActionResult> Current(string equipmentId, [FromQuery] string? siteId, [FromQuery] DateTimeOffset? at, CancellationToken ct)
     {
         var denied = DeniedConfigurationRead();
         if (denied is not null)
             return denied;
-        var item = await store.ResolveAsync(equipmentId, at ?? DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
+        var item = await store.ResolveAsync(authorizedSiteId!, equipmentId, at ?? DateTimeOffset.UtcNow, ct).ConfigureAwait(false);
         return item is null ? ResourceNotFound() : Ok(item);
     }
 
@@ -341,8 +379,12 @@ public sealed class ProductionContextsController(
             return denied;
         if (request is null)
             return InvalidRequest("生产切换请求不能为空。");
+        var siteFailure = ResolveSiteScope(request.SiteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
         var candidate = new ProductionContext
         {
+            SiteId = authorizedSiteId!,
             EquipmentId = request.EquipmentId,
             ProductFamilyCode = request.ProductFamilyCode,
             ProductCode = request.ProductCode,
@@ -386,14 +428,19 @@ public sealed class ProductionContextsController(
     public async Task<IActionResult> Close(
         Guid contextId,
         [FromBody] CloseIntervalRequest? request,
+        [FromQuery] string? siteId,
         CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
         try
         {
             var item = await store.CloseProductionContextAsync(
+                authorizedSiteId!,
                 contextId,
                 request?.At ?? DateTimeOffset.UtcNow,
                 ResolveUserId(),
@@ -404,13 +451,27 @@ public sealed class ProductionContextsController(
     }
 
     [HttpDelete("{contextId:guid}")]
-    public async Task<IActionResult> Delete(Guid contextId, CancellationToken ct)
+    public async Task<IActionResult> Delete(Guid contextId, [FromQuery] string? siteId, CancellationToken ct)
     {
         var denied = DeniedConfigurationWrite();
         if (denied is not null)
             return denied;
-        try { return await store.DeleteProductionContextAsync(contextId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
+        var siteFailure = ResolveSiteScope(siteId, allowAllForAdministrator: false, out var authorizedSiteId);
+        if (siteFailure is not null)
+            return siteFailure;
+        try { return await store.DeleteProductionContextAsync(authorizedSiteId!, contextId, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound(); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
+    }
+
+    private IActionResult? ResolveSiteScope(string? requestedSiteId, bool allowAllForAdministrator, out string? siteId)
+    {
+        var failure = PlatformSiteScope.Resolve(ResolveIdentity()!, requestedSiteId, allowAllForAdministrator, out siteId);
+        return failure switch
+        {
+            SiteScopeFailure.Forbidden => AuthorizationDenied("当前身份无权访问该站点。", ("siteId", requestedSiteId)),
+            SiteScopeFailure.Missing => InvalidRequest("必须指定当前身份有权访问的 siteId。"),
+            _ => null
+        };
     }
 }
 

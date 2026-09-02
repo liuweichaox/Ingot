@@ -56,7 +56,14 @@ public sealed class ProcessDataModelsController(
         });
         if (immutable.Result is not null)
             return immutable.Result;
-        return Ok(await store.UpsertDataModelAsync(immutable.Value!, ct).ConfigureAwait(false));
+        var saved = await store.TryUpsertDataModelAsync(immutable.Value!, ct).ConfigureAwait(false);
+        if (!saved.Succeeded)
+            return saved.Existing is not null && SamePayload(
+                saved.Existing with { UpdatedAt = default },
+                immutable.Value! with { UpdatedAt = default })
+                ? Ok(saved.Existing)
+                : StateConflict("工艺数据模型版本已发生并发状态变化，请重新加载后再试。", ("existing", saved.Existing));
+        return Ok(saved.Value);
     }
 
     [HttpDelete("{modelId}/{version:int}")]
@@ -83,7 +90,15 @@ public sealed class ProcessDataModelsController(
         {
             return StateConflict("工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。");
         }
-        return await store.DeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+        var deleted = await store.TryDeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false);
+        return deleted.Status switch
+        {
+            ProcessConfigurationMutationStatus.Applied => NoContent(),
+            ProcessConfigurationMutationStatus.Referenced => StateConflict(
+                "工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。"),
+            ProcessConfigurationMutationStatus.StateConflict => StateConflict("工艺数据模型状态已发生变化，请重新加载后再试。"),
+            _ => ResourceNotFound()
+        };
     }
 
     private (ProcessDataModel? Value, IActionResult? Result) HandleImmutable(
@@ -247,7 +262,14 @@ public sealed class ProcessSpecificationsController(
             else
                 return StateConflict("已发布或停用的工艺规范版本不可修改，请创建新版本。", ("existing", existing));
         }
-        return Ok(await store.UpsertProcessSpecificationAsync(normalized, ct).ConfigureAwait(false));
+        var saved = await store.TryUpsertProcessSpecificationAsync(normalized, ct).ConfigureAwait(false);
+        if (!saved.Succeeded)
+            return saved.Existing is not null && SamePayload(
+                saved.Existing with { UpdatedAt = default },
+                normalized with { UpdatedAt = default })
+                ? Ok(saved.Existing)
+                : StateConflict("工艺规范版本已发生并发状态变化，请重新加载后再试。", ("existing", saved.Existing));
+        return Ok(saved.Value);
     }
 
     [HttpDelete("{processSpecificationId}/{version:int}")]
@@ -261,7 +283,15 @@ public sealed class ProcessSpecificationsController(
             return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
             return StateConflict("只有草稿工艺规范版本可以删除。");
-        return await store.DeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+        var deleted = await store.TryDeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct)
+            .ConfigureAwait(false);
+        return deleted.Status switch
+        {
+            ProcessConfigurationMutationStatus.Applied => NoContent(),
+            ProcessConfigurationMutationStatus.StateConflict => StateConflict("工艺规范状态已发生变化，请重新加载后再试。"),
+            ProcessConfigurationMutationStatus.Referenced => StateConflict("工艺规范版本仍被其他配置引用，不能删除。"),
+            _ => ResourceNotFound()
+        };
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
@@ -388,7 +418,14 @@ public sealed class ProcessAnalysisPlansController(
             else
                 return StateConflict("已发布或停用的分析方案不可修改，请创建新版本。", ("existing", existing));
         }
-        return Ok(await store.UpsertAnalysisPlanAsync(normalized, ct).ConfigureAwait(false));
+        var saved = await store.TryUpsertAnalysisPlanAsync(normalized, ct).ConfigureAwait(false);
+        if (!saved.Succeeded)
+            return saved.Existing is not null && SamePayload(
+                saved.Existing with { UpdatedAt = default },
+                normalized with { UpdatedAt = default })
+                ? Ok(saved.Existing)
+                : StateConflict("分析方案版本已发生并发状态变化，请重新加载后再试。", ("existing", saved.Existing));
+        return Ok(saved.Value);
     }
 
     [HttpDelete("{planId}/{version:int}")]
@@ -405,7 +442,14 @@ public sealed class ProcessAnalysisPlansController(
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
         if (packages.Any(item => item.AnalysisPlanId == existing.PlanId && item.AnalysisPlanVersion == existing.Version))
             return StateConflict("分析方案仍被工艺配置引用，不能删除。");
-        return await store.DeleteAnalysisPlanAsync(existing.PlanId, version, ct).ConfigureAwait(false) ? NoContent() : ResourceNotFound();
+        var deleted = await store.TryDeleteAnalysisPlanAsync(existing.PlanId, version, ct).ConfigureAwait(false);
+        return deleted.Status switch
+        {
+            ProcessConfigurationMutationStatus.Applied => NoContent(),
+            ProcessConfigurationMutationStatus.Referenced => StateConflict("分析方案仍被工艺配置引用，不能删除。"),
+            ProcessConfigurationMutationStatus.StateConflict => StateConflict("分析方案状态已发生变化，请重新加载后再试。"),
+            _ => ResourceNotFound()
+        };
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();

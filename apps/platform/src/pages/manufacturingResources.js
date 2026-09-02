@@ -4,10 +4,10 @@ export const productionResources = {
     title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
     description: "为设备选择接下来生产的产品、工艺规范和已装工装，保存后对新运行生效。",
     drawerDescription: "按顺序确认设备、产品、工艺规范和工装；保存后只影响新开始的生产运行。",
-    columns: [["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["toolingInstallationId", "当前工装"], ["externalBatchRef", "生产批次"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
-    template: { equipmentId: "", productFamilyCode: "", productCode: "", processSpecificationId: "", processSpecificationVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
+    columns: [["siteId", "站点"], ["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "工艺规范"], ["toolingInstallationId", "当前工装"], ["externalBatchRef", "生产批次"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
+    template: { siteId: "", equipmentId: "", productFamilyCode: "", productCode: "", processSpecificationId: "", processSpecificationVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
-    requiredFields: ["equipmentId", "productFamilyCode", "productCode", "processSpecificationId", "toolingInstallationId"],
+    requiredFields: ["siteId", "equipmentId", "productFamilyCode", "productCode", "processSpecificationId", "toolingInstallationId"],
     prepare: value => ({
       ...value,
       validFrom: new Date().toISOString(),
@@ -16,19 +16,19 @@ export const productionResources = {
         ? new Date(value.calibrationValidUntil).toISOString()
         : null,
     }),
-    lifecycle: { label: "结束", visible: value => !value.validTo, url: value => `/api/v1/production-contexts/${value.contextId}:close`, body: () => ({ at: new Date().toISOString() }) },
+    lifecycle: { label: "结束", visible: value => !value.validTo, url: value => `/api/v1/production-contexts/${value.contextId}:close?siteId=${encodeURIComponent(value.siteId)}`, body: () => ({ at: new Date().toISOString() }) },
   },
   installation: {
     title: "工装装卸", endpoint: "/api/v1/tooling-installations", key: "installationId",
     description: "记录哪个工装组合版本在何时装入设备，供后续运行自动关联。",
     drawerDescription: "选择设备和已经建立的工装组合版本，装入后会进入该设备的有效工装记录。",
-    columns: [["equipmentId", "设备"], ["toolingAssemblyId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
-    template: { equipmentId: "", assemblyRevisionId: "", source: "manual" },
+    columns: [["siteId", "站点"], ["equipmentId", "设备"], ["toolingAssemblyId", "工装"], ["installedAt", "装入"], ["removedAt", "卸下"]],
+    template: { siteId: "", equipmentId: "", assemblyRevisionId: "", source: "manual" },
     createLabel: "装入工装",
-    requiredFields: ["equipmentId", "assemblyRevisionId"],
+    requiredFields: ["siteId", "equipmentId", "assemblyRevisionId"],
     referenceFields: ["equipmentId", "assemblyRevisionId"],
     prepare: value => ({ ...value, installedAt: new Date().toISOString(), commandId: crypto.randomUUID() }),
-    lifecycle: { label: "卸下", visible: value => !value.removedAt, url: value => `/api/v1/tooling-installations/${value.installationId}:remove`, body: () => ({ at: new Date().toISOString() }) },
+    lifecycle: { label: "卸下", visible: value => !value.removedAt, url: value => `/api/v1/tooling-installations/${value.installationId}:remove?siteId=${encodeURIComponent(value.siteId)}`, body: () => ({ at: new Date().toISOString() }) },
   },
   componentType: {
     title: "组件分类", endpoint: "/api/v1/tooling-component-types", key: "componentTypeCode",
@@ -75,6 +75,7 @@ export const productionResources = {
 };
 
 export const productionFieldLabels = {
+  siteId: "站点",
   equipmentId: "设备编号",
   productFamilyCode: "产品系列",
   productCode: "产品编号",

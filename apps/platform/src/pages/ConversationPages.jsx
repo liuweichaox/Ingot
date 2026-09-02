@@ -333,8 +333,31 @@ export function ChatPage() {
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deletingConversationId, setDeletingConversationId] = useState("");
+  const [queueDelayRunId, setQueueDelayRunId] = useState("");
   const { confirm, confirmationDialog } = useConfirmDialog();
   const controller = useRef(null);
+  const queueDelayTimer = useRef(null);
+  const queueDelayVersion = useRef(0);
+
+  const clearQueueDelayWarning = useCallback(() => {
+    queueDelayVersion.current += 1;
+    if (queueDelayTimer.current) {
+      window.clearTimeout(queueDelayTimer.current);
+      queueDelayTimer.current = null;
+    }
+    setQueueDelayRunId("");
+  }, []);
+
+  const warnWhenStillQueued = useCallback(runId => {
+    const version = ++queueDelayVersion.current;
+    queueDelayTimer.current = window.setTimeout(() => {
+      void getJson(`/api/v1/chat/runs/${encodeURIComponent(runId)}`)
+        .then(snapshot => {
+          if (queueDelayVersion.current === version && snapshot.status === "queued") setQueueDelayRunId(runId);
+        })
+        .catch(() => {});
+    }, 15000);
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -368,8 +391,11 @@ export function ChatPage() {
       .catch(requestError => setError(requestError.message))
       .finally(() => setCapabilitiesLoading(false));
     void loadHistory();
-    return () => controller.current?.abort();
-  }, [loadHistory]);
+    return () => {
+      controller.current?.abort();
+      clearQueueDelayWarning();
+    };
+  }, [clearQueueDelayWarning, loadHistory]);
 
   useEffect(() => {
     if (!routeConversationId) {
@@ -377,6 +403,7 @@ export function ChatPage() {
       setMessages([]);
       setRun(null);
       setEvents([]);
+      clearQueueDelayWarning();
       return;
     }
     setError("");
@@ -395,6 +422,7 @@ export function ChatPage() {
     setSubmitting(true);
     setError("");
     setEvents([]);
+    clearQueueDelayWarning();
     try {
       const payload = {
         text: submittedQuestion,
@@ -412,6 +440,7 @@ export function ChatPage() {
         { messageId: created.assistantMessageId, role: "assistant", status: "generating", runId: created.runId },
       ]);
       setQuestion("");
+      warnWhenStillQueued(created.runId);
       controller.current = new AbortController();
       let terminalReceived = false;
       try {
@@ -419,6 +448,7 @@ export function ChatPage() {
           signal: controller.current.signal,
           onEvent: ({ data }) => {
             setEvents(current => [...current, data]);
+            clearQueueDelayWarning();
             if (["run.completed", "run.failed", "run.cancelled"].includes(data?.type)) {
               terminalReceived = true;
               controller.current?.abort();
@@ -433,6 +463,7 @@ export function ChatPage() {
     } catch (requestError) {
       if (requestError.name !== "AbortError") setError(requestError.message);
     } finally {
+      clearQueueDelayWarning();
       setSubmitting(false);
     }
   }
@@ -441,6 +472,7 @@ export function ChatPage() {
     if (!run?.runId || cancelling) return;
     setCancelling(true);
     setError("");
+    clearQueueDelayWarning();
     try {
       await postJson(`/api/v1/chat/runs/${run.runId}:cancel`, {});
       controller.current?.abort();
@@ -467,6 +499,7 @@ export function ChatPage() {
     setMessages([]);
     setQuestion("");
     setEvents([]);
+    clearQueueDelayWarning();
     setError("");
     setHistoryOpen(false);
     setMode(current => capabilities?.modes?.includes(current) ? current : capabilities?.modes?.[0] || "quick");
@@ -557,7 +590,9 @@ export function ChatPage() {
                 ) : (
                   <section key={message.messageId} className="space-y-4">
                     {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
-                    {message.runId === run?.runId && submitting && !message.answer && visibleProgress.length === 0 && <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>}
+                    {message.runId === run?.runId && submitting && !message.answer && visibleProgress.length === 0 && (queueDelayRunId === message.runId
+                      ? <Alert tone="warning" title="分析任务仍在排队">后台 Worker 尚未领取此任务。请检查 Platform Worker 是否运行；任务会在 Worker 恢复后继续处理。</Alert>
+                      : <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>)}
                     <ChatAnswer answer={message.answer || message.text} onFollowUp={setQuestion} />
                     {message.status === "failed" && <Alert tone="danger" title="分析失败">{message.error || "回答生成失败，请重试。"}</Alert>}
                     {message.status === "cancelled" && <Alert title="分析已取消">{message.error || "本次回答已取消。"}</Alert>}

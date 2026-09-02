@@ -35,7 +35,11 @@ function ProductionAttributeSummary({ value }) {
 
 export function ProductionRecordsPage({ section, canWrite = true }) {
   const resource = productionResources[section];
-  const { data, loading, error, reload } = useApi(resource.endpoint);
+  const [siteId, setSiteId] = useState("");
+  const listEndpoint = ["context", "installation"].includes(section) && siteId.trim()
+    ? `${resource.endpoint}?siteId=${encodeURIComponent(siteId.trim())}`
+    : resource.endpoint;
+  const { data, loading, error, reload } = useApi(listEndpoint);
   const rows = extractRows(data);
   const [open, setOpen] = useState(false);
   const [editor, setEditor] = useState({});
@@ -60,7 +64,9 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
   }, [page, pageSize, rows.length]);
 
   function openEditor(row = null) {
-    const value = row ? structuredClone(row) : structuredClone(resource.template);
+    const value = row
+      ? structuredClone(row)
+      : { ...structuredClone(resource.template), ...(["context", "installation"].includes(section) && siteId.trim() ? { siteId: siteId.trim() } : {}) };
     if (row?.version && section === "type") {
       value.version = Number(row.version) + 1;
       value.status = "active";
@@ -89,6 +95,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
       const prepared = resource.prepare ? resource.prepare(value) : value;
       const request = section === "installation"
         ? {
+          siteId: prepared.siteId,
           equipmentId: prepared.equipmentId,
           assemblyRevisionId: prepared.assemblyRevisionId,
           installedAt: prepared.installedAt,
@@ -97,6 +104,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
         }
         : section === "context"
           ? {
+            siteId: prepared.siteId,
             equipmentId: prepared.equipmentId,
             productFamilyCode: prepared.productFamilyCode,
             productCode: prepared.productCode,
@@ -201,6 +209,20 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
       {!open && actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
         <>
+          {["context", "installation"].includes(section) && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-full sm:w-64">
+                <label className="mb-1.5 block text-sm font-medium text-slate-700" htmlFor={`${section}-site-filter`}>站点</label>
+                <input
+                  id={`${section}-site-filter`}
+                  className="block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-trajectory-500 focus:ring-2 focus:ring-trajectory-100"
+                  value={siteId}
+                  placeholder="输入 SiteId 筛选记录"
+                  onChange={event => setSiteId(event.target.value)}
+                />
+              </div>
+            </div>
+          )}
           {section === "context" && (
             <>
               <WorkflowGuide

@@ -135,6 +135,7 @@ public sealed class ManufacturingContextValidatorTests
         var ok = ManufacturingContextValidator.TryValidate(
             new ProductionContext
             {
+                SiteId = "SITE-001",
                 EquipmentId = "PRESS-01",
                 ProductFamilyCode = "LENS-A",
                 ProductCode = "LENS-A-01",
@@ -154,6 +155,7 @@ public sealed class ManufacturingContextValidatorTests
 
         Assert.True(ok, error);
         Assert.NotEqual(Guid.Empty, normalized!.ContextId);
+        Assert.Equal("SITE-001", normalized.SiteId);
         Assert.Equal("mes", normalized.Source);
         Assert.Equal("MES-CMD-001", normalized.CommandId);
         Assert.Equal("GLASS-X", normalized.MaterialSpecification);
@@ -170,6 +172,7 @@ public sealed class ManufacturingContextValidatorTests
         var ok = ManufacturingContextValidator.TryValidate(
             new ProductionContext
             {
+                SiteId = "SITE-001",
                 EquipmentId = "PRESS-01",
                 ProductFamilyCode = "LENS-A",
                 ProductCode = "LENS-A-01",
@@ -183,5 +186,23 @@ public sealed class ManufacturingContextValidatorTests
 
         Assert.False(ok);
         Assert.Contains("CommandId", error);
+    }
+
+    [Fact]
+    public void ToolingInstallation_RequiresSiteId()
+    {
+        var ok = ManufacturingContextValidator.TryValidate(
+            new ToolingInstallation
+            {
+                SiteId = "",
+                EquipmentId = "PRESS-01",
+                AssemblyRevisionId = Guid.NewGuid(),
+                InstalledAt = DateTimeOffset.UtcNow
+            },
+            out var _,
+            out var error);
+
+        Assert.False(ok);
+        Assert.Contains("SiteId", error);
     }
 }

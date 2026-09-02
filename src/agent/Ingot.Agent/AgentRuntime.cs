@@ -26,6 +26,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
     private readonly ChatOptions _chatOptions;
     private readonly IPlanValidator _planValidator;
     private readonly IAgentRunStore _store;
+    private readonly IAgentRunAuthorization _runAuthorization;
     private readonly IReadOnlyDictionary<string, IAnalysisTool> _tools;
 
     public AgentRuntime(
@@ -38,7 +39,8 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         IAgentRunLifecycleSink lifecycleSink,
         IOptions<ChatOptions> chatOptions,
         ILogger<AgentRuntime> logger,
-        IModelServiceConfigurationProvider? modelSettings = null)
+        IModelServiceConfigurationProvider? modelSettings = null,
+        IAgentRunAuthorization? runAuthorization = null)
     {
         _store = store;
         _models = models;
@@ -48,6 +50,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         _lifecycleSink = lifecycleSink;
         _chatOptions = chatOptions.Value;
         _modelSettings = modelSettings ?? new UnconfiguredModelServiceConfigurationProvider();
+        _runAuthorization = runAuthorization ?? new CapturedAgentRunAuthorization();
         _logger = logger;
         _tools = tools.ToDictionary(static tool => tool.Definition.Name, StringComparer.Ordinal);
     }
@@ -172,16 +175,41 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         if (!settings.Enabled)
             return false;
         var leaseDuration = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds + 60, 90, 960));
-        var claimed = await durableStore.ClaimNextAsync(leaseOwner, leaseDuration, ct).ConfigureAwait(false);
-        if (claimed is null)
+        var claim = await durableStore.ClaimNextAsync(leaseOwner, leaseDuration, ct).ConfigureAwait(false);
+        if (claim is null)
             return false;
+        var claimed = claim.Run;
+        var lease = claim.Lease;
 
         var reserved = false;
         var executionOwnsAdmission = false;
         try
         {
+            if (claimed.Status == AgentRunStatuses.Cancelling)
+            {
+                var cancelled = claimed with
+                {
+                    Status = AgentRunStatuses.Cancelled,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    CancellationReason = claimed.CancellationReason ?? "运行已由用户取消。"
+                };
+                if (await durableStore.UpdateLeasedAsync(cancelled, lease, CancellationToken.None).ConfigureAwait(false))
+                {
+                    await NotifyTerminalAsync(cancelled).ConfigureAwait(false);
+                    await EmitAsync(cancelled.RunId, AgentStreamEventTypes.RunCancelled,
+                        new { reason = cancelled.CancellationReason }, CancellationToken.None, lease).ConfigureAwait(false);
+                }
+                return true;
+            }
             ReserveRun(claimed.UserId, settings);
             reserved = true;
+            if (claimed.AccessScope is null ||
+                claimed.AccessScope.Version != AgentRunAccessScopeSnapshot.CurrentVersion)
+                throw new UnauthorizedAccessException("持久 Chat 运行缺少有效的授权范围快照。");
+            var accessScope = await _runAuthorization.ResolveCurrentScopeAsync(
+                claimed.UserId, claimed.AccessScope, ct).ConfigureAwait(false);
+            if (accessScope is null)
+                throw new UnauthorizedAccessException("任务所属用户已无权执行此 Chat 分析。");
             var tools = ToolsForEntryPoint(claimed.EntryPoint);
             var modelRole = claimed.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
             var model = _models.GetClient(claimed.EntryPoint, modelRole, settings.Provider);
@@ -195,7 +223,6 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 ResponseMessageId = claimed.ResponseMessageId,
                 ConversationHistory = await BuildConversationHistoryAsync(claimed, ct).ConfigureAwait(false)
             };
-            var accessScope = RestoreAccessScope(claimed.AccessScope);
             var run = claimed with
             {
                 ModelProvider = model.Provider,
@@ -207,11 +234,11 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 throw new InvalidOperationException("无法注册持久 Chat 运行。");
             using var monitorStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var monitor = MonitorLeaseAndCancellationAsync(
-                durableStore, run.RunId, leaseOwner, leaseDuration, runCts, monitorStop.Token);
+                durableStore, lease, leaseDuration, runCts, monitorStop.Token);
             try
             {
                 executionOwnsAdmission = true;
-                await ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token)
+                await ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token, lease)
                     .ConfigureAwait(false);
             }
             finally
@@ -221,9 +248,36 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             }
             return true;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // 宿主停止时保留当前租约，等待其过期后由其他 Worker 重领。
+            return true;
+        }
+        catch (AgentLeaseLostException)
+        {
+            _logger.LogWarning("持久 Agent 运行在提交时失去租约: {RunId}", claimed.RunId);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "持久 Agent 运行初始化失败: {RunId}", claimed.RunId);
+            var failed = claimed with
+            {
+                Status = AgentRunStatuses.Failed,
+                CompletedAt = DateTimeOffset.UtcNow,
+                Error = exception.Message
+            };
+            if (await durableStore.UpdateLeasedAsync(failed, lease, CancellationToken.None).ConfigureAwait(false))
+            {
+                await NotifyTerminalAsync(failed).ConfigureAwait(false);
+                await EmitAsync(failed.RunId, AgentStreamEventTypes.RunFailed,
+                    new { error = exception.Message }, CancellationToken.None, lease).ConfigureAwait(false);
+            }
+            return true;
+        }
         finally
         {
-            await durableStore.ReleaseLeaseAsync(claimed.RunId, leaseOwner, CancellationToken.None)
+            await durableStore.ReleaseLeaseAsync(lease, CancellationToken.None)
                 .ConfigureAwait(false);
             if (reserved && !executionOwnsAdmission)
                 ReleaseRun(claimed.UserId);
@@ -254,8 +308,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
 
     private async Task MonitorLeaseAndCancellationAsync(
         IDurableAgentRunStore store,
-        string runId,
-        string leaseOwner,
+        AgentRunLease lease,
         TimeSpan leaseDuration,
         CancellationTokenSource runCts,
         CancellationToken hostToken)
@@ -265,14 +318,14 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             while (!runCts.IsCancellationRequested && !hostToken.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(5), hostToken).ConfigureAwait(false);
-                var persisted = await _store.GetAsync(runId, hostToken).ConfigureAwait(false);
+                var persisted = await _store.GetAsync(lease.RunId, hostToken).ConfigureAwait(false);
                 if (persisted is null || AgentRunStatuses.IsTerminal(persisted.Status) ||
                     string.Equals(persisted.Status, AgentRunStatuses.Cancelling, StringComparison.Ordinal))
                 {
                     await runCts.CancelAsync().ConfigureAwait(false);
                     return;
                 }
-                if (!await store.RenewLeaseAsync(runId, leaseOwner, leaseDuration, hostToken)
+                if (!await store.RenewLeaseAsync(lease, leaseDuration, hostToken)
                         .ConfigureAwait(false))
                 {
                     await runCts.CancelAsync().ConfigureAwait(false);
@@ -387,15 +440,6 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     .ToArray()
         };
 
-    private static AgentAccessScope RestoreAccessScope(AgentRunAccessScopeSnapshot? snapshot)
-        => new()
-        {
-            AllowAllSites = snapshot?.AllowAllSites ?? false,
-            SiteIds = new HashSet<string>(
-                snapshot?.SiteIds ?? [],
-                StringComparer.OrdinalIgnoreCase)
-        };
-
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(
         string entryPoint,
         string runId,
@@ -437,6 +481,22 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             AgentRunStatuses.IsTerminal(run.Status))
             return false;
         var cancellationReason = string.IsNullOrWhiteSpace(reason) ? "用户请求取消。" : reason.Trim();
+        if (_store is IDurableAgentRunStore durableStore)
+        {
+            var updated = await durableStore.RequestCancellationAsync(
+                runId, userId, cancellationReason, CancellationToken.None).ConfigureAwait(false);
+            if (updated is null)
+                return false;
+            if (_active.TryGetValue(runId, out var activeSource))
+                await activeSource.CancelAsync().ConfigureAwait(false);
+            if (updated.Status == AgentRunStatuses.Cancelled)
+            {
+                await NotifyTerminalAsync(updated).ConfigureAwait(false);
+                await EmitAsync(runId, AgentStreamEventTypes.RunCancelled,
+                    new { reason = cancellationReason }, CancellationToken.None).ConfigureAwait(false);
+            }
+            return true;
+        }
         if (_active.TryGetValue(runId, out var source))
         {
             await _store.UpdateAsync(run with
@@ -518,7 +578,8 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         IModelClient model,
         IReadOnlyDictionary<string, IAnalysisTool> tools,
         EntryPointSettings settings,
-        CancellationToken ct)
+        CancellationToken ct,
+        AgentRunLease? lease = null)
     {
         var run = initial;
         var started = Stopwatch.StartNew();
@@ -534,8 +595,8 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         try
         {
             run = run with { Status = AgentRunStatuses.Running, StartedAt = DateTimeOffset.UtcNow };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
-            await EmitAsync(run.RunId, AgentStreamEventTypes.RunStarted, new { run.RunId }, ct)
+            await PersistAsync(run, lease).ConfigureAwait(false);
+            await EmitAsync(run.RunId, AgentStreamEventTypes.RunStarted, new { run.RunId }, ct, lease)
                 .ConfigureAwait(false);
 
             var planResult = await model.ResolveIntentAsync(request, tools.Values.Select(static x => x.Definition).ToArray(), ct)
@@ -549,8 +610,8 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             if (plan.ToolCalls.Count == 0)
             {
                 run = run with { Plan = plan };
-                await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
-                await EmitAsync(run.RunId, AgentStreamEventTypes.PlanCreated, plan, ct).ConfigureAwait(false);
+                await PersistAsync(run, lease).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.PlanCreated, plan, ct, lease).ConfigureAwait(false);
 
                 var conversationResult = await model.ComposeConversationAsync(request, plan, ct)
                     .ConfigureAwait(false);
@@ -572,24 +633,24 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     CompletedAt = DateTimeOffset.UtcNow,
                     Usage = BuildUsage(modelCalls, 0, settings.ModelPricing)
                 };
-                await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                await PersistAsync(run, lease).ConfigureAwait(false);
                 await NotifyTerminalAsync(run).ConfigureAwait(false);
                 await EmitAsync(run.RunId, AgentStreamEventTypes.AnswerDelta,
-                    new { text = guidance.Summary }, CancellationToken.None).ConfigureAwait(false);
+                    new { text = guidance.Summary }, CancellationToken.None, lease).ConfigureAwait(false);
                 await EmitAsync(run.RunId, AgentStreamEventTypes.RunCompleted,
-                    new { run.RunId, answer = guidance }, CancellationToken.None).ConfigureAwait(false);
+                    new { run.RunId, answer = guidance }, CancellationToken.None, lease).ConfigureAwait(false);
                 return;
             }
             if (!_planValidator.TryValidate(run.EntryPoint, plan, tools, out var planError))
             {
-                await EmitAsync(run.RunId, AgentStreamEventTypes.PlanRejected, new { error = planError }, ct)
+                await EmitAsync(run.RunId, AgentStreamEventTypes.PlanRejected, new { error = planError }, ct, lease)
                     .ConfigureAwait(false);
                 throw new InvalidOperationException(planError);
             }
 
             run = run with { Plan = plan };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
-            await EmitAsync(run.RunId, AgentStreamEventTypes.PlanCreated, plan, ct).ConfigureAwait(false);
+            await PersistAsync(run, lease).ConfigureAwait(false);
+            await EmitAsync(run.RunId, AgentStreamEventTypes.PlanCreated, plan, ct, lease).ConfigureAwait(false);
 
             var results = new List<AnalysisToolResult>();
             var invocations = new List<AgentToolInvocation>();
@@ -600,9 +661,9 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             {
                 const int iteration = 1;
                 run = run with { Iteration = iteration };
-                await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                await PersistAsync(run, lease).ConfigureAwait(false);
                 await EmitAsync(run.RunId, AgentStreamEventTypes.IterationStarted,
-                    new { iteration, calls = pendingCalls.Count }, ct).ConfigureAwait(false);
+                    new { iteration, calls = pendingCalls.Count }, ct, lease).ConfigureAwait(false);
 
                 foreach (var call in pendingCalls)
                 {
@@ -622,9 +683,9 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     };
                     invocations.Add(invocation);
                     run = run with { ToolInvocations = invocations.ToArray() };
-                    await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                    await PersistAsync(run, lease).ConfigureAwait(false);
                     await EmitAsync(run.RunId, AgentStreamEventTypes.ToolStarted,
-                            new { tool = invocation.Tool, version = invocation.Version, iteration }, ct)
+                            new { tool = invocation.Tool, version = invocation.Version, iteration }, ct, lease)
                         .ConfigureAwait(false);
 
                     try
@@ -659,9 +720,9 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                         };
                         invocations[^1] = invocation;
                         run = run with { ToolInvocations = invocations.ToArray() };
-                        await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                        await PersistAsync(run, lease).ConfigureAwait(false);
                         await EmitAsync(run.RunId, AgentStreamEventTypes.ToolCompleted,
-                                new { tool = invocation.Tool, result.Summary, result.RelatedRecords, iteration }, ct)
+                                new { tool = invocation.Tool, result.Summary, result.RelatedRecords, iteration }, ct, lease)
                             .ConfigureAwait(false);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -673,16 +734,16 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                             Error = ex.Message
                         };
                         run = run with { ToolInvocations = invocations.ToArray() };
-                        await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+                        await PersistAsync(run, lease).ConfigureAwait(false);
                         await EmitAsync(run.RunId, AgentStreamEventTypes.ToolFailed,
-                                new { tool = invocation.Tool, error = ex.Message, iteration }, ct)
+                                new { tool = invocation.Tool, error = ex.Message, iteration }, ct, lease)
                             .ConfigureAwait(false);
                         throw;
                     }
                 }
 
                 await EmitAsync(run.RunId, AgentStreamEventTypes.IterationCompleted,
-                    new { iteration, stage = run.WorkflowStage, toolCalls = invocations.Count }, ct).ConfigureAwait(false);
+                    new { iteration, stage = run.WorkflowStage, toolCalls = invocations.Count }, ct, lease).ConfigureAwait(false);
 
             }
 
@@ -694,9 +755,9 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     result,
                     invocations[index].Version)).ToArray()
             };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await PersistAsync(run, lease).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RelatedRecordsChecked,
-                    new { count = relatedRecords.Count, relatedRecords }, ct)
+                    new { count = relatedRecords.Count, relatedRecords }, ct, lease)
                 .ConfigureAwait(false);
 
             var insufficientData = results.Any(static result =>
@@ -709,7 +770,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                         plan,
                         results,
                         model,
-                        (type, data, token) => EmitAsync(run.RunId, type, data, token),
+                        (type, data, token) => EmitAsync(run.RunId, type, data, token, lease),
                         ct)
                     .ConfigureAwait(false);
                 investigation = investigationResult.Verdict;
@@ -757,10 +818,10 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             if (!_relatedRecordsVerifier.TryVerifyAnswer(answer, results, out var answerError))
                 throw new InvalidOperationException(answerError);
             await EmitAsync(run.RunId, AgentStreamEventTypes.AnswerDelta,
-                    new { text = answer.Summary }, ct)
+                    new { text = answer.Summary }, ct, lease)
                 .ConfigureAwait(false);
             foreach (var chart in answer.Charts)
-                await EmitAsync(run.RunId, AgentStreamEventTypes.ChartCompleted, chart, ct).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.ChartCompleted, chart, ct, lease).ConfigureAwait(false);
 
             run = run with
             {
@@ -769,10 +830,10 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 CompletedAt = DateTimeOffset.UtcNow,
                 Usage = BuildUsage(modelCalls, invocations.Count, settings.ModelPricing)
             };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await PersistAsync(run, lease).ConfigureAwait(false);
             await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunCompleted,
-                    new { run.RunId, answer }, CancellationToken.None)
+                    new { run.RunId, answer }, CancellationToken.None, lease)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -785,10 +846,10 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 CancellationReason = persisted?.CancellationReason ?? "运行已由用户取消或超过时间限制。",
                 Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
             };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await PersistAsync(run, lease).ConfigureAwait(false);
             await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunCancelled,
-                    new { reason = run.CancellationReason }, CancellationToken.None)
+                    new { reason = run.CancellationReason }, CancellationToken.None, lease)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -801,10 +862,10 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 Error = ex.Message,
                 Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
             };
-            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            await PersistAsync(run, lease).ConfigureAwait(false);
             await NotifyTerminalAsync(run).ConfigureAwait(false);
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunFailed,
-                    new { error = ex.Message }, CancellationToken.None)
+                    new { error = ex.Message }, CancellationToken.None, lease)
                 .ConfigureAwait(false);
         }
         finally
@@ -856,12 +917,43 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         };
     }
 
-    private async Task EmitAsync(string runId, string type, object? data, CancellationToken ct)
+    private async Task PersistAsync(AgentRunSnapshot run, AgentRunLease? lease)
+    {
+        if (lease is null)
+        {
+            await _store.UpdateAsync(run, CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
+        if (_store is not IDurableAgentRunStore durableStore)
+            throw new AgentLeaseLostException(run.RunId);
+        if (await durableStore.UpdateLeasedAsync(run, lease, CancellationToken.None).ConfigureAwait(false))
+            return;
+        var persisted = await _store.GetAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
+        if (persisted?.Status == AgentRunStatuses.Cancelling)
+            throw new OperationCanceledException("Agent 运行已请求取消。");
+        throw new AgentLeaseLostException(run.RunId);
+    }
+
+    private async Task EmitAsync(
+        string runId,
+        string type,
+        object? data,
+        CancellationToken ct,
+        AgentRunLease? lease = null)
     {
         if (type == AgentStreamEventTypes.DiscussionParticipantFailed)
             AgentTelemetry.DiscussionParticipantFailures.Add(1);
+        if (lease is not null)
+        {
+            if (_store is not IDurableAgentRunStore durableStore ||
+                await durableStore.AppendLeasedEventAsync(runId, lease, type, data, ct).ConfigureAwait(false) is null)
+                throw new AgentLeaseLostException(runId);
+            return;
+        }
         await _store.AppendEventAsync(runId, type, data, ct).ConfigureAwait(false);
     }
+
+    private sealed class AgentLeaseLostException(string runId) : Exception($"Agent 运行租约已失效: {runId}");
 
     private static bool SameCall(AnalysisToolCall left, AnalysisToolCall right)
         => string.Equals(left.Tool, right.Tool, StringComparison.Ordinal) &&

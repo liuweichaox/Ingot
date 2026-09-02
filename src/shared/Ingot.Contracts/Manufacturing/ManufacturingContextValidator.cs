@@ -201,7 +201,8 @@ public static partial class ManufacturingContextValidator
         normalized = null;
         if (value is null)
             return Fail("工装装卸记录不能为空。", out error);
-        if (!TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error))
+        if (!TryId(value.SiteId, "SiteId", out var siteId, out error) ||
+            !TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error))
             return false;
         if (value.AssemblyRevisionId == Guid.Empty)
             return Fail("AssemblyRevisionId 不能为空。", out error);
@@ -212,6 +213,7 @@ public static partial class ManufacturingContextValidator
         normalized = value with
         {
             InstallationId = value.InstallationId == Guid.Empty ? Guid.NewGuid() : value.InstallationId,
+            SiteId = siteId!,
             EquipmentId = equipmentId!,
             InstalledAt = value.InstalledAt == default ? DateTimeOffset.UtcNow : value.InstalledAt.ToUniversalTime(),
             RemovedAt = value.RemovedAt?.ToUniversalTime(),
@@ -231,7 +233,8 @@ public static partial class ManufacturingContextValidator
         normalized = null;
         if (value is null)
             return Fail("生产上下文不能为空。", out error);
-        if (!TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error) ||
+        if (!TryId(value.SiteId, "SiteId", out var siteId, out error) ||
+            !TryId(value.EquipmentId, "EquipmentId", out var equipmentId, out error) ||
             !TryId(value.ProductFamilyCode, "ProductFamilyCode", out var productFamilyCode, out error) ||
             !TryId(value.ProductCode, "ProductCode", out var productCode, out error) ||
             !TryId(value.ProcessSpecificationId, "ProcessSpecificationId", out var processSpecificationId, out error) ||
@@ -259,6 +262,7 @@ public static partial class ManufacturingContextValidator
         normalized = value with
         {
             ContextId = value.ContextId == Guid.Empty ? Guid.NewGuid() : value.ContextId,
+            SiteId = siteId!,
             EquipmentId = equipmentId!,
             ProductFamilyCode = productFamilyCode!,
             ProductCode = productCode!,

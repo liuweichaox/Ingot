@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPlanValidator, DefaultPlanValidator>();
         services.AddSingleton<IAnalysisResultValidator, DefaultAnalysisResultValidator>();
         services.AddSingleton<ICombinedAnalysisWorkflow, BoundedCombinedAnalysisWorkflow>();
+        services.TryAddSingleton<IAgentRunAuthorization, CapturedAgentRunAuthorization>();
         services.TryAddSingleton<IAgentRunLifecycleSink, NullAgentRunLifecycleSink>();
         services.AddSingleton<IAgentRuntime, AgentRuntime>();
         services.AddSingleton<IAgentRunProcessor>(provider =>

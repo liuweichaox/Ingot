@@ -28,14 +28,14 @@ public interface IManufacturingContextStore
 
     Task<ToolingInstallation> CreateInstallationAsync(ToolingInstallation value, CancellationToken ct = default);
     Task<ToolingInstallation> ReplaceInstallationAsync(ToolingInstallation value, CancellationToken ct = default);
-    Task<ToolingInstallation?> RemoveInstallationAsync(Guid installationId, DateTimeOffset removedAt, string? actor, CancellationToken ct = default);
-    Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
-    Task<bool> DeleteInstallationAsync(Guid installationId, CancellationToken ct = default);
+    Task<ToolingInstallation?> RemoveInstallationAsync(string siteId, Guid installationId, DateTimeOffset removedAt, string? actor, CancellationToken ct = default);
+    Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(string? siteId = null, string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
+    Task<bool> DeleteInstallationAsync(string siteId, Guid installationId, CancellationToken ct = default);
 
     Task<ProductionContext> StartProductionContextAsync(ProductionContext value, CancellationToken ct = default);
     Task<ProductionContext> ReplaceProductionContextAsync(ProductionContext value, CancellationToken ct = default);
-    Task<ProductionContext?> CloseProductionContextAsync(Guid contextId, DateTimeOffset validTo, string? actor, CancellationToken ct = default);
-    Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
-    Task<bool> DeleteProductionContextAsync(Guid contextId, CancellationToken ct = default);
-    Task<ResolvedProductionContext?> ResolveAsync(string equipmentId, DateTimeOffset at, CancellationToken ct = default);
+    Task<ProductionContext?> CloseProductionContextAsync(string siteId, Guid contextId, DateTimeOffset validTo, string? actor, CancellationToken ct = default);
+    Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(string? siteId = null, string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default);
+    Task<bool> DeleteProductionContextAsync(string siteId, Guid contextId, CancellationToken ct = default);
+    Task<ResolvedProductionContext?> ResolveAsync(string siteId, string equipmentId, DateTimeOffset at, CancellationToken ct = default);
 }

@@ -11,6 +11,7 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatLocalDateTime } from "./dateTime";
 
 const dataTableFeatures = tableFeatures({
   rowSortingFeature,
@@ -344,11 +345,7 @@ export function Input({ className, ...props }) {
 }
 
 function toLocalDateTimeValue(value) {
-  if (!value) return "";
-  const text = String(value);
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return text.slice(0, 16);
-  const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 16);
+  return formatLocalDateTime(value);
 }
 
 // Retains native calendar accessibility while presenting date and time as one field.

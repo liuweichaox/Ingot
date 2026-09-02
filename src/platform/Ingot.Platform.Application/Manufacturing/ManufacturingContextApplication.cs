@@ -50,13 +50,13 @@ public sealed class ManufacturingContextApplication(IManufacturingContextStore c
         ToolingInstallation value, CancellationToken ct = default)
         => contexts.ReplaceInstallationAsync(value, ct);
     public Task<ToolingInstallation?> RemoveInstallationAsync(
-        Guid id, DateTimeOffset removedAt, string? actor, CancellationToken ct = default)
-        => contexts.RemoveInstallationAsync(id, removedAt, actor, ct);
+        string siteId, Guid id, DateTimeOffset removedAt, string? actor, CancellationToken ct = default)
+        => contexts.RemoveInstallationAsync(siteId, id, removedAt, actor, ct);
     public Task<IReadOnlyList<ToolingInstallation>> ListInstallationsAsync(
-        string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default)
-        => contexts.ListInstallationsAsync(equipmentId, activeOnly, ct);
-    public Task<bool> DeleteInstallationAsync(Guid id, CancellationToken ct = default)
-        => contexts.DeleteInstallationAsync(id, ct);
+        string? siteId = null, string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default)
+        => contexts.ListInstallationsAsync(siteId, equipmentId, activeOnly, ct);
+    public Task<bool> DeleteInstallationAsync(string siteId, Guid id, CancellationToken ct = default)
+        => contexts.DeleteInstallationAsync(siteId, id, ct);
 
     public Task<ProductionContext> StartProductionContextAsync(
         ProductionContext value, CancellationToken ct = default)
@@ -65,14 +65,14 @@ public sealed class ManufacturingContextApplication(IManufacturingContextStore c
         ProductionContext value, CancellationToken ct = default)
         => contexts.ReplaceProductionContextAsync(value, ct);
     public Task<ProductionContext?> CloseProductionContextAsync(
-        Guid id, DateTimeOffset validTo, string? actor, CancellationToken ct = default)
-        => contexts.CloseProductionContextAsync(id, validTo, actor, ct);
+        string siteId, Guid id, DateTimeOffset validTo, string? actor, CancellationToken ct = default)
+        => contexts.CloseProductionContextAsync(siteId, id, validTo, actor, ct);
     public Task<IReadOnlyList<ProductionContext>> ListProductionContextsAsync(
-        string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default)
-        => contexts.ListProductionContextsAsync(equipmentId, activeOnly, ct);
-    public Task<bool> DeleteProductionContextAsync(Guid id, CancellationToken ct = default)
-        => contexts.DeleteProductionContextAsync(id, ct);
+        string? siteId = null, string? equipmentId = null, bool activeOnly = false, CancellationToken ct = default)
+        => contexts.ListProductionContextsAsync(siteId, equipmentId, activeOnly, ct);
+    public Task<bool> DeleteProductionContextAsync(string siteId, Guid id, CancellationToken ct = default)
+        => contexts.DeleteProductionContextAsync(siteId, id, ct);
     public Task<ResolvedProductionContext?> ResolveAsync(
-        string equipmentId, DateTimeOffset at, CancellationToken ct = default)
-        => contexts.ResolveAsync(equipmentId, at, ct);
+        string siteId, string equipmentId, DateTimeOffset at, CancellationToken ct = default)
+        => contexts.ResolveAsync(siteId, equipmentId, at, ct);
 }

@@ -1,6 +1,7 @@
 
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DateTimeField, Field, Input, Select, Textarea } from "../ui/components";
+import { formatLocalDateTime, localDateTimeToIso } from "../ui/dateTime";
 
 // 编辑业务字典定义；页面只提交结构化注册表数据，不承担运行证据或优化决策流程。
 const codePattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -49,8 +50,8 @@ const pairsFromObject = value => Object.entries(value || {}).map(([key, pairValu
 const objectFromPairs = pairs => Object.fromEntries(
   pairs.filter(pair => pair.key.trim() && pair.value.trim()).map(pair => [pair.key.trim(), pair.value.trim()]),
 );
-const localDateTime = value => value ? new Date(value).toISOString().slice(0, 16) : "";
-const apiDateTime = value => value ? new Date(value).toISOString() : null;
+const localDateTime = formatLocalDateTime;
+const apiDateTime = localDateTimeToIso;
 const numberOrNull = value => value === "" || value === null || value === undefined ? null : Number(value);
 const modelValue = (id, version) => id ? `${id}::${version || 1}` : "";
 const versionedStatus = (value, version) => version === undefined ? value.status || "draft" : "draft";

@@ -3,6 +3,7 @@
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Acquisition;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Xunit;
 
 namespace Ingot.Core.Tests.Integration;
@@ -15,6 +16,7 @@ public sealed class PostgresIngestionConfigurationStoreTests(PostgresIntegration
     {
         await postgres.EnsureSchemaAsync();
         var store = new PostgresIngestionConfigurationStore(postgres.DataSource);
+        await EnsureDataModelAsync();
         var suffix = Guid.NewGuid().ToString("N");
         var template = Template($"template-{suffix}");
         var source = Source($"source-{suffix}");
@@ -53,4 +55,18 @@ public sealed class PostgresIngestionConfigurationStoreTests(PostgresIntegration
         SubjectId = id,
         HttpPolling = new HttpPollingConnection { BaseUrl = "http://device.local" }
     };
+
+    private async Task EnsureDataModelAsync()
+    {
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        await configurations.TryUpsertDataModelAsync(new ProcessDataModel
+        {
+            ModelId = "model",
+            Version = 1,
+            Name = "Ingestion configuration model",
+            Status = ConfigurationStatuses.Published,
+            Acquisition = new AcquisitionModel(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
 }

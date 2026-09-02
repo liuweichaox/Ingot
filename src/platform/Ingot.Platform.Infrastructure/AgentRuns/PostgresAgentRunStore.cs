@@ -78,7 +78,7 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             : JsonSerializer.Deserialize<AgentRunSnapshot>((string)value, JsonOptions);
     }
 
-    public async Task<AgentRunSnapshot?> ClaimNextAsync(
+    public async Task<ClaimedAgentRun?> ClaimNextAsync(
         string leaseOwner,
         TimeSpan leaseDuration,
         CancellationToken ct = default)
@@ -89,21 +89,26 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
               SELECT run_id
               FROM agent_runs
               WHERE status = 'queued'
-                 OR (status = 'running' AND lease_expires_at < now())
+                 OR (status IN ('running', 'cancelling') AND lease_expires_at < now())
               ORDER BY created_at, run_id
               FOR UPDATE SKIP LOCKED
               LIMIT 1
             )
             UPDATE agent_runs run
-            SET status = 'running',
-                snapshot = jsonb_set(run.snapshot, '{status}', to_jsonb('running'::text), true),
+            SET status = CASE WHEN run.status = 'cancelling' THEN 'cancelling' ELSE 'running' END,
+                snapshot = jsonb_set(
+                  run.snapshot,
+                  '{status}',
+                  to_jsonb(CASE WHEN run.status = 'cancelling' THEN 'cancelling'::text ELSE 'running'::text END),
+                  true),
                 lease_owner = $1,
                 lease_expires_at = now() + $2,
+                lease_generation = run.lease_generation + 1,
                 attempt_count = attempt_count + 1,
                 updated_at = now()
             FROM candidate
             WHERE run.run_id = candidate.run_id
-            RETURNING run.snapshot::text
+            RETURNING run.snapshot::text, run.lease_generation
             """);
         command.Parameters.AddWithValue(leaseOwner);
         command.Parameters.Add(new NpgsqlParameter
@@ -111,26 +116,29 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             NpgsqlDbType = NpgsqlDbType.Interval,
             Value = leaseDuration
         });
-        var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-        return value is null or DBNull
-            ? null
-            : JsonSerializer.Deserialize<AgentRunSnapshot>((string)value, JsonOptions);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (!await reader.ReadAsync(ct).ConfigureAwait(false))
+            return null;
+        var run = JsonSerializer.Deserialize<AgentRunSnapshot>(reader.GetString(0), JsonOptions)
+                  ?? throw new InvalidOperationException("Agent 运行快照无效。");
+        return new ClaimedAgentRun(run, new AgentRunLease(run.RunId, leaseOwner, reader.GetInt64(1)));
     }
 
     public async Task<bool> RenewLeaseAsync(
-        string runId,
-        string leaseOwner,
+        AgentRunLease lease,
         TimeSpan leaseDuration,
         CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand(
             """
             UPDATE agent_runs
-            SET lease_expires_at = now() + $3, updated_at = now()
-            WHERE run_id = $1 AND lease_owner = $2 AND status = 'running'
+            SET lease_expires_at = now() + $4, updated_at = now()
+            WHERE run_id = $1 AND lease_owner = $2 AND lease_generation = $3
+              AND status IN ('running', 'cancelling')
             """);
-        command.Parameters.AddWithValue(runId);
-        command.Parameters.AddWithValue(leaseOwner);
+        command.Parameters.AddWithValue(lease.RunId);
+        command.Parameters.AddWithValue(lease.Owner);
+        command.Parameters.AddWithValue(lease.Generation);
         command.Parameters.Add(new NpgsqlParameter
         {
             NpgsqlDbType = NpgsqlDbType.Interval,
@@ -140,19 +148,42 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
     }
 
     public async Task ReleaseLeaseAsync(
-        string runId,
-        string leaseOwner,
+        AgentRunLease lease,
         CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand(
             """
             UPDATE agent_runs
             SET lease_owner = NULL, lease_expires_at = NULL, updated_at = now()
-            WHERE run_id = $1 AND lease_owner = $2
+            WHERE run_id = $1 AND lease_owner = $2 AND lease_generation = $3
+              AND status IN ('completed', 'cancelled', 'failed')
             """);
-        command.Parameters.AddWithValue(runId);
-        command.Parameters.AddWithValue(leaseOwner);
+        command.Parameters.AddWithValue(lease.RunId);
+        command.Parameters.AddWithValue(lease.Owner);
+        command.Parameters.AddWithValue(lease.Generation);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> UpdateLeasedAsync(
+        AgentRunSnapshot run,
+        AgentRunLease lease,
+        CancellationToken ct = default)
+    {
+        if (!string.Equals(run.RunId, lease.RunId, StringComparison.Ordinal))
+            throw new ArgumentException("租约和运行编号不匹配。", nameof(lease));
+        await using var command = dataSource.CreateCommand(
+            """
+            UPDATE agent_runs
+            SET user_id = $2, entry_point = $3, status = $4, created_at = $5,
+                completed_at = $6, snapshot = $7, updated_at = now(),
+                conversation_id = $8, trigger_message_id = $9, response_message_id = $10
+            WHERE run_id = $1 AND lease_owner = $11 AND lease_generation = $12
+              AND (status = 'running' OR (status = 'cancelling' AND $4 = 'cancelled'))
+            """);
+        BindRun(command, run);
+        command.Parameters.AddWithValue(lease.Owner);
+        command.Parameters.AddWithValue(lease.Generation);
+        return await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
     }
 
     public async Task<IReadOnlyList<AgentRunSnapshot>> ListAsync(
@@ -305,6 +336,79 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             OccurredAt = occurredAt,
             Data = element
         };
+    }
+
+    public async Task<AgentStreamEvent?> AppendLeasedEventAsync(
+        string runId,
+        AgentRunLease lease,
+        string type,
+        object? data,
+        CancellationToken ct = default)
+    {
+        if (!string.Equals(runId, lease.RunId, StringComparison.Ordinal))
+            throw new ArgumentException("租约和运行编号不匹配。", nameof(lease));
+        var occurredAt = DateTimeOffset.UtcNow;
+        var element = data is null
+            ? (JsonElement?)null
+            : JsonSerializer.SerializeToElement(data, JsonOptions);
+        await using var command = dataSource.CreateCommand(
+            """
+            INSERT INTO agent_stream_events(run_id, event_type, occurred_at, data)
+            SELECT $1, $2, $3, $4
+            WHERE EXISTS (
+              SELECT 1 FROM agent_runs
+              WHERE run_id = $1 AND lease_owner = $5 AND lease_generation = $6
+            )
+            RETURNING sequence
+            """);
+        command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(type);
+        command.Parameters.AddWithValue(occurredAt);
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Jsonb,
+            Value = element?.GetRawText() ?? (object)DBNull.Value
+        });
+        command.Parameters.AddWithValue(lease.Owner);
+        command.Parameters.AddWithValue(lease.Generation);
+        var sequence = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return sequence is null or DBNull
+            ? null
+            : new AgentStreamEvent
+            {
+                Sequence = Convert.ToInt64(sequence),
+                Type = type,
+                OccurredAt = occurredAt,
+                Data = element
+            };
+    }
+
+    public async Task<AgentRunSnapshot?> RequestCancellationAsync(
+        string runId,
+        string userId,
+        string reason,
+        CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand(
+            """
+            UPDATE agent_runs
+            SET status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE 'cancelling' END,
+                completed_at = CASE WHEN status = 'queued' THEN now() ELSE completed_at END,
+                snapshot = jsonb_set(
+                  jsonb_set(snapshot, '{status}',
+                    to_jsonb(CASE WHEN status = 'queued' THEN 'cancelled'::text ELSE 'cancelling'::text END), true),
+                  '{cancellationReason}', to_jsonb($3::text), true),
+                updated_at = now()
+            WHERE run_id = $1 AND user_id = $2 AND status IN ('queued', 'running')
+            RETURNING snapshot::text
+            """);
+        command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(userId);
+        command.Parameters.AddWithValue(reason);
+        var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return value is null or DBNull
+            ? null
+            : JsonSerializer.Deserialize<AgentRunSnapshot>((string)value, JsonOptions);
     }
 
     public async Task<IReadOnlyList<AgentStreamEvent>> ReadEventsAsync(

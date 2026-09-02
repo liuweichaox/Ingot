@@ -3,6 +3,7 @@
 using System.Text.Json;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
+using Ingot.Contracts.Manufacturing;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Domain.Events;
 using Ingot.Platform.Application.ProcessExecutions;
@@ -21,6 +22,141 @@ namespace Ingot.Core.Tests.Integration;
 [Collection(PostgresIntegrationCollection.Name)]
 public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres)
 {
+    [LinuxDockerFact]
+    public async Task SameEquipmentIdAcrossSites_ShouldCaptureEachSitesManufacturingContext()
+    {
+        await postgres.EnsureSchemaAsync();
+        var options = Options.Create(new PlatformEventOptions());
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
+            NullLogger<PostgresTimeSeriesStore>.Instance,
+            options);
+        using var events = new PostgresPlatformEventStore(
+            postgres.DataSource,
+            NullLogger<PostgresPlatformEventStore>.Instance,
+            new PlatformEventMetrics(),
+            options,
+            manufacturing,
+            new ProcessAnalysisResolver(configurations),
+            materializations,
+            timeSeries);
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var siteA = $"SITE-A-{suffix}";
+        var siteB = $"SITE-B-{suffix}";
+        var edgeA = $"EDGE-A-{suffix}";
+        var edgeB = $"EDGE-B-{suffix}";
+        var now = DateTimeOffset.UtcNow;
+
+        await CreateProductionContextAsync(manufacturing, siteA, suffix, "A", now);
+        await CreateProductionContextAsync(manufacturing, siteB, suffix, "B", now);
+
+        await events.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteA,
+            EdgeId = edgeA,
+            Events = [EquipmentHeartbeat(edgeA, now, 1)]
+        });
+        await events.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteB,
+            EdgeId = edgeB,
+            Events = [EquipmentHeartbeat(edgeB, now, 1)]
+        });
+
+        var capturedA = Assert.Single(await events.QueryAsync(new PlatformEventQuery { SiteId = siteA }));
+        var capturedB = Assert.Single(await events.QueryAsync(new PlatformEventQuery { SiteId = siteB }));
+
+        Assert.Equal($"PRODUCT-A-{suffix}", capturedA.Event.Context["product_code"]);
+        Assert.Equal($"PRODUCT-B-{suffix}", capturedB.Event.Context["product_code"]);
+        Assert.NotEqual(capturedA.Event.Context["production_context_id"], capturedB.Event.Context["production_context_id"]);
+
+        static ProductionEvent EquipmentHeartbeat(string edgeId, DateTimeOffset occurredAt, long sequence)
+            => ProductionEvent.Create(
+                "equipment.heartbeat",
+                occurredAt,
+                $"edge/{edgeId}/equipment/PRESS-01",
+                new ObjectRef("equipment", "PRESS-01")) with { Seq = sequence };
+    }
+
+    private static async Task CreateProductionContextAsync(
+        PostgresManufacturingContextStore manufacturing,
+        string siteId,
+        string suffix,
+        string marker,
+        DateTimeOffset now)
+    {
+        var componentTypeCode = $"component-{marker.ToLowerInvariant()}-{suffix}";
+        var toolingTypeCode = $"tooling-{marker.ToLowerInvariant()}-{suffix}";
+        var componentId = $"COMPONENT-{marker}-{suffix}";
+        var assemblyId = $"ASSEMBLY-{marker}-{suffix}";
+        var installedAt = now.AddMinutes(-1);
+
+        await manufacturing.UpsertComponentTypeAsync(new ToolingComponentTypeDefinition
+        {
+            ComponentTypeCode = componentTypeCode,
+            Name = $"Component {marker}"
+        });
+        await manufacturing.CreateToolingTypeAsync(new ToolingTypeDefinition
+        {
+            ToolingTypeCode = toolingTypeCode,
+            Name = $"Tooling {marker}",
+            Roles =
+            [
+                new ToolingRoleDefinition
+                {
+                    Code = "core",
+                    Name = "Core",
+                    AcceptedComponentTypeCodes = [componentTypeCode]
+                }
+            ]
+        });
+        await manufacturing.UpsertComponentAsync(new ToolingComponent
+        {
+            ComponentId = componentId,
+            ComponentTypeCode = componentTypeCode,
+            SerialNo = $"SERIAL-{marker}-{suffix}"
+        });
+        await manufacturing.UpsertAssemblyAsync(new ToolingAssembly
+        {
+            ToolingAssemblyId = assemblyId,
+            ToolingTypeCode = toolingTypeCode,
+            Name = $"Assembly {marker}"
+        });
+        var revision = await manufacturing.CreateAssemblyRevisionAsync(new ToolingAssemblyRevision
+        {
+            AssemblyRevisionId = Guid.NewGuid(),
+            ToolingAssemblyId = assemblyId,
+            ToolingTypeVersion = 1,
+            Members = [new ToolingAssemblyMember { RoleCode = "core", ComponentId = componentId }]
+        });
+        var installation = await manufacturing.ReplaceInstallationAsync(new ToolingInstallation
+        {
+            InstallationId = Guid.NewGuid(),
+            SiteId = siteId,
+            EquipmentId = "PRESS-01",
+            AssemblyRevisionId = revision.AssemblyRevisionId,
+            InstalledAt = installedAt
+        });
+        await manufacturing.ReplaceProductionContextAsync(new ProductionContext
+        {
+            ContextId = Guid.NewGuid(),
+            SiteId = siteId,
+            EquipmentId = "PRESS-01",
+            ProductFamilyCode = $"FAMILY-{marker}-{suffix}",
+            ProductCode = $"PRODUCT-{marker}-{suffix}",
+            ProcessSpecificationId = $"SPEC-{marker}-{suffix}",
+            ProcessSpecificationVersion = "1",
+            ToolingInstallationId = installation.InstallationId,
+            ValidFrom = now
+        });
+    }
+
     [LinuxDockerFact]
     public async Task BoundaryProjection_ShouldCoalesceBatchesAndCompleteFromCanonicalEvent()
     {

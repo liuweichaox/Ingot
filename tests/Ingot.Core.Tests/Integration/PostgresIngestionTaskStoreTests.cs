@@ -3,6 +3,7 @@
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Acquisition;
+using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Xunit;
 
 namespace Ingot.Core.Tests.Integration;
@@ -15,6 +16,7 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
     {
         await postgres.EnsureSchemaAsync();
         var store = new PostgresIngestionTaskStore(postgres.DataSource);
+        await EnsureDataModelAsync();
         await store.InitializeAsync();
         var taskId = $"concurrent-{Guid.NewGuid():N}";
         var first = Profile(taskId, 1);
@@ -37,6 +39,7 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
     {
         await postgres.EnsureSchemaAsync();
         var store = new PostgresIngestionTaskStore(postgres.DataSource);
+        await EnsureDataModelAsync();
         var taskId = $"immutable-{Guid.NewGuid():N}";
         var published = Profile(taskId, 1) with { Name = "first" };
         await store.PublishExclusiveAsync(published);
@@ -63,4 +66,18 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
             SubjectId = "MACHINE-01",
             UpdatedAt = DateTimeOffset.UtcNow
         };
+
+    private async Task EnsureDataModelAsync()
+    {
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        await configurations.TryUpsertDataModelAsync(new ProcessDataModel
+        {
+            ModelId = "model-a",
+            Version = 1,
+            Name = "Task store model",
+            Status = ConfigurationStatuses.Published,
+            Acquisition = new AcquisitionModel(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
 }

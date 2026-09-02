@@ -190,6 +190,7 @@ describe("生产界面状态反馈", () => {
   it("生产切换必须绑定当前已装工装", () => {
     const editor = {
       ...productionResources.context.template,
+      siteId: "SITE-001",
       equipmentId: "PRESS-01",
       productFamilyCode: "LENS",
       productCode: "LENS-A",
@@ -197,6 +198,11 @@ describe("生产界面状态反馈", () => {
     };
     expect(isProductionEditorValid(productionResources.context, editor)).toBe(false);
     expect(isProductionEditorValid(productionResources.context, { ...editor, toolingInstallationId: "install-01" })).toBe(true);
+    expect(isProductionEditorValid(productionResources.context, { ...editor, siteId: "", toolingInstallationId: "install-01" })).toBe(false);
+    expect(productionResources.context.lifecycle.url({ contextId: "context-01", siteId: "SITE/01" }))
+      .toBe("/api/v1/production-contexts/context-01:close?siteId=SITE%2F01");
+    expect(productionResources.installation.lifecycle.url({ installationId: "installation-01", siteId: "SITE/01" }))
+      .toBe("/api/v1/tooling-installations/installation-01:remove?siteId=SITE%2F01");
   });
 
   it("从已发布工艺规范的运行依据创建下一版草稿", async () => {
