@@ -338,6 +338,20 @@ def test_service_stops_when_runs_never_covered_enough_of_the_space():
     assert "observed coverage envelope" in response.text
 
 
+def test_service_hypothesis_validation_skips_the_observed_coverage_envelope():
+    body = request_body()
+    body["campaign"]["decision_intent"] = "validate-hypothesis"
+    body["campaign"]["hypothesis_variables"] = ["x"]
+    body["candidate_pool"] = [{"x": 0.89}]
+
+    response = client.post("/v1/suggestions", json=body)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["coverage_envelope"] is None
+    assert payload["suggestions"][0]["recommended_params"]["x"] == pytest.approx(0.89)
+
+
 def test_service_keeps_binary_objective_predictions_inside_declared_bounds():
     body = request_body()
     body["campaign"]["objectives"] = [

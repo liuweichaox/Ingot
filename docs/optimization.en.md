@@ -31,6 +31,8 @@ Safety boundaries state where the process is allowed to go, not where historical
 
 Candidates are generated inside the envelope rather than sampled across the declared range and filtered, because the envelope is often a thin slice of that range when parameters are strongly correlated. When the envelope holds too few candidates, the system stops and reports that production runs have not covered enough of the parameter space.
 
+The envelope constrains only `reach-specification` recommendations. `validate-hypothesis` deliberately separates candidates from existing observations inside the safety boundaries to gather identifiable information, so the observed-coverage envelope does not apply and the service does not return an applied envelope for that intent.
+
 The optimization service returns the envelope it applied and Platform recomputes the same envelope from the same runs. Platform stops the recommendation when the two disagree or when any suggestion falls outside it. The gate does not apply to offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
 
 ## Numerical Methods

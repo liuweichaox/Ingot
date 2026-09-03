@@ -456,6 +456,10 @@ class BotorchOptimizer:
             raise ValueError("top_k must be between 1 and 20")
         if decision_intent not in {"reach-specification", "validate-hypothesis"}:
             raise ValueError("decision_intent must be reach-specification or validate-hypothesis")
+        # Hypothesis validation deliberately explores identifiable directions,
+        # including outside the cluster already covered by production runs.
+        if decision_intent == "validate-hypothesis":
+            enforce_coverage = False
         self.coverage_envelope = build_coverage_envelope(np.vstack(self.x))
         candidates = self._candidate_units(
             candidate_params,

@@ -555,7 +555,12 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     model_version = suggestions[0].model_version
-    envelope = optimizer.coverage_envelope
+    # Report only envelopes that actually constrained this response.
+    envelope = (
+        None
+        if request.campaign.decision_intent == "validate-hypothesis"
+        else optimizer.coverage_envelope
+    )
     return SuggestionResponse(
         model_version=model_version,
         observation_count=len(request.observations),

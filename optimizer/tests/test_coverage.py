@@ -140,3 +140,21 @@ def test_disabled_coverage_restores_whole_campaign_candidates():
     )[0]
 
     assert recommended.recommended_params["x"] == pytest.approx(0.9)
+
+
+def test_hypothesis_validation_may_leave_the_observed_coverage_envelope():
+    optimizer = build_optimizer(
+        collinear_campaign(), collinear_observations(), seed=11
+    )
+
+    recommended = optimizer.suggest(
+        candidate_params=[{"x": 0.9, "y": 0.1}],
+        n_random=1,
+        n_samples=64,
+        top_k=1,
+        decision_intent="validate-hypothesis",
+        hypothesis_variables=["x"],
+    )[0]
+
+    assert recommended.recommended_params["x"] == pytest.approx(0.9)
+    assert recommended.recommended_params["y"] == pytest.approx(0.1)
