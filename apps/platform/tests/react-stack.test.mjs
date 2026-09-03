@@ -27,7 +27,6 @@ const acquisitionPanels = {
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-const authGate = await readFile(new URL("../src/auth/AuthGate.jsx", import.meta.url), "utf8");
 const main = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 async function sourceFiles(directory) {
@@ -354,18 +353,18 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
 
 test("local authentication has a complete login and session-expiry experience", () => {
   assert.match(main, /<AuthGate>/);
-  assert.match(authGate, /PROCESS DIAGNOSIS · SPECIFICATION REVISION/);
-  assert.match(authGate, /从真实运行，/);
-  assert.match(authGate, /到下一版工艺规范。/);
-  assert.match(authGate, /ENGINEERING DECISION · EVIDENCE/);
-  assert.match(authGate, /结论可复用/);
-  assert.match(authGate, /真实运行、质量结果、工艺追因与工艺规范版本/);
-  assert.doesNotMatch(authGate, /下一份配方/);
-  assert.match(authGate, /\/api\/v1\/auth\/me/);
-  assert.match(authGate, /\/api\/v1\/auth\/login/);
-  assert.match(authGate, /ingot:unauthorized/);
-  assert.match(authGate, /autoComplete="username"/);
-  assert.match(authGate, /autoComplete="current-password"/);
+  assert.match(auth, /PROCESS DIAGNOSIS · SPECIFICATION REVISION/);
+  assert.match(auth, /从真实运行，/);
+  assert.match(auth, /到下一版工艺规范。/);
+  assert.match(auth, /ENGINEERING DECISION · EVIDENCE/);
+  assert.match(auth, /结论可复用/);
+  assert.match(auth, /真实运行、质量结果、工艺追因与工艺规范版本/);
+  assert.doesNotMatch(auth, /下一份配方/);
+  assert.match(auth, /\/api\/v1\/auth\/me/);
+  assert.match(auth, /\/api\/v1\/auth\/login/);
+  assert.match(auth, /ingot:unauthorized/);
+  assert.match(auth, /autoComplete="username"/);
+  assert.match(auth, /autoComplete="current-password"/);
   assert.match(app, /退出登录/);
   assert.doesNotMatch(app, /开发模式 · operator/);
 });

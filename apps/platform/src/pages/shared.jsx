@@ -19,7 +19,7 @@ export const formatBytes = value => {
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
   return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 };
-export const metricSamples = (payload, name) => payload?.metrics?.[name]?.data || [];
+const metricSamples = (payload, name) => payload?.metrics?.[name]?.data || [];
 export const metricTotal = (payload, name) => metricSamples(payload, name).reduce((sum, sample) => sum + Number(sample.value || 0), 0);
 export const formatDuration = value => {
   const milliseconds = Number(value);
@@ -43,7 +43,7 @@ export const edgeStatus = edge => {
   return Date.now() - new Date(edge.lastSeen).getTime() <= 30000 ? "online" : "offline";
 };
 
-export const inspectionInputTypeLabels = {
+const inspectionInputTypeLabels = {
   numeric: "数值",
   text: "文本",
   select: "选项",
@@ -58,14 +58,14 @@ export const acquisitionProtocolLabels = {
   "melsec-a1e": "三菱 MC 1E",
 };
 
-export const objectTypeLabels = {
+const objectTypeLabels = {
   equipment: "生产设备",
   workpiece: "工件",
 };
 
 export const objectTypeLabel = value => objectTypeLabels[value] || value || "未分类";
 
-export const eventTypeLabels = {
+const eventTypeLabels = {
   "process.started": "生产开始",
   "process.completed": "生产完成",
   "process.sample": "过程采样",
@@ -80,7 +80,7 @@ export const eventTypeLabels = {
 
 export const eventTypeLabel = value => eventTypeLabels[value] || value?.split(".").join(" / ") || "生产事件";
 
-export const contextFieldLabels = {
+const contextFieldLabels = {
   context_capture_status: "上下文捕获状态",
   equipment_id: "设备编号",
   execution_id: "运行编号",

@@ -1,6 +1,6 @@
 
 // 将质量与过程数据转换为 Plotly trace，并保留原始测量语义和悬停证据。
-export const chartPalette = ["#3478c9", "#2f9d78", "#e09b3d", "#8a63c7", "#d45f65", "#4b98a7"];
+const chartPalette = ["#3478c9", "#2f9d78", "#e09b3d", "#8a63c7", "#d45f65", "#4b98a7"];
 
 export function qualityOutcomeTraces(groups) {
   const rows = groups || [];

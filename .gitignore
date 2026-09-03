@@ -79,6 +79,7 @@ StyleCopReport.xml
 node_modules/
 apps/platform/dist/
 apps/platform/.vite/
+.next/
 
 # Local runtime data
 /.codex-temp/

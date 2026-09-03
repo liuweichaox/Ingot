@@ -3,16 +3,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Badge, Card, DataTable, Metric, Page, RequestError, StatusBadge, WorkflowGuide } from "../ui/components";
-import { formatTime, formatInteger, formatDuration, edgeStatus, acquisitionProtocolLabels, objectTypeLabel, LoadingCard } from "./shared";
-
-function formatBytes(value) {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes)) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
-  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
-}
+import { formatTime, formatInteger, formatDuration, formatBytes, edgeStatus, acquisitionProtocolLabels, objectTypeLabel, LoadingCard } from "./shared";
 
 export function EdgesPage() {
   const { data, loading, error, reload } = useApi("/api/edges", { interval: 10000 });

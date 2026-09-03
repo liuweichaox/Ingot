@@ -206,7 +206,7 @@ const evidenceLevels = {
   sufficient: { label: "证据充分", strength: 4, activeClassName: "bg-emerald-600", labelClassName: "text-emerald-700" },
 };
 
-export function evidenceLevelLabel(value) {
+function evidenceLevelLabel(value) {
   const normalized = String(value ?? "insufficient").toLowerCase();
   return evidenceLevels[normalized]?.label ?? String(value ?? "证据不足");
 }
