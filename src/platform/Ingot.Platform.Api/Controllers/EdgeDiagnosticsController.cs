@@ -15,52 +15,6 @@ public sealed class EdgeDiagnosticsController(
     IHttpClientFactory httpClientFactory,
     PlatformUserResolver userResolver) : PlatformApiController
 {
-    [HttpGet("metrics/raw")]
-    public async Task<IActionResult> GetEdgeMetricsRaw([FromRoute] string edgeId, CancellationToken cancellationToken)
-    {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
-        var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
-        if (reported is not null)
-            return Ok(reported);
-
-        var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 metrics。");
-
-        var uri = new Uri(new Uri(baseUrl), "/metrics");
-        var client = CreateEdgeClient(edgeId);
-
-        using var resp = await client.GetAsync(uri, cancellationToken);
-        var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
-
-        return Content(body, "text/plain; version=0.0.4; charset=utf-8");
-    }
-
-    [HttpGet("metrics/json")]
-    public async Task<IActionResult> GetEdgeMetricsJson([FromRoute] string edgeId, CancellationToken cancellationToken)
-    {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
-        var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 metrics。");
-
-        var uri = new Uri(new Uri(baseUrl), "/metrics");
-        var client = CreateEdgeClient(edgeId);
-
-        using var resp = await client.GetAsync(uri, cancellationToken);
-        var text = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, text);
-
-        var metrics = PrometheusTextParser.Parse(text);
-        return Ok(new
-        {
-            edgeId,
-            timestamp = DateTimeOffset.UtcNow,
-            metrics
-        });
-    }
-
     [HttpGet("logs")]
     public async Task<IActionResult> GetEdgeLogs(
         [FromRoute] string edgeId,
@@ -109,23 +63,6 @@ public sealed class EdgeDiagnosticsController(
         }
     }
 
-    [HttpGet("logs/levels")]
-    public async Task<IActionResult> GetEdgeLogLevels([FromRoute] string edgeId, CancellationToken cancellationToken)
-    {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
-        var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
-
-        var uri = new Uri(new Uri(baseUrl), "/api/logs/levels");
-        var client = CreateEdgeClient(edgeId);
-        using var resp = await client.GetAsync(uri, cancellationToken);
-        var body = await resp.Content.ReadAsStringAsync(cancellationToken);
-        if (!resp.IsSuccessStatusCode) return EdgeProxyFailure(resp, body);
-
-        return Content(body, "application/json; charset=utf-8");
-    }
-
     [HttpGet("acquisition/status")]
     public async Task<IActionResult> GetAcquisitionStatus(
         [FromRoute] string edgeId,
@@ -158,21 +95,6 @@ public sealed class EdgeDiagnosticsController(
                 "采集节点不可访问。",
                 [("upstreamDetail", exception.Message)]);
         }
-    }
-
-    [HttpGet("delivery/status")]
-    public async Task<IActionResult> GetDeliveryStatus(
-        [FromRoute] string edgeId,
-        CancellationToken cancellationToken)
-    {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
-        var state = await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (state is null)
-            return ResourceNotFound("采集节点不存在。");
-        return state.Delivery is null
-            ? ResourceNotFound("采集节点尚未上报数据上送状态。")
-            : Ok(state.Delivery);
     }
 
     private string? GetEdgeBaseUrlOrNull(string edgeId)
