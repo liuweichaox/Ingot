@@ -239,6 +239,33 @@ public sealed record OptimizerSuggestionOutput
     public string Rationale { get; init; } = "";
 }
 
+/// <summary>报告一个可控变量被历史运行实际覆盖的范围。</summary>
+public sealed record OptimizerCoverageVariable
+{
+    public required string Name { get; init; }
+    public string Unit { get; init; } = "";
+    public double Lower { get; init; }
+    public double Upper { get; init; }
+
+    [JsonPropertyName("observed_minimum")]
+    public double ObservedMinimum { get; init; }
+
+    [JsonPropertyName("observed_maximum")]
+    public double ObservedMaximum { get; init; }
+}
+
+/// <summary>报告优化服务实际施加的观察覆盖包络。</summary>
+public sealed record OptimizerCoverageEnvelope
+{
+    [JsonPropertyName("observation_count")]
+    public int ObservationCount { get; init; }
+
+    [JsonPropertyName("leverage_limit")]
+    public double LeverageLimit { get; init; }
+
+    public IReadOnlyList<OptimizerCoverageVariable> Variables { get; init; } = [];
+}
+
 public sealed record OptimizerSuggestionResponse
 {
     [JsonPropertyName("model_version")]
@@ -248,6 +275,9 @@ public sealed record OptimizerSuggestionResponse
     public int ObservationCount { get; init; }
 
     public IReadOnlyList<OptimizerSuggestionOutput> Suggestions { get; init; } = [];
+
+    [JsonPropertyName("coverage_envelope")]
+    public OptimizerCoverageEnvelope? CoverageEnvelope { get; init; }
 
     [JsonPropertyName("feature_set_id")]
     public string FeatureSetId { get; init; } = "";

@@ -98,9 +98,14 @@ public sealed class ResearchOptimizationService(
         var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
         if (response.ObservationCount != observations.Length || response.Suggestions.Count != topK)
             throw new ProcessResearchRuleException("优化服务使用的数据快照或返回的配方建议数量不一致。");
+        var campaignVariables = call.Campaign.Variables.ToDictionary(
+            static value => value.Name, StringComparer.Ordinal);
+        var coverage = BuildObservedCoverage(call.Campaign.Variables, observations);
+        ValidateReportedCoverage(response.CoverageEnvelope, coverage, campaignVariables);
         foreach (var candidate in response.Suggestions)
         {
             ValidateSuggestion(project, response.ModelVersion, candidate);
+            ValidateObservedCoverage(coverage, campaignVariables, candidate);
             MechanismKnowledgeRecommendationPolicy.ValidateHardConstraints(candidate, mechanismKnowledge);
         }
         var suggestion = MechanismKnowledgeRecommendationPolicy.Rank(response.Suggestions, mechanismKnowledge, controls).First();
@@ -230,6 +235,72 @@ public sealed class ResearchOptimizationService(
         foreach (var (code, parameter) in value.RecommendedParameters)
             if (!double.IsFinite(parameter) || parameter < controls[code].LowerLimit || parameter > controls[code].UpperLimit)
                 throw new ProcessResearchRuleException($"优化变量 {code} 超出项目范围。");
+    }
+
+    // Mirrors the range gate in optimizer/ingot_optimizer/coverage.py; the platform
+    // recomputes it so a recommendation outside the covered region fails closed even
+    // when the optimization service does not apply the gate.
+    private const double CoverageRelativeMargin = 0.10;
+    private const double CoverageMinimumStep = 0.02;
+    private const double CoverageTolerance = 1e-9;
+
+    private static IReadOnlyDictionary<string, (double Lower, double Upper)> BuildObservedCoverage(
+        IReadOnlyList<OptimizerVariableInput> variables,
+        IReadOnlyList<OptimizerObservationInput> observations)
+    {
+        var coverage = new Dictionary<string, (double Lower, double Upper)>(StringComparer.Ordinal);
+        foreach (var variable in variables)
+        {
+            var values = observations.Select(value => value.Params[variable.Name]).ToArray();
+            var observedLower = values.Min();
+            var observedUpper = values.Max();
+            var margin = Math.Max(
+                CoverageRelativeMargin * (observedUpper - observedLower),
+                CoverageMinimumStep * (variable.High - variable.Low));
+            coverage[variable.Name] = (
+                Math.Max(variable.Low, observedLower - margin),
+                Math.Min(variable.High, observedUpper + margin));
+        }
+        return coverage;
+    }
+
+    private static double CoverageToleranceFor(OptimizerVariableInput variable)
+        => CoverageTolerance * Math.Max(variable.High - variable.Low, 1);
+
+    private static void ValidateReportedCoverage(
+        OptimizerCoverageEnvelope? envelope,
+        IReadOnlyDictionary<string, (double Lower, double Upper)> coverage,
+        IReadOnlyDictionary<string, OptimizerVariableInput> variables)
+    {
+        if (envelope is null)
+            throw new ProcessResearchRuleException(
+                "优化服务未报告观察覆盖包络，无法确认建议落在历史运行的覆盖范围内。");
+        var reported = envelope.Variables.ToDictionary(static value => value.Name, StringComparer.Ordinal);
+        if (!reported.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(coverage.Keys))
+            throw new ProcessResearchRuleException("观察覆盖包络的变量集合与本次优化输入不一致。");
+        foreach (var (code, bounds) in coverage)
+        {
+            var tolerance = CoverageToleranceFor(variables[code]);
+            if (Math.Abs(reported[code].Lower - bounds.Lower) > tolerance ||
+                Math.Abs(reported[code].Upper - bounds.Upper) > tolerance)
+                throw new ProcessResearchRuleException(
+                    $"优化服务报告的变量 {code} 覆盖范围与平台依据同一批运行计算的结果不一致。");
+        }
+    }
+
+    private static void ValidateObservedCoverage(
+        IReadOnlyDictionary<string, (double Lower, double Upper)> coverage,
+        IReadOnlyDictionary<string, OptimizerVariableInput> variables,
+        OptimizerSuggestionOutput value)
+    {
+        foreach (var (code, parameter) in value.RecommendedParameters)
+        {
+            var (lower, upper) = coverage[code];
+            var tolerance = CoverageToleranceFor(variables[code]);
+            if (parameter < lower - tolerance || parameter > upper + tolerance)
+                throw new ProcessResearchRuleException(
+                    $"配方建议的变量 {code} 超出历史运行的观察覆盖范围。");
+        }
     }
 
     private static int CommonProcessFeatureCount(IReadOnlyList<OptimizerObservationInput> observations)

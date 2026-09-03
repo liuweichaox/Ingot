@@ -15,6 +15,7 @@ All notable project changes will be documented here. The format follows [Keep a 
 - Automatic assembly of experiment observations from cycles, actual recipes, process features, and inspections.
 - Idempotent optimized experiments and atomic result persistence.
 - Bilingual open-source documentation and project website.
+- Observed-coverage envelope that keeps next-recipe recommendations inside the region real production runs cover, enforced by a range gate and a hat-matrix leverage gate, generated from inside the envelope, and revalidated independently by Platform.
 
 ### Changed
 

@@ -64,6 +64,70 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
         Assert.Equal(2, optimizer.SuggestionCallCount);
     }
 
+    [Fact]
+    public async Task CreateNextRecipeRecommendation_RejectsSuggestionOutsideObservedCoverage()
+    {
+        // 观察到的保压温度为 500–540，量程门允许到 544；552 只满足项目安全上限。
+        var service = await CreateServiceAsync(new CapturingOptimizerClient(temperature: 548));
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.Service.CreateNextRecipeRecommendationAsync(
+                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+
+        Assert.Contains("holding-temperature", error.Message, StringComparison.Ordinal);
+        Assert.Contains("观察覆盖范围", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateNextRecipeRecommendation_AcceptsSuggestionInsideObservedCoverage()
+    {
+        var service = await CreateServiceAsync(new CapturingOptimizerClient(temperature: 543.5));
+
+        var recommendation = await service.Service.CreateNextRecipeRecommendationAsync(
+            service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a");
+
+        Assert.Equal(543.5, recommendation.Items[0].Parameters
+            .Single(value => value.VariableCode == "holding-temperature").Value);
+    }
+
+    [Fact]
+    public async Task CreateNextRecipeRecommendation_StopsWhenCoverageEnvelopeIsMissing()
+    {
+        var service = await CreateServiceAsync(new CapturingOptimizerClient(reportCoverage: false));
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.Service.CreateNextRecipeRecommendationAsync(
+                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+
+        Assert.Contains("未报告观察覆盖包络", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateNextRecipeRecommendation_StopsWhenReportedCoverageDisagreesWithObservations()
+    {
+        var service = await CreateServiceAsync(
+            new CapturingOptimizerClient(coverageRelativeMargin: 0.40));
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.Service.CreateNextRecipeRecommendationAsync(
+                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+
+        Assert.Contains("覆盖范围与平台依据同一批运行计算的结果不一致", error.Message, StringComparison.Ordinal);
+    }
+
+    private static async Task<(ResearchOptimizationService Service, Guid ProjectId)> CreateServiceAsync(
+        CapturingOptimizerClient optimizer)
+    {
+        var store = new MemoryStore();
+        var workflow = CreateWorkflow(store);
+        var project = await workflow.CreateProjectAsync(
+            ProjectDraft() with { Code = "observed-coverage" }, "engineer-a");
+        return (new ResearchOptimizationService(store, optimizer,
+            new MultipleObservationAssembler(
+                Observation(500, 8), Observation(520, 12), Observation(540, 16))),
+            project.ProjectId);
+    }
+
     private static async Task<ResearchRecipeRecommendationDecision> SaveDecisionAsync(
         MemoryStore store,
         ResearchProject project,
@@ -133,7 +197,40 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
                 observations.Where(value => value.ExecutionKey == executionKey).ToArray(), observations.Length));
     }
 
-    private sealed class CapturingOptimizerClient : IProcessOptimizerClient
+    /// <summary>按优化服务的量程门规则复算包络，使桩与真实服务保持一致。</summary>
+    private static OptimizerCoverageEnvelope Coverage(
+        OptimizerSuggestionCall request,
+        double relativeMargin = 0.10,
+        double minimumStep = 0.02)
+        => new()
+        {
+            ObservationCount = request.Observations.Count,
+            LeverageLimit = 1,
+            Variables = request.Campaign.Variables.Select(variable =>
+            {
+                var values = request.Observations.Select(value => value.Params[variable.Name]).ToArray();
+                var observedLower = values.Min();
+                var observedUpper = values.Max();
+                var margin = Math.Max(
+                    relativeMargin * (observedUpper - observedLower),
+                    minimumStep * (variable.High - variable.Low));
+                return new OptimizerCoverageVariable
+                {
+                    Name = variable.Name,
+                    Unit = variable.Unit,
+                    Lower = Math.Max(variable.Low, observedLower - margin),
+                    Upper = Math.Min(variable.High, observedUpper + margin),
+                    ObservedMinimum = observedLower,
+                    ObservedMaximum = observedUpper
+                };
+            }).ToArray()
+        };
+
+    private sealed class CapturingOptimizerClient(
+        double temperature = 515,
+        double force = 11,
+        bool reportCoverage = true,
+        double coverageRelativeMargin = 0.10) : IProcessOptimizerClient
     {
         public OptimizerSuggestionCall? LastSuggestionCall { get; private set; }
         public int SuggestionCallCount { get; private set; }
@@ -147,14 +244,15 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
             {
                 ModelVersion = "pending-point-test-v1",
                 ObservationCount = request.Observations.Count,
+                CoverageEnvelope = reportCoverage ? Coverage(request, coverageRelativeMargin) : null,
                 Suggestions =
                 [
                     new OptimizerSuggestionOutput
                     {
                         RecommendedParameters = new Dictionary<string, double>
                         {
-                            ["holding-temperature"] = 515,
-                            ["press-force"] = 11
+                            ["holding-temperature"] = temperature,
+                            ["press-force"] = force
                         },
                         ModelVersion = "pending-point-test-v1"
                     }

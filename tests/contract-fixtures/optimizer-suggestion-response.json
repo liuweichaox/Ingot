@@ -24,6 +24,20 @@
       "rationale": "Shared contract fixture"
     }
   ],
+  "coverage_envelope": {
+    "observation_count": 3,
+    "leverage_limit": 2.42,
+    "variables": [
+      {
+        "name": "temperature",
+        "unit": "Cel",
+        "lower": 496.0,
+        "upper": 544.0,
+        "observed_minimum": 500.0,
+        "observed_maximum": 540.0
+      }
+    ]
+  },
   "feature_set_id": "molding-v2",
   "feature_set_version": 2,
   "derived_feature_count": 4,

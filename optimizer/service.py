@@ -26,6 +26,7 @@ from ingot_optimizer import (
     build_optimizer,
 )
 from ingot_optimizer.botorch_engine import MODEL_VERSION
+from ingot_optimizer.coverage import describe_coverage_envelope
 from ingot_optimizer.diagnosis import FeatureSpec, diagnose
 from ingot_optimizer.feature_transforms import expand_inputs
 from ingot_optimizer.replay import replay_history_pool
@@ -173,10 +174,26 @@ class SuggestionOut(StrictModel):
     rationale: str
 
 
+class CoverageVariableOut(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    unit: str = Field(default="", max_length=40)
+    lower: float
+    upper: float
+    observed_minimum: float
+    observed_maximum: float
+
+
+class CoverageEnvelopeOut(StrictModel):
+    observation_count: int = Field(ge=0)
+    leverage_limit: float
+    variables: list[CoverageVariableOut] = Field(min_length=1, max_length=100)
+
+
 class SuggestionResponse(StrictModel):
     model_version: str
     observation_count: int = Field(ge=0)
     suggestions: list[SuggestionOut] = Field(min_length=1, max_length=20)
+    coverage_envelope: CoverageEnvelopeOut | None = None
     feature_set_id: str = Field(min_length=1, max_length=120)
     feature_set_version: int = Field(ge=1)
     derived_feature_count: int = Field(ge=0, le=100)
@@ -538,10 +555,18 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     model_version = suggestions[0].model_version
+    envelope = optimizer.coverage_envelope
     return SuggestionResponse(
         model_version=model_version,
         observation_count=len(request.observations),
         suggestions=[SuggestionOut.model_validate(suggestion.to_dict()) for suggestion in suggestions],
+        coverage_envelope=(
+            CoverageEnvelopeOut.model_validate(
+                describe_coverage_envelope(envelope, campaign)
+            )
+            if envelope is not None
+            else None
+        ),
         feature_set_id=request.campaign.feature_set_id,
         feature_set_version=request.campaign.feature_set_version,
         derived_feature_count=len(request.campaign.derived_features),

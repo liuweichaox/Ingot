@@ -8,6 +8,11 @@ import numpy as np
 from scipy.stats import norm, rankdata
 
 from .campaign import Campaign
+from .coverage import (
+    CoverageEnvelope,
+    build_coverage_envelope,
+    sample_within_envelope,
+)
 from .feature_transforms import DerivedFeature, expand_inputs
 from .loop import ObjectivePrediction, Suggestion
 
@@ -361,6 +366,7 @@ class BotorchOptimizer:
         self.y: list[list[float]] = []
         self.constraint_y: list[list[float]] = []
         self.process_features: list[dict[str, float]] = []
+        self.coverage_envelope: CoverageEnvelope | None = None
 
     def observe(
         self,
@@ -405,17 +411,21 @@ class BotorchOptimizer:
         self,
         candidate_params: Sequence[Mapping[str, float]] | None,
         n_random: int,
+        envelope: CoverageEnvelope | None = None,
     ) -> np.ndarray:
         from scipy.stats import qmc
 
         if candidate_params is not None:
             points = np.vstack([self.campaign.to_unit(value) for value in candidate_params])
         else:
-            sampler = qmc.Sobol(self.campaign.dim, scramble=True, seed=self.seed)
-            points = sampler.random_base2(math.ceil(math.log2(max(n_random, 2))))[:n_random]
+            if envelope is not None:
+                points = sample_within_envelope(envelope, n_random, seed=self.seed)
+            else:
+                sampler = qmc.Sobol(self.campaign.dim, scramble=True, seed=self.seed)
+                points = sampler.random_base2(math.ceil(math.log2(max(n_random, 2))))[:n_random]
             points = np.asarray(
                 [point for point in points if self.campaign.is_feasible_unit(point)]
-            )
+            ).reshape(-1, self.campaign.dim)
         points = np.unique(points, axis=0)
         if self.x:
             observed = np.vstack(self.x)
@@ -435,6 +445,7 @@ class BotorchOptimizer:
         pending_params: Sequence[Mapping[str, float]] | None = None,
         decision_intent: str = "reach-specification",
         hypothesis_variables: Sequence[str] | None = None,
+        enforce_coverage: bool = True,
         **_: object,
     ) -> list[Suggestion]:
         if len(self.x) < 3:
@@ -445,7 +456,12 @@ class BotorchOptimizer:
             raise ValueError("top_k must be between 1 and 20")
         if decision_intent not in {"reach-specification", "validate-hypothesis"}:
             raise ValueError("decision_intent must be reach-specification or validate-hypothesis")
-        candidates = self._candidate_units(candidate_params, n_random)
+        self.coverage_envelope = build_coverage_envelope(np.vstack(self.x))
+        candidates = self._candidate_units(
+            candidate_params,
+            n_random,
+            self.coverage_envelope if enforce_coverage else None,
+        )
         pending_units = (
             np.vstack([self.campaign.to_unit(value) for value in pending_params])
             if pending_params
@@ -462,6 +478,14 @@ class BotorchOptimizer:
                 )
                 > 1e-7
             ]
+        if enforce_coverage:
+            candidates = candidates[self.coverage_envelope.contains(candidates)]
+            if len(candidates) < top_k:
+                raise ValueError(
+                    "fewer candidates inside the observed coverage envelope than "
+                    "top_k; production runs have not varied enough of the "
+                    "parameter space to support a recommendation"
+                )
         if len(candidates) < top_k:
             raise ValueError("fewer feasible unobserved candidates than top_k")
 

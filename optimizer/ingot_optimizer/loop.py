@@ -7,6 +7,11 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from .campaign import Campaign, Objective
+from .coverage import (
+    MINIMUM_COVERAGE_OBSERVATIONS,
+    CoverageEnvelope,
+    build_coverage_envelope,
+)
 from .gp import GaussianProcess
 
 
@@ -65,6 +70,7 @@ class SequentialOptimizer:
             constraint.name: [] for constraint in campaign.outcome_constraints
         }
         self.distances: list[float] = []
+        self.coverage_envelope: CoverageEnvelope | None = None
 
     def observe(
         self,
@@ -232,6 +238,7 @@ class SequentialOptimizer:
         n_samples: int = 256,
         n_restarts: int = 3,
         pending_params: Sequence[Mapping[str, float]] | None = None,
+        enforce_coverage: bool = True,
     ) -> list[Suggestion]:
         if top_k < 1 or top_k > 20:
             raise ValueError("top_k must be between 1 and 20")
@@ -263,6 +270,16 @@ class SequentialOptimizer:
                 axis=1,
             ) >= 1e-8
             candidates = candidates[unplanned]
+        if len(self.X) >= MINIMUM_COVERAGE_OBSERVATIONS:
+            self.coverage_envelope = build_coverage_envelope(self.X)
+            if enforce_coverage:
+                candidates = candidates[self.coverage_envelope.contains(candidates)]
+                if len(candidates) < top_k:
+                    raise ValueError(
+                        "fewer candidates inside the observed coverage envelope "
+                        "than top_k; production runs have not varied enough of "
+                        "the parameter space to support a recommendation"
+                    )
         safety_constraints = [
             value
             for value in self.campaign.outcome_constraints

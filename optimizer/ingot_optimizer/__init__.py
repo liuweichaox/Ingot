@@ -9,6 +9,7 @@ from .campaign import (
     ParameterConstraint,
     Variable,
 )
+from .coverage import CoverageEnvelope, build_coverage_envelope
 from .loop import ObjectivePrediction, SequentialOptimizer, Suggestion
 from .botorch_engine import BotorchOptimizer
 from .feature_transforms import DerivedFeature
@@ -17,6 +18,7 @@ from .engine_selection import OptimizerEngine, OptimizerObservation, build_optim
 __all__ = [
     "Campaign",
     "BotorchOptimizer",
+    "CoverageEnvelope",
     "DerivedFeature",
     "OptimizerEngine",
     "OptimizerObservation",
@@ -30,5 +32,6 @@ __all__ = [
     "SequentialOptimizer",
     "Suggestion",
     "Variable",
+    "build_coverage_envelope",
     "build_optimizer",
 ]

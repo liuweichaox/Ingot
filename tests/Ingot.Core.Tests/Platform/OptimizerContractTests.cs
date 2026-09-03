@@ -31,5 +31,13 @@ public sealed class OptimizerContractTests
         var suggestion = Assert.Single(response.Suggestions);
         Assert.Equal(512.5, suggestion.RecommendedParameters["temperature"]);
         Assert.Equal(0.012, suggestion.Predictions["defect_rate"].Mean);
+        var envelope = Assert.IsType<OptimizerCoverageEnvelope>(response.CoverageEnvelope);
+        Assert.Equal(3, envelope.ObservationCount);
+        var covered = Assert.Single(envelope.Variables);
+        Assert.Equal("temperature", covered.Name);
+        Assert.Equal(496, covered.Lower);
+        Assert.Equal(544, covered.Upper);
+        Assert.Equal(500, covered.ObservedMinimum);
+        Assert.Equal(540, covered.ObservedMaximum);
     }
 }

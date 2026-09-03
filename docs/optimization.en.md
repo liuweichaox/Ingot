@@ -20,7 +20,18 @@ A recommendation is not an equipment command. It is an append-only record contai
 
 ## Admission and Stop Conditions
 
-The system creates a recommendation only after at least three valid runs cover two distinct actual recipes. Runs require trustworthy identity, actual settings, required context, and quality outcomes; recommendations remain inside safety boundaries and the observed parameter envelope. Incomplete data, poor comparability, inadequate coverage, conflicting constraints, or unmet model conditions stop the recommendation and state the reason.
+The system creates a recommendation only after at least three valid runs cover two distinct actual recipes. Runs require trustworthy identity, actual settings, required context, and quality outcomes. Incomplete data, poor comparability, inadequate coverage, conflicting constraints, or unmet model conditions stop the recommendation and state the reason.
+
+## Observed Coverage Envelope
+
+Safety boundaries state where the process is allowed to go, not where historical runs have been. Daily production runs cluster around the current recipe and move several settings together, so a surrogate fitted on that data reports small uncertainty inside the cluster while extrapolating freely into regions no run ever visited. A recommendation therefore stays inside the observed coverage of real runs as well as the safety boundaries, bounded by two independent gates:
+
+- **Range gate**: every variable stays between its observed minimum and maximum across historical runs, widened by a margin. The margin is the larger of 10% of the observed spread and 2% of the declared range, so a variable that never moved keeps a small local step rather than being frozen or released across its full range.
+- **Leverage gate**: a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. This is the hat-matrix extrapolation criterion from response surface work. It admits interpolation inside sparse data while rejecting points off the directions production actually varied, which a per-variable range cannot express.
+
+Candidates are generated inside the envelope rather than sampled across the declared range and filtered, because the envelope is often a thin slice of that range when parameters are strongly correlated. When the envelope holds too few candidates, the system stops and reports that production runs have not covered enough of the parameter space.
+
+The optimization service returns the envelope it applied and Platform recomputes the same envelope from the same runs. Platform stops the recommendation when the two disagree or when any suggestion falls outside it. The gate does not apply to offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
 
 ## Numerical Methods
 

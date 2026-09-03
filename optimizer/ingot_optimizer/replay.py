@@ -99,7 +99,10 @@ def _run_optimizer(
             prior_means=prior_means,
             seed=seed,
         )
-        params = optimizer.suggest()[0].recommended_params
+        # Offline replay measures algorithm mechanics against a simulator rather
+        # than issuing a recipe to a factory, so the production coverage gate
+        # does not apply here.
+        params = optimizer.suggest(enforce_coverage=False)[0].recommended_params
         observation = _evaluate_truth(campaign, truth_fn, params)
         observations.append(observation)
         if _is_success(campaign, observation):
@@ -272,12 +275,15 @@ def _historical_optimizer_run(
         if not feasible_remaining:
             break
         candidates = [history[index]["params"] for index in feasible_remaining]
+        # Every candidate is a production run that already happened, so selecting
+        # one is not extrapolation and the production coverage gate does not apply.
         try:
             suggestions = optimizer.suggest(
                 candidate_params=candidates,
                 n_random=len(candidates),
                 n_samples=256,
                 top_k=min(4, len(candidates)),
+                enforce_coverage=False,
             )
         except ValueError as error:
             if "fewer" not in str(error):
@@ -287,6 +293,7 @@ def _historical_optimizer_run(
                 n_random=len(candidates),
                 n_samples=256,
                 top_k=1,
+                enforce_coverage=False,
             )
         acquisitions = np.asarray([
             value.acquisition_value if value.acquisition_value is not None else 0.0

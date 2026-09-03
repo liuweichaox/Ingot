@@ -65,7 +65,9 @@ The repository bundles no public or field-validation datasets, historical protoc
 - optional candidate parameter settings;
 - top-k, seed, candidate-count, and posterior-sample settings.
 
-It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, and rationale. Platform also checks that proposed conditions are distinguishable at the minimum spacing seen in actual historical conditions; nearby floating-point values cannot masquerade as separate experiment conditions.
+It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, rationale, and the `coverage_envelope` applied to the request.
+
+Candidates are generated only inside the region historical runs cover: every variable stays within its observed range plus a margin (the larger of 10% of the observed spread and 2% of the declared range), and a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. Platform recomputes the same envelope from the same runs and stops the recommendation when the two disagree or a suggestion falls outside it. When too few candidates remain inside the envelope, the service returns 422 and reports that production runs have not covered enough of the parameter space.
 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier

@@ -6,6 +6,7 @@ from typing import Mapping, Protocol, Sequence
 
 from .botorch_engine import BotorchOptimizer
 from .campaign import Campaign
+from .coverage import CoverageEnvelope
 from .feature_transforms import DerivedFeature
 from .loop import SequentialOptimizer, Suggestion
 
@@ -22,6 +23,8 @@ class OptimizerObservation:
 
 class OptimizerEngine(Protocol):
     """Common behavior exposed by every optimizer selected for production use."""
+
+    coverage_envelope: CoverageEnvelope | None
 
     def observe(
         self,

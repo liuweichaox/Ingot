@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from service import SuggestionResponse, app
@@ -22,6 +23,10 @@ def test_shared_suggestion_response_fixture_matches_python_contract():
     assert response.feature_set_id == "molding-v2"
     assert response.feature_set_version == 2
     assert response.derived_feature_count == 4
+    assert response.coverage_envelope is not None
+    assert response.coverage_envelope.variables[0].name == "temperature"
+    assert response.coverage_envelope.variables[0].lower == 496.0
+    assert response.coverage_envelope.variables[0].upper == 544.0
 
 
 def test_suggestion_endpoint_publishes_typed_response_schema():
@@ -298,6 +303,39 @@ def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features(
         set(item["constraint_predictions"]) == {"crack_rate"}
         for item in payload["suggestions"]
     )
+
+
+def test_service_reports_and_enforces_the_observed_coverage_envelope():
+    response = client.post("/v1/suggestions", json=request_body())
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    covered = {
+        value["name"]: value
+        for value in payload["coverage_envelope"]["variables"]
+    }
+
+    assert payload["coverage_envelope"]["observation_count"] == 3
+    assert covered["x"]["observed_minimum"] == pytest.approx(0.0)
+    assert covered["x"]["observed_maximum"] == pytest.approx(0.7)
+    # The observed spread is 0.7, so the range gate widens it by 0.07.
+    assert covered["x"]["upper"] == pytest.approx(0.77)
+    assert all(
+        covered["x"]["lower"]
+        <= item["recommended_params"]["x"]
+        <= covered["x"]["upper"]
+        for item in payload["suggestions"]
+    )
+
+
+def test_service_stops_when_runs_never_covered_enough_of_the_space():
+    body = request_body()
+    body["candidate_pool"] = [{"x": 0.89}]
+
+    response = client.post("/v1/suggestions", json=body)
+
+    assert response.status_code == 422
+    assert "observed coverage envelope" in response.text
 
 
 def test_service_keeps_binary_objective_predictions_inside_declared_bounds():
