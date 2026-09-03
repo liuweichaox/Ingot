@@ -267,6 +267,32 @@ def _campaign_from_input(spec: CampaignIn) -> Campaign:
     )
 
 
+def _build_derived_features_and_validate(
+    campaign: Campaign, spec: CampaignIn
+) -> list[DerivedFeature]:
+    """Build DerivedFeature list from campaign input and validate bounds."""
+    derived_features = [
+        DerivedFeature(
+            name=value.name,
+            operator=value.operator,
+            inputs=tuple(value.inputs),
+            normalization_offset=value.normalization_offset,
+            normalization_scale=value.normalization_scale,
+            epsilon=value.epsilon,
+            intercept=value.intercept,
+            coefficients=tuple(value.coefficients),
+        )
+        for value in spec.derived_features
+    ]
+    expand_inputs(
+        np.full((1, campaign.dim), 0.5),
+        [value.name for value in campaign.variables],
+        [value.low for value in campaign.variables],
+        [value.high for value in campaign.variables],
+        derived_features,
+    )
+    return derived_features
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "model_version": MODEL_VERSION}
@@ -295,25 +321,8 @@ def ready() -> dict[str, str]:
 def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
     try:
         campaign = _campaign_from_input(request.campaign)
-        derived_features = [
-            DerivedFeature(
-                name=value.name,
-                operator=value.operator,
-                inputs=tuple(value.inputs),
-                normalization_offset=value.normalization_offset,
-                normalization_scale=value.normalization_scale,
-                epsilon=value.epsilon,
-                intercept=value.intercept,
-                coefficients=tuple(value.coefficients),
-            )
-            for value in request.campaign.derived_features
-        ]
-        expand_inputs(
-            np.full((1, campaign.dim), 0.5),
-            [value.name for value in campaign.variables],
-            [value.low for value in campaign.variables],
-            [value.high for value in campaign.variables],
-            derived_features,
+        derived_features = _build_derived_features_and_validate(
+            campaign, request.campaign
         )
         optimizer = build_optimizer(
             campaign,
@@ -414,25 +423,8 @@ def create_diagnosis(request: DiagnosisRequest) -> dict:
 def create_historical_replay(request: HistoricalReplayRequest) -> dict:
     try:
         campaign = _campaign_from_input(request.campaign)
-        derived_features = [
-            DerivedFeature(
-                name=value.name,
-                operator=value.operator,
-                inputs=tuple(value.inputs),
-                normalization_offset=value.normalization_offset,
-                normalization_scale=value.normalization_scale,
-                epsilon=value.epsilon,
-                intercept=value.intercept,
-                coefficients=tuple(value.coefficients),
-            )
-            for value in request.campaign.derived_features
-        ]
-        expand_inputs(
-            np.full((1, campaign.dim), 0.5),
-            [value.name for value in campaign.variables],
-            [value.low for value in campaign.variables],
-            [value.high for value in campaign.variables],
-            derived_features,
+        derived_features = _build_derived_features_and_validate(
+            campaign, request.campaign
         )
         history = [value.model_dump(exclude_none=True) for value in request.history]
         result = replay_history_pool(
