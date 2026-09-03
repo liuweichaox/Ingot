@@ -185,7 +185,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
             <Field label="外部工单" hint="来自 MES、ERP 或现场工单，可选">
               <Input value={editor.externalOrderRef || ""} onChange={event => onChange("externalOrderRef", event.target.value)} />
             </Field>
-            <Field label="生产批次" hint="同一批产品经过多台设备时，各设备填写相同批次号">
+            <Field label="生产批次" hintVisible hint="同一批产品经过多台设备时，各设备填写相同批次号">
               <Input value={editor.externalBatchRef || ""} onChange={event => onChange("externalBatchRef", event.target.value)} />
             </Field>
             <Field label="物料批次" hint="没有批次管理时可以留空">
@@ -197,7 +197,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
             <Field label="设备维护状态" hint="例如 available、due 或 maintenance">
               <Input value={editor.maintenanceStatus || ""} onChange={event => onChange("maintenanceStatus", event.target.value)} />
             </Field>
-            <Field label="校准状态" hint="例如 valid、due；到期后运行快照会强制标记 expired">
+            <Field label="校准状态" hintVisible hint="例如 valid、due；到期后运行快照会强制标记 expired">
               <Input value={editor.calibrationStatus || ""} onChange={event => onChange("calibrationStatus", event.target.value)} />
             </Field>
             <Field label="校准记录"><Input value={editor.calibrationRef || ""} onChange={event => onChange("calibrationRef", event.target.value)} /></Field>

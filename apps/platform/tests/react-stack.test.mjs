@@ -4,6 +4,7 @@ import test from "node:test";
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+const globalSearch = await readFile(new URL("../src/components/GlobalSearchDialog.jsx", import.meta.url), "utf8");
 const pageDirectory = new URL("../src/pages/", import.meta.url);
 const pages = (await Promise.all(
   (await readdir(pageDirectory, { withFileTypes: true }))
@@ -315,8 +316,8 @@ test("form primitives keep controls aligned and make non-editable state visible"
   assert.match(components, /disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50/);
   assert.match(components, /role="alert"/);
   assert.match(styles, /input\[type="checkbox"\]/);
-  assert.match(app, /<Input\s+ref=\{inputRef\}/);
-  assert.doesNotMatch(app, /focus:ring-blue-100/);
+  assert.match(globalSearch, /<Input\s+ref=\{inputRef\}/);
+  assert.doesNotMatch(globalSearch, /focus:ring-blue-100/);
   assert.match(acquisitionPanels.connection, /group\.fields\.length === 4 \|\| group\.fields\.length === 8/);
 });
 

@@ -6,7 +6,7 @@
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Evaluate the product workflow | [Five-minute synthetic tour](#five-minute-synthetic-tour) | Complete a nonconforming-run comparison and enter recipe optimization |
+| Evaluate the product workflow | [Five-minute synthetic tour](#five-minute-synthetic-tour) | Complete a nonconforming-run comparison and inspect candidate causes |
 | Run the complete system locally | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy |
 | Prepare a real project | [Recipe-optimization pilot guide](pilot.en.md) | Produce the first qualified observations and next-recipe recommendation |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
@@ -41,7 +41,13 @@ Open `http://127.0.0.1:3001`:
 - `demo / demo`: tour the engineering workflow;
 - `admin / admin12345`: inspect system administration and pilot-acceptance entry points.
 
-The workbench guides the user through opening a nonconforming run, reviewing an approved inspection, choosing a conforming baseline, comparing actual conditions and trajectories, and inspecting candidate causes and the recipe-optimization entry point. The optimization workspace shows how real runs become observations and how next-recipe recommendations remain subject to engineer confirmation. All data are synthetic. The demo validates pages and workflow, not real process benefit.
+The workbench provides access to run traceability, inspection records, and process investigation. Users can select comparable runs, compare actual conditions and trajectories, and inspect candidate causes. Backend APIs support recipe recommendations and engineer decisions; the current frontend does not yet provide the corresponding workflow pages. All data are synthetic. The demo validates pages and workflow, not real process benefit.
+
+Common interactions:
+
+- Open feature search with `Ctrl+K` (`⌘K` on macOS), select with the arrow keys, open with `Enter`, and close with `Esc`. Results reflect the current role.
+- In the analysis assistant, `Enter` sends and `Shift+Enter` inserts a new line. Pressing `Enter` while composing text with an input method does not send.
+- Notifications appear in order, each for 3.5 seconds, and can be dismissed. Key guidance about batch consistency, calibration expiry, and selected analysis rules appears below the relevant form fields.
 
 Press `Ctrl+C` in both terminals when finished.
 

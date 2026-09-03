@@ -16,13 +16,14 @@ import {
   SignalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import * as Pages from "./pages";
 import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
-import { cx, Input, ToastHost } from "./ui/components";
+import { cx, ToastHost } from "./ui/components";
+import GlobalSearchDialog from "./components/GlobalSearchDialog";
 import { formatRoleSummary, formatSiteScope } from "./auth/identityPresentation";
 
 const sections = [
@@ -392,54 +393,6 @@ export default function App({ identity, logout }) {
       />
       <ToastHost />
     </div>
-  );
-}
-
-function GlobalSearchDialog({ open, onClose, navigate, entries }) {
-  const [query, setQuery] = useState("");
-  const inputRef = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    setQuery("");
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, [open]);
-  const results = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) return entries;
-    return entries.filter(item => `${item.label} ${item.section} ${item.description} ${item.aliases}`.toLowerCase().includes(keyword));
-  }, [entries, query]);
-  function select(path) {
-    onClose();
-    navigate(path);
-  }
-  return (
-    <Dialog open={open} onClose={onClose} className="relative z-100">
-      <DialogBackdrop className="fixed inset-0 bg-slate-950/35 backdrop-blur-sm" />
-      <div className="fixed inset-0 overflow-y-auto p-4 pt-[12vh] sm:p-6 sm:pt-[14vh]">
-        <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="border-b border-slate-100 p-4 sm:p-5">
-            <p className="text-sm font-semibold text-slate-950">功能搜索</p>
-            <p className="mt-1 text-xs text-slate-500">查找现场接入、工艺配置、生产运行、质量管理、工艺追因和系统功能。</p>
-            <Input
-              ref={inputRef}
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="例如：采集配置、工艺规范、运行对比、检验任务"
-              className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
-            />
-          </div>
-          <div className="max-h-[55vh] overflow-y-auto p-2">
-            {results.length ? results.map(item => (
-              <button key={item.path} type="button" onClick={() => select(item.path)} className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-blue-50 focus-visible:bg-blue-50">
-                <span className="mt-0.5 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">{item.section}</span>
-                <span className="min-w-0"><span className="block text-sm font-medium text-slate-900">{item.label}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span></span>
-              </button>
-            )) : <div className="px-4 py-10 text-center text-sm text-slate-500">没有匹配的功能。请换一个关键词。</div>}
-          </div>
-          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500"><span>搜索产品功能</span><span>Esc 关闭</span></div>
-        </DialogPanel>
-      </div>
-    </Dialog>
   );
 }
 

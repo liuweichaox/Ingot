@@ -417,6 +417,12 @@ export function ChatPage() {
     });
   }, [loadConversation, navigate, routeConversationId, routeFor]);
 
+  function handleQuestionKeyDown(event) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
   async function start(event) {
     event.preventDefault();
     if (!question.trim()) return;
@@ -610,7 +616,7 @@ export function ChatPage() {
 
         <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
           <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
-            <textarea aria-label="给工艺分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="询问生产、质量或工艺问题…" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+            <textarea aria-label="给工艺分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="询问生产、质量或工艺问题…" onKeyDown={handleQuestionKeyDown} />
             {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止"}</Button> : <Button className="size-10 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-5" /></Button>}
           </form>
           <p className="mx-auto mt-2 max-w-4xl text-center text-[13px] text-slate-500">回答基于平台记录，并标注证据范围。</p>

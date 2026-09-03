@@ -107,8 +107,8 @@ export function WorkbenchPage({ identity }) {
   };
   const dailyActions = isQualityRole && !isEngineeringRole
     ? [qualityAction, analysisAction, platformAction]
-    : isEngineeringRole
-      ? [analysisAction, isAdministrator ? platformAction : qualityAction, qualityAction]
+    : isAdministrator
+      ? [analysisAction, platformAction, qualityAction]
       : [analysisAction, qualityAction, platformAction];
   const overviewItems = [
     { label: "生产运行", value: state.executionTotal, hint: `${activeProcessExecutions} 个进行中`, icon: CircleStackIcon, tone: "text-trajectory-100 bg-trajectory-500/12 ring-trajectory-500/20" },

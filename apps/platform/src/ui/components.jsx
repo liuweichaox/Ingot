@@ -296,37 +296,54 @@ export function notify(message, tone = "success") {
 }
 
 export function ToastHost() {
-  const [notice, setNotice] = useState(null);
+  const [notices, setNotices] = useState([]);
+  const nextNoticeId = useRef(0);
+  const notice = notices[0];
   useEffect(() => {
-    let timer;
     function handleNotice(event) {
-      setNotice(event.detail);
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setNotice(null), 3500);
+      const nextNotice = { ...event.detail, id: ++nextNoticeId.current };
+      setNotices(current => [...current, nextNotice]);
     }
     window.addEventListener("ingot:notice", handleNotice);
-    return () => {
-      window.removeEventListener("ingot:notice", handleNotice);
-      window.clearTimeout(timer);
-    };
+    return () => window.removeEventListener("ingot:notice", handleNotice);
   }, []);
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => {
+      setNotices(current => current[0]?.id === notice.id ? current.slice(1) : current);
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   if (!notice) return null;
   const tone = notice.tone === "danger"
     ? "border-rose-200 bg-rose-50 text-rose-800"
     : "border-emerald-200 bg-emerald-50 text-emerald-800";
   return (
-    <div className={cx("fixed bottom-5 right-5 z-200 max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-xl", tone)} role="status">
-      {notice.message}
+    <div
+      key={notice.id}
+      className={cx("fixed inset-x-4 bottom-4 z-200 flex max-h-[calc(100dvh-2rem)] items-start gap-3 overflow-y-auto rounded-xl border px-4 py-3 text-sm font-medium shadow-xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm", tone)}
+      role="status"
+      aria-atomic="true"
+    >
+      <span className="min-w-0 flex-1 break-words">{notice.message}</span>
+      <button
+        type="button"
+        aria-label="关闭通知"
+        className="-mr-1 -mt-1 flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-2"
+        onClick={() => setNotices(current => current[0]?.id === notice.id ? current.slice(1) : current)}
+      >
+        <XMarkIcon className="size-4" aria-hidden="true" />
+      </button>
     </div>
   );
 }
 
-export function Field({ label, hint, error, className, children }) {
+export function Field({ label, hint, hintVisible = false, error, className, children }) {
   return (
     <label className={cx("grid min-w-0 content-start gap-1 self-start text-[13px] font-semibold text-slate-700", className)}>
       {label !== undefined && label !== null && <span className="min-w-0 leading-5">{label}</span>}
       {children}
-      {hint && <span className="sr-only">{hint}</span>}
+      {hint && <span className={hintVisible ? "min-w-0 break-words text-[13px] font-normal leading-5 text-slate-500" : "sr-only"}>{hint}</span>}
       {error && <span className="min-w-0 text-[13px] font-normal leading-5 text-rose-600" role="alert">{error}</span>}
     </label>
   );
