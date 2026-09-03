@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
+import { useIsMounted } from "../hooks/useIsMounted";
 import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea } from "../ui/components";
-import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, LoadingCard } from "./shared";
+import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, toFiniteNumber, LoadingCard } from "./shared";
 
 const comparisonFeatureLabels = {
   min: "最小值",
@@ -32,8 +33,9 @@ const readinessBlockingReasonLabels = {
 };
 
 function formatDecimal(value) {
-  if (!Number.isFinite(Number(value))) return "—";
-  return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+  const numeric = toFiniteNumber(value);
+  if (numeric == null) return "—";
+  return numeric.toLocaleString("zh-CN", { maximumFractionDigits: 3 });
 }
 
 function MatchingContext({ value }) {
@@ -91,6 +93,7 @@ export function AnalysisReadinessCard({ diagnosis = {} }) {
 export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
   const requestedSiteId = params.get("siteId") || "";
+  const isMounted = useIsMounted();
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
   const [candidate, setCandidate] = useState("");
   const [comparisonScope, setComparisonScope] = useState("cohort");
@@ -104,41 +107,37 @@ export function ExecutionComparisonPage() {
   const [additionalConfounders, setAdditionalConfounders] = useState("");
   const [catalogRetryKey, setCatalogRetryKey] = useState(0);
   useEffect(() => {
-    let mounted = true;
     const search = executionFilter.trim();
     const query = new URLSearchParams({ status: "completed", limit: "200" });
     if (requestedSiteId) query.set("siteId", requestedSiteId);
     if (search) query.set("search", search);
     setCatalogLoading(true);
     getJson(`/api/v1/process-executions?${query}`).then(executionPayload => {
-      if (!mounted) return;
+      if (!isMounted()) return;
       const loadedExecutions = extractRows(executionPayload);
       setProcessExecutions(loadedExecutions);
       if (!baseline && !search && loadedExecutions.length > 0) setBaseline(loadedExecutions[0].executionId);
     }).catch(requestError => {
-      if (!mounted) return;
+      if (!isMounted()) return;
       setProcessExecutions([]);
       setError(requestError.message || "无法读取可比较的生产运行。");
     }).finally(() => {
-      if (mounted) setCatalogLoading(false);
+      if (isMounted()) setCatalogLoading(false);
     });
-    return () => { mounted = false; };
   }, [catalogRetryKey, executionFilter, requestedSiteId]);
 
   useEffect(() => {
-    let mounted = true;
     if (!baseline || executions.some(item => item.executionId === baseline)) {
       setLinkedBaseline(null);
-      return () => { mounted = false; };
+      return;
     }
     getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(requestedSiteId)}&limit=1`)
       .then(payload => {
-        if (mounted) setLinkedBaseline(extractRows(payload)[0] || null);
+        if (isMounted()) setLinkedBaseline(extractRows(payload)[0] || null);
       })
       .catch(() => {
-        if (mounted) setLinkedBaseline(null);
+        if (isMounted()) setLinkedBaseline(null);
       });
-    return () => { mounted = false; };
   }, [baseline, executions, requestedSiteId]);
 
   const baselineProcessExecution = executions.find(item => item.executionId === baseline) || linkedBaseline;

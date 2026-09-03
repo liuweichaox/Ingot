@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Card, EmptyState, Field, Input, Metric, Page, WorkflowGuide } from "../ui/components";
+import { Alert, Badge, Card, EmptyState, Field, Input, LinkButton, Metric, Page, WorkflowGuide } from "../ui/components";
 import { formatTime, formatInteger, objectTypeLabel, eventTypeLabel, LoadingCard } from "./shared";
 
 export function ObjectExplorerPage() {
@@ -24,7 +24,7 @@ export function ObjectExplorerPage() {
   return (
     <Page
       title="对象目录"
-      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">接入设备</Link>}
+      actions={<LinkButton to="/configuration/ingestion-tasks">接入设备</LinkButton>}
     >
       {objects.error && <Alert tone="danger" title="工业对象暂不可用">{objects.error}</Alert>}
       {objects.loading && !objects.data ? <LoadingCard /> : (

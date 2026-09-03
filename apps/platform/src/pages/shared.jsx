@@ -1,15 +1,15 @@
 
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
-import { Card } from "../ui/components";
+export { LoadingCard } from "../ui/components";
+export { toFiniteNumber } from "../utils/numbers.js";
+import { toFiniteNumber } from "../utils/numbers.js";
 
 export const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 export const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
 export const formatMeasurementValue = value => {
-  if (value == null || value === "") return "—";
-  const numeric = Number(value);
-  return Number.isFinite(numeric)
+  const numeric = toFiniteNumber(value);
+  return numeric != null
     ? numeric.toLocaleString("zh-CN", { maximumFractionDigits: 6 })
-    : String(value);
+    : (value == null || value === "") ? "—" : String(value);
 };
 export const formatBytes = value => {
   const bytes = Number(value);
@@ -42,6 +42,8 @@ export const edgeStatus = edge => {
   if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state) || edge.delivery?.state === "degraded") return "degraded";
   return Date.now() - new Date(edge.lastSeen).getTime() <= 30000 ? "online" : "offline";
 };
+
+export const countOnlineEdges = rows => rows.filter(row => edgeStatus(row) === "online").length;
 
 const inspectionInputTypeLabels = {
   numeric: "数值",
@@ -213,16 +215,6 @@ export function inspectionDefinitionValidation(form) {
 export function inspectionInputTypes(characteristics) {
   if (!Array.isArray(characteristics) || characteristics.length === 0) return "—";
   return [...new Set(characteristics.map(item => inspectionInputTypeLabels[item.inputType] || item.inputType))].join("、");
-}
-
-export function LoadingCard() {
-  return (
-    <Card>
-      <div className="grid min-h-44 place-items-center text-sm text-slate-500">
-        <span className="inline-flex items-center gap-2"><ArrowPathIcon className="size-5 animate-spin" />正在读取数据</span>
-      </div>
-    </Card>
-  );
 }
 
 export function uuidv7() {

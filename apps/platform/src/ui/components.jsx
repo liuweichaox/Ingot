@@ -1,6 +1,7 @@
 // 提供平台统一、可访问且具备稳定列表标识的基础界面组件。
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { CalendarDaysIcon, ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon, ClockIcon, ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CalendarDaysIcon, ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon, ClockIcon, ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Link } from "react-router";
 import {
   createSortedRowModel,
   rowSortingFeature,
@@ -27,7 +28,7 @@ export function cx(...values) {
   return values.filter(Boolean).join(" ");
 }
 
-export function Page({ title, description, actions, className, children }) {
+export function Page({ title, description, actions, className, loading, error, onRetry, errorTitle, children }) {
   return (
     <div className={cx("space-y-6", className)}>
       <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
@@ -38,8 +39,19 @@ export function Page({ title, description, actions, className, children }) {
         </div>
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>
-      {children}
+      {error && <RequestError error={error} onRetry={onRetry} title={errorTitle} />}
+      {loading ? <LoadingCard /> : children}
     </div>
+  );
+}
+
+export function LoadingCard() {
+  return (
+    <Card>
+      <div className="grid min-h-44 place-items-center text-sm text-slate-500">
+        <span className="inline-flex items-center gap-2"><ArrowPathIcon className="size-5 animate-spin" />正在读取数据</span>
+      </div>
+    </Card>
   );
 }
 
@@ -80,6 +92,21 @@ export function Button({ variant = "secondary", className, type = "button", chil
     >
       {children}
     </button>
+  );
+}
+
+export function LinkButton({ className, children, ...props }) {
+  return (
+    <Link
+      className={cx(
+        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2",
+        "bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-blue-600",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </Link>
   );
 }
 

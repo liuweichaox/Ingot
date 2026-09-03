@@ -2,17 +2,17 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Badge, Card, DataTable, Metric, Page, RequestError, StatusBadge, WorkflowGuide } from "../ui/components";
-import { formatTime, formatInteger, formatDuration, formatBytes, edgeStatus, acquisitionProtocolLabels, objectTypeLabel, LoadingCard } from "./shared";
+import { Alert, Badge, Card, DataTable, LinkButton, Metric, Page, RequestError, StatusBadge, WorkflowGuide } from "../ui/components";
+import { formatTime, formatInteger, formatDuration, formatBytes, edgeStatus, countOnlineEdges, acquisitionProtocolLabels, objectTypeLabel, LoadingCard } from "./shared";
 
 export function EdgesPage() {
   const { data, loading, error, reload } = useApi("/api/edges", { interval: 10000 });
   const rows = extractRows(data);
-  const online = rows.filter(row => edgeStatus(row) === "online").length;
+  const online = countOnlineEdges(rows);
   return (
     <Page
       title="现场节点"
-      actions={<Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>}
+      actions={<LinkButton to="/configuration/ingestion-tasks">配置数据源</LinkButton>}
     >
       <RequestError error={error} title="现场节点暂不可用" onRetry={reload} />
       <div className="grid gap-4 sm:grid-cols-3">
@@ -85,7 +85,7 @@ export function EdgeDetailPage() {
       actions={(
         <>
           <Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/edges">返回现场节点</Link>
-          <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>
+          <LinkButton to="/configuration/ingestion-tasks">配置数据源</LinkButton>
         </>
       )}
     >

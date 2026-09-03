@@ -22,7 +22,7 @@ import * as Pages from "./pages";
 import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
-import { cx, ToastHost } from "./ui/components";
+import { cx, LinkButton, ToastHost } from "./ui/components";
 import GlobalSearchDialog from "./components/GlobalSearchDialog";
 import { formatRoleSummary, formatSiteScope } from "./auth/identityPresentation";
 
@@ -405,7 +405,7 @@ export function RequireRole({ identity, roles, children }) {
         <p className="text-sm font-semibold text-amber-700">权限不足</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-950">当前岗位不能访问此功能</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">该页面仅向平台管理员开放。你仍可继续处理已授权的生产、质量和工艺任务。</p>
-        <Link className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" to="/workbench">返回工作台</Link>
+        <LinkButton className="mt-5" to="/workbench">返回工作台</LinkButton>
       </div>
     </div>
   );

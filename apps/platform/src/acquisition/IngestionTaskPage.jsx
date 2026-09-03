@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  Alert, Badge, Button, Card, Field, Input, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog,
+  Alert, Badge, Button, Card, Field, Input, LinkButton, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog,
 } from "../ui/components";
 import { deleteJson, downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
@@ -650,8 +650,8 @@ export function IngestionTasksPage({ canWrite = true }) {
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
             to="/edges">查看现场节点</Link>
-          {canWrite && <Link className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            to="/configuration/ingestion-tasks/new">配置数据源</Link>}
+          {canWrite && <LinkButton
+            to="/configuration/ingestion-tasks/new">配置数据源</LinkButton>}
         </div>
       }
     >

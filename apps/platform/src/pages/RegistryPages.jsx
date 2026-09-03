@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
 import { extractRows, useApi } from "../hooks/useApi";
-import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Page, RequestError, Select, StatusBadge, Textarea, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, LinkButton, Page, RequestError, Select, StatusBadge, Textarea, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
 
 export function ConfigurationHubPage() {
@@ -33,8 +33,8 @@ export function ConfigurationHubPage() {
       title="配置总览"
       actions={!readinessLoading && !readinessError && (
         readyCount === readiness.length
-          ? <Link className="inline-flex min-h-10 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/production/changeover">进入生产切换</Link>
-          : <Link className="inline-flex min-h-10 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</Link>
+          ? <LinkButton to="/production/changeover">进入生产切换</LinkButton>
+          : <LinkButton to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</LinkButton>
       )}
     >
       <Card

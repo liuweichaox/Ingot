@@ -1,5 +1,7 @@
 
 // 将质量与过程数据转换为 Plotly trace，并保留原始测量语义和悬停证据。
+import { toFiniteNumber } from "../utils/numbers.js";
+
 const chartPalette = ["#3478c9", "#2f9d78", "#e09b3d", "#8a63c7", "#d45f65", "#4b98a7"];
 
 export function qualityOutcomeTraces(groups) {
@@ -21,7 +23,7 @@ export function processCurveTraces(series, signalDefinitions, startedAt) {
     const definition = definitions.get(item.signalCode) || {};
     const points = (item.points || []).map(point => {
       const occurredAt = new Date(point.occurredAt).getTime();
-      const value = numberOrNull(point.value);
+      const value = toFiniteNumber(point.value);
       return value == null || !Number.isFinite(occurredAt)
         ? null
         : { x: (occurredAt - origin) / 1000, y: value, occurredAt: point.occurredAt, phase: point.phaseCode || "" };
@@ -44,10 +46,4 @@ export function processCurveTraces(series, signalDefinitions, startedAt) {
 function curveColor(index) {
   if (index < chartPalette.length) return chartPalette[index];
   return `hsl(${Math.round((index * 137.508) % 360)} 58% 44%)`;
-}
-
-function numberOrNull(value) {
-  if (value == null || value === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
 }

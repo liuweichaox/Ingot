@@ -7,8 +7,8 @@ import { getJson } from "../api/http";
 import { processCurveTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
 import { useProcessCurves } from "../hooks/useProcessCurves";
-import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, cx } from "../ui/components";
-import { formatTime, formatInteger, formatMeasurementValue, formatDuration, edgeStatus, eventTypeLabel, LoadingCard } from "./shared";
+import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, LinkButton, Metric, Pagination, Page, RequestError, Select, StatusBadge, cx } from "../ui/components";
+import { formatTime, formatInteger, formatMeasurementValue, formatDuration, countOnlineEdges, eventTypeLabel, LoadingCard } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
 const runIssueSeverityRank = {
@@ -77,7 +77,7 @@ export function WorkbenchPage({ identity }) {
 
   const activeProcessExecutions = state.executionOverview.activeCount
     ?? state.executions.filter(item => item.status === "active" || !item.completedAt).length;
-  const onlineEdges = state.edges.filter(item => edgeStatus(item) === "online").length;
+  const onlineEdges = countOnlineEdges(state.edges);
   const pendingInspections = state.summary.pending ?? state.summary.pendingCount ?? 0;
   const roles = identity?.roles || [];
   const isQualityRole = roles.some(role => role === "quality.inspector" || role === "quality.reviewer");
@@ -222,7 +222,7 @@ export function ProcessExecutionsPage() {
   const ingestionResponse = useApi("/api/v1/ingestion-tasks", { enabled: showingEmptyState });
   const hasAppliedFilters = appliedFilters.status !== "all" || Object.entries(appliedFilters).some(([key, value]) => key !== "status" && value.trim());
   const edgeRows = extractRows(edgeResponse.data);
-  const onlineEdges = edgeRows.filter(item => edgeStatus(item) === "online").length;
+  const onlineEdges = countOnlineEdges(edgeRows);
   const publishedIngestionTasks = extractRows(ingestionResponse.data).filter(item => item.status === "published").length;
   const edgeSummary = edgeResponse.error ? "检查失败" : edgeResponse.loading ? "检查中" : `${onlineEdges}/${edgeRows.length} 在线`;
   const ingestionSummary = ingestionResponse.error ? "检查失败" : ingestionResponse.loading ? "检查中" : publishedIngestionTasks;
@@ -290,7 +290,7 @@ export function ProcessExecutionsPage() {
               actions={(
                 <>
                   <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/edges">查看现场节点</Link>
-                  <Link className="inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/configuration/ingestion-tasks">配置数据源</Link>
+                  <LinkButton to="/configuration/ingestion-tasks">配置数据源</LinkButton>
                 </>
               )}
             />
@@ -402,7 +402,7 @@ export function ProcessExecutionDetailPage() {
         <>
           <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/process-executions">返回运行记录</Link>
           <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/events?executionId=${encodedId}`}>查看全部事件</Link>
-          <Link className="inline-flex min-h-9 items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" to={`/comparisons?executionId=${encodedId}`}>历史对比</Link>
+          <LinkButton to={`/comparisons?executionId=${encodedId}`}>历史对比</LinkButton>
         </>
       )}
     >

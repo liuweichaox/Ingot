@@ -24,12 +24,10 @@ function notifyUnauthorized(response) {
   if (response.status === 401) window.dispatchEvent(new Event("ingot:unauthorized"));
 }
 
-async function jsonRequest(url, options = {}) {
-  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
-  if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+async function rawRequest(url, options = {}) {
   let res;
   try {
-    res = await fetch(resolveUrl(url), { ...options, headers });
+    res = await fetch(resolveUrl(url), options);
   } catch (error) {
     throw platformRequestError(error);
   }
@@ -38,6 +36,13 @@ async function jsonRequest(url, options = {}) {
     const text = await res.text().catch(() => "");
     throw responseError(res, text);
   }
+  return res;
+}
+
+async function jsonRequest(url, options = {}) {
+  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
+  if (options.body && !(options.body instanceof FormData) && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  const res = await rawRequest(url, { ...options, headers });
   if (res.status === 204) return null;
   return await res.json();
 }
@@ -81,67 +86,20 @@ export function patchJson(url, body, options = {}) {
   return jsonRequest(url, { ...options, method: "PATCH", body: JSON.stringify(body) });
 }
 
-export async function putJson(url, body, options = {}) {
-  const headers = authenticatedHeaders({ Accept: "application/json", "Content-Type": "application/json", ...(options.headers || {}) });
-  let res;
-  try {
-    res = await fetch(resolveUrl(url), { ...options, method: "PUT", headers, body: JSON.stringify(body) });
-  } catch (error) {
-    throw platformRequestError(error);
-  }
-  if (!res.ok) {
-    notifyUnauthorized(res);
-    const detail = await res.text().catch(() => "");
-    throw responseError(res, detail);
-  }
-  if (res.status === 204) return null;
-  return await res.json();
+export function putJson(url, body, options = {}) {
+  return jsonRequest(url, { ...options, method: "PUT", body: JSON.stringify(body) });
 }
 
-export async function deleteJson(url, options = {}) {
-  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
-  let res;
-  try {
-    res = await fetch(resolveUrl(url), { ...options, method: "DELETE", headers });
-  } catch (error) {
-    throw platformRequestError(error);
-  }
-  if (!res.ok) {
-    notifyUnauthorized(res);
-    const detail = await res.text().catch(() => "");
-    throw responseError(res, detail);
-  }
-  if (res.status === 204) return null;
-  return await res.json();
+export function deleteJson(url, options = {}) {
+  return jsonRequest(url, { ...options, method: "DELETE" });
 }
 
-export async function postForm(url, formData, options = {}) {
-  const headers = authenticatedHeaders({ Accept: "application/json", ...(options.headers || {}) });
-  let res;
-  try {
-    res = await fetch(resolveUrl(url), { ...options, method: "POST", headers, body: formData });
-  } catch (error) {
-    throw platformRequestError(error);
-  }
-  if (!res.ok) {
-    notifyUnauthorized(res);
-    const text = await res.text().catch(() => "");
-    throw responseError(res, text);
-  }
-  return await res.json();
+export function postForm(url, formData, options = {}) {
+  return jsonRequest(url, { ...options, method: "POST", body: formData });
 }
 
 export async function downloadFile(url, fallbackName = "download") {
-  let res;
-  try {
-    res = await fetch(resolveUrl(url), { headers: authenticatedHeaders({ Accept: "text/csv" }) });
-  } catch (error) {
-    throw platformRequestError(error);
-  }
-  if (!res.ok) {
-    notifyUnauthorized(res);
-    throw responseError(res, await res.text().catch(() => ""));
-  }
+  const res = await rawRequest(url, { headers: authenticatedHeaders({ Accept: "text/csv" }) });
   const disposition = res.headers.get("content-disposition") || "";
   const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1];
@@ -160,16 +118,8 @@ export async function downloadFile(url, fallbackName = "download") {
 }
 
 export async function getBlob(url) {
-  let res;
-  try {
-    res = await fetch(resolveUrl(url), { headers: authenticatedHeaders({ Accept: "image/*,application/pdf" }) });
-  } catch (error) {
-    throw platformRequestError(error);
-  }
-  if (!res.ok) {
-    notifyUnauthorized(res);
-    throw responseError(res, await res.text().catch(() => ""));
-  }
+  const headers = authenticatedHeaders({ Accept: "image/*,application/pdf" });
+  const res = await rawRequest(url, { headers });
   return await res.blob();
 }
 

@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import { postJson, putJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
-import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, LoadingCard } from "./shared";
+import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, countOnlineEdges, LoadingCard } from "./shared";
 import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
 
 export function formatLiveUptime(milliseconds) {
@@ -377,7 +377,7 @@ export function MetricsPage() {
   const inspectionResponse = useApi("/api/v1/inspection-records", { interval: 10000 });
   const reliabilityResponse = useApi("/api/v1/data-reliability/baseline?maximumRuns=2000", { interval: 30000 });
   const rows = extractRows(edgeResponse.data);
-  const online = rows.filter(row => edgeStatus(row) === "online").length;
+  const online = countOnlineEdges(rows);
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;
   const unknown = Math.max(0, rows.length - online - offline);
   const metrics = metricResponse.data;

@@ -7,6 +7,7 @@ import { useSearchParams } from "react-router";
 import { getBlob, getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
 import { extractRows, useApi } from "../hooks/useApi";
+import { useIsMounted } from "../hooks/useIsMounted";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
 import { formatTime, LoadingCard, uuidv7 } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
@@ -33,20 +34,19 @@ function ratio(value, total) {
 function InspectionAttachmentPreview({ attachment }) {
   const [objectUrl, setObjectUrl] = useState("");
   const [error, setError] = useState("");
+  const isMounted = useIsMounted();
   const contentUrl = `/api/v1/inspection-attachments/${encodeURIComponent(attachment.attachmentId)}/content`;
 
   useEffect(() => {
-    let active = true;
     let url = "";
     getBlob(contentUrl).then(blob => {
-      if (!active) return;
+      if (!isMounted()) return;
       url = URL.createObjectURL(blob);
       setObjectUrl(url);
     }).catch(requestError => {
-      if (active) setError(requestError.message);
+      if (isMounted()) setError(requestError.message);
     });
     return () => {
-      active = false;
       if (url) URL.revokeObjectURL(url);
     };
   }, [contentUrl]);
