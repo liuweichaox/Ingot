@@ -119,9 +119,6 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<ProcessExecutionService>());
         services.AddSingleton<IProcessExecutionAnalysisRecomputeExecutor>(provider =>
             provider.GetRequiredService<ProcessExecutionService>());
-        services.AddSingleton<IProcessExecutionAnalysisOperationsStore>(provider =>
-            provider.GetRequiredService<IProcessExecutionAnalysisMaterializationStore>());
-        services.AddSingleton<ProcessExecutionAnalysisOperationsService>();
         services.AddSingleton<ProcessExecutionAnalysisBackfillService>();
         services.AddSingleton<IQualityAnalysisService, QualityAnalysisService>();
         services.AddSingleton<ResearchContextAdmissionEvaluator>();
@@ -130,7 +127,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProcessConfigurationStore, PostgresProcessConfigurationStore>();
         services.AddSingleton<ProcessAnalysisResolver>();
         services.AddSingleton<ProcessConfigurationApplication>();
-        services.AddSingleton<ScenarioPackageService>();
 
         services.Configure<ProcessKnowledgeOptions>(configuration.GetSection("ProcessKnowledge"));
         services.AddSingleton<IResearchAssetStore, PostgresResearchAssetStore>();
@@ -145,13 +141,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IProcessKnowledgeSearch, PostgresProcessKnowledgeSearch>();
         services.AddSingleton<ResearchAssetApplication>();
         services.AddSingleton<ResearchAssetWorkflow>();
-        services.AddSingleton<MechanismModelService>();
         services.AddSingleton<IMechanismKnowledgeStore, PostgresMechanismKnowledgeStore>();
-        services.AddSingleton<MechanismKnowledgeService>();
-        services.AddSingleton<MechanismKnowledgeQueries>();
-        services.AddSingleton<MechanismClaimDraftService>();
-        services.AddHttpClient("mechanism-draft-generation");
-        services.AddSingleton<IMechanismClaimDraftGenerator, OpenAiCompatibleMechanismClaimDraftGenerator>();
         services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, PlainTextKnowledgeExtractor>();
@@ -163,9 +153,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<KnowledgeExtractionService>();
         services.Configure<KnowledgeExtractionWorkerOptions>(
             configuration.GetSection("KnowledgeExtractionWorker"));
-        services.AddSingleton<DatasetQualityValidationRunner>();
-        services.AddSingleton<IDatasetQualityValidationService>(provider =>
-            provider.GetRequiredService<DatasetQualityValidationRunner>());
         services.AddHostedService<ResearchAssetInitializerHostedService>();
 
         services.AddIngotProcessResearch(configuration);

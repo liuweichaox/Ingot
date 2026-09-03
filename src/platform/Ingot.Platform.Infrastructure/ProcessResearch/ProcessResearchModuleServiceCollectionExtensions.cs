@@ -16,7 +16,6 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         services.AddSingleton<ProcessResearchQueries>();
         services.AddSingleton<IResearchProjectContextReader, ResearchProjectContextReader>();
         services.AddSingleton<ProcessResearchWorkflow>();
-        services.AddSingleton<ResearchExecutionEvidenceService>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
         services.Configure<ProcessOptimizerOptions>(configuration.GetSection("ProcessOptimizer"));
         services.AddTransient<ProcessOptimizerCircuitBreakerHandler>();
@@ -31,8 +30,6 @@ public static class ProcessResearchModuleServiceCollectionExtensions
                     : $"{baseAddress.AbsoluteUri}/");
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.RequestTimeoutSeconds, 1, 300));
         }).AddHttpMessageHandler<ProcessOptimizerCircuitBreakerHandler>();
-        services.AddSingleton<ResearchOptimizationService>();
-        services.AddSingleton<ResearchRecipeRecommendationDecisionService>();
         return services;
     }
 }

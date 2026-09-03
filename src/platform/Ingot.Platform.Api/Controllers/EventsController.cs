@@ -5,7 +5,6 @@ using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
 using Ingot.Platform.Application.Events;
-using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,11 +19,9 @@ public sealed class EventsController(
     EdgeTokenValidator tokenValidator,
     IOptions<PlatformEventOptions> eventOptions,
     PlatformUserResolver userResolver,
-    ExecutionBoundaryQueries executionBoundaries,
     PlatformEventMetrics metrics,
     ILogger<EventsController> logger) : PlatformApiController
 {
-    private const int MaximumExecutionEventRows = 50_000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
 
@@ -231,91 +228,6 @@ public sealed class EventsController(
         }
     }
 
-    [HttpGet("/api/v1/process-executions/{executionId}")]
-    public async Task<IActionResult> GetProcessExecution(
-        string executionId,
-        [FromQuery] string? siteId,
-        CancellationToken ct)
-    {
-        var siteAccess = ResolveSiteAccess(siteId, requireExplicitForAdministrator: true);
-        if (siteAccess.Denied is not null)
-            return siteAccess.Denied;
-        IReadOnlyList<PlatformProductionEvent> correlated;
-        try
-        {
-            correlated = await QueryAllAsync(
-                BuildQuery(siteAccess.SiteId, null, null, null, null, executionId, null, null, null, null, 500),
-                ct).ConfigureAwait(false);
-        }
-        catch (PlatformEventQueryLimitExceededException exception)
-        {
-            return UnprocessableRequest(exception.Message);
-        }
-        var pair = correlated
-            .OrderBy(static item => item.Event.OccurredAt)
-            .ThenBy(static item => item.IngestId)
-            .ToArray();
-        if (pair.Length == 0)
-            return ResourceNotFound("未找到对应生产过程执行。", ("executionId", executionId));
-
-        var first = pair[0];
-        var boundary = await executionBoundaries.GetAsync(
-            siteAccess.SiteId!, executionId, ct).ConfigureAwait(false);
-        var startedAt = boundary?.StartedAt ?? pair.Min(static item => item.Event.OccurredAt);
-        var completedAt = boundary?.EndedAt ?? pair
-            .Where(static item => item.Event.EventType == "process.execution.completed")
-            .Select(static item => (DateTimeOffset?)item.Event.OccurredAt)
-            .LastOrDefault();
-        var windowEnd = completedAt ?? pair.Max(static item => item.Event.OccurredAt);
-        IReadOnlyList<PlatformProductionEvent> sameSubjectWindow;
-        try
-        {
-            sameSubjectWindow = await QueryAllAsync(
-                    BuildQuery(
-                        first.SiteId,
-                        first.EdgeId,
-                        null,
-                        first.Event.Subject.Type,
-                        first.Event.Subject.Id,
-                        null,
-                        startedAt,
-                        windowEnd,
-                        null,
-                        null,
-                        500),
-                    ct)
-                .ConfigureAwait(false);
-        }
-        catch (PlatformEventQueryLimitExceededException exception)
-        {
-            return UnprocessableRequest(exception.Message);
-        }
-        var ordered = pair
-            .Concat(sameSubjectWindow.Where(item =>
-                string.IsNullOrWhiteSpace(item.Event.ExecutionId) ||
-                string.Equals(
-                    item.Event.ExecutionId,
-                    executionId,
-                    StringComparison.Ordinal)))
-            .DistinctBy(static item => item.Event.EventId)
-            .OrderBy(static item => item.Event.OccurredAt)
-            .ThenBy(static item => item.IngestId)
-            .ToArray();
-
-        return Ok(new
-        {
-            executionId,
-            siteId = first.SiteId,
-            edgeId = first.EdgeId,
-            subject = first.Event.Subject,
-            startedAt,
-            completedAt,
-            durationMs = completedAt.HasValue
-                ? (completedAt.Value - startedAt).TotalMilliseconds
-                : (double?)null,
-            events = ordered
-        });
-    }
 
     private (string? SiteId, IActionResult? Denied) ResolveSiteAccess(
         string? requestedSiteId,
@@ -338,39 +250,6 @@ public sealed class EventsController(
         return (null, InvalidRequest("必须指定当前身份有权访问的 siteId。"));
     }
 
-    private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
-        PlatformEventQuery query,
-        CancellationToken ct)
-    {
-        const int pageSize = 500;
-        var cursor = query.AfterIngestId ?? 0;
-        var result = new List<PlatformProductionEvent>();
-
-        while (true)
-        {
-            var remaining = MaximumExecutionEventRows - result.Count;
-            var requestedLimit = Math.Min(pageSize, remaining + 1);
-            var page = await store.QueryAsync(
-                    query with { AfterIngestId = cursor, Limit = requestedLimit },
-                    ct)
-                .ConfigureAwait(false);
-            if (page.Count == 0)
-                break;
-            if (page.Count > remaining)
-                throw new PlatformEventQueryLimitExceededException(MaximumExecutionEventRows);
-
-            var nextCursor = page.Max(static item => item.IngestId);
-            if (nextCursor <= cursor)
-                throw new InvalidOperationException("完整次执行查询的摄入游标没有前进。");
-
-            result.AddRange(page);
-            cursor = nextCursor;
-            if (page.Count < requestedLimit)
-                break;
-        }
-
-        return result;
-    }
 
     private PlatformEventQuery BuildQuery(
         string? siteId,

@@ -97,14 +97,6 @@ class SequentialOptimizer:
         self.distances.append(distance)
         return distance
 
-    def in_spec(self) -> bool:
-        return bool(self.distances) and min(self.distances) <= 0.0
-
-    def best(self) -> tuple[dict[str, float], float]:
-        if not self.distances:
-            raise ValueError("no observations are available")
-        index = int(np.argmin(self.distances))
-        return self.campaign.from_unit(self.X[index]), float(self.distances[index])
 
     def _fit(self, n_restarts: int) -> dict[str, GaussianProcess]:
         models: dict[str, GaussianProcess] = {}

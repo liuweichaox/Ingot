@@ -91,19 +91,12 @@ public class EdgesController(
             state.EdgeId,
             state.SiteId,
             state.HostBaseUrl,
+            state.Hostname,
             state.LastSeen,
             state.LastError,
             state.Acquisition,
             state.Delivery
         });
-    }
-
-    [HttpGet("{edgeId}/status-history")]
-    public async Task<IActionResult> StatusHistory(
-        string edgeId, [FromQuery] int limit = 288, CancellationToken ct = default)
-    {
-        var denied = await DeniedEdgeAsync(edgeId, ct).ConfigureAwait(false);
-        return denied ?? Ok(new { data = await registry.ListStatusHistoryAsync(edgeId, limit, ct).ConfigureAwait(false) });
     }
 
     [HttpGet("{edgeId}/status-intervals")]

@@ -450,3 +450,8 @@ Data/connector-host-*/
 Data/connector-host/
 Data/connector-host-edge-factory-001/
 Data/platform-api/
+_verify_api/
+
+# Build output from tool projects
+tools/*/bin/
+tools/*/obj/

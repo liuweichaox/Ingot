@@ -10,17 +10,14 @@ dependencies = [
     "torch>=2.2",
     "gpytorch>=1.11",
     "botorch>=0.18.1,<0.19",
-    "ninja>=1.11,<2",
 ]
 
 [project.optional-dependencies]
 # uv sync --extra service   —— 起 HTTP 服务
 service = ["fastapi>=0.110", "uvicorn>=0.29"]
-# uv sync --extra viz       —— 画收敛图
-viz = ["matplotlib>=3.8"]
 
 [dependency-groups]
-dev = ["pytest>=8", "httpx2>=0.1"]
+dev = ["pytest>=8"]
 
 [tool.uv]
 required-version = "==0.12.5"
