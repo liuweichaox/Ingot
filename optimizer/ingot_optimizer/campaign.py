@@ -151,23 +151,33 @@ class Objective:
             float(np.clip(upper_95, low, high)),
         )
 
-    def badness(self, value: float) -> float:
-        """Return normalized badness where ``badness <= 1`` is in specification."""
-        if not math.isfinite(value):
-            raise ValueError(f"objective {self.name} outcome must be finite")
+    def badness(self, value):
+        """Return normalized badness where ``badness <= 1`` is in specification.
+
+        Accepts both scalar floats and numpy arrays.
+        """
+        is_scalar = not isinstance(value, np.ndarray)
+        if is_scalar:
+            if not math.isfinite(value):
+                raise ValueError(f"objective {self.name} outcome must be finite")
+        else:
+            if not np.all(np.isfinite(value)):
+                raise ValueError(f"objective {self.name} outcome must be finite")
         if self.kind == "le":
             threshold = float(self.threshold)
             scale = max(abs(threshold), 1.0)
-            return 1.0 + (value - threshold) / scale
-        if self.kind == "ge":
+            result = 1.0 + (value - threshold) / scale
+        elif self.kind == "ge":
             threshold = float(self.threshold)
             scale = max(abs(threshold), 1.0)
-            return 1.0 + (threshold - value) / scale
-        if self.kind == "target":
-            return abs(value - float(self.target)) / float(self.tol)
-        midpoint = (float(self.lower) + float(self.upper)) / 2.0
-        half_width = (float(self.upper) - float(self.lower)) / 2.0
-        return abs(value - midpoint) / half_width
+            result = 1.0 + (threshold - value) / scale
+        elif self.kind == "target":
+            result = np.abs(value - float(self.target)) / float(self.tol)
+        else:
+            midpoint = (float(self.lower) + float(self.upper)) / 2.0
+            half_width = (float(self.upper) - float(self.lower)) / 2.0
+            result = np.abs(value - midpoint) / half_width
+        return float(result) if is_scalar else result
 
 
 @dataclass(frozen=True)

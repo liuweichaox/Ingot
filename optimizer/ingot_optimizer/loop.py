@@ -47,6 +47,38 @@ class Suggestion:
         return asdict(self)
 
 
+
+
+def select_diverse_points(
+    candidates: np.ndarray, scores: np.ndarray, top_k: int
+) -> list[int]:
+    """Greedy diverse point selection with minimum separation.
+
+    Select up to ``top_k`` indices from ``candidates`` ordered by descending
+    ``scores``, skipping points closer than ``0.02 * sqrt(dim)`` to an already
+    selected point.  Falls back to filling remaining slots from the score order
+    when the separation constraint cannot be satisfied.
+    """
+    dim = candidates.shape[1]
+    order = np.argsort(-scores, kind="stable")
+    selected: list[int] = []
+    minimum_separation = 0.02 * np.sqrt(dim)
+    for index in order:
+        point = candidates[index]
+        if selected and min(
+            np.linalg.norm(candidates[other] - point) for other in selected
+        ) < minimum_separation:
+            continue
+        selected.append(int(index))
+        if len(selected) == top_k:
+            return selected
+    for index in order:
+        if int(index) not in selected:
+            selected.append(int(index))
+            if len(selected) == top_k:
+                return selected
+    return selected
+
 class SequentialOptimizer:
     """Runs the dependency-light optimizer used before three observations exist."""
 
@@ -112,18 +144,7 @@ class SequentialOptimizer:
 
     @staticmethod
     def _badness_samples(objective: Objective, samples: np.ndarray) -> np.ndarray:
-        samples = objective.clip(samples)
-        if objective.kind == "le":
-            threshold = float(objective.threshold)
-            return 1.0 + (samples - threshold) / max(abs(threshold), 1.0)
-        if objective.kind == "ge":
-            threshold = float(objective.threshold)
-            return 1.0 + (threshold - samples) / max(abs(threshold), 1.0)
-        if objective.kind == "target":
-            return np.abs(samples - float(objective.target)) / float(objective.tol)
-        midpoint = (float(objective.lower) + float(objective.upper)) / 2.0
-        half_width = (float(objective.upper) - float(objective.lower)) / 2.0
-        return np.abs(samples - midpoint) / half_width
+        return objective.badness(objective.clip(samples))
 
     def _posterior_samples(
         self,
@@ -179,24 +200,7 @@ class SequentialOptimizer:
     def _select_diverse(
         self, candidates: np.ndarray, scores: np.ndarray, top_k: int
     ) -> list[int]:
-        order = np.argsort(-scores, kind="stable")
-        selected: list[int] = []
-        minimum_separation = 0.02 * np.sqrt(self.campaign.dim)
-        for index in order:
-            point = candidates[index]
-            if selected and min(
-                np.linalg.norm(candidates[other] - point) for other in selected
-            ) < minimum_separation:
-                continue
-            selected.append(int(index))
-            if len(selected) == top_k:
-                return selected
-        for index in order:
-            if int(index) not in selected:
-                selected.append(int(index))
-                if len(selected) == top_k:
-                    return selected
-        return selected
+        return select_diverse_points(candidates, scores, top_k)
 
     def _cold_start_indices(self, candidates: np.ndarray, top_k: int) -> list[int]:
         selected: list[int] = []

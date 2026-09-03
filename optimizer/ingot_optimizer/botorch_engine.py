@@ -8,6 +8,7 @@ import numpy as np
 from scipy.stats import norm, rankdata
 
 from .campaign import Campaign
+from .loop import select_diverse_points
 from .coverage import (
     CoverageEnvelope,
     build_coverage_envelope,
@@ -626,58 +627,7 @@ class BotorchOptimizer:
             reach_deviations = (
                 reach_posterior.variance.clamp_min(0).sqrt().cpu().numpy()
             )
-        specification_probability = np.ones(len(candidates), dtype=float)
-        for index, objective_spec in enumerate(self.campaign.objectives):
-            sigma = np.maximum(reach_deviations[:, index], 1e-12)
-            if objective_spec.kind == "le":
-                probability = norm.cdf(
-                    (float(objective_spec.threshold) - reach_means[:, index])
-                    / sigma
-                )
-            elif objective_spec.kind == "ge":
-                probability = 1.0 - norm.cdf(
-                    (float(objective_spec.threshold) - reach_means[:, index])
-                    / sigma
-                )
-            else:
-                lower = (
-                    float(objective_spec.target) - float(objective_spec.tol)
-                    if objective_spec.kind == "target"
-                    else float(objective_spec.lower)
-                )
-                upper = (
-                    float(objective_spec.target) + float(objective_spec.tol)
-                    if objective_spec.kind == "target"
-                    else float(objective_spec.upper)
-                )
-                probability = norm.cdf(
-                    (upper - reach_means[:, index]) / sigma
-                ) - norm.cdf((lower - reach_means[:, index]) / sigma)
-            specification_probability *= np.clip(probability, 0.0, 1.0)
-        for index, constraint_spec in enumerate(
-            self.campaign.outcome_constraints
-        ):
-            output_index = objective_count + index
-            sigma = np.maximum(
-                reach_deviations[:, output_index], 1e-12
-            )
-            if constraint_spec.operator == "<=":
-                probability = norm.cdf(
-                    (
-                        float(constraint_spec.limit)
-                        - reach_means[:, output_index]
-                    )
-                    / sigma
-                )
-            else:
-                probability = 1.0 - norm.cdf(
-                    (
-                        float(constraint_spec.limit)
-                        - reach_means[:, output_index]
-                    )
-                    / sigma
-                )
-            specification_probability *= np.clip(probability, 0.0, 1.0)
+        specification_probability = self._compute_feasibility_probability(reach_means, reach_deviations)
         acquisition_score, reach_policy = _reach_specification_scores(
             train_unit,
             observed_distance,
@@ -735,46 +685,7 @@ class BotorchOptimizer:
                     self.campaign.outcome_constraints
                 )
             }
-            feasibility = 1.0
-            for index, objective_spec in enumerate(self.campaign.objectives):
-                sigma = max(float(deviation[index]), 1e-12)
-                if objective_spec.kind == "le":
-                    probability = norm.cdf((float(objective_spec.threshold) - mean[index]) / sigma)
-                elif objective_spec.kind == "ge":
-                    probability = 1.0 - norm.cdf(
-                        (float(objective_spec.threshold) - mean[index]) / sigma
-                    )
-                else:
-                    lower = (
-                        float(objective_spec.target) - float(objective_spec.tol)
-                        if objective_spec.kind == "target"
-                        else float(objective_spec.lower)
-                    )
-                    upper = (
-                        float(objective_spec.target) + float(objective_spec.tol)
-                        if objective_spec.kind == "target"
-                        else float(objective_spec.upper)
-                    )
-                    probability = norm.cdf((upper - mean[index]) / sigma) - norm.cdf(
-                        (lower - mean[index]) / sigma
-                    )
-                feasibility *= float(np.clip(probability, 0.0, 1.0))
-            for index, constraint_spec in enumerate(
-                self.campaign.outcome_constraints
-            ):
-                output_index = objective_count + index
-                sigma = max(float(deviation[output_index]), 1e-12)
-                if constraint_spec.operator == "<=":
-                    probability = norm.cdf(
-                        (float(constraint_spec.limit) - mean[output_index])
-                        / sigma
-                    )
-                else:
-                    probability = 1.0 - norm.cdf(
-                        (float(constraint_spec.limit) - mean[output_index])
-                        / sigma
-                    )
-                feasibility *= float(np.clip(probability, 0.0, 1.0))
+            feasibility = float(self._compute_feasibility_probability(mean, deviation))
             results.append(
                 Suggestion(
                     recommended_params=params,
@@ -794,22 +705,73 @@ class BotorchOptimizer:
             )
         return results
 
+
+    def _compute_feasibility_probability(
+        self, means: np.ndarray, deviations: np.ndarray
+    ) -> np.ndarray:
+        """Compute P(in-spec) for each output across objectives and constraints.
+
+        ``means`` and ``deviations`` share shape ``(..., n_outputs)`` where the
+        leading dimension is the batch axis (may be empty for a single point).
+        """
+        objective_count = len(self.campaign.objectives)
+        total_outputs = objective_count + len(self.campaign.outcome_constraints)
+        is_batch = means.ndim == 2
+        if is_batch:
+            probability = np.ones(means.shape[0], dtype=float)
+        else:
+            probability = 1.0
+        for index, objective_spec in enumerate(self.campaign.objectives):
+            if is_batch:
+                mu = means[:, index]
+                sigma = np.maximum(deviations[:, index], 1e-12)
+            else:
+                mu = means[index]
+                sigma = max(float(deviations[index]), 1e-12)
+            if objective_spec.kind == "le":
+                prob = norm.cdf((float(objective_spec.threshold) - mu) / sigma)
+            elif objective_spec.kind == "ge":
+                prob = 1.0 - norm.cdf(
+                    (float(objective_spec.threshold) - mu) / sigma
+                )
+            else:
+                lower = (
+                    float(objective_spec.target) - float(objective_spec.tol)
+                    if objective_spec.kind == "target"
+                    else float(objective_spec.lower)
+                )
+                upper = (
+                    float(objective_spec.target) + float(objective_spec.tol)
+                    if objective_spec.kind == "target"
+                    else float(objective_spec.upper)
+                )
+                prob = norm.cdf((upper - mu) / sigma) - norm.cdf(
+                    (lower - mu) / sigma
+                )
+            probability *= np.clip(prob, 0.0, 1.0)
+        for index, constraint_spec in enumerate(
+            self.campaign.outcome_constraints
+        ):
+            output_index = objective_count + index
+            if is_batch:
+                mu = means[:, output_index]
+                sigma = np.maximum(deviations[:, output_index], 1e-12)
+            else:
+                mu = means[output_index]
+                sigma = max(float(deviations[output_index]), 1e-12)
+            if constraint_spec.operator == "<=":
+                prob = norm.cdf((float(constraint_spec.limit) - mu) / sigma)
+            else:
+                prob = 1.0 - norm.cdf(
+                    (float(constraint_spec.limit) - mu) / sigma
+                )
+            probability *= np.clip(prob, 0.0, 1.0)
+        return probability
+
     def _select_diverse_points(
         self,
         candidates: np.ndarray,
         scores: np.ndarray,
         top_k: int,
     ) -> list[int]:
-        order = np.argsort(-scores, kind="stable")
-        selected: list[int] = []
-        minimum_separation = 0.02 * math.sqrt(self.campaign.dim)
-        for index in order:
-            if selected and min(
-                np.linalg.norm(candidates[index] - candidates[other])
-                for other in selected
-            ) < minimum_separation:
-                continue
-            selected.append(int(index))
-            if len(selected) == top_k:
-                return selected
-        return [int(index) for index in order[:top_k]]
+        return select_diverse_points(candidates, scores, top_k)
