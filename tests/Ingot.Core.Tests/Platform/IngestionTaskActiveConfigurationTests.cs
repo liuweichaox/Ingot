@@ -260,6 +260,10 @@ public sealed class IngestionTaskActiveConfigurationTests
         public Task InitializeAsync(CancellationToken ct = default) => System.Threading.Tasks.Task.CompletedTask;
         public Task<ProcessDataModel> UpsertDataModelAsync(ProcessDataModel value, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(value);
+        public async Task<ProcessConfigurationMutationResult<ProcessDataModel>> TryUpsertDataModelAsync(
+            ProcessDataModel value, CancellationToken ct = default)
+            => ProcessConfigurationMutationResult<ProcessDataModel>.Applied(
+                await UpsertDataModelAsync(value, ct).ConfigureAwait(false));
         public Task<IReadOnlyList<ProcessDataModel>> ListDataModelsAsync(CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ProcessDataModel>>([]);
         public Task<ProcessDataModel?> GetDataModelAsync(string modelId, int version, CancellationToken ct = default)
@@ -267,30 +271,69 @@ public sealed class IngestionTaskActiveConfigurationTests
                 model is not null && model.ModelId == modelId && model.Version == version ? model : null);
         public Task<bool> DeleteDataModelAsync(string modelId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(false);
+        public async Task<ProcessConfigurationDeleteResult> TryDeleteDataModelAsync(
+            string modelId, int version, CancellationToken ct = default)
+            => await DeleteDataModelAsync(modelId, version, ct).ConfigureAwait(false)
+                ? ProcessConfigurationDeleteResult.Applied()
+                : ProcessConfigurationDeleteResult.NotFound();
         public Task<ProcessSpecification> UpsertProcessSpecificationAsync(ProcessSpecification value, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(value);
+        public async Task<ProcessConfigurationMutationResult<ProcessSpecification>> TryUpsertProcessSpecificationAsync(
+            ProcessSpecification value, CancellationToken ct = default)
+            => ProcessConfigurationMutationResult<ProcessSpecification>.Applied(
+                await UpsertProcessSpecificationAsync(value, ct).ConfigureAwait(false));
         public Task<IReadOnlyList<ProcessSpecification>> ListProcessSpecificationsAsync(CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ProcessSpecification>>([]);
         public Task<ProcessSpecification?> GetProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<ProcessSpecification?>(null);
+        public Task<ProcessSpecificationDraftCreationResult> CreateNextProcessSpecificationDraftAsync(
+            string processSpecificationId,
+            int baseVersion,
+            CreateProcessSpecificationDraftRequest request,
+            CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromException<ProcessSpecificationDraftCreationResult>(
+                new NotSupportedException());
         public Task<bool> DeleteProcessSpecificationAsync(string processSpecificationId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(false);
+        public async Task<ProcessConfigurationDeleteResult> TryDeleteProcessSpecificationAsync(
+            string processSpecificationId, int version, CancellationToken ct = default)
+            => await DeleteProcessSpecificationAsync(processSpecificationId, version, ct).ConfigureAwait(false)
+                ? ProcessConfigurationDeleteResult.Applied()
+                : ProcessConfigurationDeleteResult.NotFound();
         public Task<ProcessAnalysisPlan> UpsertAnalysisPlanAsync(ProcessAnalysisPlan value, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(value);
+        public async Task<ProcessConfigurationMutationResult<ProcessAnalysisPlan>> TryUpsertAnalysisPlanAsync(
+            ProcessAnalysisPlan value, CancellationToken ct = default)
+            => ProcessConfigurationMutationResult<ProcessAnalysisPlan>.Applied(
+                await UpsertAnalysisPlanAsync(value, ct).ConfigureAwait(false));
         public Task<IReadOnlyList<ProcessAnalysisPlan>> ListAnalysisPlansAsync(CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ProcessAnalysisPlan>>([]);
         public Task<ProcessAnalysisPlan?> GetAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<ProcessAnalysisPlan?>(null);
         public Task<bool> DeleteAnalysisPlanAsync(string planId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(false);
+        public async Task<ProcessConfigurationDeleteResult> TryDeleteAnalysisPlanAsync(
+            string planId, int version, CancellationToken ct = default)
+            => await DeleteAnalysisPlanAsync(planId, version, ct).ConfigureAwait(false)
+                ? ProcessConfigurationDeleteResult.Applied()
+                : ProcessConfigurationDeleteResult.NotFound();
         public Task<ScenarioPackage> UpsertScenarioPackageAsync(ScenarioPackage value, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public async Task<ProcessConfigurationMutationResult<ScenarioPackage>> TryUpsertScenarioPackageAsync(
+            ScenarioPackage value, CancellationToken ct = default)
+            => ProcessConfigurationMutationResult<ScenarioPackage>.Applied(
+                await UpsertScenarioPackageAsync(value, ct).ConfigureAwait(false));
         public Task<IReadOnlyList<ScenarioPackage>> ListScenarioPackagesAsync(CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ScenarioPackage>>([]);
         public Task<ScenarioPackage?> GetScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult<ScenarioPackage?>(null);
         public Task<bool> DeleteScenarioPackageAsync(string packageId, int version, CancellationToken ct = default)
             => System.Threading.Tasks.Task.FromResult(false);
+        public async Task<ProcessConfigurationDeleteResult> TryDeleteScenarioPackageAsync(
+            string packageId, int version, CancellationToken ct = default)
+            => await DeleteScenarioPackageAsync(packageId, version, ct).ConfigureAwait(false)
+                ? ProcessConfigurationDeleteResult.Applied()
+                : ProcessConfigurationDeleteResult.NotFound();
     }
 
     private sealed class TestHostEnvironment(string environmentName = "Development") : IHostEnvironment

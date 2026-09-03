@@ -294,11 +294,10 @@ def _reach_specification_scores(
     Linear response is the default. Quadratic response is admitted only when
     paired leave-one-out ranking losses improve by more than one standard error
     across three consecutive expanding histories.
-    Inconclusive evidence keeps the simpler linear model; information-seeking
-    model discrimination belongs to the explicit hypothesis-validation path,
-    not the reach-specification budget. GP specification probability is used
-    only after both nonlinear evidence and a separate sample-capacity gate are
-    present. Candidate outcomes and dataset identities are never read.
+    Inconclusive evidence keeps the simpler linear model.
+    GP specification probability is used only after both nonlinear evidence and
+    a separate sample-capacity gate are present. Candidate outcomes and dataset
+    identities are never read.
     """
     observed = np.atleast_2d(np.asarray(observed_points, dtype=float))
     distance = np.asarray(observed_distance, dtype=float)
@@ -444,7 +443,6 @@ class BotorchOptimizer:
         n_samples: int = 256,
         pending_params: Sequence[Mapping[str, float]] | None = None,
         decision_intent: str = "reach-specification",
-        hypothesis_variables: Sequence[str] | None = None,
         enforce_coverage: bool = True,
         **_: object,
     ) -> list[Suggestion]:
@@ -454,12 +452,8 @@ class BotorchOptimizer:
             )
         if top_k < 1 or top_k > 20:
             raise ValueError("top_k must be between 1 and 20")
-        if decision_intent not in {"reach-specification", "validate-hypothesis"}:
-            raise ValueError("decision_intent must be reach-specification or validate-hypothesis")
-        # Hypothesis validation deliberately explores identifiable directions,
-        # including outside the cluster already covered by production runs.
-        if decision_intent == "validate-hypothesis":
-            enforce_coverage = False
+        if decision_intent != "reach-specification":
+            raise ValueError("decision_intent must be reach-specification")
         self.coverage_envelope = build_coverage_envelope(np.vstack(self.x))
         candidates = self._candidate_units(
             candidate_params,
@@ -626,111 +620,75 @@ class BotorchOptimizer:
                 )
             candidates = candidates[safe]
             choices = choices[safe]
-        validation_scores = None
-        selected_indices = None
-        selected_acquisition_values = None
-        reach_policy = None
-        if decision_intent == "validate-hypothesis":
-            requested = [str(value) for value in (hypothesis_variables or [])]
-            variable_indexes = [names.index(value) for value in requested if value in names]
-            if not variable_indexes:
-                raise ValueError(
-                    "hypothesis validation requires at least one controllable hypothesis variable"
-                )
-            with torch.no_grad():
-                validation_posterior = model.posterior(choices)
-                objective_uncertainty = (
-                    validation_posterior.variance[:, : len(self.campaign.objectives)]
-                    .clamp_min(0)
-                    .sqrt()
-                    .mean(dim=1)
-                    .cpu()
-                    .numpy()
-                )
-            projected_candidates = candidates[:, variable_indexes]
-            projected_observations = train_unit[:, variable_indexes]
-            separation = np.min(
-                np.linalg.norm(
-                    projected_candidates[:, None, :] - projected_observations[None, :, :],
-                    axis=2,
-                ),
-                axis=1,
+        with torch.no_grad():
+            reach_posterior = model.posterior(choices)
+            reach_means = reach_posterior.mean.cpu().numpy()
+            reach_deviations = (
+                reach_posterior.variance.clamp_min(0).sqrt().cpu().numpy()
             )
-            validation_scores = objective_uncertainty * (1.0 + separation)
-            selected_indices = self._select_diverse_points(
-                candidates, validation_scores, top_k
-            )
-            selected_x = choices[selected_indices]
-        else:
-            with torch.no_grad():
-                reach_posterior = model.posterior(choices)
-                reach_means = reach_posterior.mean.cpu().numpy()
-                reach_deviations = (
-                    reach_posterior.variance.clamp_min(0).sqrt().cpu().numpy()
+        specification_probability = np.ones(len(candidates), dtype=float)
+        for index, objective_spec in enumerate(self.campaign.objectives):
+            sigma = np.maximum(reach_deviations[:, index], 1e-12)
+            if objective_spec.kind == "le":
+                probability = norm.cdf(
+                    (float(objective_spec.threshold) - reach_means[:, index])
+                    / sigma
                 )
-            specification_probability = np.ones(len(candidates), dtype=float)
-            for index, objective_spec in enumerate(self.campaign.objectives):
-                sigma = np.maximum(reach_deviations[:, index], 1e-12)
-                if objective_spec.kind == "le":
-                    probability = norm.cdf(
-                        (float(objective_spec.threshold) - reach_means[:, index])
-                        / sigma
-                    )
-                elif objective_spec.kind == "ge":
-                    probability = 1.0 - norm.cdf(
-                        (float(objective_spec.threshold) - reach_means[:, index])
-                        / sigma
-                    )
-                else:
-                    lower = (
-                        float(objective_spec.target) - float(objective_spec.tol)
-                        if objective_spec.kind == "target"
-                        else float(objective_spec.lower)
-                    )
-                    upper = (
-                        float(objective_spec.target) + float(objective_spec.tol)
-                        if objective_spec.kind == "target"
-                        else float(objective_spec.upper)
-                    )
-                    probability = norm.cdf(
-                        (upper - reach_means[:, index]) / sigma
-                    ) - norm.cdf((lower - reach_means[:, index]) / sigma)
-                specification_probability *= np.clip(probability, 0.0, 1.0)
-            for index, constraint_spec in enumerate(
-                self.campaign.outcome_constraints
-            ):
-                output_index = objective_count + index
-                sigma = np.maximum(
-                    reach_deviations[:, output_index], 1e-12
+            elif objective_spec.kind == "ge":
+                probability = 1.0 - norm.cdf(
+                    (float(objective_spec.threshold) - reach_means[:, index])
+                    / sigma
                 )
-                if constraint_spec.operator == "<=":
-                    probability = norm.cdf(
-                        (
-                            float(constraint_spec.limit)
-                            - reach_means[:, output_index]
-                        )
-                        / sigma
-                    )
-                else:
-                    probability = 1.0 - norm.cdf(
-                        (
-                            float(constraint_spec.limit)
-                            - reach_means[:, output_index]
-                        )
-                        / sigma
-                    )
-                specification_probability *= np.clip(probability, 0.0, 1.0)
-            acquisition_score, reach_policy = _reach_specification_scores(
-                train_unit,
-                observed_distance,
-                candidates,
-                specification_probability,
+            else:
+                lower = (
+                    float(objective_spec.target) - float(objective_spec.tol)
+                    if objective_spec.kind == "target"
+                    else float(objective_spec.lower)
+                )
+                upper = (
+                    float(objective_spec.target) + float(objective_spec.tol)
+                    if objective_spec.kind == "target"
+                    else float(objective_spec.upper)
+                )
+                probability = norm.cdf(
+                    (upper - reach_means[:, index]) / sigma
+                ) - norm.cdf((lower - reach_means[:, index]) / sigma)
+            specification_probability *= np.clip(probability, 0.0, 1.0)
+        for index, constraint_spec in enumerate(
+            self.campaign.outcome_constraints
+        ):
+            output_index = objective_count + index
+            sigma = np.maximum(
+                reach_deviations[:, output_index], 1e-12
             )
-            selected_indices = self._select_diverse_points(
-                candidates, acquisition_score, top_k
-            )
-            selected_x = choices[selected_indices]
-            selected_acquisition_values = acquisition_score[selected_indices]
+            if constraint_spec.operator == "<=":
+                probability = norm.cdf(
+                    (
+                        float(constraint_spec.limit)
+                        - reach_means[:, output_index]
+                    )
+                    / sigma
+                )
+            else:
+                probability = 1.0 - norm.cdf(
+                    (
+                        float(constraint_spec.limit)
+                        - reach_means[:, output_index]
+                    )
+                    / sigma
+                )
+            specification_probability *= np.clip(probability, 0.0, 1.0)
+        acquisition_score, reach_policy = _reach_specification_scores(
+            train_unit,
+            observed_distance,
+            candidates,
+            specification_probability,
+        )
+        selected_indices = self._select_diverse_points(
+            candidates, acquisition_score, top_k
+        )
+        selected_x = choices[selected_indices]
+        selected_acquisition_values = acquisition_score[selected_indices]
         selected_expanded = selected_x.detach().cpu().numpy()
         selected_unit = selected_expanded[:, : self.campaign.dim]
         with torch.no_grad():
@@ -817,28 +775,18 @@ class BotorchOptimizer:
                         / sigma
                     )
                 feasibility *= float(np.clip(probability, 0.0, 1.0))
-            acq_value = (
-                float(validation_scores[selected_indices[row]])
-                if validation_scores is not None and selected_indices is not None
-                else float(selected_acquisition_values[row])
-            )
-            mean_outcomes = bounded_means
             results.append(
                 Suggestion(
                     recommended_params=params,
                     objective_predictions=predictions,
                     constraint_predictions=constraint_predictions,
-                    predicted_distance_to_spec=self.campaign.distance_to_spec(mean_outcomes),
+                    predicted_distance_to_spec=self.campaign.distance_to_spec(bounded_means),
                     feasibility_probability=feasibility,
-                    acquisition_value=acq_value,
+                    acquisition_value=float(selected_acquisition_values[row]),
                     cold_start=False,
                     model_version=MODEL_VERSION,
                     rationale=(
-                        "Hypothesis-validation design selected this safe point because it "
-                        "maximizes outcome uncertainty while separating the hypothesis variables "
-                        "from prior observations."
-                        if validation_scores is not None
-                        else "The production surrogate selected this parameter setting "
+                        "The production surrogate selected this parameter setting "
                         f"under the versioned {reach_policy} policy using only visible "
                         "observations."
                     ),

@@ -98,106 +98,9 @@ def test_service_has_health_endpoint_and_no_process_memory_campaign_api():
     assert client.post("/campaigns", json={}).status_code == 404
 
 
-def test_design_service_generates_reproducible_classic_doe_without_state():
-    body = {
-        "method": "full-factorial",
-        "variables": [
-            {"name": "temperature", "low": 300.0, "high": 340.0, "unit": "C"},
-            {"name": "pressure", "low": 1.0, "high": 3.0, "unit": "MPa"},
-        ],
-        "levels": 2,
-        "replicates": 2,
-        "block_count": 2,
-        "seed": 42,
-    }
-    first = client.post("/v1/designs", json=body)
-    second = client.post("/v1/designs", json=body)
-
-    assert first.status_code == 200
-    assert first.json() == second.json()
-    payload = first.json()
-    assert payload["state_persisted"] is False
-    assert len(payload["runs"]) == 8
-    assert {run["block_key"] for run in payload["runs"]} == {"block-01", "block-02"}
 
 
-def test_design_service_balances_blocks_independently_of_replicates():
-    response = client.post("/v1/designs", json={
-        "method": "full-factorial",
-        "variables": [
-            {"name": "temperature", "low": 300.0, "high": 340.0},
-            {"name": "pressure", "low": 1.0, "high": 3.0},
-        ],
-        "levels": 2,
-        "replicates": 1,
-        "block_count": 3,
-        "seed": 42,
-    })
 
-    assert response.status_code == 200
-    runs = response.json()["runs"]
-    assert [run["block_key"] for run in runs] == [
-        "block-01", "block-02", "block-03", "block-01",
-    ]
-    assert sorted(
-        sum(run["block_key"] == block for run in runs)
-        for block in {run["block_key"] for run in runs}
-    ) == [1, 1, 2]
-    assert {run["replicate_key"] for run in runs} == {"replicate-01"}
-
-
-def test_design_service_rejects_more_blocks_than_generated_runs():
-    response = client.post("/v1/designs", json={
-        "method": "full-factorial",
-        "variables": [{"name": "temperature", "low": 300.0, "high": 340.0}],
-        "levels": 2,
-        "replicates": 1,
-        "block_count": 3,
-    })
-
-    assert response.status_code == 422
-    assert "block_count cannot exceed" in response.json()["detail"]
-
-
-def test_design_service_rejects_oversized_factorial_before_materializing_points():
-    response = client.post("/v1/designs", json={
-        "method": "full-factorial",
-        "variables": [
-            {"name": f"factor-{index}", "low": 0.0, "high": 1.0}
-            for index in range(12)
-        ],
-        "levels": 5,
-        "replicates": 5,
-    })
-
-    assert response.status_code == 422
-    assert "40-run experiment limit" in response.json()["detail"]
-
-
-def test_design_service_supports_fractional_response_surface_and_latin_hypercube():
-    variables = [
-        {"name": "a", "low": 0.0, "high": 10.0},
-        {"name": "b", "low": 0.0, "high": 10.0},
-        {"name": "c", "low": 0.0, "high": 10.0},
-    ]
-    fractional = client.post("/v1/designs", json={
-        "method": "fractional-factorial", "variables": variables, "seed": 3,
-    })
-    ccd = client.post("/v1/designs", json={
-        "method": "response-surface", "variables": variables[:2],
-        "response_surface_family": "central-composite", "seed": 3,
-    })
-    lhs = client.post("/v1/designs", json={
-        "method": "latin-hypercube", "variables": variables,
-        "sample_count": 6, "seed": 3,
-    })
-
-    assert fractional.status_code == 200
-    assert fractional.json()["alias_structure"]
-    assert ccd.status_code == 200
-    assert ccd.json()["response_surface_family"] == "central-composite"
-    assert lhs.status_code == 200
-    assert len(lhs.json()["runs"]) == 6
 
 
 def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features():
@@ -337,19 +240,6 @@ def test_service_stops_when_runs_never_covered_enough_of_the_space():
     assert response.status_code == 422
     assert "observed coverage envelope" in response.text
 
-
-def test_service_hypothesis_validation_skips_the_observed_coverage_envelope():
-    body = request_body()
-    body["campaign"]["decision_intent"] = "validate-hypothesis"
-    body["campaign"]["hypothesis_variables"] = ["x"]
-    body["candidate_pool"] = [{"x": 0.89}]
-
-    response = client.post("/v1/suggestions", json=body)
-
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload["coverage_envelope"] is None
-    assert payload["suggestions"][0]["recommended_params"]["x"] == pytest.approx(0.89)
 
 
 def test_service_keeps_binary_objective_predictions_inside_declared_bounds():

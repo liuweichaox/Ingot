@@ -260,10 +260,6 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
             });
         }
 
-        public Task<OptimizerDesignResponse> DesignAsync(
-            OptimizerDesignCall request, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
         public Task<ProcessDiagnosisResponse> DiagnoseAsync(
             ProcessDiagnosisCall request, CancellationToken ct = default)
             => throw new NotSupportedException();

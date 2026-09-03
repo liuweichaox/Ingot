@@ -14,15 +14,14 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
 - GP outcome-safety filtering followed by visible-evidence admission for response surfaces, GP probability, and mechanism features
-- Two decision intents: `reach-specification` for specification seeking, and `validate-hypothesis` for safely maximizing identifiable information in hypothesis variables
-- A two-stage set-point-to-trajectory-to-quality surrogate
+- Decision intent is `reach-specification` only: seek the specification inside the observed coverage envelope
 - Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
 - Safe-baseline local cold start, pending experiments, and idempotent batches
-- Historical pool replay that can select only real, unconsumed parameter settings
+- Historical pool replay that can select only real, unconsumed parameter settings (`POST /v1/historical-replay`)
 - Stateless `POST /v1/suggestions` HTTP contract
 - Synthetic digital-twin demonstration
 
-The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. Information-first model discrimination belongs only to the engineer-selected hypothesis-validation path and does not automatically spend the reach-specification budget. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
+The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
 The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate campaigns stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar.
 
@@ -67,7 +66,7 @@ The repository bundles no public or field-validation datasets, historical protoc
 
 It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, rationale, and the `coverage_envelope` applied to the request.
 
-Candidates are generated only inside the region historical runs cover: every variable stays within its observed range plus a margin (the larger of 10% of the observed spread and 2% of the declared range), and a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. Platform recomputes the same envelope from the same runs and stops the recommendation when the two disagree or a suggestion falls outside it. When too few candidates remain inside the envelope, the service returns 422 and reports that production runs have not covered enough of the parameter space. The envelope constrains only `reach-specification`; `validate-hypothesis` explores identifiable information inside the safety boundaries and neither applies nor returns an observed-coverage envelope.
+Candidates are generated only inside the region historical runs cover: every variable stays within its observed range plus a margin (the larger of 10% of the observed spread and 2% of the declared range), and a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. Platform recomputes the same envelope from the same runs and stops the recommendation when the two disagree or a suggestion falls outside it. When too few candidates remain inside the envelope, the service returns 422 and reports that production runs have not covered enough of the parameter space. Recommendations use `reach-specification` only and always stay inside the observed coverage envelope.
 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier
@@ -75,8 +74,6 @@ derived feature. Composition problems may also use `weighted_mean` and
 `weighted_standard_deviation` with fixed property coefficients; weights must
 be non-negative and have a positive total. Arbitrary Python expressions, unknown inputs, forward
 references, and legacy hidden `process_profile` switches are rejected.
-
-For `validate-hypothesis`, the campaign must also provide `hypothesis_variables`. The platform sends this intent only after an engineer defines the outcome, expected direction, and minimum meaningful effect; the service never treats an association as a causal conclusion.
 
 The .NET platform turns the returned batch into an ordinary `ResearchExperiment`, storing its input hash, model version, predictions, review, and outcome. No recommendation is sent directly to a PLC.
 

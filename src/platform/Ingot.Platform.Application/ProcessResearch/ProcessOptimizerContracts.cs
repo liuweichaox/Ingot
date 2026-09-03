@@ -96,10 +96,9 @@ public sealed record OptimizerCampaignInput
     [JsonPropertyName("derived_features")]
     public IReadOnlyList<OptimizerDerivedFeatureInput> DerivedFeatures { get; init; } = [];
 
+    /// <summary>Only <c>reach-specification</c> is supported; recommendations stay inside the observed coverage envelope.</summary>
     [JsonPropertyName("decision_intent")]
     public string DecisionIntent { get; init; } = "reach-specification";
-    [JsonPropertyName("hypothesis_variables")]
-    public IReadOnlyList<string> HypothesisVariables { get; init; } = [];
     public IReadOnlyList<OptimizerVariableInput> Variables { get; init; } = [];
     public IReadOnlyList<OptimizerObjectiveInput> Objectives { get; init; } = [];
     public IReadOnlyList<OptimizerConstraintInput> Constraints { get; init; } = [];
@@ -292,50 +291,6 @@ public sealed record OptimizerSuggestionResponse
     public bool StatePersisted { get; init; }
 }
 
-public sealed record OptimizerDesignCall
-{
-    public required string Method { get; init; }
-    public IReadOnlyList<OptimizerVariableInput> Variables { get; init; } = [];
-    public int Levels { get; init; } = 2;
-    public int Replicates { get; init; } = 1;
-    [JsonPropertyName("block_count")]
-    public int BlockCount { get; init; } = 1;
-    [JsonPropertyName("sample_count")]
-    public int SampleCount { get; init; }
-    [JsonPropertyName("response_surface_family")]
-    public string? ResponseSurfaceFamily { get; init; }
-    public int Seed { get; init; }
-}
-
-public sealed record OptimizerDesignRun
-{
-    [JsonPropertyName("execution_key")]
-    public required string ExecutionKey { get; init; }
-    [JsonPropertyName("condition_key")]
-    public required string ConditionKey { get; init; }
-    [JsonPropertyName("replicate_key")]
-    public string? ReplicateKey { get; init; }
-    [JsonPropertyName("block_key")]
-    public string? BlockKey { get; init; }
-    public int Sequence { get; init; }
-    public IReadOnlyDictionary<string, double> Params { get; init; } =
-        new Dictionary<string, double>();
-}
-
-public sealed record OptimizerDesignResponse
-{
-    public required string Method { get; init; }
-    public int Seed { get; init; }
-    public IReadOnlyList<OptimizerDesignRun> Runs { get; init; } = [];
-    public IReadOnlyList<string> Warnings { get; init; } = [];
-    [JsonPropertyName("alias_structure")]
-    public string? AliasStructure { get; init; }
-    [JsonPropertyName("response_surface_family")]
-    public string? ResponseSurfaceFamily { get; init; }
-    [JsonPropertyName("state_persisted")]
-    public bool StatePersisted { get; init; }
-}
-
 public sealed record ProcessDiagnosticFeatureInput
 {
     [JsonPropertyName("data_source")]
@@ -428,10 +383,6 @@ public interface IProcessOptimizerClient
 {
     Task<OptimizerSuggestionResponse> SuggestAsync(
         OptimizerSuggestionCall request,
-        CancellationToken ct = default);
-
-    Task<OptimizerDesignResponse> DesignAsync(
-        OptimizerDesignCall request,
         CancellationToken ct = default);
 
     Task<ProcessDiagnosisResponse> DiagnoseAsync(

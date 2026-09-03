@@ -78,8 +78,8 @@ export const sectionsForIdentity = identity => (identity?.roles || []).includes(
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
-  "/workbench": ["工作台", "集中查看待办、生产状态、质量风险与研发进展"],
-  "/chat": ["工艺分析助手", "用自然语言查询运行、质量、配置、研发与知识证据"],
+  "/workbench": ["工作台", "集中查看待办、生产状态与质量风险"],
+  "/chat": ["工艺分析助手", "用自然语言查询运行、质量与配置证据"],
   "/analysis": ["追因总览", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
   "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
   "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],

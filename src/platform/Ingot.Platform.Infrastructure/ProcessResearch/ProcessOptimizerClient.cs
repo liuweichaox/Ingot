@@ -79,47 +79,6 @@ public sealed class ProcessOptimizerClient(
         }
     }
 
-    public async Task<OptimizerDesignResponse> DesignAsync(
-        OptimizerDesignCall request,
-        CancellationToken ct = default)
-    {
-        if (!_options.Enabled)
-            throw new ProcessResearchRuleException("优化服务未启用。");
-        HttpResponseMessage response;
-        try
-        {
-            response = await httpClient.PostAsJsonAsync("v1/designs", request, ct)
-                .ConfigureAwait(false);
-        }
-        catch (HttpRequestException exception)
-        {
-            throw new ProcessOptimizerUnavailableException("配方建议服务暂时不可用。", exception);
-        }
-        catch (TaskCanceledException exception) when (!ct.IsCancellationRequested)
-        {
-            throw new ProcessOptimizerUnavailableException("配方建议服务请求超时。", exception);
-        }
-        using (response)
-        {
-            if ((int)response.StatusCode >= 500)
-                throw new ProcessOptimizerUnavailableException(
-                    $"配方建议服务暂时不可用（{(int)response.StatusCode}）。");
-            if (!response.IsSuccessStatusCode)
-            {
-                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                throw new ProcessResearchRuleException(
-                    $"配方建议服务拒绝请求（{(int)response.StatusCode}）：{detail[..Math.Min(detail.Length, 1000)]}");
-            }
-            var result = await response.Content.ReadFromJsonAsync<OptimizerDesignResponse>(
-                    cancellationToken: ct)
-                .ConfigureAwait(false)
-                ?? throw new ProcessResearchRuleException("配方建议服务返回了空响应。");
-            if (result.StatePersisted || result.Runs.Count == 0)
-                throw new ProcessResearchRuleException("配方建议服务响应无效或违反无状态契约。");
-            return result;
-        }
-    }
-
     public async Task<ProcessDiagnosisResponse> DiagnoseAsync(
         ProcessDiagnosisCall request,
         CancellationToken ct = default)

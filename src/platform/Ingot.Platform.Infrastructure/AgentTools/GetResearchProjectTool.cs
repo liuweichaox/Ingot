@@ -70,8 +70,7 @@ public sealed class GetResearchProjectTool(
                     {
                         Kind = "research-project",
                         Id = workspace.Project.ProjectId.ToString(),
-                        Label = workspace.Project.Name,
-                        Url = "/research-projects"
+                        Label = workspace.Project.Name
                     }
                 ],
                 Outcome = AnalysisToolOutcomes.Sufficient

@@ -84,10 +84,9 @@ public static class ResearchHypothesisEffectDirections
 public static class ResearchOptimizationIntents
 {
     public const string ReachSpecification = "reach-specification";
-    public const string ValidateHypothesis = "validate-hypothesis";
 
     public static bool IsValid(string? value)
-        => value is ReachSpecification or ValidateHypothesis;
+        => value is ReachSpecification;
 }
 
 public static class ResearchTransferAssessmentStatuses

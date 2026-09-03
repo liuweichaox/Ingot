@@ -7,10 +7,8 @@ All notable project changes will be documented here. The format follows [Keep a 
 ### Added
 
 - Industrial-object-centered Platform Web workflow for operations, investigation, context, connection, and administration.
-- Cycle diagnosis, controllable hypotheses, hypothesis-validation experiments, independent process-window validation, and reusable research assets.
 - Embedded Agent chat, investigation tools, data-quality explanations, and deterministic/OpenAI provider boundaries inside Platform API.
-- Stateless BoTorch optimization service with qLogNEI and qLogNEHVI.
-- Two-stage surrogate modeling for setpoint-to-trajectory and trajectory-to-quality behavior.
+- Stateless BoTorch optimization service for next-recipe recommendations inside safety boundaries.
 - Weighted objectives, parameter constraints, safety outcome constraints, and pending-point avoidance.
 - Automatic assembly of experiment observations from cycles, actual recipes, process features, and inspections.
 - Idempotent optimized experiments and atomic result persistence.
@@ -23,3 +21,5 @@ All notable project changes will be documented here. The format follows [Keep a 
 - Website and Docs are documented as a separate public-site deployment, apart from the factory application Compose stack.
 - Product positioning now centers on reducing experiments required to reach process specification.
 - The first concrete validation scenario has data onboarding and diagnosis running, with historical replay, shadow, and controlled-online validation still in progress; its industry and equipment details stay out of the public repository.
+- Removed half-open `validate-hypothesis` decision intent; recommendations use `reach-specification` within the observed coverage envelope only.
+- Removed unused optimizer `POST /v1/designs` DOE endpoint and Platform `DesignAsync` client path; historical replay remains for offline evaluation.

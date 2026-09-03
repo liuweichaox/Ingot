@@ -6,8 +6,6 @@ service restarts cannot lose business state.
 """
 from __future__ import annotations
 
-from itertools import combinations, product
-import random
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -120,10 +118,7 @@ class CampaignIn(StrictModel):
         default_factory=list,
         max_length=100,
     )
-    decision_intent: Literal["reach-specification", "validate-hypothesis"] = (
-        "reach-specification"
-    )
-    hypothesis_variables: list[str] = Field(default_factory=list, max_length=100)
+    decision_intent: Literal["reach-specification"] = "reach-specification"
     variables: list[VariableIn] = Field(min_length=1, max_length=100)
     objectives: list[ObjectiveIn] = Field(min_length=1, max_length=50)
     constraints: list[ConstraintIn] = Field(default_factory=list, max_length=100)
@@ -198,22 +193,6 @@ class SuggestionResponse(StrictModel):
     feature_set_version: int = Field(ge=1)
     derived_feature_count: int = Field(ge=0, le=100)
     state_persisted: Literal[False]
-
-
-class DesignRequest(StrictModel):
-    method: Literal[
-        "full-factorial",
-        "fractional-factorial",
-        "response-surface",
-        "latin-hypercube",
-    ]
-    variables: list[VariableIn] = Field(min_length=1, max_length=12)
-    levels: int = Field(default=2, ge=2, le=5)
-    replicates: int = Field(default=1, ge=1, le=5)
-    block_count: int = Field(default=1, ge=1, le=5)
-    sample_count: int = Field(default=0, ge=0, le=40)
-    response_surface_family: Literal["central-composite", "box-behnken"] | None = None
-    seed: int = Field(default=0, ge=0, le=2_147_483_647)
 
 
 class DiagnosticFeatureIn(StrictModel):
@@ -312,179 +291,6 @@ def ready() -> dict[str, str]:
     }
 
 
-def _validate_design_variables(values: list[VariableIn]) -> None:
-    names = [value.name for value in values]
-    if len(set(names)) != len(names):
-        raise ValueError("design variable names must be unique")
-    if any(value.high <= value.low for value in values):
-        raise ValueError("each design variable must have high > low")
-
-
-def _decode_level(value: VariableIn, coded: float) -> float:
-    return (value.low + value.high) / 2 + coded * (value.high - value.low) / 2
-
-
-def _full_factorial(values: list[VariableIn], levels: int) -> list[dict[str, float]]:
-    grids = [np.linspace(value.low, value.high, levels).tolist() for value in values]
-    return [dict(zip((value.name for value in values), point, strict=True)) for point in product(*grids)]
-
-
-def _fractional_factorial(values: list[VariableIn]) -> tuple[list[dict[str, float]], str, list[str]]:
-    if len(values) < 3:
-        return (
-            _full_factorial(values, 2),
-            "无部分因子缩减：两个因素以下使用完整二水平设计。",
-            ["因素少于三个时，部分因子设计等同于完整二水平设计。"],
-        )
-    base = values[:-1]
-    points: list[dict[str, float]] = []
-    for signs in product((-1.0, 1.0), repeat=len(base)):
-        last = float(np.prod(signs))
-        coded = [*signs, last]
-        points.append({value.name: _decode_level(value, sign) for value, sign in zip(values, coded, strict=True)})
-    generator = " × ".join(value.name for value in values)
-    resolution = len(values)
-    return (
-        points,
-        f"I = {generator}（分辨率 {resolution}）",
-        ["部分因子设计会混杂部分高阶交互；请在提交前确认别名结构与现场知识一致。"],
-    )
-
-
-def _central_composite(values: list[VariableIn]) -> list[dict[str, float]]:
-    # Inscribed CCD: factorial points remain inside the approved bounds and axial points touch them.
-    points: list[dict[str, float]] = []
-    for signs in product((-0.5, 0.5), repeat=len(values)):
-        points.append({value.name: _decode_level(value, sign) for value, sign in zip(values, signs, strict=True)})
-    for index, value in enumerate(values):
-        for sign in (-1.0, 1.0):
-            points.append({
-                candidate.name: _decode_level(candidate, sign if offset == index else 0.0)
-                for offset, candidate in enumerate(values)
-            })
-    points.append({value.name: _decode_level(value, 0.0) for value in values})
-    return points
-
-
-def _box_behnken(values: list[VariableIn]) -> list[dict[str, float]]:
-    if len(values) < 3:
-        raise ValueError("Box-Behnken design requires at least three variables")
-    points: list[dict[str, float]] = []
-    for left, right in combinations(range(len(values)), 2):
-        for left_sign, right_sign in product((-1.0, 1.0), repeat=2):
-            points.append({
-                value.name: _decode_level(
-                    value,
-                    left_sign if index == left else right_sign if index == right else 0.0,
-                )
-                for index, value in enumerate(values)
-            })
-    points.append({value.name: _decode_level(value, 0.0) for value in values})
-    return points
-
-
-def _latin_hypercube(values: list[VariableIn], sample_count: int, rng: random.Random) -> list[dict[str, float]]:
-    if sample_count < 2:
-        raise ValueError("latin hypercube design requires sample_count of at least two")
-    columns: list[list[float]] = []
-    for value in values:
-        strata = list(range(sample_count))
-        rng.shuffle(strata)
-        columns.append([
-            value.low + (stratum + rng.random()) / sample_count * (value.high - value.low)
-            for stratum in strata
-        ])
-    return [
-        {value.name: columns[index][row] for index, value in enumerate(values)}
-        for row in range(sample_count)
-    ]
-
-
-def _ensure_design_run_budget(point_count: int, replicates: int) -> None:
-    if point_count * replicates > 40:
-        raise ValueError("design exceeds the 40-run experiment limit after replication")
-
-
-def _design_runs(request: DesignRequest) -> tuple[list[dict[str, float]], str | None, list[str], str | None]:
-    _validate_design_variables(request.variables)
-    family = request.response_surface_family
-    alias_structure: str | None = None
-    warnings: list[str] = []
-    variable_count = len(request.variables)
-    if request.method == "full-factorial":
-        _ensure_design_run_budget(request.levels ** variable_count, request.replicates)
-        points = _full_factorial(request.variables, request.levels)
-    elif request.method == "fractional-factorial":
-        if request.levels != 2:
-            raise ValueError("fractional factorial design supports exactly two levels")
-        point_count = 2 ** (variable_count if variable_count < 3 else variable_count - 1)
-        _ensure_design_run_budget(point_count, request.replicates)
-        points, alias_structure, warnings = _fractional_factorial(request.variables)
-    elif request.method == "response-surface":
-        if variable_count < 2:
-            raise ValueError("response surface design requires at least two variables")
-        family = family or "central-composite"
-        if family == "central-composite":
-            _ensure_design_run_budget(
-                2 ** variable_count + 2 * variable_count + 1,
-                request.replicates,
-            )
-            points = _central_composite(request.variables)
-        else:
-            if variable_count < 3:
-                raise ValueError("Box-Behnken design requires at least three variables")
-            _ensure_design_run_budget(
-                2 * variable_count * (variable_count - 1) + 1,
-                request.replicates,
-            )
-            points = _box_behnken(request.variables)
-    else:
-        _ensure_design_run_budget(request.sample_count, request.replicates)
-        points = _latin_hypercube(
-            request.variables,
-            request.sample_count,
-            random.Random(request.seed),
-        )
-    _ensure_design_run_budget(len(points), request.replicates)
-    return points, alias_structure, warnings, family
-
-
-@app.post("/v1/designs")
-def create_design(request: DesignRequest) -> dict:
-    try:
-        points, alias_structure, warnings, family = _design_runs(request)
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    rng = random.Random(request.seed)
-    runs = []
-    for replicate in range(request.replicates):
-        for condition, params in enumerate(points, start=1):
-            runs.append({
-                "condition_key": f"condition-{condition:02d}",
-                "replicate_key": f"replicate-{replicate + 1:02d}",
-                "params": params,
-            })
-    if request.block_count > len(runs):
-        raise HTTPException(
-            status_code=422,
-            detail="block_count cannot exceed the generated run count",
-        )
-    rng.shuffle(runs)
-    for sequence, run in enumerate(runs, start=1):
-        run["sequence"] = sequence
-        run["block_key"] = f"block-{(sequence - 1) % request.block_count + 1:02d}"
-        run["execution_key"] = f"{run['condition_key']}-{run['replicate_key']}"
-    return {
-        "method": request.method,
-        "seed": request.seed,
-        "runs": runs,
-        "warnings": warnings,
-        "alias_structure": alias_structure,
-        "response_surface_family": family,
-        "state_persisted": False,
-    }
-
-
 @app.post("/v1/suggestions", response_model=SuggestionResponse)
 def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
     try:
@@ -509,22 +315,6 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
             [value.high for value in campaign.variables],
             derived_features,
         )
-        if request.campaign.decision_intent == "validate-hypothesis":
-            if len(request.observations) < 3:
-                raise ValueError(
-                    "hypothesis validation requires at least three valid observations"
-                )
-            unknown = set(request.campaign.hypothesis_variables).difference(
-                campaign.variable_names
-            )
-            if unknown:
-                raise ValueError(
-                    f"hypothesis variables are not controllable campaign variables: {sorted(unknown)}"
-                )
-            if not request.campaign.hypothesis_variables:
-                raise ValueError(
-                    "hypothesis validation requires at least one controllable hypothesis variable"
-                )
         optimizer = build_optimizer(
             campaign,
             [
@@ -539,28 +329,18 @@ def create_suggestions(request: SuggestionRequest) -> SuggestionResponse:
             derived_features=derived_features,
             seed=request.seed,
         )
-        suggestion_args = {
-            "top_k": request.top_k,
-            "candidate_params": request.candidate_pool,
-            "n_random": request.n_random,
-            "n_samples": request.n_samples,
-            "pending_params": request.pending_points,
-        }
-        if request.campaign.decision_intent == "validate-hypothesis":
-            suggestion_args.update(
-                decision_intent=request.campaign.decision_intent,
-                hypothesis_variables=request.campaign.hypothesis_variables,
-            )
-        suggestions = optimizer.suggest(**suggestion_args)
+        suggestions = optimizer.suggest(
+            top_k=request.top_k,
+            candidate_params=request.candidate_pool,
+            n_random=request.n_random,
+            n_samples=request.n_samples,
+            pending_params=request.pending_points,
+            decision_intent=request.campaign.decision_intent,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     model_version = suggestions[0].model_version
-    # Report only envelopes that actually constrained this response.
-    envelope = (
-        None
-        if request.campaign.decision_intent == "validate-hypothesis"
-        else optimizer.coverage_envelope
-    )
+    envelope = optimizer.coverage_envelope
     return SuggestionResponse(
         model_version=model_version,
         observation_count=len(request.observations),
