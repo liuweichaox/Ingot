@@ -5,6 +5,7 @@ using System.Text;
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Edge.ConnectorHost.Acquisition;
+using Ingot.Edge.ConnectorHost.Acquisition.Probers;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -323,15 +324,28 @@ public sealed class AcquisitionProbeServiceTests
         IHttpClientFactory clients,
         IAcquisitionSecretResolver secrets,
         params string[] allowedHosts)
-        => new(
-            clients,
-            secrets,
-            new AcquisitionHttpEgressPolicy(Options.Create(new AcquisitionSecurityOptions
-            {
-                AllowedHttpHosts = allowedHosts,
-                AllowPrivateNetworkHttpTargets = true,
-                AllowPrivateNetworkTargets = true
-            })));
+    {
+        var egressPolicy = new AcquisitionHttpEgressPolicy(Options.Create(new AcquisitionSecurityOptions
+        {
+            AllowedHttpHosts = allowedHosts,
+            AllowPrivateNetworkHttpTargets = true,
+            AllowPrivateNetworkTargets = true
+        }));
+        return new AcquisitionProbeService(CreateProbers(clients, secrets, egressPolicy));
+    }
+
+    private static IEnumerable<IProtocolProber> CreateProbers(
+        IHttpClientFactory clients,
+        IAcquisitionSecretResolver secrets,
+        AcquisitionHttpEgressPolicy egressPolicy)
+        =>
+        [
+            new HttpProtocolProber(clients, secrets, egressPolicy),
+            new MqttProtocolProber(secrets, egressPolicy),
+            new OpcUaProtocolProber(secrets, egressPolicy),
+            new ModbusTcpProtocolProber(egressPolicy),
+            new MelsecA1EProtocolProber(egressPolicy)
+        ];
 
     private sealed class NoSecrets : IAcquisitionSecretResolver
     {

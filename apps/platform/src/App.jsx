@@ -16,15 +16,43 @@ import {
   SignalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
-import * as Pages from "./pages";
-import { IngestionTaskPage, IngestionTasksPage } from "./acquisition/IngestionTaskPage";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
-import { cx, LinkButton, ToastHost } from "./ui/components";
+import { cx, LinkButton, LoadingCard, ToastHost } from "./ui/components";
 import GlobalSearchDialog from "./components/GlobalSearchDialog";
 import { formatRoleSummary, formatSiteScope } from "./auth/identityPresentation";
+
+const lazyNamed = (loader, name) => lazy(() => loader().then(module => ({ default: module[name] })));
+
+const WorkbenchPage = lazyNamed(() => import("./pages/OperationsPages"), "WorkbenchPage");
+const ProcessExecutionsPage = lazyNamed(() => import("./pages/OperationsPages"), "ProcessExecutionsPage");
+const ProcessExecutionDetailPage = lazyNamed(() => import("./pages/OperationsPages"), "ProcessExecutionDetailPage");
+const EventsPage = lazyNamed(() => import("./pages/ConversationPages"), "EventsPage");
+const ChatPage = lazyNamed(() => import("./pages/ConversationPages"), "ChatPage");
+const ObjectExplorerPage = lazyNamed(() => import("./pages/ObjectPages"), "ObjectExplorerPage");
+const ProductionSetupPage = lazyNamed(() => import("./pages/ManufacturingPages"), "ProductionSetupPage");
+const InspectionsPage = lazyNamed(() => import("./pages/InspectionPages"), "InspectionsPage");
+const QualityAnalysisPage = lazyNamed(() => import("./pages/InspectionPages"), "QualityAnalysisPage");
+const ExecutionComparisonPage = lazyNamed(() => import("./pages/AnalysisPages"), "ExecutionComparisonPage");
+const DataQualityPage = lazyNamed(() => import("./pages/AnalysisPages"), "DataQualityPage");
+const AnalysisHubPage = lazyNamed(() => import("./pages/AnalysisHubPage"), "AnalysisHubPage");
+const ConfigurationHubPage = lazyNamed(() => import("./pages/RegistryPages"), "ConfigurationHubPage");
+const ProcessDataModelsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessDataModelsPage");
+const ProcessSpecificationsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessSpecificationsPage");
+const ProcessAnalysisPlansPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessAnalysisPlansPage");
+const InspectionDefinitionsPage = lazyNamed(() => import("./pages/RegistryPages"), "InspectionDefinitionsPage");
+const QualityPlansPage = lazyNamed(() => import("./pages/RegistryPages"), "QualityPlansPage");
+const EdgesPage = lazyNamed(() => import("./pages/EdgePages"), "EdgesPage");
+const EdgeDetailPage = lazyNamed(() => import("./pages/EdgePages"), "EdgeDetailPage");
+const UsersPage = lazyNamed(() => import("./pages/AdministrationPages"), "UsersPage");
+const ModelServiceConfigurationPage = lazyNamed(() => import("./pages/AdministrationPages"), "ModelServiceConfigurationPage");
+const MetricsPage = lazyNamed(() => import("./pages/AdministrationPages"), "MetricsPage");
+const LogsPage = lazyNamed(() => import("./pages/AdministrationPages"), "LogsPage");
+const NotFoundPage = lazyNamed(() => import("./pages/AdministrationPages"), "NotFoundPage");
+const IngestionTasksPage = lazyNamed(() => import("./acquisition/IngestionTaskPage"), "IngestionTasksPage");
+const IngestionTaskPage = lazyNamed(() => import("./acquisition/IngestionTaskPage"), "IngestionTaskPage");
 
 const sections = [
   {
@@ -413,41 +441,43 @@ export function RequireRole({ identity, roles, children }) {
 
 function AppRoutes({ identity, canConfigure }) {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/workbench" replace />} />
-      <Route path="/workbench" element={<Pages.WorkbenchPage identity={identity} />} />
-      <Route path="/analysis" element={<Pages.AnalysisHubPage identity={identity} />} />
-      <Route path="/chat" element={<Pages.ChatPage />} />
-      <Route path="/chat/:conversationId" element={<Pages.ChatPage />} />
-      <Route path="/explorer" element={<Pages.ObjectExplorerPage />} />
-      <Route path="/process-executions" element={<Pages.ProcessExecutionsPage />} />
-      <Route path="/process-executions/:executionId" element={<Pages.ProcessExecutionDetailPage />} />
-      <Route path="/events" element={<Pages.EventsPage />} />
-      <Route path="/production/changeover" element={<Pages.ProductionSetupPage section="context" canWrite={canConfigure} />} />
-      <Route path="/production/tooling-installations" element={<Pages.ProductionSetupPage section="installation" canWrite={canConfigure} />} />
-      <Route path="/configuration/component-types" element={<Pages.ProductionSetupPage section="componentType" canWrite={canConfigure} />} />
-      <Route path="/configuration/components" element={<Pages.ProductionSetupPage section="component" canWrite={canConfigure} />} />
-      <Route path="/configuration/tooling-types" element={<Pages.ProductionSetupPage section="type" canWrite={canConfigure} />} />
-      <Route path="/configuration/tooling-assemblies" element={<Pages.ProductionSetupPage section="assembly" canWrite={canConfigure} />} />
-      <Route path="/inspections" element={<Pages.InspectionsPage />} />
-      <Route path="/quality-analysis" element={<Pages.QualityAnalysisPage />} />
-      <Route path="/configuration/inspection-definitions" element={<Pages.InspectionDefinitionsPage canWrite={canConfigure} />} />
-      <Route path="/configuration/quality-plans" element={<Pages.QualityPlansPage canWrite={canConfigure} />} />
-      <Route path="/comparisons" element={<Pages.ExecutionComparisonPage />} />
-      <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.ModelServiceConfigurationPage /></RequireRole>} />
-      <Route path="/data-quality" element={<Pages.DataQualityPage />} />
-      <Route path="/configuration" element={<Pages.ConfigurationHubPage canWrite={canConfigure} />} />
-      <Route path="/configuration/process-analysis-plans" element={<Pages.ProcessAnalysisPlansPage canWrite={canConfigure} />} />
-      <Route path="/configuration/process-data-models" element={<Pages.ProcessDataModelsPage canWrite={canConfigure} />} />
-      <Route path="/configuration/process-specifications" element={<Pages.ProcessSpecificationsPage canWrite={canConfigure} />} />
-      <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage canWrite={canConfigure} />} />
-      <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage canWrite={canConfigure} />} />
-      <Route path="/edges" element={<Pages.EdgesPage />} />
-      <Route path="/edges/:edgeId" element={<Pages.EdgeDetailPage />} />
-      <Route path="/platform-metrics" element={<Pages.MetricsPage />} />
-      <Route path="/logs" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.LogsPage /></RequireRole>} />
-      <Route path="/identity/users" element={<RequireRole identity={identity} roles={["platform.admin"]}><Pages.UsersPage /></RequireRole>} />
-      <Route path="*" element={<Pages.NotFoundPage />} />
-    </Routes>
+    <Suspense fallback={<div className="p-6"><LoadingCard /></div>}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/workbench" replace />} />
+        <Route path="/workbench" element={<WorkbenchPage identity={identity} />} />
+        <Route path="/analysis" element={<AnalysisHubPage identity={identity} />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:conversationId" element={<ChatPage />} />
+        <Route path="/explorer" element={<ObjectExplorerPage />} />
+        <Route path="/process-executions" element={<ProcessExecutionsPage />} />
+        <Route path="/process-executions/:executionId" element={<ProcessExecutionDetailPage />} />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/production/changeover" element={<ProductionSetupPage section="context" canWrite={canConfigure} />} />
+        <Route path="/production/tooling-installations" element={<ProductionSetupPage section="installation" canWrite={canConfigure} />} />
+        <Route path="/configuration/component-types" element={<ProductionSetupPage section="componentType" canWrite={canConfigure} />} />
+        <Route path="/configuration/components" element={<ProductionSetupPage section="component" canWrite={canConfigure} />} />
+        <Route path="/configuration/tooling-types" element={<ProductionSetupPage section="type" canWrite={canConfigure} />} />
+        <Route path="/configuration/tooling-assemblies" element={<ProductionSetupPage section="assembly" canWrite={canConfigure} />} />
+        <Route path="/inspections" element={<InspectionsPage />} />
+        <Route path="/quality-analysis" element={<QualityAnalysisPage />} />
+        <Route path="/configuration/inspection-definitions" element={<InspectionDefinitionsPage canWrite={canConfigure} />} />
+        <Route path="/configuration/quality-plans" element={<QualityPlansPage canWrite={canConfigure} />} />
+        <Route path="/comparisons" element={<ExecutionComparisonPage />} />
+        <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><ModelServiceConfigurationPage /></RequireRole>} />
+        <Route path="/data-quality" element={<DataQualityPage />} />
+        <Route path="/configuration" element={<ConfigurationHubPage canWrite={canConfigure} />} />
+        <Route path="/configuration/process-analysis-plans" element={<ProcessAnalysisPlansPage canWrite={canConfigure} />} />
+        <Route path="/configuration/process-data-models" element={<ProcessDataModelsPage canWrite={canConfigure} />} />
+        <Route path="/configuration/process-specifications" element={<ProcessSpecificationsPage canWrite={canConfigure} />} />
+        <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage canWrite={canConfigure} />} />
+        <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage canWrite={canConfigure} />} />
+        <Route path="/edges" element={<EdgesPage />} />
+        <Route path="/edges/:edgeId" element={<EdgeDetailPage />} />
+        <Route path="/platform-metrics" element={<MetricsPage />} />
+        <Route path="/logs" element={<RequireRole identity={identity} roles={["platform.admin"]}><LogsPage /></RequireRole>} />
+        <Route path="/identity/users" element={<RequireRole identity={identity} roles={["platform.admin"]}><UsersPage /></RequireRole>} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   );
 }

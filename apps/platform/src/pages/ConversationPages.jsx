@@ -1,9 +1,10 @@
 // 管理 Chat 运行创建、历史、流式状态和受控删除交互。
 import { ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { deleteJson, getJson, postJson, streamSse } from "../api/http";
+import { deleteJson, getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
+import { consumeSse, useSseReconnect } from "../hooks/useSseStream";
 import { Alert, Badge, Button, Card, DataTable, Drawer, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
 import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
@@ -23,38 +24,28 @@ export function EventsPage() {
   const [query, setQuery] = useState(() => makeEventQuery(filters, 1, 50));
   const { data, setData, loading, error } = useApi(`/api/v1/events?${query}`);
   const rows = extractRows(data);
-  useEffect(() => {
-    if (!live) return undefined;
-    const newest = rows.reduce((maximum, item) => Math.max(maximum, Number(item.ingestId || 0)), 0);
+  const newest = rows.reduce((maximum, item) => Math.max(maximum, Number(item.ingestId || 0)), 0);
+  const streamUrl = useMemo(() => {
     const streamParams = new URLSearchParams();
     Object.entries(appliedFilters).forEach(([key, value]) => value.trim() && streamParams.set(key, value.trim()));
-    if (newest) streamParams.set("afterIngestId", String(newest));
-    const cancellation = new AbortController();
-    let cursor = newest;
-    void (async () => {
-      while (!cancellation.signal.aborted) {
-        try {
-          cursor = await streamSse(`/api/v1/events/stream?${streamParams}`, {
-            signal: cancellation.signal,
-            lastEventId: cursor,
-            onEvent: async ({ data: item }) => {
-              setStreamError("");
-              setData(current => {
-                const currentRows = extractRows(current);
-                if (currentRows.some(value => value.ingestId === item.ingestId)) return current;
-                return { ...(current || {}), data: [item, ...currentRows].slice(0, pageSize), total: Number(current?.total || currentRows.length) + 1 };
-              });
-            },
-          });
-        } catch (error) {
-          if (cancellation.signal.aborted || error?.name === "AbortError") return;
-          setStreamError("实时事件连接暂时中断，正在使用最近确认位置重连。");
-        }
-        await new Promise(resolve => window.setTimeout(resolve, 1000));
-      }
-    })();
-    return () => cancellation.abort();
-  }, [appliedFilters, live, pageSize, setData]);
+    return `/api/v1/events/stream?${streamParams}`;
+  }, [appliedFilters]);
+
+  useSseReconnect(streamUrl, {
+    enabled: live,
+    initialLastEventId: newest,
+    onEvent: ({ data: item }) => {
+      setStreamError("");
+      setData(current => {
+        const currentRows = extractRows(current);
+        if (currentRows.some(value => value.ingestId === item.ingestId)) return current;
+        return { ...(current || {}), data: [item, ...currentRows].slice(0, pageSize), total: Number(current?.total || currentRows.length) + 1 };
+      });
+    },
+    onError: () => {
+      setStreamError("实时事件连接暂时中断，正在使用最近确认位置重连。");
+    },
+  });
   return (
     <Page
       title="运行事件"
@@ -454,7 +445,7 @@ export function ChatPage() {
       controller.current = new AbortController();
       let terminalReceived = false;
       try {
-        await streamSse(created.streamUrl, {
+        await consumeSse(created.streamUrl, {
           signal: controller.current.signal,
           onEvent: ({ data }) => {
             setEvents(current => [...current, data]);

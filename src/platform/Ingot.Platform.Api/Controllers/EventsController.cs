@@ -1,5 +1,4 @@
 // 接收 Edge 事件并提供经身份和站点授权的有界事件查询。
-using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Errors;
@@ -22,7 +21,6 @@ public sealed class EventsController(
     PlatformEventMetrics metrics,
     ILogger<EventsController> logger) : PlatformApiController
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly PlatformEventOptions _eventOptions = eventOptions.Value;
 
     [HttpPost(PlatformEventRoutes.AbsoluteBatchIngest)]
@@ -189,9 +187,9 @@ public sealed class EventsController(
             100);
         if (!TryValidateQuery(initialQuery, out var validationError))
         {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-            Response.ContentType = "application/problem+json";
-            await Response.WriteAsJsonAsync(
+            await SseStreamWriter.WriteProblemAsync(
+                Response,
+                StatusCodes.Status400BadRequest,
                 ApiProblemDetailsFactory.Create(
                     HttpContext,
                     StatusCodes.Status400BadRequest,
@@ -200,30 +198,22 @@ public sealed class EventsController(
             return;
         }
 
-        Response.StatusCode = StatusCodes.Status200OK;
-        Response.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers.Connection = "keep-alive";
+        var stream = new SseStreamWriter(Response, cursor ?? 0);
+        stream.Begin();
 
         while (!ct.IsCancellationRequested)
         {
             var events = await store.QueryAsync(
                 BuildQuery(
                     siteId, edgeId, eventType, subjectType, subjectId, executionId,
-                    from, to, cursor, null, 100),
+                    from, to, stream.Cursor, null, 100),
                 ct).ConfigureAwait(false);
             foreach (var item in events.OrderBy(static item => item.IngestId))
-            {
-                await Response.WriteAsync($"id: {item.IngestId}\n", ct).ConfigureAwait(false);
-                await Response.WriteAsync(
-                    $"data: {JsonSerializer.Serialize(item, JsonOptions)}\n\n",
-                    ct).ConfigureAwait(false);
-                cursor = item.IngestId;
-            }
+                await stream.WriteDataAsync(item.IngestId, item, ct).ConfigureAwait(false);
 
             if (events.Count == 0)
-                await Response.WriteAsync(": keep-alive\n\n", ct).ConfigureAwait(false);
-            await Response.Body.FlushAsync(ct).ConfigureAwait(false);
+                await stream.WriteKeepAliveAsync(ct).ConfigureAwait(false);
+            await stream.FlushAsync(ct).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
         }
     }

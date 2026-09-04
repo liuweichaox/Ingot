@@ -6,6 +6,7 @@ using Ingot.Domain.Events;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
 using Ingot.Edge.ConnectorHost.Acquisition;
+using Ingot.Edge.ConnectorHost.Acquisition.Probers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -217,9 +218,13 @@ public sealed class AcquisitionConfigurationReconciliationTests
             }),
             cache ?? new NullDeploymentCache(),
             new AcquisitionProbeService(
-                clients,
-                secrets,
-                egressPolicy),
+            [
+                new HttpProtocolProber(clients, secrets, egressPolicy),
+                new MqttProtocolProber(secrets, egressPolicy),
+                new OpcUaProtocolProber(secrets, egressPolicy),
+                new ModbusTcpProtocolProber(egressPolicy),
+                new MelsecA1EProtocolProber(egressPolicy)
+            ]),
             secrets,
             [runner],
             egressPolicy,
