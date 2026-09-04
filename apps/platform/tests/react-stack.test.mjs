@@ -302,8 +302,9 @@ test("device acquisition has its own page instead of a generic registry drawer",
 test("configuration surfaces align write actions with platform roles", () => {
   assert.match(app, /const canConfigure = \(identity\?\.roles \|\| \[\]\)\.some/);
   assert.match(app, /role === "process\.engineer" \|\| role === "platform\.admin"/);
-  assert.match(app, /<Pages\.ConfigurationHubPage canWrite=\{canConfigure\}/);
-  assert.match(app, /<Pages\.ProductionSetupPage section="context" canWrite=\{canConfigure\}/);
+  assert.match(app, /const lazyNamed = /);
+  assert.match(app, /<ConfigurationHubPage canWrite=\{canConfigure\}/);
+  assert.match(app, /<ProductionSetupPage section="context" canWrite=\{canConfigure\}/);
   assert.match(app, /<IngestionTasksPage canWrite=\{canConfigure\}/);
   assert.match(acquisitionPage, /const readOnly = !canWrite \|\| managedByBinding/);
   assert.match(acquisitionPage, /canWrite && row\.status === "draft"/);

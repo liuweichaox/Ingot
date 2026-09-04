@@ -1,14 +1,6 @@
-// 共享 SSE 生命周期：一次性消费与可重连订阅。
+// 共享可重连 SSE 订阅生命周期。
 import { useEffect, useRef } from "react";
 import { streamSse } from "../api/http";
-
-/**
- * 消费单次 SSE 流直到结束或中止。
- * @returns {Promise<number>} 最终 cursor（Last-Event-ID）
- */
-export async function consumeSse(url, { signal, onEvent, lastEventId = 0 } = {}) {
-  return streamSse(url, { signal, onEvent, lastEventId });
-}
 
 /**
  * 在 enabled 时保持 SSE 连接；断线后自动重连并保留 cursor。
@@ -32,6 +24,7 @@ export function useSseReconnect(url, {
     if (!enabled || !url) return undefined;
     const cancellation = new AbortController();
     let cursor = initialCursorRef.current;
+    let reconnectTimer = 0;
     void (async () => {
       while (!cancellation.signal.aborted) {
         try {
@@ -39,6 +32,7 @@ export function useSseReconnect(url, {
             signal: cancellation.signal,
             lastEventId: cursor,
             onEvent: async (event) => {
+              if (Number.isFinite(event?.id)) cursor = Math.max(cursor, event.id);
               await onEventRef.current?.(event);
             },
           });
@@ -47,9 +41,14 @@ export function useSseReconnect(url, {
           onErrorRef.current?.(error);
         }
         if (cancellation.signal.aborted) return;
-        await new Promise((resolve) => window.setTimeout(resolve, reconnectDelayMs));
+        await new Promise((resolve) => {
+          reconnectTimer = window.setTimeout(resolve, reconnectDelayMs);
+        });
       }
     })();
-    return () => cancellation.abort();
+    return () => {
+      cancellation.abort();
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    };
   }, [enabled, url, reconnectDelayMs]);
 }

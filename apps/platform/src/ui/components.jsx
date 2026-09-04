@@ -25,25 +25,7 @@ const dataTableFeatures = tableFeatures({
 });
 
 export function cx(...values) {
-  const classes = [];
-  for (const value of values) {
-    if (!value) continue;
-    if (typeof value === "string" || typeof value === "number") {
-      classes.push(String(value));
-      continue;
-    }
-    if (Array.isArray(value)) {
-      const nested = cx(...value);
-      if (nested) classes.push(nested);
-      continue;
-    }
-    if (typeof value === "object") {
-      for (const [key, on] of Object.entries(value)) {
-        if (on) classes.push(key);
-      }
-    }
-  }
-  return classes.join(" ");
+  return values.filter(Boolean).join(" ");
 }
 
 export function Page({ title, description, actions, className, loading, error, onRetry, errorTitle, children }) {

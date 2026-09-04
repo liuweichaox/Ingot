@@ -2,9 +2,9 @@
 import { ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { deleteJson, getJson, postJson } from "../api/http";
+import { deleteJson, getJson, postJson, streamSse } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
-import { consumeSse, useSseReconnect } from "../hooks/useSseStream";
+import { useSseReconnect } from "../hooks/useSseStream";
 import { Alert, Badge, Button, Card, DataTable, Drawer, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
 import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
@@ -445,7 +445,7 @@ export function ChatPage() {
       controller.current = new AbortController();
       let terminalReceived = false;
       try {
-        await consumeSse(created.streamUrl, {
+        await streamSse(created.streamUrl, {
           signal: controller.current.signal,
           onEvent: ({ data }) => {
             setEvents(current => [...current, data]);
