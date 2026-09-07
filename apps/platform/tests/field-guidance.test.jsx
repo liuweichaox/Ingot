@@ -1,20 +1,10 @@
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createRegistryBusinessForm, RegistryBusinessEditor } from "../src/components/RegistryBusinessEditor";
 import { ProductionRecordForm } from "../src/pages/ProductionRecordForm";
 import { productionResources } from "../src/pages/manufacturingResources";
 import { Field, Input } from "../src/ui/components";
-
-vi.mock("../src/hooks/useApi", async importOriginal => ({
-  ...await importOriginal(),
-  useApi: url => ({
-    data: url.includes("data-reliability/baseline")
-      ? { analyzedRunCount: 20, contextFields: [{ field: "material_lot_ref", coverage: 0.85, presentRunCount: 17, runCount: 20 }] }
-      : [],
-    error: "",
-  }),
-}));
 
 afterEach(cleanup);
 
@@ -27,20 +17,6 @@ describe("关键操作说明", () => {
     expect(screen.getByText("常规辅助说明")).toHaveClass("sr-only");
     expect(screen.getByText("影响操作的规则")).not.toHaveClass("sr-only");
     expect(screen.getByRole("alert")).toHaveTextContent("请检查输入");
-  });
-
-  it("工艺配置显示真实覆盖率、分析准入规则和因素重叠条件", () => {
-    const form = createRegistryBusinessForm("scenarioPackage", {
-      contextFields: [{ fieldCode: "material_lot_ref", name: "材料批次", mode: "required-for-analysis", minimumCoverage: 0.95 }],
-    });
-    render(<RegistryBusinessEditor kind="scenarioPackage" form={form} onChange={() => {}} />);
-    for (const text of [
-      "当前覆盖：85%（17/20）",
-      "分析必需会排除缺失该字段的运行；进入建模还要求经过因素重叠验证。",
-      "只有把该字段作为分层/混杂因素时才填写；0.5 表示至少覆盖一半组合。",
-    ]) {
-      expect(screen.getByText(text)).not.toHaveClass("sr-only");
-    }
   });
 
   it("分析方案显示多字段输入规则", () => {

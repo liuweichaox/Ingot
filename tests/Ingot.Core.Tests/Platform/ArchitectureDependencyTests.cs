@@ -13,7 +13,7 @@ public sealed class ArchitectureDependencyTests
     [Fact]
     public void ApplicationAssembly_ShouldNotReferenceInfrastructureOrDatabaseProviders()
     {
-        var references = ReferencedAssemblies(typeof(ProcessExecutionAnalysisOperationsService).Assembly);
+        var references = ReferencedAssemblies(typeof(IProcessExecutionAnalysisOperationsStore).Assembly);
 
         Assert.DoesNotContain(references, static name =>
             name.Contains("Infrastructure", StringComparison.Ordinal) ||
