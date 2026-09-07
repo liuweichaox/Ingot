@@ -238,23 +238,23 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
           <img src="/brand/ingot-lockup-dark.svg" alt="Ingot" className="relative h-11 w-auto" />
 
           <div className="relative max-w-2xl py-14">
-            <p className="data-label text-evidence-400">PROCESS DIAGNOSIS · SPECIFICATION REVISION</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从真实运行，<br /><span className="text-evidence-400">到下一版工艺规范。</span></h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师修订下一版工艺规范。</p>
+            <p className="data-label text-evidence-400">PROCESS DIAGNOSIS · RECIPE RECOMMENDATION</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从真实运行，<br /><span className="text-evidence-400">到下一份配方建议。</span></h1>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议，并按需修订下一版工艺规范。</p>
 
             <div className="mt-10 overflow-hidden rounded-lg border border-white/12 bg-black/15 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
                 <div><p className="data-label text-slate-400">ENGINEERING DECISION · EVIDENCE</p><p className="mt-1 text-sm font-semibold text-white">一次运行的工程证据</p></div>
-                <span className="rounded-full bg-trajectory-500/12 px-3 py-1 text-xs font-semibold text-trajectory-100 ring-1 ring-inset ring-trajectory-500/20">下一版草稿待确认</span>
+                <span className="rounded-full bg-trajectory-500/12 px-3 py-1 text-xs font-semibold text-trajectory-100 ring-1 ring-inset ring-trajectory-500/20">配方建议待确认</span>
               </div>
-              <p className="px-5 pt-4 text-[11px] text-slate-500">SPECIFICATION REVISION · RUN-042</p>
+              <p className="px-5 pt-4 text-[11px] text-slate-500">RECIPE RECOMMENDATION · RUN-042</p>
               <div className="grid grid-cols-3 divide-x divide-white/8 px-2 py-5">
                 {[["实际控制变量", "42.0"], ["阶段轨迹偏差", "+1.8σ"], ["工装版本", "TOOLING-A"]].map(([label, value]) => (
                   <div key={label} className="px-4"><p className="data-label text-slate-500">{label}</p><p className="data-value mt-2 text-xl font-semibold text-white">{value}</p></div>
                 ))}
               </div>
               <div className="mx-5 divide-y divide-white/8 border border-white/8 bg-black/10 text-xs">
-                {[["关键差异", "保压阶段"], ["有效运行", "12 条"], ["下一版规范", "待修订"]].map(([label, value]) => (
+                {[["关键差异", "保压阶段"], ["有效运行", "12 条"], ["下一份配方", "待审核"]].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between gap-4 px-3 py-2.5"><span className="text-slate-400">{label}</span><strong className="font-mono text-slate-200">{value}</strong></div>
                 ))}
               </div>
@@ -271,12 +271,12 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
           <div className="w-full max-w-md">
             <header className="mb-10 flex items-center justify-between lg:hidden">
               <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-coal-950"><img src="/ingot-mark.svg" alt="" className="size-8" /></span><div><strong className="text-base text-slate-950">Ingot</strong><p className="text-xs text-slate-500">工艺证据工作台</p></div></div>
-              <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">{import.meta.env.MODE === "demo" ? "演示环境" : "平台环境"}</span>
+              <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">平台环境</span>
             </header>
             <div className="mb-8">
               <div className="hidden items-center justify-between lg:flex">
                 <p className="data-label text-trajectory-700">Secure workspace</p>
-                <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">{import.meta.env.MODE === "demo" ? "演示环境" : "平台环境"}</span>
+                <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">平台环境</span>
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">进入 Ingot</h1>
               <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续查看真实运行、质量结果、工艺追因与工艺规范版本。</p>
@@ -289,7 +289,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
                   {busy ? "正在跳转…" : "使用企业身份登录"}
                 </Button>
               </div>
-            ) : authMode === "local" || authMode === "disabled" ? (
+            ) : authMode === "local" ? (
               <form className="space-y-5" onSubmit={login}>
                 <Field label="用户名">
                   <Input className="h-12 bg-white" autoComplete="username" value={credentials.username} onChange={event => setCredentials({ ...credentials, username: event.target.value })} required autoFocus />

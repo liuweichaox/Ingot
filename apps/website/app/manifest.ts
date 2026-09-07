@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Ingot",
     short_name: "Ingot",
-    description: "用真实运行证据支持工艺追因与下一版工艺规范修订的开源系统",
+    description: "把真实配方运行变成优化证据并推荐下一份配方的开源系统",
     start_url: "/",
     display: "standalone",
     background_color: "#10161c",

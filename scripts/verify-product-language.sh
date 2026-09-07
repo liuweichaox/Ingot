@@ -21,6 +21,7 @@ if grep -RInE \
   --exclude-dir=out \
   --exclude-dir=bin \
   --exclude-dir=obj \
+  --exclude-dir=.venv \
   "$forbidden_external_database_pattern" .; then
   echo "Repository copy must not name the prohibited external database product." >&2
   exit 1
@@ -135,22 +136,15 @@ for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.
 done
 
 if grep -RIniE --exclude='package-lock.json' \
-  'every experiment[^.]*closer to (the )?optimum|closed-loop process optimization|optimization brain' \
+  'closed-loop process optimization|optimization brain' \
   README.md README.en.md apps/website/app apps/docs-site/app; then
   echo "Public copy has drifted back to an algorithm-first product narrative." >&2
   exit 1
 fi
 
-if grep -RIniE --exclude='package-lock.json' \
-  '自动实验|自动创建实验|automatic experiments?|automatically creates? experiments?' \
-  README.md README.en.md docs apps/website/app apps/docs-site/app; then
-  echo "Public copy must describe real-run recipe optimization, not automatic experiments." >&2
-  exit 1
-fi
-
-if ! grep -Fq '无需先建立实验，也无需工程师重新归类配方' apps/website/app/IngotSite.tsx ||
-   ! grep -Fq 'No experiment setup or manual recipe reclassification is required' apps/website/app/IngotSite.tsx; then
-  echo "The website must retain the no-experiment-setup, no-manual-reclassification boundary." >&2
+if ! grep -Fq '直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方' apps/website/app/IngotSite.tsx ||
+   ! grep -Fq 'directly links actual settings, process context, and quality outcomes from completed runs without manual recipe reclassification' apps/website/app/IngotSite.tsx; then
+  echo "The website must retain the direct real-run linkage and no-manual-reclassification boundary." >&2
   exit 1
 fi
 

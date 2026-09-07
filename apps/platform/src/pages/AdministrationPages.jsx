@@ -427,7 +427,7 @@ export function MetricsPage() {
       </div>
       <Card
         title="受控试点业务闭环"
-        description={pilotReady ? "业务数据门槛已满足；仍需独立完成备份恢复、故障、容量、告警送达和连续观察验收。" : "先关闭未通过项，再生成只读业务闭环验收工件。"}
+        description={pilotReady ? "业务数据门槛已满足；仍需独立完成备份恢复、故障、容量、告警送达和连续观察验收。" : "先关闭未通过项，再由部署者运行生产验收脚本。"}
         actions={<span className={`text-sm font-semibold ${pilotReady ? "text-emerald-700" : "text-amber-700"}`}>{pilotReady ? "业务闭环可验收" : `${pilotChecks.filter(item => !item.passed).length} 项待完成`}</span>}
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -439,8 +439,8 @@ export function MetricsPage() {
           ))}
         </div>
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">生成验收工件</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">由管理员在部署主机运行 <code className="rounded bg-white px-1.5 py-0.5 text-xs">node scripts/verify-pilot-workflow.mjs --output artifacts/pilot-workflow.json</code>。脚本只读取业务 API，不会修改生产记录。</p>
+          <p className="text-sm font-semibold text-slate-900">记录生产验收</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">本页只显示业务数据门槛，不会自动生成生产验收结论。完成备份、故障、容量、告警和连续观察演练后，在部署主机运行 <code className="rounded bg-white px-1.5 py-0.5 text-xs">scripts/verify-production-acceptance.sh</code> 固化验收记录。</p>
         </div>
       </Card>
       <Card title="现场节点" description="点击诊断可查看采集任务、上行积压和最近日志。">

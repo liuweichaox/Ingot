@@ -253,45 +253,14 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
-    public void Platform_RejectsDisabledAuthUnlessExplicitlyAllowed()
+    public void Platform_RejectsRetiredDisabledAuthMode()
     {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
-            ["Authentication:Mode"] = "Disabled",
-            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
-            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
-            ["Chat:Enabled"] = "false",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
+        var values = CompletePlatformOidcConfiguration();
+        values["Authentication:Mode"] = "Disabled";
 
-        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
-        Assert.Contains("Authentication:Mode 'Disabled'", error.Message, StringComparison.Ordinal);
-    }
+        var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(Build(values)));
 
-    [Fact]
-    public void Platform_AcceptsDisabledAuthOnlyWhenExplicitlyAllowed()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot;Password=random-production-secret",
-            ["EventIngest:RequireToken"] = "true",
-            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
-            ["EventIngest:EdgeSites:EDGE-001"] = "SITE-001",
-            ["EdgeDiagnostics:EdgeTokens:EDGE-001"] = "diagnostics-token-with-at-least-24-characters",
-            ["EdgeDiagnostics:EdgeBaseUrls:EDGE-001"] = "http://edge-001:8001",
-            ["Authentication:Mode"] = "Disabled",
-            ["Authentication:AllowInsecureDemo"] = "true",
-            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
-            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
-            ["Chat:Enabled"] = "false",
-            ["Cors:AllowedOrigins:0"] = "https://ingotstack.com"
-        });
-
-        PlatformValidator.Validate(configuration);
+        Assert.Contains("Authentication:Mode must be 'Local' or 'Oidc'", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

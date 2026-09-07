@@ -33,16 +33,16 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         var decision = Required(request.Decision, "工程师决策", 40).ToLowerInvariant();
         if (!ResearchRecipeRecommendationDecisionStatuses.IsValid(decision))
             throw new ProcessResearchRuleException("工程师决策必须是 accepted、modified 或 rejected。");
-        var actualExecutionKey = Optional(request.ActualExecutionKey, 120);
         var reason = Optional(request.Reason, 2000);
         var usefulnessRating = Optional(request.UsefulnessRating, 40)?.ToLowerInvariant();
         var decidedBy = Required(userId, "工程师", 240);
         var projectEvidence = ResolveRecommendationSnapshot(recommendation, project);
         var frozenProject = ResearchProjectEvidenceSnapshots.Restore(projectEvidence.Snapshot);
+        var requestedParameters = request.EngineerSelectedParameters ?? [];
         var selected = decision == ResearchRecipeRecommendationDecisionStatuses.Rejected &&
-            request.EngineerSelectedParameters.Count == 0
+            requestedParameters.Count == 0
                 ? []
-                : NormalizeSelectedParameters(frozenProject, request.EngineerSelectedParameters);
+                : NormalizeSelectedParameters(frozenProject, requestedParameters);
         var sameAsSuggestion = selected.Count > 0 && ParametersEqual(item.Parameters, selected);
         if (decision == ResearchRecipeRecommendationDecisionStatuses.Accepted && !sameAsSuggestion)
             throw new ProcessResearchRuleException("接受建议时，工程师选择必须与冻结的模型建议一致。");
@@ -52,9 +52,6 @@ public sealed class ResearchRecipeRecommendationDecisionService(
             throw new ProcessResearchRuleException("拒绝建议时无需登记原建议参数；如登记替代参数，必须与建议不同。");
         if (decision != ResearchRecipeRecommendationDecisionStatuses.Accepted && reason is null)
             throw new ProcessResearchRuleException("修改或拒绝建议时必须说明原因。");
-        if (actualExecutionKey is not null)
-            throw new ProcessResearchRuleException(
-                "请先冻结工程师决定，再在实际运行开始后通过独立关联操作登记运行。");
         if (usefulnessRating is not null && !ResearchUsefulnessRatings.IsValid(usefulnessRating))
             throw new ProcessResearchRuleException(
                 "工程师有用性评分必须是 useful、partly-useful 或 not-useful。");
@@ -77,12 +74,13 @@ public sealed class ResearchRecipeRecommendationDecisionService(
             EngineerSelectedParameters = selected.OrderBy(static value => value.VariableCode),
             reason,
             usefulnessRating,
-            actualExecutionKey,
             decidedBy
         });
         if (await store.GetRecipeRecommendationDecisionByItemAsync(
                 recommendationId, recommendationKey, ct).ConfigureAwait(false) is { } existing)
             return ExactRetryOrConflict(existing, snapshotHash);
+        if (recommendation.ExpiresAt is { } expiresAt && expiresAt <= now)
+            throw new ProcessResearchRuleException("该配方建议已过期，请重新生成建议后再登记工程师决定。");
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
         if (recommendation.ProjectRevision != project.Revision)
@@ -122,7 +120,7 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         try
         {
             return await store.CreateRecipeRecommendationDecisionTransactionAsync(
-                    value, actualExecutionKey, audit, ct)
+                    value, null, audit, ct)
                 .ConfigureAwait(false);
         }
         catch (ProcessResearchRuleException)
@@ -236,11 +234,6 @@ public sealed class ResearchRecipeRecommendationDecisionService(
                 $"实际运行尚未形成完整结果约束：{string.Join("、", missingConstraintOutcomes)}。");
         if (observation.ProcessFeatures.Count == 0)
             throw new ProcessResearchRuleException("实际运行尚未形成过程特征，不能冻结日常建议结果。");
-        if (!observation.ValidForOptimization)
-            throw new ProcessResearchRuleException(
-                $"实际运行尚未通过优化证据准入：{observation.ExclusionReason ?? "原因未记录"}。");
-        await RequireCompletedExecutionAsync(
-            project, actualExecutionKey, decision.DecidedAt, ct).ConfigureAwait(false);
         var outcome = new ResearchRecipeRecommendationOutcome
         {
             ProjectRevision = decision.ProjectRevision,
@@ -284,10 +277,6 @@ public sealed class ResearchRecipeRecommendationDecisionService(
     {
         var execution = await RequireExecutionAsync(project, executionKey, decidedAt, ct)
             .ConfigureAwait(false);
-        if (execution.HasCompleted || execution.LifecycleComplete || execution.CompletedAt is not null ||
-            execution.InspectionOutcomes.Count > 0)
-            throw new ProcessResearchRuleException(
-                "不能在结果已知后补选历史运行；请在工程师决定之后、运行完成之前关联实际运行。");
         return execution;
     }
 
@@ -316,7 +305,7 @@ public sealed class ResearchRecipeRecommendationDecisionService(
             ?? throw new ProcessResearchRuleException("实际运行不存在或不在项目站点范围内。");
         if (!execution.HasStarted)
             throw new ProcessResearchRuleException("实际运行尚未开始，不能关联到工程师决定。");
-        if (execution.StartedAt < decidedAt)
+        if (execution.StartedAt <= decidedAt)
             throw new ProcessResearchRuleException("实际运行必须在工程师决定之后开始，不能事后挑选历史结果。");
         ValidateExecutionScope(project, execution);
         return execution;
@@ -328,6 +317,7 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         ValidateScopeValue(project, "product_code", execution.ProductCode, "产品");
         ValidateScopeValue(project, "equipment_id", execution.EquipmentId, "设备");
         ValidateScopeValue(project, "process_specification_id", execution.ProcessSpecificationId, "工艺规范");
+        ValidateScopeValue(project, "process_specification_version", execution.ProcessSpecificationVersion, "工艺规范版本");
         ValidateScopeValue(project, "output_item_id", execution.OutputItemId, "产出物料");
     }
 

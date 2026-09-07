@@ -23,7 +23,7 @@ if ! command -v uv >/dev/null 2>&1 && [[ -x "$HOME/.local/bin/uv" ]]; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 if ! command -v uv >/dev/null 2>&1; then
-  echo "需要 uv 才能执行 optimizer 与现场模拟器测试。" >&2
+  echo "需要 uv 才能执行 optimizer 测试。" >&2
   exit 1
 fi
 uv_command=(uv)
@@ -81,7 +81,6 @@ npm --prefix "$platform_app" ci
 npm --prefix "$platform_app" run build
 npm --prefix "$platform_app" run test
 npm --prefix "$platform_app" run lint
-INGOT_E2E_API_PORT=4410 INGOT_E2E_WEB_PORT=3401 npm --prefix "$platform_app" run test:e2e
 npm --prefix "$platform_app" audit --omit=dev
 
 npm --prefix "$website_app" ci

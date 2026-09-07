@@ -15,7 +15,7 @@
   [![PostgreSQL 17](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
   [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/)
 
-  [Website](https://ingotstack.com/en/) · [Documentation](https://docs.ingotstack.com/en) · [Local demo](#local-demo) · [Report an issue](https://github.com/liuweichaox/Ingot/issues) · [Discuss](https://github.com/liuweichaox/Ingot/discussions)
+  [Website](https://ingotstack.com/en/) · [Documentation](https://docs.ingotstack.com/en) · [Report an issue](https://github.com/liuweichaox/Ingot/issues) · [Discuss](https://github.com/liuweichaox/Ingot/discussions)
 
   [简体中文](README.md) · English
 </div>
@@ -29,7 +29,6 @@
 
 - [Project overview](#project-overview)
 - [Capability scope](#capability-scope)
-- [Local demo](#local-demo)
 - [Domain workflow](#domain-workflow)
 - [Current status](#current-status)
 - [System boundaries](#system-boundaries)
@@ -58,9 +57,9 @@ The fixed design objective is:
 
 > **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
 
-Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. Daily optimization does not require a separately created experiment and does not provide a separate controlled-validation workflow. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production.
+Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. The system keeps this as the only real-run loop and does not add a separate planning, approval, or result state machine. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production.
 
-Methods are selected by question type, data coverage, and constraints. Available methods include traditional design of experiments (DOE), response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
+Methods are selected by question type, data coverage, and constraints. Available methods include DOE, response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
 
 ## Capability scope
 
@@ -71,28 +70,6 @@ Ingot does not replace production-execution, real-time-control, quality-complian
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
 | Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
 | New material, machine, or extrapolated setting | Collect additional real runs through existing production and compliance processes; Ingot only records and explains their evidence |
-
-## Local demo
-
-The synthetic demo uses a lens run that exceeds its surface-form error limit. The workflow covers opening the nonconforming run, reviewing its quality result, comparing it with a conforming run, inspecting candidate causes, and entering the recipe-optimization workspace.
-
-The demo requires Node.js 22.22+ but no database, equipment, or Docker:
-
-```bash
-npm --prefix apps/platform ci
-```
-
-Run these commands in two terminals:
-
-```bash
-node scripts/platform-demo.mjs
-```
-
-```bash
-npm --prefix apps/platform run demo
-```
-
-Open `http://127.0.0.1:3001` and sign in with `demo / demo`. All demo data are synthetic. The tour verifies the interface and workflow, not real process benefit.
 
 ## Domain workflow
 
@@ -119,7 +96,7 @@ The main software workflow is implemented: the system can link real recipe runs 
 
 The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
 
-When data or methods fail admission, the system stops the recommendation, records the reason, and falls back to a response-surface or traditional experiment-design path.
+When data or methods fail admission, the system stops the recommendation, records the reason, and falls back to a response-surface or DOE path.
 
 See [Current status](docs/status.en.md) for capability and production boundaries.
 
@@ -130,7 +107,7 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 | MES, SCADA, historian | Receive run, equipment, and process facts | Does not replace execution, monitoring, or real-time control |
 | LIMS, QMS, ELN | Link inspection results, review, and R&D context | Does not replace complete sample, compliance, or document management |
 | Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs | Does not treat one algorithm as the answer to every process problem |
-| AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, approve experiments, or control equipment |
+| AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, replace engineer recipe approval, or control equipment |
 
 ## Runtime architecture
 
@@ -146,7 +123,7 @@ Platform API is the system of record for factory business records and evidence a
 | `src/platform` | Business API, systems of record, evidence assembly, authorization, and background work |
 | `src/agent` | Model-assisted question parsing, read-only tool calls, scope-controlled knowledge retrieval, and evidence explanation |
 | `src/shared` | Domain models, cross-module contracts, and stable identifiers |
-| `optimizer` | Experiment design, surrogate models, constraint evaluation, and sequential optimization service |
+| `optimizer` | DOE, surrogate models, constraint evaluation, and sequential optimization service |
 | `apps/platform` | React/Vite engineering workbench |
 | `apps/website`, `apps/docs-site` | Public website and documentation site |
 | `tests/Ingot.Core.Tests` | xUnit coverage for backend behavior, module boundaries, and protocols |
@@ -178,13 +155,13 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 ## Documentation
 
 - [Documentation home](docs/index.en.md): choose a path by objective
-- [Getting started](docs/getting-started.en.md): tour the demo or run the complete local stack
+- [Getting started](docs/getting-started.en.md): run the complete local stack
 - [Current status](docs/status.en.md): implemented capabilities, validation evidence, and production boundaries
 - [Recipe-optimization pilot guide](docs/pilot.en.md): move from real runs to the first next-recipe recommendation
 - [System design](docs/design.en.md): stable business boundaries and component responsibilities
 - [Analysis and optimization](docs/optimization.en.md): method selection, admission, and numerical strategy
 - [Data integration](docs/data-connection.en.md): identity, mapping, and data quality
-- [Scenario validation](docs/rollout.en.md): historical replay, shadow validation, and online validation
+- [Scenario evaluation](docs/rollout.en.md): historical replay, shadow, and online evaluation
 - [Roadmap](docs/project-plan.en.md): long-term direction and promotion gates
 
 ## Roadmap
@@ -193,7 +170,7 @@ The near-term objective is tighter admission of natural-run data, clearer recipe
 
 ## Contributing
 
-The project accepts contributions to equipment adapters, statistical methods, experiment design, optimization, tests, and documentation. Participation options include [opening an issue](https://github.com/liuweichaox/Ingot/issues), [joining a discussion](https://github.com/liuweichaox/Ingot/discussions), or following the [contributing guide](CONTRIBUTING.en.md) to submit a pull request. Review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) before submitting changes.
+The project accepts contributions to equipment adapters, statistical methods, DOE, optimization, tests, and documentation. Participation options include [opening an issue](https://github.com/liuweichaox/Ingot/issues), [joining a discussion](https://github.com/liuweichaox/Ingot/discussions), or following the [contributing guide](CONTRIBUTING.en.md) to submit a pull request. Review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) before submitting changes.
 
 ## License
 

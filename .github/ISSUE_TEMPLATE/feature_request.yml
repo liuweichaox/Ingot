@@ -7,14 +7,14 @@ body:
     id: scenario
     attributes:
       label: Real process scenario
-      description: What process, equipment, experiment, or engineering decision needs support?
+      description: What process, equipment, production run, or engineering decision needs support?
     validations:
       required: true
   - type: textarea
     id: outcome
     attributes:
       label: Desired outcome
-      description: How should this reduce experiments-to-specification or improve trust?
+      description: How should this reduce runs-to-specification or improve trust?
     validations:
       required: true
   - type: textarea

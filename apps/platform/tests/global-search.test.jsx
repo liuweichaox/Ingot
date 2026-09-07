@@ -71,7 +71,7 @@ describe("功能搜索", () => {
     expect(screen.getByLabelText("当前位置")).toHaveTextContent("/workbench");
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/ingestion-tasks");
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/ingestion-tasks"));
   });
 
   it("普通工程师不能搜索管理员入口，管理员可点击打开", async () => {
@@ -83,6 +83,6 @@ describe("功能搜索", () => {
     fireEvent.change(input, { target: { value: "用户权限" } });
     fireEvent.click(screen.getByRole("option"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByLabelText("当前位置")).toHaveTextContent("/identity/users");
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/identity/users"));
   });
 });

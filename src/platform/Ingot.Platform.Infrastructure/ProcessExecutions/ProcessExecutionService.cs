@@ -100,12 +100,19 @@ public sealed class ProcessExecutionService(
         CancellationToken ct = default,
         string? edgeId = null,
         string? externalBatchRef = null,
-        string? siteId = null)
+        string? siteId = null,
+        string? processSpecificationVersion = null)
     {
         if (string.IsNullOrWhiteSpace(siteId))
             throw new ArgumentException("过程运行查询必须指定站点。", nameof(siteId));
         siteId = siteId.Trim();
-        var context = BuildContext(productFamilyCode, productCode, processSpecificationId, outputItemId, externalBatchRef);
+        var context = BuildContext(
+            productFamilyCode,
+            productCode,
+            processSpecificationId,
+            processSpecificationVersion,
+            outputItemId,
+            externalBatchRef);
         var lifecycle = new List<PlatformProductionEvent>();
         if (!string.IsNullOrWhiteSpace(executionId))
         {
@@ -535,6 +542,7 @@ public sealed class ProcessExecutionService(
         string? productFamilyCode,
         string? productCode,
         string? processSpecificationId,
+        string? processSpecificationVersion,
         string? outputItemId,
         string? externalBatchRef)
     {
@@ -542,6 +550,7 @@ public sealed class ProcessExecutionService(
         Add(result, "product_family_code", productFamilyCode);
         Add(result, "product_code", productCode);
         Add(result, "process_specification_id", processSpecificationId);
+        Add(result, "process_specification_version", processSpecificationVersion);
         Add(result, "output_item_id", outputItemId);
         Add(result, "external_batch_ref", externalBatchRef);
         return result;

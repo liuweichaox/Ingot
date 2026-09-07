@@ -57,7 +57,6 @@ public sealed partial class ProcessResearchWorkflow
                 ClaimId = existing?.ClaimId ??
                           (request.ClaimId == Guid.Empty ? Guid.CreateVersion7() : request.ClaimId),
                 ProjectId = projectId,
-                TransferAssessmentId = null,
                 Statement = RequiredText(request.Statement, "知识声明", 8000),
                 Applicability = RequiredText(request.Applicability, "知识适用范围", 8000),
                 Status = ResearchKnowledgeStatuses.Draft,

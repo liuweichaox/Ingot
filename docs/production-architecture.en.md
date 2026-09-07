@@ -8,7 +8,7 @@ This document defines production topology, failure models, data semantics, and s
 
 Production support does not mean connecting a model directly to a PLC, and it does not mean replacing PostgreSQL with another time-series database. Production capability has two independent levels:
 
-1. **Production observation and decision support**: continuously collect real recipe runs and provide traceability, comparison, diagnosis, next-recipe recommendations, and optional supplementary evidence review without directly changing equipment state.
+1. **Production observation and decision support**: continuously collect real recipe runs and provide traceability, comparison, diagnosis, next-recipe recommendations, engineer decisions, and links to subsequent run outcomes without directly changing equipment state.
 2. **Controlled action**: only after the first level has operated reliably and a specific scenario has passed admission, deliver an approved structured action to Edge for deterministic validation, bounds enforcement, stop, and rollback outside the field interlocks.
 
 The default delivery target is the first level. The second requires separate certification by equipment class and action type; analysis capability never grants it automatically.
@@ -47,7 +47,7 @@ PostgreSQL stores:
 - identities, permissions, sites, and equipment catalogues;
 - process configurations, analysis plans, and versions;
 - process executions, context, and inspection relationships;
-- recipe-optimization tasks, independent recipe recommendations, supplementary evidence reviews, approvals, and state machines;
+- recipe-optimization tasks, recipe recommendations, engineer decisions, and real-run outcomes;
 - Agent runs, input snapshots, recommendations, and evidence hashes;
 - reviewed knowledge fragments, retrieval jobs, and rebuildable full-text/similarity and vector indexes;
 - controlled actions, execution receipts, stop, and rollback outcomes;
@@ -172,7 +172,7 @@ Table ownership is fixed by the following keys and access rules rather than infe
 | Site production data | `SiteId`, bound to the Edge token | `platform_edges`; `event_ingest_keys`, `production_events`, `process_sample_frames`, `collection_points`, `data_object_summaries`, `data_object_operation_keys` | Ingestion, query, retention, capacity, and export require an explicit site; no default-site inference |
 | Versioned configuration | Configuration identity and version; release binding targets site/Edge | `ingestion_tasks`, `ingestion_task_bindings`, `process_data_models`, `process_analysis_plans`, `process_specification_versions`, `signal_definitions` | Definitions may be reusable; applicability is explicit, and production events preserve the configuration actually applied |
 | Run-derived data | `ExecutionId`, traceable to a site ingestion fact | `execution_features`, `execution_phases`, analysis materializations and recompute jobs, `operation_context_snapshots` | Not an independent tenant boundary; external reads resolve allowed executions from authorized sites before loading derived rows |
-| Research projects and evidence | `ProjectId` plus project membership/role | `process_research_*`, `research_*`, `mechanism_*`, `knowledge_*`, `dataset_quality_validation_reports` | A project may reference authorized scopes from one or more sites; copied evidence retains its source site and run ownership |
+| Research projects and evidence | `ProjectId` plus project membership/role | `process_research_*`, `research_*`, `recipe_recommendation*`, `mechanism_*`, `knowledge_*`, `training_dataset_versions` | A project may reference authorized scopes from one or more sites; copied evidence retains its source site and run ownership |
 | Quality and inspection | `SiteId` plus run/project/inspection-plan relationship | `inspection_*`, `case_level_evaluations`, `model_evaluations`, `model_drift_readings` | Inspection records, scopes, and attachments freeze site ownership; authorization still derives from the related run or project, and attachments and review logs are never accessed without their parent |
 | Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `problem_cases` | Agent records grant no new data permission; replay rechecks user, project, and site scope |
 
@@ -428,4 +428,4 @@ Every phase has its own migration, tests, runbook, and rollback point. After P0â
 - Do not maintain two long-lived production data paths without capacity evidence.
 - Do not treat the lack of legacy users as permission to omit migration, recovery, and rollback discipline after the first production release.
 
-See [Deployment](deployment.en.md) for operations, [System design](design.en.md) for stable business boundaries, and [Scenario validation](rollout.en.md) for scientific validation with real scenarios.
+See [Deployment](deployment.en.md) for operations, [System design](design.en.md) for stable business boundaries, and [Scenario evaluation](rollout.en.md) for scientific evaluation with real scenarios.

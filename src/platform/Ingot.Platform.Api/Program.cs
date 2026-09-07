@@ -80,8 +80,7 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 builder.Services.AddOpenApi();
 
 var authenticationMode = builder.Configuration["Authentication:Mode"] ?? "Local";
-var useAnonymousDevelopmentIdentity = builder.Environment.IsDevelopment()
-    || string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase);
+var useAnonymousDevelopmentIdentity = builder.Environment.IsDevelopment();
 var useOidc = !useAnonymousDevelopmentIdentity
     && string.Equals(authenticationMode, "Oidc", StringComparison.OrdinalIgnoreCase);
 if (useAnonymousDevelopmentIdentity)
@@ -177,14 +176,6 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-if (!app.Environment.IsDevelopment() &&
-    string.Equals(authenticationMode, "Disabled", StringComparison.OrdinalIgnoreCase))
-{
-    app.Logger.LogCritical(
-        "INSECURE DEMO AUTHENTICATION IS ENABLED IN PRODUCTION. " +
-        "All authenticated requests use the fixed development identity; isolate this deployment.");
-}
-
 app.UseRouting();
 
 app.UseCors("frontend");
@@ -240,15 +231,8 @@ app.MapGet("/", () => Results.Ok(new
         inspectionReviews = "/api/v1/inspection-reviews",
         executions = "/api/v1/process-executions",
         executionComparisons = "/api/v1/execution-comparisons/{executionId}",
-        timeWindowComparisons = "/api/v1/time-window-comparisons",
-        executionAnalysisBackfills = "/api/v1/process-execution-analysis-backfills",
-        executionFeatureAggregates = "/api/v1/process-feature-aggregates",
-        scenarioPackages = "/api/v1/scenario-packages",
-        processModels = "/api/v1/process-models",
-        trainingDatasets = "/api/v1/training-datasets",
-        processKnowledge = "/api/v1/process-knowledge",
         researchProjects = "/api/v1/research-projects",
-        researchAssets = "/api/v1/dataset-quality-validations",
+        trainingDatasets = "/api/v1/training-datasets",
         toolingTypes = "/api/v1/tooling-types",
         toolingComponents = "/api/v1/tooling-components",
         toolingAssemblies = "/api/v1/tooling-assemblies",
@@ -292,10 +276,7 @@ Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseA
 Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
 Log.Logger.Information("    > ProcessExecutions:        {0}/api/v1/process-executions", baseAddress);
 Log.Logger.Information("    > Comparisons:   {0}/api/v1/execution-comparisons/{{executionId}}", baseAddress);
-Log.Logger.Information("    > Research:      {0}/api/v1/research-projects", baseAddress);
-Log.Logger.Information("    > Models:        {0}/api/v1/process-models", baseAddress);
-Log.Logger.Information("    > Knowledge:     {0}/api/v1/process-knowledge", baseAddress);
-Log.Logger.Information("    > Dataset Quality:{0}/api/v1/dataset-quality-validations", baseAddress);
+Log.Logger.Information("    > Research Projects: {0}/api/v1/research-projects", baseAddress);
 Log.Logger.Information("    > Tooling Types: {0}/api/v1/tooling-types", baseAddress);
 Log.Logger.Information("    > Components:    {0}/api/v1/tooling-components", baseAddress);
 Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", baseAddress);

@@ -25,7 +25,7 @@ public sealed class LocalAgentRunAuthorization(
     {
         ArgumentNullException.ThrowIfNull(capturedScope);
 
-        // 开发环境的匿名演示身份不对应 users 表；生产环境对无法解析的主体一律拒绝。
+        // 开发环境的匿名身份不对应 users 表；生产环境对无法解析的主体一律拒绝。
         if (!Guid.TryParse(userId, out var userIdValue))
             return environment.IsDevelopment() ? Restore(capturedScope) : null;
 

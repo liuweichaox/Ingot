@@ -1,6 +1,6 @@
 """Observed-coverage envelope for recommendations built from production runs.
 
-Production runs are not a designed experiment.  Settings move together, cluster
+Production runs are observational evidence. Settings move together, cluster
 around the current known-good recipe, and leave most of the declared range
 unobserved.  A surrogate fitted on that data reports small uncertainty inside
 the cluster while extrapolating freely outside it, so the declared safety bounds

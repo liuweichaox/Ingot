@@ -2,7 +2,7 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution preserves the experiment-efficiency, evidence, and safety claim boundaries.
+Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution preserves the run-efficiency, evidence, and safety claim boundaries.
 
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -13,7 +13,7 @@ Unless a contributor explicitly states otherwise in writing, accepted contributi
 1. Search Issues for duplicates.
 2. For a substantial feature, open an Issue describing scenario, input, output, and validation.
 3. Report vulnerabilities privately under the [security policy](SECURITY.md).
-4. Never upload factory credentials, device addresses, customer data, or unauthorized experimental data.
+4. Never upload factory credentials, device addresses, customer data, or unauthorized run data.
 
 ## Development environment
 
@@ -35,8 +35,8 @@ uv run --project optimizer --locked pytest
 
 ## Engineering principles
 
-- Explain how a capability reduces experiments-to-specification or improves trust.
-- Keep one formal record for acquisition, inspection, experiments, and optimization.
+- Explain how a capability reduces runs-to-specification or improves trust.
+- Keep one real-run-centered formal record for acquisition, inspection, and optimization.
 - Distinguish planned values, actual values, trajectories, and outcomes.
 - Retain model version, uncertainty, and provenance.
 - Never let an LLM generate numerical process settings.

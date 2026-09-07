@@ -25,7 +25,7 @@ Security fixes currently target the latest `main`. Supported release ranges will
 - 为每个 Edge 使用独立、可轮换的上送令牌；
 - 备份数据库、检验附件和 Edge 待上送日志；
 - 不在日志、Issue 或导出文件中保存密钥；
-- 在真实实验执行前保留工程师审核。
+- 在真实配方运行前保留工程师审核。
 
 Even inside a factory network:
 
@@ -34,8 +34,8 @@ Even inside a factory network:
 - use separate, rotatable Edge ingestion tokens;
 - back up database, attachments, and unshipped Edge logs;
 - keep secrets out of logs, Issues, and exports;
-- retain engineering review before real experiment execution.
+- retain engineering review before a real recipe run.
 
 ## Scope
 
-Examples of security-sensitive issues include authentication bypass, cross-project data exposure, unsafe file handling, SSRF, secret leakage, forged Edge ingestion, experiment-tampering, and any path that could cause unreviewed equipment control.
+Examples of security-sensitive issues include authentication bypass, cross-project data exposure, unsafe file handling, SSRF, secret leakage, forged Edge ingestion, recipe-recommendation tampering, and any path that could cause unreviewed equipment control.

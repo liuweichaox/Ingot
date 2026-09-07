@@ -1,4 +1,4 @@
-"""Sequential experiment recommendation with independent GP surrogates."""
+"""Sequential recipe recommendation with independent GP surrogates."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -325,11 +325,11 @@ class SequentialOptimizer:
                     model_version=MODEL_VERSION,
                     rationale=(
                         "Insufficient observations for a surrogate; selected a "
-                        "local experiment around a verified safe baseline."
+                        "local recipe step around a verified safe baseline."
                         if safety_constraints
                         else
                         "Insufficient observations for a surrogate; selected a "
-                        "feasible space-filling experiment."
+                        "feasible space-filling recipe step."
                     ),
                 )
                 for index in self._cold_start_indices(candidates, top_k)

@@ -107,7 +107,7 @@ def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features(
     body = {
         "campaign": {
             "name": "lens-molding",
-            "feature_set_id": "optical-lens-molding-demo",
+            "feature_set_id": "synthetic-process-fixture",
             "feature_set_version": 1,
             "derived_features": [
                 {
@@ -191,7 +191,7 @@ def test_service_runs_batch_multiobjective_spec_ensemble_with_declared_features(
     assert payload["model_version"] == (
         "conservative-target-ranking-selector-2026-08-23"
     )
-    assert payload["feature_set_id"] == "optical-lens-molding-demo"
+    assert payload["feature_set_id"] == "synthetic-process-fixture"
     assert payload["derived_feature_count"] == 2
     assert len(payload["suggestions"]) == 2
     assert all(
@@ -412,6 +412,9 @@ def test_historical_replay_endpoint_is_production_equivalent_and_auditable():
     assert payload["engine_policy"].startswith("production-equivalent")
     assert payload["evidence_kind"] == "historical-pool-ranking"
     assert payload["state_persisted"] is False
+    assert "original_order_runs_to_specification" in payload
+    retired_key = "original_order_" + "tri" + "als"
+    assert retired_key not in payload
     assert len(payload["step_traces"]) == 3
     assert all(
         step["revealed_history_index"]

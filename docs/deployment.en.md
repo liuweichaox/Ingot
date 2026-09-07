@@ -57,7 +57,7 @@ Change at least:
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
-Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. `INGOT_AUTH_MODE=Disabled` is permitted only for an explicitly isolated demo with `INGOT_ALLOW_INSECURE_DEMO=true`; it maps every request to a fixed development identity and must not be exposed to a plant network or reverse proxy.
+Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 
 ### OIDC identity provider
 
@@ -267,17 +267,7 @@ A recovery exercise verifies more than service startup:
 
 Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
 
-First run the read-only business-workflow verifier against the target deployment. It checks versioned configuration, a running real source, complete tooling, production context, run-to-inspection linkage, data admission, candidate guardrails, execution outcomes, and role separation:
-
-```bash
-export INGOT_PLATFORM_URL=https://ingot.example.com
-export INGOT_ACCEPTANCE_USERNAME=acceptance-admin
-export INGOT_ACCEPTANCE_PASSWORD='provided by the site secret manager'
-node scripts/verify-pilot-workflow.mjs \
-  --output artifacts/pilot-workflow.json
-```
-
-The script only signs in and reads business APIs; it does not create, publish, or modify production records. `business-workflow-passed` means that the workflow has verifiable data, not that production admission is complete. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence below remain mandatory.
+The Platform status page reports four live business gates: a running field source, complete production context, run-to-inspection linkage, and formal analysis admission. These checks only show that the current data chain is inspectable; they do not complete production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
 
 The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment declarations, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
 

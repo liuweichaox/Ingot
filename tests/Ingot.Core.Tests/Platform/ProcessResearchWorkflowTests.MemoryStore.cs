@@ -105,7 +105,7 @@ public abstract partial class ProcessResearchWorkflowTestBase
                 .Where(value => value.ProjectId == projectId &&
                     value.Decision is ResearchRecipeRecommendationDecisionStatuses.Accepted or
                         ResearchRecipeRecommendationDecisionStatuses.Modified &&
-                    !string.IsNullOrWhiteSpace(value.ActualExecutionKey) && value.Outcome is null)
+                    value.Outcome is null)
                 .OrderBy(static value => value.DecidedAt).ThenBy(static value => value.DecisionId).ToArray());
 
         public async Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(

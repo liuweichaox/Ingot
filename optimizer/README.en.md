@@ -2,7 +2,7 @@
 
 > Status: current numerical-service development guide.
 
-This directory implements surrogate modeling and sequential experiment recommendation within Ingot's method toolbox. It receives a complete project snapshot and valid observations from Platform, then returns experiments for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential experiments, not the only answer to every process question and not a replacement product value.
+This directory implements surrogate modeling and sequential recipe optimization within Ingot's method toolbox. It receives a complete project snapshot and valid observations from Platform, then returns candidate recipe parameters for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential runs, not the only answer to every process question and not a replacement product value.
 
 See the [system design](../docs/design.en.md) for boundaries and [analysis and optimization methods](../docs/optimization.en.md) for method-selection principles.
 
@@ -16,10 +16,10 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - GP outcome-safety filtering followed by visible-evidence admission for response surfaces, GP probability, and mechanism features
 - Decision intent is `reach-specification` only: seek the specification inside the observed coverage envelope
 - Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
-- Safe-baseline local cold start, pending experiments, and idempotent batches
+- Safe-baseline local cold start, pending recipe points, and idempotent batches
 - Historical pool replay that can select only real, unconsumed parameter settings (`POST /v1/historical-replay`)
 - Stateless `POST /v1/suggestions` HTTP contract
-- Synthetic digital-twin demonstration
+- Synthetic digital-twin replay for validating algorithm contracts
 
 The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
@@ -75,11 +75,15 @@ derived feature. Composition problems may also use `weighted_mean` and
 be non-negative and have a positive total. Arbitrary Python expressions, unknown inputs, forward
 references, and legacy hidden `process_profile` switches are rejected.
 
-The .NET platform turns the returned batch into an ordinary `ResearchExperiment`, storing its input hash, model version, predictions, review, and outcome. No recommendation is sent directly to a PLC.
+The .NET platform stores the returned batch as next-recipe recommendations with their input hash, model version, predictions, engineer decision, and later real-run outcome. No recommendation is sent directly to a PLC.
 
 ## Historical validation
 
-Use `replay_history_pool` for real history. Every row must contain a finite numeric `occurred_at`, and rows must be strictly increasing in time. Missing, duplicate, or out-of-order timestamps are rejected rather than silently sorted, preserving the no-future-leakage contract. Replay measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective trial savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
+Use `replay_history_pool` for real history. Every row must contain a finite numeric `occurred_at`, and rows must be strictly increasing in time. Missing, duplicate, or out-of-order timestamps are rejected rather than silently sorted, preserving the no-future-leakage contract. Replay measures whether the model ranks successful parameter settings earlier among parameter settings that were actually run. It does not invent outcomes for untried parameter settings and cannot by itself prove prospective run savings. Aggregate repeated parameter settings with a predefined statistical method before replay.
+
+Replay return fields have undergone a breaking change: summaries use `median_runs_to_specification` and `mean_runs_to_specification`, historical pool replay uses `original_order_runs_to_specification`, and a single optimizer replay uses `total_run_count` and `additional_run_count`. Custom consumers that read these responses must upgrade alongside the service; this repository provides no compatibility layer for the previous fields.
+
+This response-contract change corresponds to Optimizer HTTP API `0.6.0` (Python package `0.5.0`).
 
 Synthetic replay truth functions must return `SyntheticTruthResult` with explicit `outcomes`, `constraint_outcomes`, and optional `process_features`. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.
 
@@ -87,10 +91,10 @@ Synthetic replay truth functions must return `SyntheticTruthResult` with explici
 
 The .NET platform remains the only business system of record:
 
-1. An experiment `ExecutionKey` maps to the field run identifier. Platform assembles measured process features, realized control values, and inspection results into one observation.
+1. `ExecutionKey` maps directly to the field run identifier. Platform assembles measured process features, realized control values, and inspection results into one observation.
 2. Platform sends the complete project definition, valid observations, and constraints to this service.
 3. This service calculates the next parameter batch without retaining business state.
-4. Platform creates ordinary experiments with the input hash, model version, and prediction intervals.
-5. After all runs are complete, Platform records the reviewed result. If the experiment tests a hypothesis, the result interval updates that hypothesis as supported, rejected, or inconclusive through the existing approval and completion workflow.
+4. Platform creates next-recipe recommendations with the input hash, model version, and prediction intervals.
+5. After an engineer decides, Platform links later real runs and freezes their quality outcomes. If those runs evaluate a hypothesis, the result interval updates that hypothesis as supported, rejected, or inconclusive.
 
 PLC, instrument, vision, file, and API connectors only map source data into this contract; they do not change the optimizer's responsibility or authority.

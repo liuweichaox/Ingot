@@ -17,17 +17,9 @@ public static class ProductionConfigurationValidator
 
         var authMode = configuration["Authentication:Mode"] ?? "Local";
         if (!string.Equals(authMode, "Local", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(authMode, "Disabled", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(authMode, "Oidc", StringComparison.OrdinalIgnoreCase))
         {
-            errors.Add("Authentication:Mode must be 'Local', 'Oidc', or 'Disabled'.");
-        }
-        if (string.Equals(authMode, "Disabled", StringComparison.OrdinalIgnoreCase) &&
-            !IsInsecureDemoAllowed(configuration))
-        {
-            errors.Add(
-                "Authentication:Mode 'Disabled' is forbidden in production unless " +
-                "Authentication:AllowInsecureDemo=true is explicitly set for an isolated demo.");
+            errors.Add("Authentication:Mode must be 'Local' or 'Oidc'.");
         }
         var seedAdminPassword = configuration["Authentication:Local:SeedAdminPassword"];
         if (IsPlaceholder(seedAdminPassword))
@@ -157,10 +149,6 @@ public static class ProductionConfigurationValidator
         return value.All(static character =>
             char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
     }
-
-    private static bool IsInsecureDemoAllowed(IConfiguration configuration) =>
-        configuration.GetValue<bool>("Authentication:AllowInsecureDemo") ||
-        configuration.GetValue<bool>("INGOT_ALLOW_INSECURE_DEMO");
 
     private static void ValidateOidcConfiguration(
         IConfiguration configuration,

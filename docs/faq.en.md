@@ -4,15 +4,15 @@
 
 ## What core problem does Ingot solve?
 
-A shared run identity links actual recipes, process curves, and quality outcomes so engineers can review field facts in one place. Normal production runs become optimization observations that support the next recipe within safety boundaries and observed coverage; supplementary evidence review is designed separately when causal confirmation is needed.
+A shared run identity links actual recipes, process curves, and quality outcomes so engineers can review field facts in one place. Normal production runs become optimization observations that support the next recipe within safety boundaries and observed coverage; when more evidence is needed, later real runs are collected through the existing production flow.
 
 ## Is Ingot a data-acquisition system?
 
-Data acquisition is not Ingot's only responsibility. Acquisition receives raw data; the system also determines the associated run, actual conditions, quality outcome, and subsequent validation task.
+Data acquisition is not Ingot's only responsibility. Acquisition receives raw data; the system also determines the associated run, actual conditions, quality outcome, and subsequent real runs.
 
 ## Does Ingot replace process engineers?
 
-No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and approve separate supplementary evidence review when it is needed.
+No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and make the final judgment from later real-run outcomes.
 
 ## Can the system find root causes automatically?
 
@@ -36,7 +36,7 @@ Material, tooling, and equipment context may affect quality or may serve only tr
 
 ## Why not always use the most complex model?
 
-Model complexity does not establish reliability. With limited samples or confounded conditions, supplementary evidence review often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data and does not generate an unsupported conclusion.
+Model complexity does not establish reliability. With limited samples or confounded conditions, collecting more comparable real runs often provides clearer evidence than a complex model. When evidence is insufficient, the system requires additional data and does not generate an unsupported conclusion.
 
 ## What responsibilities does the language model have?
 
@@ -60,15 +60,15 @@ Bayesian optimization applies when individual real recipe runs are costly and ea
 
 ## Can existing recipe runs be analyzed directly?
 
-Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more runs or create separate supplementary evidence review.
+Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more real runs through the existing production workflow and have engineers assess whether the evidence is sufficient.
 
 ## Can the system generate multiple recipe recommendations at once?
 
-Daily optimization returns one next recipe by default to minimize field judgment and operating cost. Formal supplementary evidence review can still generate multiple validation conditions according to field capacity. Unfinished validation conditions remain pending points so they are not scheduled twice.
+Daily optimization returns one next recipe by default. Engineers decide whether to adopt it under field conditions and evaluate its effect using quality outcomes from subsequent real runs.
 
 ## Are recipe recommendations written automatically to controls?
 
-No. A next-recipe recommendation is not an recommendation record and creates no approval or equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
+No. A next-recipe recommendation does not automatically create an equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
 
 ## Does an optimization or language-model outage stop acquisition?
 
@@ -80,7 +80,7 @@ Validation data, protocols, and results are tied to a specific scenario, objecti
 
 ## How is a reduction in run count validated?
 
-Before results are reviewed, define the target, starting data, run budget, comparison methods, and pass criteria outside Ingot. Historical review and actual production runs can then evaluate recommendation stability, run count, and elapsed time after adoption. See [Scenario validation](rollout.en.md) for the complete method.
+Before results are reviewed, define the target, starting data, run budget, comparison methods, and pass criteria outside Ingot. Historical review and actual production runs can then evaluate recommendation stability, run count, and elapsed time after adoption. See [Scenario evaluation](rollout.en.md) for the complete method.
 
 The repository provides historical replay and method-comparison capabilities but bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
 

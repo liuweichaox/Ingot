@@ -84,7 +84,6 @@ services:
       - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_CONNECTOR_LOCAL_TOKEN:?INGOT_CONNECTOR_LOCAL_TOKEN is required}
       - EdgeDiagnostics__EdgeBaseUrls__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_DIAGNOSTICS_BASE_URL:-http://connector-host:8001}
       - Authentication__Mode=${INGOT_AUTH_MODE:-Local}
-      - Authentication__AllowInsecureDemo=${INGOT_ALLOW_INSECURE_DEMO:-false}
       - Authentication__Authority=${INGOT_AUTHORITY:-}
       - Authentication__Audience=${INGOT_AUDIENCE:-}
       - Authentication__RequireHttpsMetadata=${INGOT_AUTH_REQUIRE_HTTPS:-true}

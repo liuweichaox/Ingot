@@ -495,38 +495,18 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         Resolution = reader.IsDBNull(13) ? null : reader.GetString(13)
     };
 
-    public async Task SaveUsagesAsync(
-        IReadOnlyList<MechanismClaimUsage> values,
-        CancellationToken ct = default)
-        => await SaveUsagesCoreAsync(
-            "recommendation_knowledge_usage",
-            values,
-            ct).ConfigureAwait(false);
-
     public async Task SaveRecipeRecommendationUsagesAsync(
         IReadOnlyList<MechanismClaimUsage> values,
         CancellationToken ct = default)
-        => await SaveUsagesCoreAsync(
-            "recipe_recommendation_knowledge_usage",
-            values,
-            ct).ConfigureAwait(false);
-
-    private async Task SaveUsagesCoreAsync(
-        string table,
-        IReadOnlyList<MechanismClaimUsage> values,
-        CancellationToken ct)
     {
         if (values.Count == 0) return;
-        if (table is not ("recommendation_knowledge_usage" or
-            "recipe_recommendation_knowledge_usage"))
-            throw new InvalidOperationException("不允许写入未注册的机理知识使用表。");
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         foreach (var value in values)
         {
             await using var command = new NpgsqlCommand(
-                $"""
-                INSERT INTO {table}(
+                """
+                INSERT INTO recipe_recommendation_knowledge_usage(
                   recommendation_id, claim_id, claim_version, usage_type, content_hash)
                 VALUES (@recommendation_id, @claim_id, @claim_version, @usage_type, @content_hash)
                 ON CONFLICT DO NOTHING;
@@ -551,13 +531,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             """
             SELECT usage.recommendation_id, usage.claim_id, usage.claim_version,
               usage.usage_type, usage.content_hash, version.name
-            FROM (
-              SELECT recommendation_id, claim_id, claim_version, usage_type, content_hash
-              FROM recommendation_knowledge_usage
-              UNION ALL
-              SELECT recommendation_id, claim_id, claim_version, usage_type, content_hash
-              FROM recipe_recommendation_knowledge_usage
-            ) usage
+            FROM recipe_recommendation_knowledge_usage usage
             JOIN mechanism_claims claim ON claim.claim_id = usage.claim_id
             JOIN mechanism_claim_versions version
               ON version.claim_id = usage.claim_id AND version.version = usage.claim_version

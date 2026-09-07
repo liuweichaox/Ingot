@@ -30,12 +30,12 @@ PUBLIC_DOCUMENTS = [
 FORBIDDEN = {
     "zh": re.compile(
         r"优化大脑|智能大脑|AI[ -]?赋能|颠覆(?:性)?|革命性|一键(?:生成)?最优|"
-        r"保证(?:减少|缩短)|必然(?:减少|缩短)|零试验"
+        r"保证(?:减少|缩短)|必然(?:减少|缩短)|零运行"
     ),
     "en": re.compile(
         r"optimization brain|intelligent brain|AI-powered|revolutionary|"
         r"one-click optimum|"
-        r"guaranteed (?:experiment|development-time) reduction|zero experiments",
+        r"guaranteed (?:run|development-time) reduction|zero runs",
         re.IGNORECASE,
     ),
 }

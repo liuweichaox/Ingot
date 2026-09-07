@@ -29,11 +29,7 @@ public sealed class AuthController(
     public IActionResult Configuration()
     {
         var configuredMode = configuration["Authentication:Mode"] ?? "Local";
-        var mode = configuredMode.Equals("Oidc", StringComparison.OrdinalIgnoreCase)
-            ? "oidc"
-            : configuredMode.Equals("Disabled", StringComparison.OrdinalIgnoreCase)
-                ? "disabled"
-                : "local";
+        var mode = configuredMode.Equals("Oidc", StringComparison.OrdinalIgnoreCase) ? "oidc" : "local";
         return Ok(new AuthConfigurationResponse
         {
             Mode = mode,

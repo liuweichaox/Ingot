@@ -102,7 +102,6 @@ docker run -d \
   -e "EventIngest__EdgeTokens__${lifecycle_edge_id}=${token}" \
   -e "EventIngest__EdgeSites__${edge_id}=${site_id}" \
   -e "EventIngest__EdgeSites__${lifecycle_edge_id}=${site_id}" \
-  -e Authentication__Mode=Disabled \
   ingot-platform-api:latest >/dev/null
 
 for _ in $(seq 1 60); do

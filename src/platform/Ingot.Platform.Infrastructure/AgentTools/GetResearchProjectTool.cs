@@ -61,8 +61,9 @@ public sealed class GetResearchProjectTool(
             {
                 Tool = Definition.Name,
                 Summary =
-                    $"研发项目“{workspace.Project.Name}”包含 {workspace.Hypotheses.Count} 条假设、" +
-                    $"{workspace.RecipeRecommendationFlows.Count} 条配方建议闭环和 {validatedWindows} 个已验证工艺窗口。",
+                    $"研发项目“{workspace.Project.Name}”当前页包含 {workspace.Hypotheses.Count} 条假设、" +
+                    $"{workspace.RecipeRecommendationFlows.Count} 条配方建议闭环和 {validatedWindows} 个已验证工艺窗口" +
+                    (workspace.HasMoreHistory ? "；历史记录还有下一页。" : "。"),
                 Data = JsonSerializer.SerializeToElement(workspace),
                 RelatedRecords =
                 [

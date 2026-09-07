@@ -158,7 +158,8 @@ public sealed class ProcessExecutionAnalysisOperationsServiceTests
             CancellationToken ct = default,
             string? edgeId = null,
             string? externalBatchRef = null,
-            string? siteId = null)
+            string? siteId = null,
+            string? processSpecificationVersion = null)
         {
             SiteId = siteId;
             ExecutionId = executionId;

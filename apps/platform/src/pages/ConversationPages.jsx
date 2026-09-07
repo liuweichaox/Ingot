@@ -533,7 +533,7 @@ export function ChatPage() {
     .filter(item => item.message)
     .slice(-4);
   const serviceEnabled = Boolean(capabilities?.enabled);
-  const deterministicDemo = Boolean(capabilities?.isDeterministic);
+  const deterministicModel = Boolean(capabilities?.isDeterministic);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
 
   return (
@@ -569,7 +569,7 @@ export function ChatPage() {
           <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-6 sm:px-6">
             <div className="space-y-3">
               {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署未启用分析服务，请联系平台管理员检查模型服务配置。</Alert>}
-              {!capabilitiesLoading && serviceEnabled && deterministicDemo && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
+              {!capabilitiesLoading && serviceEnabled && deterministicModel && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
             {!messages.length ? (

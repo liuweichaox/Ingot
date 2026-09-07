@@ -21,6 +21,7 @@ public sealed class ProcessExecutionsController(
         [FromQuery] string? productFamilyCode,
         [FromQuery] string? productCode,
         [FromQuery] string? processSpecificationId,
+        [FromQuery] string? processSpecificationVersion,
         [FromQuery] string? equipmentId,
         [FromQuery] string? edgeId,
         [FromQuery] string? outputItemId,
@@ -72,7 +73,8 @@ public sealed class ProcessExecutionsController(
                 ct,
                 edgeId,
                 externalBatchRef,
-                authorizedSiteId).ConfigureAwait(false);
+                authorizedSiteId,
+                processSpecificationVersion).ConfigureAwait(false);
             return Ok(result);
         }
         catch (PlatformEventQueryLimitExceededException exception)

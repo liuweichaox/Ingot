@@ -419,7 +419,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     public async Task RecipeRecommendationDecision_RejectsInvalidExecutionIdentityAndTiming()
     {
         var cases = new (string Name, Func<DateTimeOffset, ExecutionComparisonRow?> Execution,
-            string ExpectedMessage)[]
+            string? ExpectedMessage)[]
         {
             ("missing", _ => null, "不存在或不在项目站点范围"),
             ("family", decidedAt => Execution("scope-family", decidedAt.AddSeconds(1)) with
@@ -428,10 +428,12 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
                 { ProductCode = "product-b" }, "产品"),
             ("equipment", decidedAt => Execution("scope-equipment", decidedAt.AddSeconds(1)) with
                 { EquipmentId = "press-02" }, "设备"),
+            ("simultaneous", decidedAt => Execution("scope-simultaneous", decidedAt),
+                "决定之后开始"),
             ("historical", decidedAt => Execution("scope-historical", decidedAt.AddSeconds(-1)),
                 "决定之后开始"),
             ("known-result", decidedAt => Execution(
-                "scope-known-result", decidedAt.AddSeconds(1), completed: true), "结果已知")
+                "scope-known-result", decidedAt.AddSeconds(1), completed: true), null)
         };
 
         foreach (var testCase in cases)
@@ -467,18 +469,30 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
             if (execution is not null)
                 executions.Set(execution);
 
-            var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
-                service.LinkActualExecutionAsync(
+            if (testCase.ExpectedMessage is not null)
+            {
+                var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+                    service.LinkActualExecutionAsync(
+                        decision.DecisionId,
+                        new ResearchRecipeRecommendationExecutionLinkRequest
+                            { ActualExecutionKey = executionKey },
+                        "engineer-b"));
+                Assert.Contains(testCase.ExpectedMessage, error.Message, StringComparison.Ordinal);
+            }
+            else
+            {
+                var linked = await service.LinkActualExecutionAsync(
                     decision.DecisionId,
                     new ResearchRecipeRecommendationExecutionLinkRequest
                         { ActualExecutionKey = executionKey },
-                    "engineer-b"));
-            Assert.Contains(testCase.ExpectedMessage, error.Message, StringComparison.Ordinal);
+                    "engineer-b");
+                Assert.Equal(executionKey, linked.ActualExecutionKey);
+            }
         }
     }
 
     [Fact]
-    public async Task RecipeRecommendationDecision_IncompleteOutcomeRemainsRetryable()
+    public async Task RecipeRecommendationDecision_RecordsExcludedOutcomeAsTerminal()
     {
         var store = new MemoryStore();
         var workflow = CreateWorkflow(store);
@@ -523,29 +537,16 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
 
         assembler.Observation = Observation(item.Parameters) with
         {
-            ProcessFeatures = new Dictionary<string, double>(),
-            ConstraintOutcomes = new Dictionary<string, double> { ["form-error-limit"] = 0.3 }
-        };
-        await AssertIncompleteOutcomeAsync(service, store, decision.DecisionId, "过程特征");
-
-        assembler.Observation = Observation(item.Parameters) with
-        {
             ConstraintOutcomes = new Dictionary<string, double> { ["form-error-limit"] = 0.3 },
             ValidForOptimization = false,
             ExclusionReason = "context admission failed"
         };
-        await AssertIncompleteOutcomeAsync(service, store, decision.DecisionId, "证据准入");
-
-        assembler.Observation = Observation(item.Parameters);
-        await AssertIncompleteOutcomeAsync(service, store, decision.DecisionId, "完整结果约束");
-
-        assembler.Observation = Observation(item.Parameters) with
-        {
-            ConstraintOutcomes = new Dictionary<string, double> { ["form-error-limit"] = 0.3 }
-        };
-        var completed = await service.MaterializeOutcomeAsync(decision.DecisionId, "engineer-c");
-        Assert.NotNull(completed.Outcome);
-        Assert.True(completed.Outcome.ValidForOptimization);
+        var excluded = await service.MaterializeOutcomeAsync(decision.DecisionId, "engineer-c");
+        Assert.NotNull(excluded.Outcome);
+        Assert.False(excluded.Outcome.ValidForOptimization);
+        Assert.Equal("context admission failed", excluded.Outcome.ExclusionReason);
+        var frozen = await service.MaterializeOutcomeAsync(decision.DecisionId, "engineer-d");
+        Assert.Equal(excluded.Outcome.CapturedAt, frozen.Outcome!.CapturedAt);
     }
 
     [Fact]
@@ -602,18 +603,6 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         Assert.Equal(project.ProjectId, decision.ProjectSnapshot.ProjectId);
         Assert.Equal(64, decision.ProjectSnapshotHash.Length);
         Assert.NotEqual("none", decision.ProjectSnapshotHash);
-    }
-
-    private static async Task AssertIncompleteOutcomeAsync(
-        ResearchRecipeRecommendationDecisionService service,
-        MemoryStore store,
-        Guid decisionId,
-        string expectedMessage)
-    {
-        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
-            service.MaterializeOutcomeAsync(decisionId, "engineer-c"));
-        Assert.Contains(expectedMessage, error.Message, StringComparison.Ordinal);
-        Assert.Null((await store.GetRecipeRecommendationDecisionAsync(decisionId))!.Outcome);
     }
 
     private static ResearchRunObservation Observation(

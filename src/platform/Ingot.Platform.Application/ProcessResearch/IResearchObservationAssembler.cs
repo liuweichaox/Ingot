@@ -5,7 +5,8 @@ namespace Ingot.Platform.Application.ProcessResearch;
 
 public sealed record ResearchObservationAssembly(
     IReadOnlyList<ResearchRunObservation> Observations,
-    int CandidateRunCount)
+    int CandidateRunCount,
+    bool IsTruncated = false)
 {
     public int ValidObservationCount =>
         Observations.Count(static value => value.ValidForOptimization);

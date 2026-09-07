@@ -9,12 +9,14 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTestBase
 {
     [Fact]
-    public async Task CreateNextRecipeRecommendation_UsesOnlyCurrentLinkedPendingDecisions()
+    public async Task CreateNextRecipeRecommendation_UsesOnlyCurrentPendingDecisions()
     {
         var store = new MemoryStore();
         var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "pending-recipe-points" }, "engineer-a");
+        project = await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a", expectedRevision: project.Revision);
         var snapshot = ResearchProjectEvidenceSnapshots.Freeze(project);
         var snapshotHash = ResearchProjectEvidenceSnapshots.Hash(snapshot);
 
@@ -46,12 +48,12 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
 
         Assert.NotNull(optimizer.LastSuggestionCall);
         var call = optimizer.LastSuggestionCall!;
-        Assert.Equal(2, call.PendingPoints.Count);
+        Assert.Equal(3, call.PendingPoints.Count);
         Assert.Contains(call.PendingPoints, value => Matches(value, 510, 9));
         Assert.Contains(call.PendingPoints, value => Matches(value, 518, 13));
+        Assert.Contains(call.PendingPoints, value => Matches(value, 534, 16));
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 524, 14));
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 530, 15));
-        Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 534, 16));
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 540, 17));
 
         await SaveDecisionAsync(store, project, snapshot, snapshotHash, "new-current", Parameters(536, 10),
@@ -122,6 +124,8 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
         var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
             ProjectDraft() with { Code = "observed-coverage" }, "engineer-a");
+        project = await workflow.ChangeProjectStatusAsync(
+            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a", expectedRevision: project.Revision);
         return (new ResearchOptimizationService(store, optimizer,
             new MultipleObservationAssembler(
                 Observation(500, 8), Observation(520, 12), Observation(540, 16))),

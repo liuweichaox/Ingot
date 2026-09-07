@@ -89,24 +89,21 @@ public static class ResearchOptimizationIntents
         => value is ReachSpecification;
 }
 
-public static class ResearchTransferAssessmentStatuses
+/// <summary>研发项目用于筛选真实生产运行的结构化范围键。</summary>
+public static class ResearchProjectScopeKeys
 {
-    public const string Recorded = "recorded";
-    public const string Reviewed = "reviewed";
+    public const string ProductFamilyCode = "product_family_code";
+    public const string ProductCode = "product_code";
+    public const string EquipmentId = "equipment_id";
+    public const string ProcessSpecificationId = "process_specification_id";
+    public const string ProcessSpecificationVersion = "process_specification_version";
+    public const string OutputItemId = "output_item_id";
+    public const string LookbackDays = "lookback_days";
 
-    public static bool IsValid(string? value)
-        => value is Recorded or Reviewed;
-}
-
-public static class ResearchTransferOutcomes
-{
-    public const string Beneficial = "beneficial";
-    public const string Neutral = "neutral";
-    public const string NegativeTransfer = "negative-transfer";
-    public const string InsufficientEvidence = "insufficient-evidence";
-
-    public static bool IsValid(string? value)
-        => value is Beneficial or Neutral or NegativeTransfer or InsufficientEvidence;
+    public static readonly IReadOnlySet<string> SelectorKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ProductFamilyCode, ProductCode, EquipmentId, ProcessSpecificationId, OutputItemId
+    };
 }
 
 public static class ResearchConfidenceMethods
@@ -128,11 +125,10 @@ public static class EvidenceKinds
     public const string MechanismModel = "mechanism-model";
     public const string KnowledgeSource = "knowledge-source";
     public const string OperatingRegion = "operating-region";
-    public const string TransferAssessment = "transfer-assessment";
 
     public static bool IsValid(string? value)
         => value is DatasetSnapshot or AnalysisRun or ExecutionComparison or
-            MechanismModel or KnowledgeSource or OperatingRegion or TransferAssessment;
+            MechanismModel or KnowledgeSource or OperatingRegion;
 }
 
 public sealed record ResearchObjective
@@ -411,10 +407,6 @@ public static class ResearchRecipeRecommendationDecisionStatuses
 public sealed record ResearchRecipeRecommendationDecisionRequest
 {
     public required string Decision { get; init; }
-    /// <summary>可选的已知实际运行；未知时可在决定冻结后单独关联。</summary>
-    [System.Text.Json.Serialization.JsonIgnore(
-        Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    public string? ActualExecutionKey { get; init; }
     public IReadOnlyList<ResearchVariableSetting> EngineerSelectedParameters { get; init; } = [];
     public string? Reason { get; init; }
     public string? UsefulnessRating { get; init; }
@@ -487,6 +479,7 @@ public static class ResearchRecipeRecommendationFlowStates
     public const string PendingExecution = "pending-execution";
     public const string PendingOutcome = "pending-outcome";
     public const string OutcomeFrozen = "outcome-frozen";
+    public const string OutcomeExcluded = "outcome-excluded";
     public const string Stale = "stale";
 }
 
@@ -564,7 +557,6 @@ public sealed record ResearchKnowledgeClaim
     public Guid ClaimId { get; init; }
     public Guid ProjectId { get; init; }
     public Guid? OperatingRegionId { get; init; }
-    public Guid? TransferAssessmentId { get; init; }
     public required string Statement { get; init; }
     public required string Applicability { get; init; }
     public string Status { get; init; } = ResearchKnowledgeStatuses.Draft;
@@ -589,6 +581,7 @@ public sealed record ResearchProjectWorkspace
     public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
     public IReadOnlyDictionary<string, string> NextCursors { get; init; } =
         new Dictionary<string, string>();
+    public bool HasMoreHistory => NextCursors.Count > 0;
 }
 
 public sealed record ResearchPage<T>
@@ -625,6 +618,8 @@ public sealed record ResearchRecipeRecommendation
     public IReadOnlyList<MechanismModelApplicationReference> MechanismModels { get; init; } = [];
     public IReadOnlyList<ResearchRecipeRecommendationItem> Items { get; init; } = [];
     public bool RequiresEngineerConfirmation { get; init; } = true;
+    /// <summary>建议超过该时间后不能再登记新决定，需要重新生成。</summary>
+    public DateTimeOffset? ExpiresAt { get; init; }
     public string CreatedBy { get; init; } = "";
     public DateTimeOffset GeneratedAt { get; init; }
 }

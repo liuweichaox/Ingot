@@ -25,6 +25,8 @@ public sealed class ResearchOptimizationService(
             ?? throw new ProcessResearchRuleException("研发项目不存在。");
         if (project.Status is ResearchProjectStatuses.Completed or ResearchProjectStatuses.Archived)
             throw new ProcessResearchRuleException("已完成或已归档的研发项目保持只读。");
+        if (project.Status != ResearchProjectStatuses.Active)
+            throw new ProcessResearchRuleException("研发项目必须先激活，才能根据真实生产运行生成建议。");
 
         var mechanismKnowledge = mechanismKnowledgeStore is null
             ? new AppliedMechanismKnowledge([], [], [], [])
@@ -74,7 +76,9 @@ public sealed class ResearchOptimizationService(
             .Select(value => MapPendingPoint(value, controls))
             .ToArray();
 
-        var topK = mechanismKnowledge.RankingConstraints.Count == 0 ? 1 : 4;
+        // The platform exposes one actionable recommendation. Keep the optimizer
+        // contract aligned with that UX instead of calculating and discarding candidates.
+        const int topK = 1;
         var call = new OptimizerSuggestionCall
         {
             Campaign = MechanismModelRecommendationPolicy.Apply(
@@ -142,7 +146,8 @@ public sealed class ResearchOptimizationService(
                 Prediction = MapPrediction(recommendationKey, suggestion)
             }],
             CreatedBy = userId,
-            GeneratedAt = now
+            GeneratedAt = now,
+            ExpiresAt = now.AddHours(24)
         };
         try
         {

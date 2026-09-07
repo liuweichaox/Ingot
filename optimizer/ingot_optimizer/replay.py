@@ -70,8 +70,8 @@ def _summarize(runs: Sequence[int | None]) -> dict[str, float | int | None]:
     hits = [value for value in runs if value is not None]
     return {
         "success_rate": len(hits) / len(runs),
-        "median_trials": float(np.median(hits)) if hits else None,
-        "mean_trials": float(np.mean(hits)) if hits else None,
+        "median_runs_to_specification": float(np.median(hits)) if hits else None,
+        "mean_runs_to_specification": float(np.mean(hits)) if hits else None,
         "runs": len(runs),
     }
 
@@ -114,10 +114,10 @@ def _run_random(
     campaign: Campaign, truth_fn: TruthFunction, budget: int, seed: int
 ) -> int | None:
     rng = np.random.default_rng(seed + 10_000)
-    for trial in range(1, budget + 1):
+    for run_number in range(1, budget + 1):
         params = _sample_feasible(campaign, rng)
         if _is_success(campaign, _evaluate_truth(campaign, truth_fn, params)):
-            return trial
+            return run_number
     return None
 
 
@@ -521,7 +521,7 @@ def replay_optimizer_history_pool_once(
         raise ValueError(
             "historical replay with outcome safety constraints requires preregistered initial observations"
         )
-    total_trials, selected, trace, diagnostics = _historical_optimizer_run(
+    total_run_count, selected, trace, diagnostics = _historical_optimizer_run(
         campaign,
         history,
         budget,
@@ -531,10 +531,10 @@ def replay_optimizer_history_pool_once(
         soft_constraints,
     )
     return {
-        "total_trials": total_trials,
-        "additional_trials": (
-            total_trials - initial_observation_count
-            if total_trials is not None
+        "total_run_count": total_run_count,
+        "additional_run_count": (
+            total_run_count - initial_observation_count
+            if total_run_count is not None
             else None
         ),
         "selected_history_indices": selected,
@@ -608,7 +608,7 @@ def replay_history_pool(
     original_hit = _historical_original_order(campaign, history, effective_budget)
     original_selected = list(range(original_hit or effective_budget))
     return {
-        "original_order_trials": original_hit,
+        "original_order_runs_to_specification": original_hit,
         "optimizer": _summarize(optimizer_runs),
         "random": _summarize(random_runs),
         "response_surface": (

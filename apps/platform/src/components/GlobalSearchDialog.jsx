@@ -27,8 +27,8 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
   }, [open, selectedIndex, selectedPath]);
 
   function select(path) {
-    onClose();
     navigate(path);
+    onClose();
   }
   function handleKeyDown(event) {
     if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;

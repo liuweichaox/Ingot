@@ -38,29 +38,36 @@ public sealed class ResearchObservationAssembler(
             ? throw new ProcessResearchRuleException("优化范围必须绑定站点后才能读取生产运行。")
             : project.SiteCode.Trim();
         var context = project.Context;
-        var productFamilyCode = ContextValue(context, "product_family_code");
-        var productCode = ContextValue(context, "product_code");
-        var equipmentId = ContextValue(context, "equipment_id");
+        var productFamilyCode = ContextValue(context, ResearchProjectScopeKeys.ProductFamilyCode);
+        var productCode = ContextValue(context, ResearchProjectScopeKeys.ProductCode);
+        var equipmentId = ContextValue(context, ResearchProjectScopeKeys.EquipmentId);
+        var processSpecificationId = ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationId);
+        var processSpecificationVersion = ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationVersion);
+        var outputItemId = ContextValue(context, ResearchProjectScopeKeys.OutputItemId);
+        var from = ParseLookback(context);
         var executionIds = new List<string>();
+        var totalMatchingRuns = 0;
         const int pageSize = 500;
         for (var offset = 0; offset < MaximumRunsPerAssembly; offset += pageSize)
         {
             var page = await productionRuns.QueryAsync(
-                    null,
+                    from,
                     null,
                     productFamilyCode,
                     productCode,
-                    null,
+                    processSpecificationId,
                     equipmentId,
-                    null,
+                    outputItemId,
                     null,
                     "completed",
                     Math.Min(pageSize, MaximumRunsPerAssembly - offset),
                     offset,
                     null,
                     ct,
-                    siteId: siteId)
+                    siteId: siteId,
+                    processSpecificationVersion: processSpecificationVersion)
                 .ConfigureAwait(false);
+            totalMatchingRuns = page.Total;
             executionIds.AddRange(page.Data
                 .Where(static value => value.LifecycleComplete)
                 .Select(static value => value.ExecutionId));
@@ -72,7 +79,7 @@ public sealed class ResearchObservationAssembler(
             .Take(MaximumRunsPerAssembly)
             .ToArray();
         if (distinctIds.Length == 0)
-            return new ResearchObservationAssembly([], 0);
+            return new ResearchObservationAssembly([], 0, totalMatchingRuns > MaximumRunsPerAssembly);
         var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
         var candidates = distinctIds.Select((executionId, index) => new CandidateRun(
             new ProductionRunCandidate
@@ -82,7 +89,12 @@ public sealed class ResearchObservationAssembler(
             },
             DateTimeOffset.MinValue,
             DateTimeOffset.MinValue)).ToArray();
-        return await AssembleRunsAsync(project, candidates, scenarioPackage, ct).ConfigureAwait(false);
+        var assembly = await AssembleRunsAsync(project, candidates, scenarioPackage, ct)
+            .ConfigureAwait(false);
+        return assembly with
+        {
+            IsTruncated = totalMatchingRuns > MaximumRunsPerAssembly
+        };
     }
 
     public async Task<ResearchObservationAssembly> AssembleProductionRunAsync(
@@ -211,15 +223,26 @@ public sealed class ResearchObservationAssembler(
         ExecutionComparisonRow execution)
     {
         var context = project.Context;
-        return Matches(ContextValue(context, "product_family_code"), execution.ProductFamilyCode) &&
-            Matches(ContextValue(context, "product_code"), execution.ProductCode) &&
-            Matches(ContextValue(context, "equipment_id"), execution.EquipmentId) &&
-            Matches(ContextValue(context, "process_specification_id"), execution.ProcessSpecificationId) &&
-            Matches(ContextValue(context, "output_item_id"), execution.OutputItemId);
+        return Matches(ContextValue(context, ResearchProjectScopeKeys.ProductFamilyCode), execution.ProductFamilyCode) &&
+            Matches(ContextValue(context, ResearchProjectScopeKeys.ProductCode), execution.ProductCode) &&
+            Matches(ContextValue(context, ResearchProjectScopeKeys.EquipmentId), execution.EquipmentId) &&
+            Matches(ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationId), execution.ProcessSpecificationId) &&
+            Matches(ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationVersion), execution.ProcessSpecificationVersion) &&
+            Matches(ContextValue(context, ResearchProjectScopeKeys.OutputItemId), execution.OutputItemId);
     }
 
     private static bool Matches(string? expected, string? actual)
         => expected is null || string.Equals(expected, actual?.Trim(), StringComparison.Ordinal);
+
+    private static DateTimeOffset? ParseLookback(IReadOnlyDictionary<string, string> context)
+    {
+        var value = ContextValue(context, ResearchProjectScopeKeys.LookbackDays);
+        if (value is null)
+            return null;
+        if (!int.TryParse(value, out var days) || days is < 1 or > 3650)
+            throw new ProcessResearchRuleException("历史数据窗口必须是 1 到 3650 天。");
+        return DateTimeOffset.UtcNow.AddDays(-days);
+    }
 
     private ResearchRunObservation BuildObservation(
         ResearchProject project,

@@ -31,7 +31,7 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
     result = replay_history_pool(campaign(), history, n_seeds=3)
 
     assert result["evidence_kind"] == "historical-pool-ranking"
-    assert result["original_order_trials"] == 2
+    assert result["original_order_runs_to_specification"] == 2
     for selected in result["selected_history_indices"]:
         assert len(selected) == len(set(selected))
         assert set(selected).issubset(range(len(history)))
@@ -56,7 +56,7 @@ def test_history_pool_replay_only_selects_real_rows_without_reuse():
                 assert step["nearest_historical_candidate_distance"] == 0.0
 
 
-def test_single_optimizer_episode_reports_additional_trials_and_audit_trace():
+def test_single_optimizer_episode_reports_additional_runs_and_audit_trace():
     history = [
         {
             "params": {"x": value},
@@ -76,7 +76,7 @@ def test_single_optimizer_episode_reports_additional_trials_and_audit_trace():
     )
 
     assert result["evidence_kind"] == "historical-pool-ranking"
-    assert result["total_trials"] == result["additional_trials"] + 3
+    assert result["total_run_count"] == result["additional_run_count"] + 3
     assert result["selected_history_indices"][:3] == [0, 1, 2]
     assert len(result["selected_history_indices"]) == len(
         set(result["selected_history_indices"])

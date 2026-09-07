@@ -17,7 +17,7 @@ Frozen historical records may be used offline to check algorithm determinism, co
 
 ## Conclusion Boundary
 
-Repository demos, synthetic tests, and offline algorithm evaluation establish software contracts or method boundaries only; they do not promise benefit for a particular factory. Deployers set their own scope, comparison baseline, quality measures, cost accounting, and stop conditions. When evidence is insufficient, repair the data chain, use a simpler method, or pause recommendations rather than presenting association as a causal conclusion.
+Synthetic replays, automated tests, and offline algorithm evaluation establish software contracts or method boundaries only; they do not promise benefit for a particular factory. Deployers set their own scope, comparison baseline, quality measures, cost accounting, and stop conditions. When evidence is insufficient, repair the data chain, use a simpler method, or pause recommendations rather than presenting association as a causal conclusion.
 
 ## Data Confidentiality
 

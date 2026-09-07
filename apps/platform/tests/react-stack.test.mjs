@@ -55,7 +55,6 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
   const files = await sourceFiles(new URL("../src/", import.meta.url));
   assert.equal(files.filter(file => file.pathname.endsWith(".vue")).length, 0);
 });
-
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
     "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
@@ -81,12 +80,6 @@ test("platform identity presents Ingot as a process diagnosis and optimization s
   assert.match(html, /Ingot · 工艺追因与优化系统/);
   assert.match(html, /真实生产条件、过程轨迹与质量结果/);
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
-});
-
-test("demo mode is identified without mixing a scripted story into the workbench", () => {
-  assert.match(auth, /import\.meta\.env\.MODE === "demo"/);
-  assert.match(auth, /演示环境/);
-  assert.doesNotMatch(pages, /三分钟演示：一片镜片为什么超差|RUN-2026-0821-005|0\.48 μm/);
 });
 
 test("navigation and overlays are accessible Headless UI components", () => {
@@ -354,13 +347,13 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
 
 test("local authentication has a complete login and session-expiry experience", () => {
   assert.match(main, /<AuthGate>/);
-  assert.match(auth, /PROCESS DIAGNOSIS · SPECIFICATION REVISION/);
+  assert.match(auth, /PROCESS DIAGNOSIS · RECIPE RECOMMENDATION/);
   assert.match(auth, /从真实运行，/);
-  assert.match(auth, /到下一版工艺规范。/);
+  assert.match(auth, /到下一份配方建议。/);
   assert.match(auth, /ENGINEERING DECISION · EVIDENCE/);
   assert.match(auth, /结论可复用/);
   assert.match(auth, /真实运行、质量结果、工艺追因与工艺规范版本/);
-  assert.doesNotMatch(auth, /下一份配方/);
+  assert.match(auth, /下一份配方/);
   assert.match(auth, /\/api\/v1\/auth\/me/);
   assert.match(auth, /\/api\/v1\/auth\/login/);
   assert.match(auth, /ingot:unauthorized/);

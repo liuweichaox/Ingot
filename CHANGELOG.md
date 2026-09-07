@@ -10,8 +10,8 @@ All notable project changes will be documented here. The format follows [Keep a 
 - Embedded Agent chat, investigation tools, data-quality explanations, and deterministic/OpenAI provider boundaries inside Platform API.
 - Stateless BoTorch optimization service for next-recipe recommendations inside safety boundaries.
 - Weighted objectives, parameter constraints, safety outcome constraints, and pending-point avoidance.
-- Automatic assembly of experiment observations from cycles, actual recipes, process features, and inspections.
-- Idempotent optimized experiments and atomic result persistence.
+- Automatic assembly of optimization observations from cycles, actual recipes, process features, and inspections.
+- Idempotent next-recipe recommendations and atomic outcome persistence.
 - Bilingual open-source documentation and project website.
 - Observed-coverage envelope that keeps next-recipe recommendations inside the region real production runs cover, enforced by a range gate and a hat-matrix leverage gate, generated from inside the envelope, and revalidated independently by Platform.
 
@@ -19,7 +19,8 @@ All notable project changes will be documented here. The format follows [Keep a 
 
 - Platform is now documented as a modular monolith: `Platform API` hosts Platform Infrastructure and Agent capabilities, while `Edge ConnectorHost` and `Optimizer` remain separate runtime services.
 - Website and Docs are documented as a separate public-site deployment, apart from the factory application Compose stack.
-- Product positioning now centers on reducing experiments required to reach process specification.
+- Product positioning now centers on learning from real runs to reach process specification.
 - The first concrete validation scenario has data onboarding and diagnosis running, with historical replay, shadow, and controlled-online validation still in progress; its industry and equipment details stay out of the public repository.
 - Removed half-open `validate-hypothesis` decision intent; recommendations use `reach-specification` within the observed coverage envelope only.
 - Removed unused optimizer `POST /v1/designs` DOE endpoint and Platform `DesignAsync` client path; historical replay remains for offline evaluation.
+- Bumped the Optimizer HTTP API to `0.6.0` for the breaking historical-replay response field rename; no legacy field compatibility layer is retained.

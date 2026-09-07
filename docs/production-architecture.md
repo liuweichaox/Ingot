@@ -8,7 +8,7 @@
 
 Ingot 支撑生产，不等于把模型直接接到 PLC，也不等于把 PostgreSQL 换成另一种时序数据库。生产能力分为两个独立等级：
 
-1. **生产观测与决策支持**：持续采集真实配方运行，完成追溯、比较、诊断、下一配方建议和可选补充证据审查；平台不直接改变设备状态。
+1. **生产观测与决策支持**：持续采集真实配方运行，完成追溯、比较、诊断、下一配方建议、工程师决策和后续运行结果关联；平台不直接改变设备状态。
 2. **受控行动**：在前一级长期稳定且相应场景通过准入后，把已批准的结构化动作交给 Edge，在现场联锁之外再次执行确定性校验、限幅、停止和回滚。
 
 默认交付目标是第一级。第二级必须按设备类别和动作类型单独认证，不能因分析能力上线而自动获得。
@@ -47,7 +47,7 @@ PostgreSQL 保存：
 - 身份、权限、站点和设备目录；
 - 工艺配置、分析方案和版本；
 - 过程执行、上下文和检验关系；
-- 配方优化任务、独立配方建议、补充证据审查、审批和状态机；
+- 配方优化任务、配方建议、工程师决策和真实运行结果；
 - Agent 运行、输入快照、建议和证据哈希；
 - 已复核知识片段、检索任务，以及可重建的全文/相似词和向量索引；
 - 受控动作、执行回执、停止与回滚结果；
@@ -172,7 +172,7 @@ Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得
 | 站点生产数据 | `SiteId`，并由 Edge token 绑定 | `platform_edges`；`event_ingest_keys`、`production_events`、`process_sample_frames`、`collection_points`、`data_object_summaries`、`data_object_operation_keys` | 摄入、查询、保留、容量和导出都必须显式指定站点；禁止推断默认站点 |
 | 版本化配置 | 配置身份与版本；发布绑定指向站点/Edge | `ingestion_tasks`、`ingestion_task_bindings`、`process_data_models`、`process_analysis_plans`、`process_specification_versions`、`signal_definitions` | 定义可以复用；生效范围只能通过显式绑定表达，生产事件必须保存实际应用的配置引用 |
 | 运行派生数据 | `ExecutionId`，可追溯到站点摄入事实 | `execution_features`、`execution_phases`、分析物化与重算任务、`operation_context_snapshots` | 不作为独立租户边界；所有外部读取必须从已授权站点范围解析运行集合，禁止仅凭任意 ExecutionId 越站点读取 |
-| 研发项目与证据 | `ProjectId` + 项目成员/角色 | `process_research_*`、`research_*`、`mechanism_*`、`knowledge_*`、`dataset_quality_validation_reports` | 项目可以引用一个或多个获授权站点的数据范围；证据保留原站点与运行来源，不因复制进项目而改变归属 |
+| 研发项目与证据 | `ProjectId` + 项目成员/角色 | `process_research_*`、`research_*`、`recipe_recommendation*`、`mechanism_*`、`knowledge_*`、`training_dataset_versions` | 项目可以引用一个或多个获授权站点的数据范围；证据保留原站点与运行来源，不因复制进项目而改变归属 |
 | 质量与检验 | `SiteId` + 运行/项目/检验计划关系 | `inspection_*`、`case_level_evaluations`、`model_evaluations`、`model_drift_readings` | 检验记录、范围和附件固化站点归属；授权仍从关联运行或项目继承，附件和审核日志不能脱离父记录单独访问 |
 | Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events`、`problem_cases` | Agent 记录不授予新数据权限；回放时重新验证用户、项目和站点范围 |
 
@@ -428,4 +428,4 @@ Edge 与 Platform 使用双向 TLS 或现场等价的设备身份机制，每个
 - 不在没有容量证据时维护两套长期生产数据路径；
 - 不因新项目没有历史用户而省略首次生产发布之后的迁移、恢复和回滚纪律。
 
-部署操作见[部署运维](deployment.md)，稳定业务边界见[系统设计](design.md)，真实场景的科学验证见[场景验证](rollout.md)。
+部署操作见[部署运维](deployment.md)，稳定业务边界见[系统设计](design.md)，真实场景的科学评估见[场景评估](rollout.md)。

@@ -32,9 +32,9 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
     }
 
     [Fact]
-    public async Task AnonymousResearchRequest_IsRejectedByRealAuthorizationMiddleware()
+    public async Task AnonymousProcessExecutionRequest_IsRejectedByRealAuthorizationMiddleware()
     {
-        var response = await client.GetAsync("/api/v1/research-projects");
+        var response = await client.GetAsync("/api/v1/process-executions?siteId=site-a");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -76,7 +76,7 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
     [Fact]
     public async Task AuthenticatedUserWithoutPlatformRole_IsForbiddenByRealAuthorizationMiddleware()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/research-projects");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/process-executions?siteId=site-a");
         request.Headers.Add(TestAuthenticationHandler.RoleHeaderName, "unrelated.role");
 
         var response = await client.SendAsync(request);
@@ -84,7 +84,7 @@ public sealed class PlatformAuthorizationPipelineTests : IClassFixture<PlatformA
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    public sealed class Factory : WebApplicationFactory<Ingot.Platform.Api.Controllers.ResearchProjectsController>
+    public sealed class Factory : WebApplicationFactory<Ingot.Platform.Api.Controllers.ProcessExecutionsController>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {

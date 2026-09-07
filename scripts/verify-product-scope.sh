@@ -56,4 +56,52 @@ if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' 
   exit 1
 fi
 
+# Retired planning vocabulary must stay outside current code, contracts, UI,
+# tests, and documentation. Historical migration scripts remain immutable
+# because deployed databases verify their committed checksums.
+legacy_en='exper''iment'
+legacy_run_word='tri''al'
+legacy_zh='实''验'
+legacy_zh_alt='试''验'
+if grep -RIniE \
+  --exclude='package-lock.json' \
+  --exclude='*.tsbuildinfo' \
+  --exclude='verify-product-scope.sh' \
+  --exclude='0001_baseline.sql' \
+  --exclude='0008_recipe_recommendations.sql' \
+  --exclude='0013_research_evidence_integrity.sql' \
+  --exclude='0015_retire_experiment_workflow.sql' \
+  --exclude='0022_remove_legacy_workflow_artifacts.sql' \
+  --exclude='0023_remove_retired_validation_artifacts.sql' \
+  --exclude-dir=node_modules \
+  --exclude-dir=dist \
+  --exclude-dir=.next \
+  --exclude-dir=out \
+  --exclude-dir=bin \
+  --exclude-dir=obj \
+  --exclude-dir=.venv \
+  --exclude-dir=.pytest_cache \
+  "(^|[^[:alnum:]_])${legacy_en}(s|al|ation|ing)?([^[:alnum:]_]|$)|(^|[^[:alnum:]_])${legacy_run_word}(s|ing)?([^[:alnum:]_]|$)|${legacy_zh}([^室]|$)|${legacy_zh_alt}([^室]|$)" \
+  README.md README.en.md CONTRIBUTING.md CONTRIBUTING.en.md SECURITY.md CHANGELOG.md \
+  docs apps optimizer src tests .github; then
+  echo "Retired run-planning vocabulary is forbidden outside immutable cleanup migrations." >&2
+  exit 1
+fi
+
+if grep -RInE \
+  --exclude='verify-product-scope.sh' \
+  --exclude='0001_baseline.sql' \
+  --exclude='0013_research_evidence_integrity.sql' \
+  --exclude='0014_shadow_recommendation_execution_links.sql' \
+  --exclude='0015_retire_experiment_workflow.sql' \
+  --exclude='0022_remove_legacy_workflow_artifacts.sql' \
+  --exclude='0023_remove_retired_validation_artifacts.sql' \
+  --exclude-dir=bin \
+  --exclude-dir=obj \
+  '(^|[^[:alnum:]_])recommendation_knowledge_usage|research_shadow_recommendations|research_retired_workflow_records|research_transfer_assessments|research_rollback_drills|ResearchTransferAssessmentStatuses|ResearchTransferOutcomes|TransferAssessmentId|transfer-assessment' \
+  src tests; then
+  echo "Retired workflow storage names are forbidden outside immutable cleanup migrations." >&2
+  exit 1
+fi
+
 echo "Platform Web product boundaries verified."

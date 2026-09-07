@@ -31,7 +31,7 @@ from ingot_optimizer.replay import replay_history_pool
 import numpy as np
 
 
-app = FastAPI(title="Ingot Process Optimizer", version="0.5.0")
+app = FastAPI(title="Ingot Process Optimizer", version="0.6.0")
 
 
 class StrictModel(BaseModel):

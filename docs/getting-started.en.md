@@ -1,55 +1,17 @@
 # Getting started
 
-> Document status: **current operating guide**. This page provides a synthetic-workflow tour and instructions for starting the complete local stack. Requirements for a real pilot are defined in the [Recipe-optimization pilot guide](pilot.en.md).
+> Document status: **current operating guide**. This page provides instructions for starting the complete local stack. Requirements for a real pilot are defined in the [Recipe-optimization pilot guide](pilot.en.md).
 
 ## Choose a path
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Evaluate the product workflow | [Five-minute synthetic tour](#five-minute-synthetic-tour) | Complete a nonconforming-run comparison and inspect candidate causes |
 | Run the complete system locally | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy |
 | Prepare a real project | [Recipe-optimization pilot guide](pilot.en.md) | Produce the first qualified observations and next-recipe recommendation |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
 
 See [Current status](status.en.md) for capability and validation maturity.
-
-## Five-minute synthetic tour
-
-This path requires Node.js 22.22+ but no database, equipment, or Docker.
-
-Install frontend dependencies on the first run:
-
-```bash
-npm --prefix apps/platform ci
-```
-
-Start the synthetic business API and frontend in two terminals:
-
-```bash
-# Terminal 1
-node scripts/platform-demo.mjs
-```
-
-```bash
-# Terminal 2
-npm --prefix apps/platform run demo
-```
-
-Open `http://127.0.0.1:3001`:
-
-- `demo / demo`: tour the engineering workflow;
-- `admin / admin12345`: inspect system administration and pilot-acceptance entry points.
-
-The workbench provides access to run traceability, inspection records, and process investigation. Users can select comparable runs, compare actual conditions and trajectories, and inspect candidate causes. Backend APIs support recipe recommendations and engineer decisions; the current frontend does not yet provide the corresponding workflow pages. All data are synthetic. The demo validates pages and workflow, not real process benefit.
-
-Common interactions:
-
-- Open feature search with `Ctrl+K` (`⌘K` on macOS), select with the arrow keys, open with `Enter`, and close with `Esc`. Results reflect the current role.
-- In the analysis assistant, `Enter` sends and `Shift+Enter` inserts a new line. Pressing `Enter` while composing text with an input method does not send.
-- Notifications appear in order, each for 3.5 seconds, and can be dismissed. Key guidance about batch consistency, calibration expiry, and selected analysis rules appears below the relevant form fields.
-
-Press `Ctrl+C` in both terminals when finished.
 
 ## Start the complete stack
 

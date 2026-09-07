@@ -356,9 +356,6 @@ public sealed class MechanismKnowledgeServiceTests
         public Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<MechanismClaimConflict>>(conflicts.Where(value => value.ProjectId == projectId).ToArray());
 
-        public Task SaveUsagesAsync(IReadOnlyList<MechanismClaimUsage> values, CancellationToken ct = default)
-            => Task.CompletedTask;
-
         public Task SaveRecipeRecommendationUsagesAsync(
             IReadOnlyList<MechanismClaimUsage> values,
             CancellationToken ct = default)

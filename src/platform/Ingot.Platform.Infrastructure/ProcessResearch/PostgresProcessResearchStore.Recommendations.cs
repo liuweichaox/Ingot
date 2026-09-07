@@ -184,7 +184,7 @@ public sealed partial class PostgresProcessResearchStore
             SELECT decision.payload
                    || jsonb_build_object('actualExecutionKey', execution_link.actual_execution_key)
             FROM research_recipe_recommendation_decisions AS decision
-            JOIN research_recipe_recommendation_decision_executions AS execution_link
+            LEFT JOIN research_recipe_recommendation_decision_executions AS execution_link
                 ON execution_link.decision_id = decision.decision_id
             LEFT JOIN research_recipe_recommendation_decision_outcomes AS outcome
                 ON outcome.decision_id = decision.decision_id

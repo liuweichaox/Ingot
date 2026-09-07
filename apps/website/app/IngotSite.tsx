@@ -23,17 +23,17 @@ const copy = {
     ],
     github: "查看 GitHub",
     docsLabel: "文档",
-    eyebrow: "PROCESS DIAGNOSIS · SPECIFICATION REVISION",
+    eyebrow: "PROCESS DIAGNOSIS · RECIPE RECOMMENDATION",
     titleA: "从真实运行，",
-    titleB: "到下一版工艺规范。",
-    lead: "开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师修订下一版工艺规范。",
-    primary: "五分钟体验",
+    titleB: "到下一份配方建议。",
+    lead: "开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议，并按需修订下一版工艺规范。",
+    primary: "阅读快速开始",
     secondary: "了解工作方式",
     truth: ["证据可追溯", "原因可验证", "建议可审核", "结论可复用"],
     panelKicker: "ENGINEERING DECISION · EVIDENCE",
     panelTitle: "一次运行的工程证据",
-    panelCampaign: "SPECIFICATION REVISION · RUN-042",
-    panelBadge: "下一版草稿待确认",
+    panelCampaign: "RECIPE RECOMMENDATION · RUN-042",
+    panelBadge: "配方建议待确认",
     parameters: [
       ["实际控制变量", "42.0", ""],
       ["阶段轨迹偏差", "+1.8", "σ"],
@@ -42,32 +42,32 @@ const copy = {
     predictions: [
       ["关键差异", "保压阶段"],
       ["有效运行", "12 条"],
-      ["下一版规范", "待修订"],
+      ["下一份配方", "待审核"],
     ],
     panelFoot: "产品界面示意 · 同时呈现事实、差异、不确定性和可执行下一步",
     productKicker: "FROM DATA TO DECISION",
-    productTitle: "正常生产本身，就是工艺规范持续修订的依据。",
-    productText: "系统关联已完成运行的实际参数、过程上下文和质量结果。无需先建立实验，也无需工程师重新归类配方。工程师从工艺追因回到已发布规范，带着证据、修订理由和机理依据创建下一版草稿。",
+    productTitle: "正常生产本身，就是下一份配方建议的依据。",
+    productText: "系统直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方。工程师先审核建议并记录决定，再带着证据、修订理由和机理依据创建下一版工艺规范草稿。",
     productCards: [
       ["01", "建立运行证据", "用同一个运行身份关联实际条件、阶段轨迹、材料、工装和质量结果。"],
       ["02", "完成工艺追因", "以同类真实运行、质量结果和过程轨迹缩小候选原因，并明确证据范围。"],
-      ["03", "修订下一版规范", "工程师继承已发布版本的参数与适用条件，记录修订理由、机理依据和引用证据。"],
-      ["04", "继续从生产回流", "新版本经既有生产流程投入运行；后续运行和质量结果继续成为下一次修订依据。"],
+      ["03", "审核下一份配方", "工程师确认建议的边界和理由，记录接受、修改或拒绝决定。"],
+      ["04", "修订规范并回流", "已确认的参数决定可带入下一版规范草稿；后续运行和质量结果继续回流。"],
     ],
     shotsKicker: "REAL WORKBENCH",
-    shotsTitle: "同一套工作台，覆盖从真实运行到下一版工艺规范。",
-    shotsText: "以下为合成演示数据的真实界面：工作台汇总生产与质量状态，追因总览识别待处理运行，工程师在工艺规范中带着实际运行依据创建下一版草稿。",
+    shotsTitle: "同一套工作台，覆盖从真实运行到配方建议。",
+    shotsText: "以下为示意数据界面：工作台汇总生产与质量状态，追因总览识别待处理运行，工程师审核建议并记录后续规范修订依据。",
     viewImage: "查看大图",
     shots: [
       ["/screenshots/production-run.png", "真实生产运行", "查看实际使用的工艺规范、过程数据、质量结果和生产上下文"],
       ["/screenshots/diagnosis.png", "工艺追因", "从待分析运行进入差异比较与候选原因"],
       ["/screenshots/optimization.png", "配方优化", "按已确认的证据范围整理候选参数与下一步验证"],
-      ["/screenshots/next-recipe.png", "规范修订草稿", "以已发布规范为基准，保存修订理由、机理依据与实际运行引用"],
+      ["/screenshots/next-recipe.png", "配方建议与规范草稿", "审核建议后，以已发布规范为基准保存修订理由与实际运行引用"],
     ],
-    shotsNote: "界面来自合成演示，仅验证软件流程，不证明真实工艺收益。",
+    shotsNote: "界面使用示意数据，仅验证软件流程，不证明真实工艺收益。",
     loopKicker: "ENGINEER IN THE LOOP",
-    loopTitle: "系统组织证据，工程师修订规范。",
-    loopText: "Ingot 负责关联真实运行、质量结果和追因证据；工程师负责判断原因、记录机理依据、确认参数变化并发布下一版工艺规范。系统不自动修改生产参数。",
+    loopTitle: "系统组织证据，工程师决定配方并修订规范。",
+    loopText: "Ingot 负责关联真实运行、质量结果和追因证据；工程师负责审核建议、判断原因、记录机理依据、确认参数变化并发布下一版工艺规范。系统不自动修改生产参数。",
     loopSteps: [
       ["01", "定义", "问题 · 变量 · 边界"],
       ["02", "接入", "协议 · 点位 · 单位"],
@@ -106,8 +106,8 @@ const copy = {
       ["持续演进", "统计方法、追因策略、页面布局和语言模型"],
     ],
     openKicker: "RUN IT YOURSELF",
-    openTitle: "开源覆盖完整工艺规范修订闭环。",
-    openText: "Ingot 采用 Apache-2.0 许可，可在厂内自托管。现场采集、运行证据、工艺追因、规范版本和机理依据位于同一仓库；公开验证协议与结果可以独立复现。",
+    openTitle: "开源覆盖从真实运行到配方建议的完整闭环。",
+    openText: "Ingot 采用 Apache-2.0 许可，可在厂内自托管。现场采集、运行证据、工艺追因、配方建议、规范版本和机理依据位于同一仓库；代码、契约和软件行为可以独立复现，具体场景评估由部署方用自己的数据完成。",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "阅读快速开始",
     contribute: "参与贡献",
@@ -116,10 +116,10 @@ const copy = {
     statusText: "主要软件流程已经实现并有自动化测试；真实工厂收益验证尚未完成。系统可用于产品评估和受控试点，现有证据不能证明其已稳定提升工艺指标或缩短工程决策周期。",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "从一个真实工艺问题开始。",
-    ctaText: "接入一组真实生产运行，核对实际参数和质量结果，从追因证据开始创建第一份可审核的下一版工艺规范。",
+    ctaText: "接入一组真实生产运行，核对实际参数和质量结果，从追因证据开始审核第一份配方建议，并在需要时通过既有流程修订规范。",
     ctaPrimary: "建立第一个数据闭环",
     ctaSecondary: "打开 GitHub",
-    footer: "Ingot · 从真实运行，到下一版工艺规范。",
+    footer: "Ingot · 从真实运行，到下一份配方建议。",
   },
   en: {
     switchLabel: "中文",
@@ -134,17 +134,17 @@ const copy = {
     ],
     github: "View GitHub",
     docsLabel: "Docs",
-    eyebrow: "PROCESS DIAGNOSIS · SPECIFICATION REVISION",
+    eyebrow: "PROCESS DIAGNOSIS · RECIPE RECOMMENDATION",
     titleA: "From real runs",
-    titleB: "to the next process specification.",
-    lead: "An open-source process diagnosis and optimization system that turns linked equipment, production, and inspection data into trustworthy evidence for engineers revising the next process specification.",
-    primary: "Take the five-minute tour",
+    titleB: "to the next recipe recommendation.",
+    lead: "An open-source process diagnosis and optimization system that turns linked equipment, production, and inspection data into trustworthy evidence for engineers reviewing the next recipe recommendation and, when needed, revising the next process specification.",
+    primary: "Read the quickstart",
     secondary: "See how it works",
     truth: ["Traceable evidence", "Testable causes", "Reviewable recommendations", "Reusable conclusions"],
     panelKicker: "ENGINEERING DECISION · EVIDENCE",
     panelTitle: "Evidence for one real run",
-    panelCampaign: "SPECIFICATION REVISION · RUN-042",
-    panelBadge: "Next-version draft awaiting confirmation",
+    panelCampaign: "RECIPE RECOMMENDATION · RUN-042",
+    panelBadge: "Recommendation awaiting review",
     parameters: [
       ["Actual control", "42.0", ""],
       ["Stage deviation", "+1.8", "σ"],
@@ -153,32 +153,32 @@ const copy = {
     predictions: [
       ["Key difference", "Holding stage"],
       ["Valid runs", "12"],
-      ["Next specification", "Ready to revise"],
+      ["Next recipe", "Ready to review"],
     ],
     panelFoot: "Product illustration · facts, differences, uncertainty, and an actionable next step",
     productKicker: "FROM DATA TO DECISION",
-    productTitle: "Normal production becomes the evidence for continuous specification revision.",
-    productText: "The system links actual settings, process context, and quality outcomes from completed runs. No experiment setup or manual recipe reclassification is required. Engineers return from diagnosis to a published specification and create the next draft with evidence, rationale, and mechanism notes.",
+    productTitle: "Normal production becomes the evidence for the next recipe recommendation.",
+    productText: "The system directly links actual settings, process context, and quality outcomes from completed runs without manual recipe reclassification. Engineers review a recommendation, record the decision, then carry evidence, rationale, and mechanism notes into a specification draft when needed.",
     productCards: [
       ["01", "Build run evidence", "Link actual conditions, stage trajectories, material, tooling, and quality outcomes through one run identity."],
       ["02", "Complete process diagnosis", "Use comparable real runs, quality outcomes, and process traces to narrow candidate causes and disclose evidence scope."],
-      ["03", "Revise the next specification", "Engineers inherit parameters and applicability, then record a rationale, mechanism notes, and cited evidence."],
-      ["04", "Return through production", "The new version is used through the existing production flow; later runs and quality outcomes become the next revision's evidence."],
+      ["03", "Review the next recommendation", "Engineers confirm boundaries and record an accepted, modified, or rejected decision."],
+      ["04", "Revise and return through production", "A confirmed decision can seed the next specification draft; later runs and quality outcomes feed the next cycle."],
     ],
     shotsKicker: "REAL WORKBENCH",
-    shotsTitle: "One workbench, from real runs to the next process specification.",
-    shotsText: "Real screenshots from the synthetic demo: the workbench summarizes production and quality, diagnosis identifies runs that need attention, and engineers create the next draft from a process specification with actual-run evidence.",
+    shotsTitle: "One workbench, from real runs to the next recommendation.",
+    shotsText: "Illustrative data shows the workbench summarizing production and quality, diagnosis identifying runs that need attention, and engineers reviewing recommendations before carrying evidence into a specification draft.",
     viewImage: "View full-size image",
     shots: [
       ["/screenshots/production-run.png", "Real production run", "Review the applied specification, process data, quality outcome, and production context"],
       ["/screenshots/diagnosis.png", "Process diagnosis", "Start from runs that need attention and narrow candidate causes"],
       ["/screenshots/optimization.png", "Recipe optimization", "Organize candidate parameters and the next validation step within the evidence boundary"],
-      ["/screenshots/next-recipe.png", "Revision draft", "Use a published specification as the baseline and save rationale, mechanism notes, and real-run evidence"],
+      ["/screenshots/next-recipe.png", "Recommendation and revision draft", "Review a recommendation, then carry its rationale and real-run evidence into a specification draft"],
     ],
-    shotsNote: "Screenshots come from the synthetic demo; they validate the software workflow, not real process outcomes.",
+    shotsNote: "Screenshots use illustrative data; they validate the software workflow, not real process outcomes.",
     loopKicker: "ENGINEER IN THE LOOP",
-    loopTitle: "The system organizes evidence. Engineers revise specifications.",
-    loopText: "Ingot links real runs, quality outcomes, and diagnostic evidence. Engineers judge causes, record mechanism notes, confirm parameter changes, and publish the next process specification. The system never changes production parameters automatically.",
+    loopTitle: "The system organizes evidence. Engineers decide and revise.",
+    loopText: "Ingot links real runs, quality outcomes, and diagnostic evidence. Engineers review recommendations, judge causes, record mechanism notes, confirm parameter changes, and publish the next process specification. The system never changes production parameters automatically.",
     loopSteps: [
       ["01", "Define", "question · variables · boundaries"],
       ["02", "Connect", "protocols · points · units"],
@@ -217,8 +217,8 @@ const copy = {
       ["Continues evolving", "Statistics, diagnostic strategies, page layouts, and language models"],
     ],
     openKicker: "RUN IT YOURSELF",
-    openTitle: "Open source across the complete process-specification revision loop.",
-    openText: "Ingot is Apache-2.0 licensed and self-hostable inside the plant. Field acquisition, run evidence, process diagnosis, specification versions, and mechanism notes live in one repository; public validation protocols and results are independently reproducible.",
+    openTitle: "Open source across the complete real-run to recipe-recommendation loop.",
+    openText: "Ingot is Apache-2.0 licensed and self-hostable inside the plant. Field acquisition, run evidence, process diagnosis, recipe recommendations, specification versions, and mechanism notes live in one repository; code, contracts, and software behavior are reproducible, while scenario-specific evaluation belongs to the deployer's own data.",
     command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "Read the quickstart",
     contribute: "Contribute",
@@ -227,10 +227,10 @@ const copy = {
     statusText: "The main software workflow is implemented and has automated tests; real-factory benefit validation remains incomplete. The system may be used for product evaluation and controlled pilots, but current evidence does not establish consistent process improvements or shorter engineering decision cycles.",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "Begin with one real process problem.",
-    ctaText: "Connect a set of real production runs, qualify actual settings and outcomes, and start from diagnostic evidence to create the first reviewable next process specification.",
+    ctaText: "Connect a set of real production runs, qualify actual settings and outcomes, and start from diagnostic evidence to review the first recipe recommendation before revising a specification through the existing flow when needed.",
     ctaPrimary: "Build the first data loop",
     ctaSecondary: "Open GitHub",
-    footer: "Ingot · From real runs to the next process specification.",
+    footer: "Ingot · From real runs to the next recipe recommendation.",
   },
 } as const;
 
@@ -296,10 +296,10 @@ function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
           </div>
         </div>
         <div className="product-frame hero-product">
-          <div className="product-frame-bar" aria-hidden="true"><i /><span>INGOT / WORKBENCH</span><small>SYNTHETIC DEMO</small></div>
+          <div className="product-frame-bar" aria-hidden="true"><i /><span>INGOT / WORKBENCH</span><small>ILLUSTRATIVE DATA</small></div>
           <Image
             src="/screenshots/workbench.png"
-            alt={locale === "zh" ? "Ingot 工作台合成演示界面" : "Ingot workbench with synthetic demo data"}
+            alt={locale === "zh" ? "Ingot 工作台示意界面" : "Ingot workbench with illustrative data"}
             width={1600}
             height={1000}
             priority
@@ -344,7 +344,7 @@ function Story({ t, locale }: { t: SiteCopy; locale: Locale }) {
           </div>
           <div className="story-visual">
             <div className="product-frame story-product" data-step={activeStep} role="group" aria-label={locale === "zh" ? "对应步骤的产品界面" : "Product interface for the selected step"}>
-              <div className="product-frame-bar"><i /><span>{t.panelCampaign}</span><small>SYNTHETIC DEMO</small></div>
+              <div className="product-frame-bar"><i /><span>{t.panelCampaign}</span><small>ILLUSTRATIVE DATA</small></div>
               <div className="story-product-shots">
                 {storyShotIndex.map((shotIndex, index) => {
                   const [src, title] = t.shots[shotIndex];

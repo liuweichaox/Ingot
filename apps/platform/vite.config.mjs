@@ -1,11 +1,11 @@
-// 配置 Platform 前端构建，并让 demo 模式默认连接只读本地模拟 API。
+// 配置 Platform 前端构建，并让开发服务器默认连接本地 Platform API。
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const defaultApiTarget = mode === "demo" ? "http://127.0.0.1:4010" : "http://127.0.0.1:8000";
+  const defaultApiTarget = "http://127.0.0.1:8000";
   const apiTarget = env.INGOT_PLATFORM_API_TARGET || process.env.INGOT_PLATFORM_API_TARGET || defaultApiTarget;
   return ({
   plugins: [react(), tailwindcss()],

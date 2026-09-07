@@ -41,7 +41,7 @@ Public material may state that the system can:
 Without evidence from real projects, public material must not claim that:
 
 - the system has automatically discovered a definitive root cause;
-- it has already reduced trial cost or development time by a stated percentage;
+- it has already reduced run cost or development time by a stated percentage;
 - a model recommendation is a field guarantee;
 - one successful setting proves a complete operating region;
 - results from one scenario transfer unconditionally to another.

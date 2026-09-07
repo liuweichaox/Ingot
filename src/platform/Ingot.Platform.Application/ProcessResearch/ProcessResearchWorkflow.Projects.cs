@@ -156,20 +156,14 @@ public sealed partial class ProcessResearchWorkflow
         if (targetStatus == ResearchProjectStatuses.Active &&
             (project.Objectives.Count == 0 || project.Variables.Count == 0))
             throw new ProcessResearchRuleException("研发项目进入执行阶段前必须定义目标和变量。");
+        if (targetStatus == ResearchProjectStatuses.Active)
+            ValidateProjectScope(project);
         var projectContext = targetStatus == ResearchProjectStatuses.Active
             ? await FreezeContextPolicyAsync(project, ct).ConfigureAwait(false)
             : project.Context;
         if (targetStatus == ResearchProjectStatuses.Completed)
         {
             await RequireProjectClosureReadyAsync(project, ct).ConfigureAwait(false);
-            var windows = await store.ListOperatingRegionsAsync(projectId, ct).ConfigureAwait(false);
-            if (windows.All(static value =>
-                    value.Status != OperatingRegionStatuses.Validated ||
-                    value.ValidationLevel is not (
-                        OperatingRegionValidationLevels.Laboratory or
-                        OperatingRegionValidationLevels.Production)))
-                throw new ProcessResearchRuleException(
-                    "研发项目完成前必须形成经过跨区组重复真实运行确认的工艺操作域。");
         }
 
         var saved = await store.SaveProjectAsync(
@@ -266,16 +260,19 @@ public sealed partial class ProcessResearchWorkflow
         ResearchRecipeRecommendationDecision? decision)
     {
         if (decision is null)
-            return recommendation.ProjectRevision == project.Revision
+            return recommendation.ProjectRevision == project.Revision &&
+                (recommendation.ExpiresAt is null || recommendation.ExpiresAt > DateTimeOffset.UtcNow)
                 ? ResearchRecipeRecommendationFlowStates.PendingDecision
                 : ResearchRecipeRecommendationFlowStates.Stale;
         if (decision.Decision == ResearchRecipeRecommendationDecisionStatuses.Rejected)
             return ResearchRecipeRecommendationFlowStates.Rejected;
         if (string.IsNullOrWhiteSpace(decision.ActualExecutionKey))
             return ResearchRecipeRecommendationFlowStates.PendingExecution;
-        return decision.Outcome is null
-            ? ResearchRecipeRecommendationFlowStates.PendingOutcome
-            : ResearchRecipeRecommendationFlowStates.OutcomeFrozen;
+        if (decision.Outcome is null)
+            return ResearchRecipeRecommendationFlowStates.PendingOutcome;
+        return decision.Outcome.ValidForOptimization
+            ? ResearchRecipeRecommendationFlowStates.OutcomeFrozen
+            : ResearchRecipeRecommendationFlowStates.OutcomeExcluded;
     }
 
     private static IReadOnlyList<string> RecipeRecommendationAllowedActions(
@@ -448,6 +445,25 @@ public sealed partial class ProcessResearchWorkflow
                     static pair => pair.Value.Trim(),
                     StringComparer.Ordinal)
         };
+    }
+
+    private static void ValidateProjectScope(ResearchProject project)
+    {
+        if (string.IsNullOrWhiteSpace(project.SiteCode))
+            throw new ProcessResearchRuleException("研发项目进入执行阶段前必须绑定站点。");
+        var selectors = project.Context.Keys
+            .Select(static key => key.Trim().ToLowerInvariant())
+            .Where(ResearchProjectScopeKeys.SelectorKeys.Contains)
+            .ToArray();
+        if (selectors.Length == 0)
+            throw new ProcessResearchRuleException(
+                "研发项目进入执行阶段前必须至少绑定一个产品、设备、工艺规范或产出物料范围。");
+        if (project.Context.TryGetValue(ResearchProjectScopeKeys.ProcessSpecificationVersion, out var version) &&
+            (!int.TryParse(version, out var parsedVersion) || parsedVersion < 1))
+            throw new ProcessResearchRuleException("工艺规范版本必须是正整数。");
+        if (project.Context.TryGetValue(ResearchProjectScopeKeys.LookbackDays, out var lookback) &&
+            (!int.TryParse(lookback, out var parsedLookback) || parsedLookback is < 1 or > 3650))
+            throw new ProcessResearchRuleException("历史数据窗口必须是 1 到 3650 天。");
     }
 
     private async Task<IReadOnlyDictionary<string, string>> FreezeContextPolicyAsync(

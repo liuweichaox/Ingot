@@ -1,4 +1,4 @@
-# 构建、测试、浏览器回归并验证可部署制品的主 CI 流水线。
+# 构建、测试并验证可部署制品的主 CI 流水线。
 name: CI
 
 on:
@@ -45,11 +45,6 @@ jobs:
           version: "0.12.5"
           enable-cache: true
           cache-dependency-glob: optimizer/uv.lock
-
-      - name: Install browser regression runtime
-        run: |
-          npm --prefix apps/platform ci
-          npm --prefix apps/platform exec -- playwright install --with-deps chromium
 
       - name: Verify repository
         env:

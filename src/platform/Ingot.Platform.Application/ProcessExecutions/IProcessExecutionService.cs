@@ -20,5 +20,6 @@ public interface IProcessExecutionService
         CancellationToken ct = default,
         string? edgeId = null,
         string? externalBatchRef = null,
-        string? siteId = null);
+        string? siteId = null,
+        string? processSpecificationVersion = null);
 }

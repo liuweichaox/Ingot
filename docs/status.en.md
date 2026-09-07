@@ -15,7 +15,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 
 | Layer | Current status | Supported conclusion |
 |---|---|---|
-| Synthetic demo | Runnable | The principal pages and business workflow can be toured |
+| Local stack | Runnable | The principal pages and business workflow can be run |
 | Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and explain why |
 | Production operation | Single-machine reference deployment available | Deployers still complete site security, recovery, capacity, and operations configuration |
 

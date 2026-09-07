@@ -26,16 +26,13 @@ public sealed class ChatRunSiteScopeTests
         var get = Assert.IsType<ObjectResult>(await controller.Get(run.RunId, default));
         Assert.Equal(StatusCodes.Status403Forbidden, get.StatusCode);
 
-        var list = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
-        Assert.Empty(Assert.IsType<ChatRunPage>(list.Value).Items);
-
         await controller.Stream(run.RunId, default);
         Assert.Equal(StatusCodes.Status403Forbidden, controller.Response.StatusCode);
         Assert.Equal(0, runtime.StreamCallCount);
     }
 
     [Fact]
-    public async Task ReadEndpoints_DenyLegacyRunWithoutCapturedScope()
+    public async Task Get_DeniesLegacyRunWithoutCapturedScope()
     {
         var run = Snapshot("legacy", "operator", accessScope: null);
         var controller = Controller(
@@ -44,9 +41,6 @@ public sealed class ChatRunSiteScopeTests
 
         var get = Assert.IsType<ObjectResult>(await controller.Get(run.RunId, default));
         Assert.Equal(StatusCodes.Status403Forbidden, get.StatusCode);
-
-        var list = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
-        Assert.Empty(Assert.IsType<ChatRunPage>(list.Value).Items);
     }
 
     [Fact]
@@ -66,7 +60,7 @@ public sealed class ChatRunSiteScopeTests
     }
 
     [Fact]
-    public async Task ReadEndpoints_AllowOwner_WhenCurrentScopeIsCapturedScopeSuperset()
+    public async Task Get_AllowsOwner_WhenCurrentScopeIsCapturedScopeSuperset()
     {
         var run = Snapshot("still-authorized", "operator", Scope("SITE-A"));
         var controller = Controller(
@@ -75,38 +69,6 @@ public sealed class ChatRunSiteScopeTests
 
         var get = Assert.IsType<OkObjectResult>(await controller.Get(run.RunId, default));
         Assert.Equal(run.RunId, Assert.IsType<ChatRunSnapshot>(get.Value).RunId);
-
-        var list = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
-        var item = Assert.Single(Assert.IsType<ChatRunPage>(list.Value).Items);
-        Assert.Equal(run.RunId, item.RunId);
-    }
-
-    [Fact]
-    public async Task List_GroupsRunsFromTheSameConversation()
-    {
-        var conversationId = Guid.CreateVersion7().ToString();
-        var first = Snapshot("first", "operator", Scope("SITE-A")) with
-        {
-            ConversationId = conversationId,
-            Question = "第一轮",
-            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1)
-        };
-        var second = Snapshot("second", "operator", Scope("SITE-A")) with
-        {
-            ConversationId = conversationId,
-            Question = "第二轮",
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        var controller = Controller(
-            new RecordingRuntime([first, second]),
-            Identity("operator", ["SITE-A"]));
-
-        var result = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
-        var item = Assert.Single(Assert.IsType<ChatRunPage>(result.Value).Items);
-
-        Assert.Equal(conversationId, item.ConversationId);
-        Assert.Equal("第一轮", item.Question);
-        Assert.Equal(second.RunId, item.RunId);
     }
 
     private static ChatRunsController Controller(RecordingRuntime runtime, ClaimsPrincipal principal)

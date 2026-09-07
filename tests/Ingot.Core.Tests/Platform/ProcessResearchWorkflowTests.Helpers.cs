@@ -28,6 +28,12 @@ public abstract partial class ProcessResearchWorkflowTestBase
             Name = "光学模压配方优化",
             ProcessName = "光学玻璃精密模压",
             SiteCode = "SITE-001",
+            Context = new Dictionary<string, string>
+            {
+                [ResearchProjectScopeKeys.ProductFamilyCode] = "lens-a",
+                [ResearchProjectScopeKeys.ProductCode] = "product-a",
+                [ResearchProjectScopeKeys.EquipmentId] = "press-01"
+            },
             Objectives =
             [
                 new ResearchObjective

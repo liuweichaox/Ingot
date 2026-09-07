@@ -45,7 +45,7 @@ See [Current status](status.en.md) for the complete boundary.
 
 ### Development and operation
 
-- [Getting started](getting-started.en.md): synthetic tour and complete local stack
+- [Getting started](getting-started.en.md): complete local stack and software checks
 - [Recipe-optimization pilot guide](pilot.en.md): move from real runs to the first next-recipe recommendation
 - [Data integration](data-connection.en.md): identity, protocols, points, mappings, and data admission
 - [Deployment](deployment.en.md): configuration, health, monitoring, backup, and upgrade

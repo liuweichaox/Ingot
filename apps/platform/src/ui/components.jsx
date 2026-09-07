@@ -199,7 +199,6 @@ export function StatusBadge({ value, label }) {
     cancelling: "取消中",
     proposed: "待评估",
     investigating: "调查中",
-    trialing: "试验中",
     planned: "已计划",
     open: "待处理",
     closed: "已关闭",
@@ -218,7 +217,7 @@ export function StatusBadge({ value, label }) {
     ? "success"
     : ["fail", "failed", "offline", "rejected", "falsified", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected", "blocked", "forbidden", "not_analyzable"].includes(normalized)
       ? "danger"
-      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "trialing", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
+      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{label ?? labels[normalized] ?? String(value ?? "待上报")}</Badge>;

@@ -9,7 +9,6 @@ using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
-using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -89,6 +88,56 @@ public sealed class EventsControllerTests
     }
 
     [Fact]
+    public async Task Query_IsolatesExecutionIdWithinAuthenticatedSite()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var store = new StubPlatformEventStore([
+            Row(1, "process.sample", startedAt, "execution-1"),
+            Row(2, "process.sample", startedAt, "execution-2"),
+            Row(3, "process.sample", startedAt, "execution-1") with { SiteId = "SITE-002" },
+            Row(4, "process.sample", startedAt, executionId: null)
+        ]);
+        var controller = CreateController(store, Options.Create(new PlatformEventOptions { RequireToken = false }));
+
+        var action = await controller.Query(
+            null, null, null, null, null, "execution-1", null, null, null, null, 0, 100,
+            CancellationToken.None);
+
+        var json = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(action).Value);
+        var row = Assert.Single(json.GetProperty("data").EnumerateArray());
+        Assert.Equal(1L, row.GetProperty("IngestId").GetInt64());
+        Assert.Equal(1L, json.GetProperty("total").GetInt64());
+    }
+
+    [Fact]
+    public async Task Query_PagesBeyondFiveHundredEventsWithoutGapsOrDuplicates()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
+        var store = new StubPlatformEventStore(Enumerable.Range(1, 625)
+            .Select(index => Row(index, "process.sample", startedAt.AddSeconds(index)))
+            .ToArray());
+        var controller = CreateController(store, Options.Create(new PlatformEventOptions { RequireToken = false }));
+        var ids = new List<long>();
+        long? beforeIngestId = null;
+
+        foreach (var expectedCount in new[] { 500, 125, 0 })
+        {
+            var action = await controller.Query(
+                null, null, null, null, null, "execution-1", null, null, null, beforeIngestId,
+                0, 500, CancellationToken.None);
+            var json = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(action).Value);
+            var page = json.GetProperty("data").EnumerateArray()
+                .Select(item => item.GetProperty("IngestId").GetInt64()).ToArray();
+            Assert.Equal(expectedCount, page.Length);
+            ids.AddRange(page);
+            beforeIngestId = json.GetProperty("previousIngestId").GetInt64();
+        }
+
+        Assert.Equal(Enumerable.Range(1, 625).Reverse().Select(index => (long)index), ids);
+        Assert.Equal(3, store.QueryCalls);
+    }
+
+    [Fact]
     public async Task Query_UsesBeforeCursorForOlderPages()
     {
         var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
@@ -156,64 +205,6 @@ public sealed class EventsControllerTests
         Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
     }
 
-    [Fact]
-    public async Task GetProcessExecution_PagesThroughMoreThanFiveHundredEvents()
-    {
-        var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
-        var rows = Enumerable.Range(1, 602)
-            .Select(index => Row(
-                index,
-                index == 1 ? "process.execution.started" :
-                index == 602 ? "process.execution.completed" : "process.sample",
-                startedAt.AddSeconds(index)))
-            .ToArray();
-        var store = new StubPlatformEventStore(rows);
-        var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = CreateController(store, options);
-
-        var action = await controller.GetProcessExecution("execution-1", "SITE-001", CancellationToken.None);
-
-        var ok = Assert.IsType<OkObjectResult>(action);
-        var json = JsonSerializer.SerializeToElement(ok.Value);
-        Assert.Equal(602, json.GetProperty("events").GetArrayLength());
-        Assert.Equal(602, json.GetProperty("events")
-            .EnumerateArray()
-            .Select(item => item.GetProperty("IngestId").GetInt64())
-            .Distinct()
-            .Count());
-        Assert.True(store.QueryCalls >= 4);
-    }
-
-    [Fact]
-    public async Task GetProcessExecution_ExcludesEventsBelongingToAnAdjacentProcessExecution()
-    {
-        var startedAt = DateTimeOffset.Parse("2026-07-18T10:00:00Z");
-        var rows = new[]
-        {
-            Row(1, "process.execution.started", startedAt, "execution-1"),
-            Row(2, "process.sample", startedAt.AddSeconds(1), "execution-1"),
-            Row(3, "alarm.raised", startedAt.AddSeconds(2), null),
-            Row(4, "process.execution.started", startedAt.AddSeconds(3), "execution-2"),
-            Row(5, "process.sample", startedAt.AddSeconds(4), "execution-2"),
-            Row(6, "process.execution.completed", startedAt.AddSeconds(5), "execution-1")
-        };
-        var store = new StubPlatformEventStore(rows);
-        var options = Options.Create(new PlatformEventOptions { RequireToken = false });
-        var controller = CreateController(store, options);
-
-        var action = await controller.GetProcessExecution("execution-1", "SITE-001", CancellationToken.None);
-
-        var ok = Assert.IsType<OkObjectResult>(action);
-        var json = JsonSerializer.SerializeToElement(ok.Value);
-        var events = json.GetProperty("events").EnumerateArray().ToArray();
-        Assert.Equal(4, events.Length);
-        Assert.DoesNotContain(
-            events,
-            item => item.GetProperty("Event")
-                .GetProperty("ExecutionId")
-                .GetString() == "execution-2");
-    }
-
     private static PlatformProductionEvent Row(
         long ingestId,
         string eventType,
@@ -253,7 +244,6 @@ public sealed class EventsControllerTests
             new EdgeTokenValidator(options),
             options,
             new PlatformUserResolver(new TestHostEnvironment()),
-            new ExecutionBoundaryQueries(new MissingBoundaryStore()),
             Metrics,
             NullLogger<EventsController>.Instance);
         var identity = new ClaimsIdentity(
@@ -275,20 +265,6 @@ public sealed class EventsControllerTests
         public string ApplicationName { get; set; } = "Ingot.Tests";
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
-    private sealed class MissingBoundaryStore : IExecutionBoundaryStore
-    {
-        public Task<ExecutionBoundary?> GetBoundaryAsync(string siteId, string sourceExecutionId, CancellationToken ct)
-            => Task.FromResult<ExecutionBoundary?>(null);
-        public Task SaveBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
-        public Task UpdateBoundaryAsync(ExecutionBoundary boundary, CancellationToken ct) => Task.CompletedTask;
-        public Task<IReadOnlyList<ExecutionBoundary>> QueryBoundariesAsync(
-            string siteId, DateTimeOffset? from, DateTimeOffset? to, int limit = 100, int offset = 0,
-            CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ExecutionBoundary>>([]);
-
-        public Task<bool> ReplayFailedProjectionAsync(string siteId, string sourceExecutionId, CancellationToken ct = default)
-            => Task.FromResult(false);
     }
 
     private sealed class StubPlatformEventStore(
@@ -317,6 +293,8 @@ public sealed class EventsControllerTests
         {
             QueryCalls++;
             IEnumerable<PlatformProductionEvent> filtered = rows;
+            if (!string.IsNullOrWhiteSpace(query.SiteId))
+                filtered = filtered.Where(item => item.SiteId == query.SiteId);
             if (!string.IsNullOrWhiteSpace(query.EdgeId))
                 filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
             if (!string.IsNullOrWhiteSpace(query.ExecutionId))
@@ -372,6 +350,8 @@ public sealed class EventsControllerTests
             CancellationToken ct = default)
         {
             IEnumerable<PlatformProductionEvent> filtered = rows;
+            if (!string.IsNullOrWhiteSpace(query.SiteId))
+                filtered = filtered.Where(item => item.SiteId == query.SiteId);
             if (!string.IsNullOrWhiteSpace(query.EdgeId))
                 filtered = filtered.Where(item => item.EdgeId == query.EdgeId);
             if (!string.IsNullOrWhiteSpace(query.EventType))
