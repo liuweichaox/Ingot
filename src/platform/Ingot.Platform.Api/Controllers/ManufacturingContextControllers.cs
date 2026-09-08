@@ -407,11 +407,11 @@ public sealed class ProductionContextsController(
         if (!ManufacturingContextValidator.TryValidate(candidate, out var normalized, out var error))
             return InvalidRequest(error);
         if (!int.TryParse(normalized!.ProcessSpecificationVersion, out var processSpecificationVersion) || processSpecificationVersion < 1)
-            return InvalidRequest("ProcessSpecificationVersion 必须是已发布工艺规范的正整数版本。");
+            return InvalidRequest("ProcessSpecificationVersion 必须是已发布配方版本的正整数版本。");
         var processSpecification = await processConfigurations.GetProcessSpecificationAsync(
             normalized.ProcessSpecificationId.Trim().ToLowerInvariant(), processSpecificationVersion, ct).ConfigureAwait(false);
         if (processSpecification is null || processSpecification.Status != ConfigurationStatuses.Published)
-            return InvalidRequest("生产上下文必须引用已发布的工艺规范版本。");
+            return InvalidRequest("生产上下文必须引用已发布的配方版本号。");
         var selectorContext = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["product_family_code"] = normalized.ProductFamilyCode,
@@ -419,7 +419,7 @@ public sealed class ProductionContextsController(
             ["equipment_id"] = normalized.EquipmentId
         };
         if (!ProcessAnalysisResolver.MatchesSelector(processSpecification.ContextSelector, selectorContext))
-            return InvalidRequest("工艺规范的适用条件与当前产品或设备不匹配。");
+            return InvalidRequest("配方版本的适用条件与当前产品或设备不匹配。");
         try { return Ok(await store.ReplaceProductionContextAsync(normalized!, ct).ConfigureAwait(false)); }
         catch (InvalidOperationException ex) { return StateConflict(ex.Message); }
     }

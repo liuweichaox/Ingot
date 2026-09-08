@@ -261,7 +261,7 @@ export function ProcessExecutionsPage() {
               { key: "equipmentId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value}</p><p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
               { key: "productCode", label: "产品" },
               { key: "externalBatchRef", label: "批次 / 工件", render: (value, row) => <div><p>{value || "批次未记录"}</p><p className="text-xs text-slate-500">{row.outputItemId || "工件未记录"}</p></div> },
-              { key: "processSpecificationId", label: "工艺规范" },
+              { key: "processSpecificationId", label: "配方版本" },
               { key: "qualityStatus", label: "质量", render: value => <StatusBadge value={value} /> },
               { key: "startedAt", label: "开始", render: formatTime },
               { key: "completedAt", label: "结束", render: formatTime },
@@ -481,7 +481,7 @@ export function ProcessExecutionDetailPage() {
                       ["Edge", execution.edgeIds?.join("、")],
                       ["产品系列", execution.productFamilyCode],
                       ["产品", execution.productCode],
-                      ["工艺规范", execution.processSpecificationId && `${execution.processSpecificationId}${execution.processSpecificationVersion ? ` / v${execution.processSpecificationVersion}` : ""}`],
+                      ["配方版本", execution.processSpecificationId && `${execution.processSpecificationId}${execution.processSpecificationVersion ? ` / v${execution.processSpecificationVersion}` : ""}`],
                       ["生产批次", execution.externalBatchRef],
                       ["工件", execution.outputItemId],
                       ["材料批次", execution.materialLotRef],
@@ -519,7 +519,7 @@ export function ProcessExecutionDetailPage() {
                 />
               </Card>
 
-              <Card title="实际执行工艺规范">
+              <Card title="实际执行配方版本">
                 {analysisResponse.loading && !analysis ? <LoadingCard /> : analysisResponse.error ? <Alert tone="danger">{analysisResponse.error}</Alert> : (analysis?.controlParameters || []).length ? (
                   <DataTable
                     rows={analysis.controlParameters}

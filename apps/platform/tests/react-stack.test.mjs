@@ -208,7 +208,7 @@ test("core workflows tell new users what to do next and confirm completed action
   assert.match(components, /export function ToastHost/);
   assert.match(pages, /质量待办/);
   assert.match(pages, /配置下一批生产/);
-  assert.match(pages, /修订工艺规范/);
+  assert.match(pages, /修订配方版本/);
   assert.match(pages, /运行依据/);
   assert.match(app, /<ToastHost \/>/);
 });
@@ -240,7 +240,7 @@ test("production forms use business fields and paginate long histories", () => {
   assert.match(pages, /function ProductionRecordForm/);
   assert.match(pages, /function isProductionEditorValid/);
   assert.match(pages, /equipmentId: "设备编号"/);
-  assert.match(pages, /processSpecificationId: "工艺规范编号"/);
+  assert.match(pages, /processSpecificationId: "配方版本编号"/);
   assert.match(pages, /rows\.slice\(\(page - 1\) \* pageSize, page \* pageSize\)/);
   assert.match(pages, /\["validFrom", "validTo"\]\.includes\(key\)/);
   assert.match(pages, /total=\{rows\.length\}/);
@@ -329,8 +329,8 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
   for (const [field, label] of [
     ["product_family_code", "产品系列"],
     ["product_code", "产品编码"],
-    ["process_specification_id", "工艺规范"],
-    ["process_specification_version", "工艺规范版本"],
+    ["process_specification_id", "配方版本"],
+    ["process_specification_version", "配方版本号"],
     ["output_item_id", "产出物"],
     ["production_context_id", "生产上下文"],
     ["external_order_ref", "外部工单"],
@@ -352,7 +352,7 @@ test("local authentication has a complete login and session-expiry experience", 
   assert.match(auth, /到下一份配方建议。/);
   assert.match(auth, /ENGINEERING DECISION · EVIDENCE/);
   assert.match(auth, /结论可复用/);
-  assert.match(auth, /真实运行、质量结果、工艺追因与工艺规范版本/);
+  assert.match(auth, /真实运行、质量结果、工艺追因与配方版本/);
   assert.match(auth, /下一份配方/);
   assert.match(auth, /\/api\/v1\/auth\/me/);
   assert.match(auth, /\/api\/v1\/auth\/login/);

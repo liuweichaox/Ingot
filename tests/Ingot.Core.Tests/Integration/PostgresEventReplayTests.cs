@@ -653,7 +653,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         {
             ProcessSpecificationId = processSpecificationId,
             Version = 1,
-            Name = "历史工艺规范",
+            Name = "历史配方版本",
             DataModelId = modelId,
             DataModelVersion = 1,
             Status = ConfigurationStatuses.Published,

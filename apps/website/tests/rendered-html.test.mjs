@@ -51,7 +51,7 @@ test("Chinese home presents the production-to-recommendation flow", async () => 
   assert.match(source, /直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方/);
   assert.match(source, /已复核工艺资料片段/);
   assert.match(source, /片段级引用/);
-  for (const stage of ["建立运行证据", "完成工艺追因", "审核下一份配方", "修订规范并回流"]) {
+  for (const stage of ["建立运行证据", "完成工艺追因", "审核下一份配方", "修订配方版本并回流"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /工艺能力持续升级，证据边界始终不变/);

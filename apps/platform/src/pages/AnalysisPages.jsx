@@ -20,7 +20,7 @@ const comparisonContextLabels = {
   product_code: "产品代码",
   equipment_id: "生产设备",
   tooling_assembly_id: "工装总成",
-  process_specification_id: "工艺规范",
+  process_specification_id: "配方版本",
   material_lot_ref: "材料批次",
   recipe_id: "配方",
 };
@@ -233,7 +233,7 @@ export function ExecutionComparisonPage() {
     : result?.diagnosis?.candidates || [])
     .map(candidate => ({
       ...candidate,
-      sourceLabel: candidate.sourceKind === "control-parameter" ? "实际工艺规范" : "过程轨迹",
+      sourceLabel: candidate.sourceKind === "control-parameter" ? "实际配方版本" : "过程轨迹",
       actionabilityLabel: candidate.actionability === "controllable" ? "可形成下一配方建议" : "需映射控制量",
       stabilityLabel: Number.isFinite(Number(candidate.stabilitySelectionRate))
         ? `${Math.round(Number(candidate.stabilitySelectionRate) * 100)}%`
@@ -270,7 +270,7 @@ export function ExecutionComparisonPage() {
             <dl className="mt-3 grid gap-2 sm:grid-cols-3">
               <div><dt className="text-[13px] text-slate-500">产品系列</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.productFamilyCode || "未记录"}</dd></div>
               <div><dt className="text-[13px] text-slate-500">设备</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.equipmentId || "未记录"}</dd></div>
-              <div><dt className="text-[13px] text-slate-500">工艺规范</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.processSpecificationId || "未记录"}</dd></div>
+              <div><dt className="text-[13px] text-slate-500">配方版本</dt><dd className="mt-1 text-sm font-medium">{baselineProcessExecution.processSpecificationId || "未记录"}</dd></div>
             </dl>
             {!comparisonReady && <p className="mt-3 text-sm text-amber-800">需要另一条具有相同产品系列（未记录产品系列时使用相同设备）的已完成运行。</p>}
           </div>
@@ -406,7 +406,7 @@ export function ExecutionComparisonPage() {
                   </Alert>
                 )}
               </>
-            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且工艺规范或过程特征具有可比较差异。" />}
+            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且配方版本或过程特征具有可比较差异。" />}
           </Card>
           <details className="rounded-lg border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看全部信号差异（{signalRows.length} 项）</summary><div className="border-t border-slate-100 p-5"><Card title="信号差异" description="按变化幅度列出前 30 项，便于工程师核对阶段和参数差异。">
             {signalRows.length ? (

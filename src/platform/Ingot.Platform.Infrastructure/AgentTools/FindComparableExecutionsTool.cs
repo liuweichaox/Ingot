@@ -31,7 +31,7 @@ public sealed class FindComparableExecutionsTool(
         Version = "1.0.0",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "按产品、工序和工艺规范查找同类生产过程执行。只查询，不修改数据。",
+        Description = "按产品、工序和配方版本查找同类生产过程执行。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",

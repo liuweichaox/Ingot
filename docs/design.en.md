@@ -30,7 +30,7 @@ The current Web information architecture balances the decision chain with freque
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
 2. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
-3. **Process configuration**: configuration overview, data dictionaries, process specifications, analysis rules, quality configuration, tooling configuration, and configuration publishing;
+3. **Process configuration**: configuration overview, data dictionaries, recipe versions, analysis rules, quality configuration, tooling configuration, and configuration publishing;
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
 6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
@@ -140,7 +140,7 @@ An analyzable run must answer:
 
 ```text
 who / which equipment / which product
-        + actual process specification and controlled conditions
+        + actual recipe version and controlled conditions
         + process trajectory and stages
         + material, tooling, lot, and other context
         + quality and safety outcomes
@@ -152,8 +152,8 @@ Stable identifiers connect these facts:
 - `ExecutionId`: the real run identity in Platform;
 - `ExecutionId`: the correlation identity for field events or process executions;
 - `ExecutionKey`: the association between an R&D recommendation record and real execution;
-- `EquipmentId`, product/process object, and process specification version: minimum run identity;
-- planned and actually applied process specifications remain separate, and comparable cohorts use the actual specification dimension declared by the analysis plan;
+- `EquipmentId`, product/process object, and recipe version number: minimum run identity;
+- planned and actually applied recipe versions remain separate, and comparable cohorts use the actual recipe version dimension declared by the analysis plan;
 - content hash: the fixed analytical input and its provenance.
 
 Identifiers may be mapped but never inferred after the fact. Unlinked runs remain visible with a reason rather than disappearing silently.

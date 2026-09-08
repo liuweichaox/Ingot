@@ -227,11 +227,11 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
             <>
               <WorkflowGuide
                 title="生产开始前"
-                description="现场接入和工艺规范发布通常只需配置一次；每次换产品或换工艺规范时更新生产配置。"
+                description="现场接入和配方版本发布通常只需配置一次；每次换产品或换配方版本时更新生产配置。"
                 steps={[
                   { title: "设备已有数据", description: "在“现场接入”中完成数据源配置。", state: rows.length ? "done" : "current" },
-                  { title: "产品与工艺规范就绪", description: "准备产品编号和已发布工艺规范。", state: rows.some(row => row.processSpecificationId) ? "done" : rows.length ? "current" : "upcoming" },
-                  { title: "启用生产配置", description: "确认设备、产品、工艺规范和当前工装。", state: activeRows.length ? "done" : "current" },
+                  { title: "产品与配方版本就绪", description: "准备产品编号和已发布配方版本。", state: rows.some(row => row.processSpecificationId) ? "done" : rows.length ? "current" : "upcoming" },
+                  { title: "启用生产配置", description: "确认设备、产品、配方版本和当前工装。", state: activeRows.length ? "done" : "current" },
                 ]}
               />
               <Card
@@ -240,7 +240,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
                 actions={(
                   <div className="flex flex-wrap items-center gap-2">
                     {activeRows.length > 0 && <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100" to="/process-executions">查看运行记录</Link>}
-                    {canWrite && <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或工艺规范" : "开始配置"}</Button>}
+                    {canWrite && <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方版本" : "开始配置"}</Button>}
                   </div>
                 )}
               >
@@ -260,7 +260,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
                         </div>
                         <dl className="mt-4 grid gap-x-4 gap-y-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-2">
                           {[
-                            ["工艺规范", `${row.processSpecificationId} v${row.processSpecificationVersion}`],
+                            ["配方版本", `${row.processSpecificationId} v${row.processSpecificationVersion}`],
                             ["当前工装", row.toolingAssemblyId || row.toolingInstallationId || "未绑定"],
                             ["生产批次", row.externalBatchRef || "未填写"],
                             ["物料批次", row.materialLotRef || "未填写"],
@@ -279,7 +279,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
                       </article>
                     ))}
                   </div>
-                ) : <EmptyState title="还没有生效配置" description="点击“开始配置”，完成设备、产品和工艺规范选择。" />}
+                ) : <EmptyState title="还没有生效配置" description="点击“开始配置”，完成设备、产品和配方版本选择。" />}
               </Card>
             </>
           )}

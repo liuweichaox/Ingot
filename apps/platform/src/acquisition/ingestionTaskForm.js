@@ -497,8 +497,8 @@ export function validateIngestionTask(form, context = {}) {
   });
 
   if (form.processSpecification.enabled) {
-    if (!form.processSpecification.idPath.trim()) set("processSpecification.idPath", "工艺规范编号来源不能为空。");
-    if (!form.processSpecification.versionPath.trim()) set("processSpecification.versionPath", "工艺规范版本来源不能为空。");
+    if (!form.processSpecification.idPath.trim()) set("processSpecification.idPath", "配方版本编号来源不能为空。");
+    if (!form.processSpecification.versionPath.trim()) set("processSpecification.versionPath", "配方版本号来源不能为空。");
     if (!EVENT_TYPE_PATTERN.test(form.processSpecification.eventType.trim()))
       set("processSpecification.eventType", "事件类型格式无效，例如 process.specification.applied。");
     validateRows(form.processSpecification.parameterMappings, "processSpecification.parameterMappings");

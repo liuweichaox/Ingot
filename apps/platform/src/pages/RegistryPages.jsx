@@ -15,7 +15,7 @@ export function ConfigurationHubPage() {
   const definitionResponse = useApi("/api/v1/inspection-definitions");
   const qualityResponse = useApi("/api/v1/inspection-plans");
   const readiness = [
-    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据字典和工艺规范已发布", pendingHint: "发布数据字典和工艺规范", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
+    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据字典和配方版本已发布", pendingHint: "发布数据字典和配方版本", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
     { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "数据源配置已发布", pendingHint: "发布至少一个数据源配置", to: "/configuration/ingestion-tasks", action: "配置数据来源", responses: [ingestionResponse] },
     { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析规则已发布", pendingHint: "发布运行分析规则", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
     { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
@@ -100,9 +100,9 @@ const registryPages = {
   },
   processSpecifications: {
     kind: "processSpecificationVersion",
-    title: "工艺规范", description: "维护引用工艺数据字典的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
-    columns: [["processSpecificationId", "工艺规范"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺规范",
+    title: "配方版本", description: "维护引用工艺数据字典的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
+    columns: [["processSpecificationId", "配方版本"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
+    createLabel: "创建配方版本",
     template: { processSpecificationId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-specifications/${encodeURIComponent(value.processSpecificationId)}/${value.version}`,
   },
@@ -383,7 +383,7 @@ function RegistryPage({ definition, canWrite = true }) {
         open={nextDraftOpen}
         onClose={() => setNextDraftOpen(false)}
         closeOnBackdrop={false}
-        title="修订工艺规范"
+        title="修订配方版本"
         description="以已发布规范为唯一基准，引用实际运行证据后只提交发生变化的控制参数。"
         footer={<><Button onClick={() => setNextDraftOpen(false)}>取消</Button><Button variant="primary" onClick={createNextDraft} disabled={saving || Boolean(nextDraftValidation)}>{saving ? "创建中" : "创建修订草稿"}</Button></>}
         size="xl"
@@ -474,7 +474,7 @@ function NextSpecificationDraftEditor({ source, form, onChange, models, modelErr
     <div className="grid gap-5">
       {validation && <Alert tone="warning">{validation}</Alert>}
       {modelError && <Alert tone="warning">无法读取控制参数定义：{modelError}</Alert>}
-      <section className="grid gap-3 border-b border-slate-200 pb-5 sm:grid-cols-2" aria-label="工艺规范修订基准">
+      <section className="grid gap-3 border-b border-slate-200 pb-5 sm:grid-cols-2" aria-label="配方版本修订基准">
         <div><p className="data-label">基准版本</p><p className="mt-1 text-sm font-semibold text-slate-900">{source.processSpecificationId} · V{source.version}</p></div>
         <div><p className="data-label">适用条件</p><p className="mt-1 text-sm font-semibold text-slate-900">{Object.values(source.contextSelector || {}).filter(Boolean).join(" · ") || "未限定"}</p></div>
       </section>
@@ -488,9 +488,9 @@ function NextSpecificationDraftEditor({ source, form, onChange, models, modelErr
           </div>
         )}
         {!executionsLoading && matchingExecutions.length > 0 && <p className="mt-4 text-sm text-slate-600">{matchingExecutions.map(item => item.executionId).join(" · ")}</p>}
-        {!executionsLoading && matchingExecutions.length === 0 && <p className="text-sm text-slate-500">尚无该规范版本的已完成运行，暂不能从这里创建修订草稿。</p>}
+        {!executionsLoading && matchingExecutions.length === 0 && <p className="text-sm text-slate-500">尚无该配方版本的已完成运行，暂不能从这里创建修订草稿。</p>}
       </Card>
-      <Card title="修订说明" description="把工程判断和机理依据写进规范版本，供后续运行追溯。">
+      <Card title="修订说明" description="把工程判断和机理依据写进配方版本，供后续运行追溯。">
         <div className="grid gap-4">
           <Field label="修订理由" required><Textarea value={form.changeReason} onChange={event => update("changeReason", event.target.value)} placeholder="例如：针对保压阶段引起的面形偏差修订" /></Field>
           <Field label="机理依据"><Textarea value={form.mechanismNotes} onChange={event => update("mechanismNotes", event.target.value)} placeholder="记录参数作用、已知边界和工程判断" /></Field>

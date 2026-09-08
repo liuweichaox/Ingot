@@ -457,10 +457,10 @@ public sealed partial class ProcessResearchWorkflow
             .ToArray();
         if (selectors.Length == 0)
             throw new ProcessResearchRuleException(
-                "研发项目进入执行阶段前必须至少绑定一个产品、设备、工艺规范或产出物料范围。");
+                "研发项目进入执行阶段前必须至少绑定一个产品、设备、配方版本或产出物料范围。");
         if (project.Context.TryGetValue(ResearchProjectScopeKeys.ProcessSpecificationVersion, out var version) &&
             (!int.TryParse(version, out var parsedVersion) || parsedVersion < 1))
-            throw new ProcessResearchRuleException("工艺规范版本必须是正整数。");
+            throw new ProcessResearchRuleException("配方版本号必须是正整数。");
         if (project.Context.TryGetValue(ResearchProjectScopeKeys.LookbackDays, out var lookback) &&
             (!int.TryParse(lookback, out var parsedLookback) || parsedLookback is < 1 or > 3650))
             throw new ProcessResearchRuleException("历史数据窗口必须是 1 到 3650 天。");

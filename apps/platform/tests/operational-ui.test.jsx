@@ -84,13 +84,13 @@ describe("生产界面状态反馈", () => {
 
   it("不在表单下方显示常规辅助说明，但保留校验错误", () => {
     render(
-      <Field label="工艺规范" hint="选择当前生产使用的已发布版本。" error="请选择工艺规范">
+      <Field label="配方版本" hint="选择当前生产使用的已发布版本。" error="请选择配方版本">
         <Input />
       </Field>,
     );
 
     expect(screen.getByText("选择当前生产使用的已发布版本。")).toHaveClass("sr-only");
-    expect(screen.getByRole("alert")).toHaveTextContent("请选择工艺规范");
+    expect(screen.getByRole("alert")).toHaveTextContent("请选择配方版本");
     expect(screen.getByRole("alert")).not.toHaveClass("sr-only");
   });
 
@@ -205,7 +205,7 @@ describe("生产界面状态反馈", () => {
       .toBe("/api/v1/tooling-installations/installation-01:remove?siteId=SITE%2F01");
   });
 
-  it("从已发布工艺规范的运行依据创建下一版草稿", async () => {
+  it("从已发布配方版本的运行依据创建下一版草稿", async () => {
     const specification = {
       processSpecificationId: "spec-lens-a",
       version: 5,

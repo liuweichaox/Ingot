@@ -316,8 +316,8 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         ValidateScopeValue(project, "product_family_code", execution.ProductFamilyCode, "产品族");
         ValidateScopeValue(project, "product_code", execution.ProductCode, "产品");
         ValidateScopeValue(project, "equipment_id", execution.EquipmentId, "设备");
-        ValidateScopeValue(project, "process_specification_id", execution.ProcessSpecificationId, "工艺规范");
-        ValidateScopeValue(project, "process_specification_version", execution.ProcessSpecificationVersion, "工艺规范版本");
+        ValidateScopeValue(project, "process_specification_id", execution.ProcessSpecificationId, "配方版本");
+        ValidateScopeValue(project, "process_specification_version", execution.ProcessSpecificationVersion, "配方版本号");
         ValidateScopeValue(project, "output_item_id", execution.OutputItemId, "产出物料");
     }
 

@@ -172,7 +172,7 @@ public sealed class ProcessConfigurationValidatorTests
             ProcessSpecificationId = "RCP-LENS-A",
             Version = 7,
             BasedOnVersion = 6,
-            Name = "镜片 A 工艺规范",
+            Name = "镜片 A 配方版本",
             DataModelId = "optical-molding.demo",
             ChangeReason = "修订保压窗口以处理面形偏差",
             Values =

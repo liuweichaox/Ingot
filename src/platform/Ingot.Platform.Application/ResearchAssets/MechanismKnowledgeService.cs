@@ -387,7 +387,7 @@ public sealed class MechanismKnowledgeService(
     {
         var normalized = Required(value, "适用维度", 100).ToLowerInvariant();
         if (!ApplicabilityDimensions.Contains(normalized))
-            throw new ResearchAssetRuleException("适用维度必须引用项目、过程、产品、材料、设备、工装、工艺规范、阶段或站点代码。");
+            throw new ResearchAssetRuleException("适用维度必须引用项目、过程、产品、材料、设备、工装、配方版本、阶段或站点代码。");
         return normalized;
     }
 

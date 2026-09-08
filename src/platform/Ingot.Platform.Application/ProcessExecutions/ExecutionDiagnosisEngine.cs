@@ -62,7 +62,7 @@ public sealed class ExecutionDiagnosisEngine
                 "候选分数来自稳健的合格/不合格组间差异，不代表因果关系。",
                 confounders.Count == 0
                     ? "当前比较未发现明显的离散上下文分布差异。"
-                    : $"设备、产品、工艺规范或工装总成分布仍可能混杂结果：{string.Join("、", confounders)}。",
+                    : $"设备、产品、配方版本或工装总成分布仍可能混杂结果：{string.Join("、", confounders)}。",
                 "候选原因必须映射为可控变量并经过跨区组重复真实运行确认。"
             ]
         };

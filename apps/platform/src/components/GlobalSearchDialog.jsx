@@ -65,7 +65,7 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
               value={query}
               onChange={event => { setQuery(event.target.value); setActiveIndex(0); }}
               onKeyDown={handleKeyDown}
-              placeholder="例如：采集配置、工艺规范、运行对比、检验任务"
+              placeholder="例如：采集配置、配方版本、运行对比、检验任务"
               className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
             />
           </div>

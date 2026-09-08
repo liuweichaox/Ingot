@@ -43,17 +43,17 @@ public static partial class ProcessConfigurationValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("工艺规范版本不能为空。", out error);
+            return Fail("配方版本号不能为空。", out error);
         if (!TryIdentity(value.ProcessSpecificationId, value.Version, value.Name, value.Status, out var id, out var name, out error))
             return false;
         var modelId = NormalizeCode(value.DataModelId);
         if (!ValidCode(modelId) || value.DataModelVersion < 1)
-            return Fail("工艺规范版本必须引用有效的工艺数据模型版本。", out error);
+            return Fail("配方版本号必须引用有效的工艺数据模型版本。", out error);
         if (value.BasedOnVersion.HasValue && (value.BasedOnVersion < 1 || value.BasedOnVersion == value.Version))
             return Fail("沿用版本必须是不同的正整数版本。", out error);
         var changeReason = Clean(value.ChangeReason);
         if (value.BasedOnVersion.HasValue && changeReason is null)
-            return Fail("修订下一版工艺规范时必须说明修订理由。", out error);
+            return Fail("修订下一配方版本时必须说明修订理由。", out error);
         if (changeReason?.Length > 2_000 || Clean(value.MechanismNotes)?.Length > 4_000)
             return Fail("修订理由或机理说明过长。", out error);
         if (!TryNormalizeSelector(value.ContextSelector, out var selector, out error))
@@ -85,11 +85,11 @@ public static partial class ProcessConfigurationValidator
     {
         normalized = null;
         if (value is null)
-            return Fail("下一版工艺规范请求不能为空。", out error);
+            return Fail("下一配方版本请求不能为空。", out error);
 
         var changeReason = Clean(value.ChangeReason);
         if (changeReason is null)
-            return Fail("修订下一版工艺规范时必须说明修订理由。", out error);
+            return Fail("修订下一配方版本时必须说明修订理由。", out error);
         var mechanismNotes = Clean(value.MechanismNotes);
         if (changeReason.Length > 2_000 || mechanismNotes?.Length > 4_000)
             return Fail("修订理由或机理说明过长。", out error);
@@ -356,7 +356,7 @@ public static partial class ProcessConfigurationValidator
         if (requireAtLeastOne && values.Count == 0)
         {
             result = [];
-            return Fail("修订下一版工艺规范时必须引用至少一条证据。", out error);
+            return Fail("修订下一配方版本时必须引用至少一条证据。", out error);
         }
         result = values;
         error = string.Empty;

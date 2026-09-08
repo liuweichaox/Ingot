@@ -150,7 +150,7 @@ public sealed class AgentProposalEnvelopeTests
         DraftFields = new Dictionary<string, string>
         {
             ["stopRule"] = "出现安全约束或数据失效时停止。",
-            ["rollbackPlan"] = "恢复经工程师确认的基线工艺规范。"
+            ["rollbackPlan"] = "恢复经工程师确认的基线配方版本。"
         },
         EvidenceReferences = [Reference()]
     };

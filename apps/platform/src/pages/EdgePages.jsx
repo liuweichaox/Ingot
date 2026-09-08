@@ -98,7 +98,7 @@ export function EdgeDetailPage() {
         <Metric label="设备连接" value={<StatusBadge value={edgeStatus(edge)} />} hint={edge?.lastSeen ? `最后心跳 ${formatTime(edge.lastSeen)}` : "尚未收到心跳"} />
         <Metric label="配置收敛" value={<StatusBadge value={acquisition.data?.state || "unknown"} />} hint={`${convergedDeployments} 个已应用 / ${deploymentStates.length} 个期望配置`} />
         <Metric label="数据上行" value={<StatusBadge value={delivery?.state || "unknown"} />} hint={delivery ? `积压 ${formatInteger(outboxBacklog)} · ACK ${formatInteger(delivery.lastAcknowledgedSequence)}` : "等待节点主动上报"} />
-        <Metric label="工艺建模" value={controlParameterMappingCount > 0 ? "工艺规范已映射" : "待映射"} hint={`${processSignalCount} 条过程信号 · ${controlParameterMappingCount} 个控制参数`} />
+        <Metric label="工艺建模" value={controlParameterMappingCount > 0 ? "配方版本已映射" : "待映射"} hint={`${processSignalCount} 条过程信号 · ${controlParameterMappingCount} 个控制参数`} />
       </div>
       {(edge?.lastError || acquisition.data?.lastError || outboxBacklog > 0) ? (
         <Alert tone="warning" title="节点需要关注">
@@ -117,7 +117,7 @@ export function EdgeDetailPage() {
             {lifecycleTaskCount === 0 && <li>尚未映射过程执行边界，连续数据无法自动归属到一次运行。</li>}
           </ul>
         </Alert>
-      ) : <Alert tone="success" title="采集端已具备交付条件">过程信号、实际工艺规范、过程执行边界与数据上行均已就绪；请继续确认质检结果已关联到相同运行。</Alert>}
+      ) : <Alert tone="success" title="采集端已具备交付条件">过程信号、实际配方版本、过程执行边界与数据上行均已就绪；请继续确认质检结果已关联到相同运行。</Alert>}
       <WorkflowGuide
         title="从设备数据到工艺证据"
         description="确认设备连接、采集上行、工艺映射和运行关联。"

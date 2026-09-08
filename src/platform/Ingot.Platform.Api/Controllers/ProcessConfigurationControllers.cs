@@ -88,14 +88,14 @@ public sealed class ProcessDataModelsController(
             ingestionTaskValues.Any(item => References(item, existing)) ||
             ingestionTemplates.Any(item => References(item, existing)))
         {
-            return StateConflict("工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。");
+            return StateConflict("工艺数据模型仍被配方版本号、分析方案、工艺配置或数据摄取配置引用，不能删除。");
         }
         var deleted = await store.TryDeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false);
         return deleted.Status switch
         {
             ProcessConfigurationMutationStatus.Applied => NoContent(),
             ProcessConfigurationMutationStatus.Referenced => StateConflict(
-                "工艺数据模型仍被工艺规范版本、分析方案、工艺配置或数据摄取配置引用，不能删除。"),
+                "工艺数据模型仍被配方版本号、分析方案、工艺配置或数据摄取配置引用，不能删除。"),
             ProcessConfigurationMutationStatus.StateConflict => StateConflict("工艺数据模型状态已发生变化，请重新加载后再试。"),
             _ => ResourceNotFound()
         };
@@ -172,7 +172,7 @@ public sealed class ProcessSpecificationsController(
         if (denied is not null)
             return denied;
         if (baseVersion < 1)
-            return InvalidRequest("基准工艺规范版本必须大于 0。");
+            return InvalidRequest("基准配方版本号必须大于 0。");
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalizedRequest, out var error))
             return InvalidRequest(error);
 
@@ -181,10 +181,10 @@ public sealed class ProcessSpecificationsController(
         if (baseline is null)
             return ResourceNotFound();
         if (baseline.Status != ConfigurationStatuses.Published)
-            return StateConflict("只能从已发布工艺规范创建下一版草稿。", ("baseline", baseline));
+            return StateConflict("只能从已发布配方版本创建下一版草稿。", ("baseline", baseline));
         var model = await store.GetDataModelAsync(baseline.DataModelId, baseline.DataModelVersion, ct).ConfigureAwait(false);
         if (model is null)
-            return StateConflict("基准工艺规范引用的工艺数据模型版本不存在。", ("baseline", baseline));
+            return StateConflict("基准配方版本引用的工艺数据模型版本不存在。", ("baseline", baseline));
 
         var candidate = baseline with
         {
@@ -207,9 +207,9 @@ public sealed class ProcessSpecificationsController(
         {
             var message = result.Conflict switch
             {
-                "baseline-not-published" => "基准工艺规范已不再是可用于修订的已发布版本。",
+                "baseline-not-published" => "基准配方版本已不再是可用于修订的已发布版本。",
                 "draft-already-exists" => "该已发布版本已有下一版草稿，不能创建并列草稿。",
-                _ => "工艺规范版本已发生并发变更，请重新打开基准版本后再试。"
+                _ => "配方版本号已发生并发变更，请重新打开基准版本后再试。"
             };
             return StateConflict(message);
         }
@@ -229,9 +229,9 @@ public sealed class ProcessSpecificationsController(
         if (existing is null)
         {
             if (normalized.Status == ConfigurationStatuses.Published)
-                return InvalidRequest("新工艺规范必须先以草稿创建，不能直接发布。");
+                return InvalidRequest("新配方版本必须先以草稿创建，不能直接发布。");
             if (normalized.Version != 1 || normalized.BasedOnVersion.HasValue)
-                return InvalidRequest("后续工艺规范版本必须从已发布基线通过下一版草稿命令创建。");
+                return InvalidRequest("后续配方版本号必须从已发布基线通过下一版草稿命令创建。");
         }
         else if (existing.BasedOnVersion != normalized.BasedOnVersion)
         {
@@ -242,14 +242,14 @@ public sealed class ProcessSpecificationsController(
         if (model is null)
             return InvalidRequest("引用的工艺数据模型版本不存在。");
         if (normalized.Status == ConfigurationStatuses.Published && model.Status != ConfigurationStatuses.Published)
-            return InvalidRequest("发布工艺规范前，引用的工艺数据模型必须已经发布。");
+            return InvalidRequest("发布配方版本前，引用的工艺数据模型必须已经发布。");
         ProcessSpecification? baseline = null;
         if (normalized.BasedOnVersion.HasValue)
         {
             baseline = await store.GetProcessSpecificationAsync(normalized.ProcessSpecificationId, normalized.BasedOnVersion.Value, ct)
                 .ConfigureAwait(false);
             if (baseline?.Status != ConfigurationStatuses.Published)
-                return StateConflict("草稿必须沿用同一工艺规范的已发布基线。", ("basedOnVersion", normalized.BasedOnVersion));
+                return StateConflict("草稿必须沿用同一配方版本的已发布基线。", ("basedOnVersion", normalized.BasedOnVersion));
         }
         if (ValidateValues(normalized, model, baseline) is { } validationError)
             return InvalidRequest(validationError);
@@ -260,7 +260,7 @@ public sealed class ProcessSpecificationsController(
             else if (SamePayload(existing with { UpdatedAt = default }, normalized with { UpdatedAt = default }))
                 return Ok(existing);
             else
-                return StateConflict("已发布或停用的工艺规范版本不可修改，请创建新版本。", ("existing", existing));
+                return StateConflict("已发布或停用的配方版本号不可修改，请创建新版本。", ("existing", existing));
         }
         var saved = await store.TryUpsertProcessSpecificationAsync(normalized, ct).ConfigureAwait(false);
         if (!saved.Succeeded)
@@ -268,7 +268,7 @@ public sealed class ProcessSpecificationsController(
                 saved.Existing with { UpdatedAt = default },
                 normalized with { UpdatedAt = default })
                 ? Ok(saved.Existing)
-                : StateConflict("工艺规范版本已发生并发状态变化，请重新加载后再试。", ("existing", saved.Existing));
+                : StateConflict("配方版本号已发生并发状态变化，请重新加载后再试。", ("existing", saved.Existing));
         return Ok(saved.Value);
     }
 
@@ -282,14 +282,14 @@ public sealed class ProcessSpecificationsController(
         if (existing is null)
             return ResourceNotFound();
         if (existing.Status != ConfigurationStatuses.Draft)
-            return StateConflict("只有草稿工艺规范版本可以删除。");
+            return StateConflict("只有草稿配方版本号可以删除。");
         var deleted = await store.TryDeleteProcessSpecificationAsync(existing.ProcessSpecificationId, version, ct)
             .ConfigureAwait(false);
         return deleted.Status switch
         {
             ProcessConfigurationMutationStatus.Applied => NoContent(),
-            ProcessConfigurationMutationStatus.StateConflict => StateConflict("工艺规范状态已发生变化，请重新加载后再试。"),
-            ProcessConfigurationMutationStatus.Referenced => StateConflict("工艺规范版本仍被其他配置引用，不能删除。"),
+            ProcessConfigurationMutationStatus.StateConflict => StateConflict("配方版本状态已发生变化，请重新加载后再试。"),
+            ProcessConfigurationMutationStatus.Referenced => StateConflict("配方版本号仍被其他配置引用，不能删除。"),
             _ => ResourceNotFound()
         };
     }
@@ -327,7 +327,7 @@ public sealed class ProcessSpecificationsController(
             if (definitions[value.Code].ChangeAllowed || !baselineValues.TryGetValue(value.Code, out var baselineValue))
                 continue;
             if (value.Value.GetRawText() != baselineValue.Value.GetRawText())
-                return $"控制参数 {value.Code} 不允许在下一版工艺规范中变更。";
+                return $"控制参数 {value.Code} 不允许在下一配方版本中变更。";
         }
         return null;
     }

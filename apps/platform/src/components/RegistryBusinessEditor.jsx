@@ -408,7 +408,7 @@ function QualityPlanEditor({ form, onChange, readOnly, lockIdentity }) {
       </Card>
       <Card title="适用范围" description="只填写需要限制的条件；全部留空表示不限定。">
         <div className="grid gap-4 md:grid-cols-2">
-          {[["productFamilyCode", "产品系列"], ["productCode", "产品编号"], ["processSpecificationId", "工艺规范编号"], ["equipmentId", "设备编号"]].map(([key, label]) => (
+          {[["productFamilyCode", "产品系列"], ["productCode", "产品编号"], ["processSpecificationId", "配方版本编号"], ["equipmentId", "设备编号"]].map(([key, label]) => (
             <Field key={key} label={label}><Input value={form.scope[key]} disabled={readOnly} onChange={event => updateNested(form, onChange, "scope", key, event.target.value)} /></Field>
           ))}
         </div>
@@ -517,15 +517,15 @@ function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) 
   return (
     <div className="grid gap-5">
       {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
-      <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="工艺规范代码" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
-      <Card title="工艺规范来源">
+      <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="配方版本编号" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
+      <Card title="配方版本来源">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="修订基准"><Input value={form.basedOnVersion ? `V${form.basedOnVersion}（受控修订创建）` : "首次创建"} disabled /></Field>
         </div>
       </Card>
       <PairEditor title="适用条件" description="例如产品系列或设备范围。" pairs={form.contextPairs} readOnly={readOnly} onChange={value => updateAt(form, onChange, "contextPairs", value)} />
-      <Card title="修订依据" description="修订理由、机理说明和引用证据会随该规范版本保存。">
+      <Card title="修订依据" description="修订理由、机理说明和引用证据会随该配方版本保存。">
         <div className="grid gap-4">
           <Field label="修订理由"><Textarea value={form.changeReason} disabled={readOnly} onChange={event => updateAt(form, onChange, "changeReason", event.target.value)} placeholder="说明本次修订要解决的质量或工艺问题" /></Field>
           <Field label="机理依据"><Textarea value={form.mechanismNotes} disabled={readOnly} onChange={event => updateAt(form, onChange, "mechanismNotes", event.target.value)} placeholder="记录已知机理、边界条件或工程判断" /></Field>

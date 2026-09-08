@@ -21,7 +21,7 @@ async function openSearch(roles = ["process.engineer"]) {
   }))));
   render(<MemoryRouter initialEntries={["/workbench"]}><App identity={{ roles }} logout={vi.fn()} /><CurrentPath /></MemoryRouter>);
   fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
-  const input = await screen.findByPlaceholderText("例如：采集配置、工艺规范、运行对比、检验任务");
+  const input = await screen.findByPlaceholderText("例如：采集配置、配方版本、运行对比、检验任务");
   await waitFor(() => expect(input).toHaveFocus());
   return input;
 }

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   applicationName: "Ingot",
   keywords: [
     "Ingot", "工艺追因", "配方优化", "工艺优化", "工艺工程师决策",
-    "生产运行", "下一份配方", "工艺规范", "工艺版本",
+    "生产运行", "下一份配方", "配方版本", "工艺版本",
     "过程数据", "机理依据", "工程师决策",
   ],
   icons: {

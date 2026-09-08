@@ -19,7 +19,7 @@ All notable project changes will be documented here. The format follows [Keep a 
 
 - Platform is now documented as a modular monolith: `Platform API` hosts Platform Infrastructure and Agent capabilities, while `Edge ConnectorHost` and `Optimizer` remain separate runtime services.
 - Website and Docs are documented as a separate public-site deployment, apart from the factory application Compose stack.
-- Product positioning now centers on learning from real runs to reach process specification.
+- Product positioning now centers on learning from real runs to reach recipe version.
 - The first concrete validation scenario has data onboarding and diagnosis running, with historical replay, shadow, and controlled-online validation still in progress; its industry and equipment details stay out of the public repository.
 - Removed half-open `validate-hypothesis` decision intent; recommendations use `reach-specification` within the observed coverage envelope only.
 - Removed unused optimizer `POST /v1/designs` DOE endpoint and Platform `DesignAsync` client path; historical replay remains for offline evaluation.

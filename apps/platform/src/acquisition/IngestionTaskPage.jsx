@@ -414,8 +414,8 @@ function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe
   const update = patch => onChange({ processSpecification: { ...processSpecification, ...patch } });
   return (
     <Card
-      title="设备工艺规范识别"
-      description="从设备读取当前生效的工艺规范标识，让每次运行都能关联到实际工艺规范。"
+      title="设备配方版本识别"
+      description="从设备读取当前生效的配方版本标识，让每次运行都能关联到实际配方版本。"
       actions={
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={processSpecification.enabled} disabled={readOnly}
@@ -424,19 +424,19 @@ function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe
       }
     >
       {!processSpecification.enabled ? (
-        <p className="text-sm text-slate-500">当前采集任务不从设备数据识别工艺规范。</p>
+        <p className="text-sm text-slate-500">当前采集任务不从设备数据识别配方版本。</p>
       ) : (
         <div className="grid gap-4">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="工艺规范编号来源" error={errors["processSpecification.idPath"]}>
+            <Field label="配方版本编号来源" error={errors["processSpecification.idPath"]}>
               <Input value={processSpecification.idPath} disabled={readOnly} placeholder={descriptorSourcePlaceholder(descriptor)}
                 onChange={event => update({ idPath: event.target.value })} />
             </Field>
-            <Field label="工艺规范版本来源" error={errors["processSpecification.versionPath"]}>
+            <Field label="配方版本号来源" error={errors["processSpecification.versionPath"]}>
               <Input value={processSpecification.versionPath} disabled={readOnly}
                 onChange={event => update({ versionPath: event.target.value })} />
             </Field>
-            <Field label="工艺规范名称来源（可选）">
+            <Field label="配方版本名称来源（可选）">
               <Input value={processSpecification.namePath} disabled={readOnly}
                 onChange={event => update({ namePath: event.target.value })} />
             </Field>

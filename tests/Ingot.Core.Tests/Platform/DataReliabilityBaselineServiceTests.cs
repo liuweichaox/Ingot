@@ -120,7 +120,7 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.Contains(baseline.Exclusions, item =>
             item.Code == "context_capture_invalid" && item.RunCount == 1);
         Assert.Contains(
-            "不使用工艺规范计划值",
+            "不使用配方版本计划值",
             Assert.Single(baseline.Rates, item => item.Code == "actual_parameter_coverage").Definition);
     }
 

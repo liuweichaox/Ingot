@@ -28,7 +28,7 @@ Equipment limits, deviations, operator adjustments, and dynamic response can cau
 
 ## Why do process trajectories matter?
 
-The same setting may produce different heating rates, overshoot, pressure hold, position, or cooling trajectories. Quality depends on the realized process, not only the process specification table. Stage features help engineers locate where deviation began.
+The same setting may produce different heating rates, overshoot, pressure hold, position, or cooling trajectories. Quality depends on the realized process, not only the recipe version table. Stage features help engineers locate where deviation began.
 
 ## Why record material, tooling, and equipment context?
 

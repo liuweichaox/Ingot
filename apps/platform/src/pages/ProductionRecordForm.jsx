@@ -112,7 +112,7 @@ function ProcessSpecificationReferenceField({ editor, onChange, required }) {
   const selected = editor.processSpecificationId ? `${editor.processSpecificationId}:${editor.processSpecificationVersion}` : "";
   const hasSelected = processSpecifications.some(row => `${row.processSpecificationId}:${row.version}` === selected);
   return (
-    <Field label="工艺规范" error={error || ""}>
+    <Field label="配方版本" error={error || ""}>
       <Select
         required={required}
         value={selected}
@@ -122,7 +122,7 @@ function ProcessSpecificationReferenceField({ editor, onChange, required }) {
           onChange("processSpecificationVersion", row?.version || 1);
         }}
       >
-        <option value="">请选择已发布工艺规范</option>
+        <option value="">请选择已发布配方版本</option>
         {selected && !hasSelected && <option value={selected}>{editor.processSpecificationId} · v{editor.processSpecificationVersion}（历史值）</option>}
         {processSpecifications.map(row => <option key={`${row.processSpecificationId}:${row.version}`} value={`${row.processSpecificationId}:${row.version}`}>{row.name} · {row.processSpecificationId} v{row.version}</option>)}
       </Select>
@@ -142,7 +142,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
           description="必填内容完成后，底部按钮会自动变为可用。"
           steps={[
             { title: "选择站点和生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
-            { title: "确认产品与工艺规范", description: "填写产品身份并选择已发布工艺规范。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
+            { title: "确认产品与配方版本", description: "填写产品身份并选择已发布配方版本。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
             { title: "确认工装并生效", description: "选择当前已装工装后保存。", state: hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation ? "current" : "upcoming" },
           ]}
         />
@@ -166,7 +166,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
             />
           </div>
         </Card>
-        <Card title="2. 确认产品与工艺规范" description="产品编号用于追溯实物，产品系列用于同类分析。">
+        <Card title="2. 确认产品与配方版本" description="产品编号用于追溯实物，产品系列用于同类分析。">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="产品系列" hint="例如 LENS-A、轴类零件">
               <Input required value={editor.productFamilyCode || ""} onChange={event => onChange("productFamilyCode", event.target.value)} />
@@ -206,7 +206,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
         </Card>
         {hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation && (
           <Alert tone="success" title="可以生效">
-            保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和工艺规范 {editor.processSpecificationId} v{editor.processSpecificationVersion}。
+            保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和配方版本 {editor.processSpecificationId} v{editor.processSpecificationVersion}。
           </Alert>
         )}
       </div>

@@ -348,10 +348,10 @@ public static partial class IngestionTaskValidator
             CheckLength(melsec.Host, 255, "melsecA1E.host", "MELSEC 主机名", found);
         if (value.ProcessSpecification is { } specification)
         {
-            CheckLength(specification.EventType, 256, "processSpecification.eventType", "工艺规范事件类型", found);
-            CheckLength(specification.IdPath, 2048, "processSpecification.idPath", "工艺规范编号来源", found);
-            CheckLength(specification.VersionPath, 2048, "processSpecification.versionPath", "工艺规范版本来源", found);
-            CheckLength(specification.NamePath, 2048, "processSpecification.namePath", "工艺规范名称来源", found);
+            CheckLength(specification.EventType, 256, "processSpecification.eventType", "配方版本事件类型", found);
+            CheckLength(specification.IdPath, 2048, "processSpecification.idPath", "配方版本编号来源", found);
+            CheckLength(specification.VersionPath, 2048, "processSpecification.versionPath", "配方版本号来源", found);
+            CheckLength(specification.NamePath, 2048, "processSpecification.namePath", "配方版本名称来源", found);
             CheckLength(specification.ParametersPath, 2048, "processSpecification.parametersPath", "工艺参数根", found);
         }
         if (value.Lifecycle is { } lifecycle)
@@ -1109,18 +1109,18 @@ public static partial class IngestionTaskValidator
     {
         if (processSpecification is null) return null;
         if (string.IsNullOrWhiteSpace(processSpecification.IdPath))
-            found.Add(new AcquisitionValidationError("processSpecification.idPath", "工艺规范编号来源不能为空。"));
+            found.Add(new AcquisitionValidationError("processSpecification.idPath", "配方版本编号来源不能为空。"));
         else
             ValidateSelectorSyntax(capability, processSpecification.IdPath.Trim(), "processSpecification.idPath", found);
         if (string.IsNullOrWhiteSpace(processSpecification.VersionPath))
-            found.Add(new AcquisitionValidationError("processSpecification.versionPath", "工艺规范版本来源不能为空。"));
+            found.Add(new AcquisitionValidationError("processSpecification.versionPath", "配方版本号来源不能为空。"));
         else
             ValidateSelectorSyntax(capability, processSpecification.VersionPath.Trim(), "processSpecification.versionPath", found);
         if (!string.IsNullOrWhiteSpace(processSpecification.NamePath))
             ValidateSelectorSyntax(capability, processSpecification.NamePath.Trim(), "processSpecification.namePath", found);
         var processSpecificationEventType = processSpecification.EventType?.Trim() ?? string.Empty;
         if (!EventTypePattern().IsMatch(processSpecificationEventType))
-            found.Add(new AcquisitionValidationError("processSpecification.eventType", "工艺规范事件类型格式无效，例如 process.specification.applied。"));
+            found.Add(new AcquisitionValidationError("processSpecification.eventType", "配方版本事件类型格式无效，例如 process.specification.applied。"));
 
         var trimmedParametersPath = processSpecification.ParametersPath?.Trim();
         var parametersPath = capability.SupportsControlParametersPath && !string.IsNullOrEmpty(trimmedParametersPath)

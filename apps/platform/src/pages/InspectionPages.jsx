@@ -539,7 +539,7 @@ export function QualityAnalysisPage() {
     return result;
   }, { pass: 0, fail: 0, inconclusive: 0, attachments: 0 });
   const productGroups = groupQuality(records, row => row.productFamilyCode || "未关联产品系列");
-  const processSpecificationGroups = groupQuality(records, row => [row.processSpecificationId, row.processSpecificationVersion ? `v${row.processSpecificationVersion}` : ""].filter(Boolean).join(" · ") || "未关联工艺规范");
+  const processSpecificationGroups = groupQuality(records, row => [row.processSpecificationId, row.processSpecificationVersion ? `v${row.processSpecificationVersion}` : ""].filter(Boolean).join(" · ") || "未关联配方版本");
   const chartLayout = useMemo(() => ({
     barmode: "stack",
     hovermode: "x unified",
@@ -582,10 +582,10 @@ export function QualityAnalysisPage() {
                 { key: "pass", label: "合格" }, { key: "fail", label: "不合格" },
               ]} />
             </Card>
-            <Card title="按工艺规范版本">
+            <Card title="按配方版本">
               <PlotlyChart traces={qualityOutcomeTraces(processSpecificationGroups.slice(0, 12))} layout={chartLayout} height={300} />
               <DataTable rows={processSpecificationGroups} keyField="name" columns={[
-                { key: "name", label: "工艺规范" }, { key: "total", label: "检测" },
+                { key: "name", label: "配方版本" }, { key: "total", label: "检测" },
                 { key: "pass", label: "合格" }, { key: "fail", label: "不合格" },
               ]} />
             </Card>

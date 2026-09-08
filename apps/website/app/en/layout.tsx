@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   applicationName: "Ingot",
   keywords: [
     "Ingot", "process diagnosis", "recipe optimization", "process optimization", "process engineer decisions",
-    "production runs", "next recipe", "process specification",
+    "production runs", "next recipe", "recipe version",
     "version lineage", "process data", "mechanism notes", "engineering decisions",
   ],
   alternates: {

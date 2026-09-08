@@ -21,7 +21,7 @@ Data enters process diagnosis and recipe optimization only when these facts can 
 
 Ingot does not treat a PLC as the only source. One run may combine:
 
-- process specifications, state, stages, and process signals from a control system;
+- recipe versions, state, stages, and process signals from a control system;
 - measurements from instruments, sensors, vision, or edge gateways;
 - laboratory, inline, or manual inspection results;
 - MES, QMS, work orders, barcodes, and lot traceability;
@@ -245,7 +245,7 @@ Excluded runs retain raw records, source hashes, and reasons. The data-quality v
 1. Define the engineering problem, run boundary, and stable equipment identity.
 2. Select or implement a protocol driver.
 3. Build equipment templates and point mappings.
-4. Define actual process specifications, signals, stages, and units.
+4. Define actual recipe versions, signals, stages, and units.
 5. Configure manufacturing context and inspection characteristics.
 6. Validate real values through the target Edge and publish.
 7. Complete one run–trajectory–inspection loop.

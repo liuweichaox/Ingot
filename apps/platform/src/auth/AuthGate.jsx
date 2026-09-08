@@ -240,7 +240,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
           <div className="relative max-w-2xl py-14">
             <p className="data-label text-evidence-400">PROCESS DIAGNOSIS · RECIPE RECOMMENDATION</p>
             <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从真实运行，<br /><span className="text-evidence-400">到下一份配方建议。</span></h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议，并按需修订下一版工艺规范。</p>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议，并按需修订下一配方版本。</p>
 
             <div className="mt-10 overflow-hidden rounded-lg border border-white/12 bg-black/15 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
@@ -279,7 +279,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
                 <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">平台环境</span>
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">进入 Ingot</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续查看真实运行、质量结果、工艺追因与工艺规范版本。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续查看真实运行、质量结果、工艺追因与配方版本。</p>
             </div>
             {authMode === "oidc" ? (
               <div className="space-y-4">

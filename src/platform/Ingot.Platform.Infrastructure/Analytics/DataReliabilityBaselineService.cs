@@ -142,7 +142,7 @@ public sealed class DataReliabilityBaselineService(
                 Rate("process_data_usability", "过程数据可用率", processUsable, denominator,
                     "过程数据状态不是“不可用”的运行 / 已分析运行。"),
                 Rate("actual_parameter_coverage", "实际参数覆盖率", actualParameters, denominator,
-                    "存在“工艺规范已应用”现场实际参数回读的运行 / 已分析运行；不使用工艺规范计划值。"),
+                    "存在“配方版本已应用”现场实际参数回读的运行 / 已分析运行；不使用配方版本计划值。"),
                 Rate("actual_parameter_unit_completeness", "实际参数单位完整率", parameterUnits, denominator,
                     "全部实际参数具有明确单位的运行 / 已分析运行。"),
                 Rate("context_capture_integrity", "生产上下文捕获可信率", contextIntegrity, denominator,
