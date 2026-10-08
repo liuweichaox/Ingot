@@ -19,7 +19,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 | Recipe versions and parameters | Web/API implemented | Parameter definitions reference the process data dictionary; recipe versions retain multiple parameter settings |
 | R&D projects | Server APIs implemented | Project creation and activation, retaining objectives, scope, and evidence references |
 | Runs and experiment outcomes | Web/API implemented | Each run is an experiment linking actual parameters, process data, and quality outcomes; admitted runs form optimization observations |
-| Recipe recommendations and engineer decisions | Server APIs implemented; complete Web interface remains planned | APIs can generate recommendations, append decisions, link runs, and materialize outcomes; interface illustrations do not represent a delivered complete Web workflow |
+| Recipe recommendations and engineer decisions | Web/API implemented | The recipe-suggestion page under process diagnosis generates a recommendation, records adoption, modification, or rejection, links the later run, and freezes the outcome |
 | Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and explain why |
 | Production operation | Single-machine reference deployment available | Deployers still complete site security, recovery, capacity, and operations configuration |
 

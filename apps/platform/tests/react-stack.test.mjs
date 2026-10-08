@@ -57,7 +57,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 });
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/workbench", "/research-projects", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
+    "/workbench", "/recipe-suggestions", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -68,7 +68,7 @@ test("all platform routes remain available after the React migration", () => {
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.match(app, /\/research-projects/);
+  assert.doesNotMatch(app, /\/research-projects/);
   assert.doesNotMatch(app, /\/research-assets/);
   assert.doesNotMatch(app, /\/configuration\/scenario-packages/);
   for (const retiredAlias of ["/production-setup", "/quality-plans", "/process-improvement", "/profiles", "/users"]) {

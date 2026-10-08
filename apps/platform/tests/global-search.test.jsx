@@ -36,10 +36,11 @@ describe("功能搜索", () => {
     }
   });
 
-  it("已撤下的研发页链接进入配方版本，不请求另一套变量定义", async () => {
+  it("旧的研发项目地址不再进入产品页面", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { headers: { "Content-Type": "application/json" } })));
     render(<MemoryRouter initialEntries={["/research-projects"]}><App identity={{ roles: ["process.engineer"] }} logout={vi.fn()} /><CurrentPath /></MemoryRouter>);
-    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-specifications"));
+    expect(await screen.findByRole("heading", { name: "页面不存在" })).toBeInTheDocument();
+    expect(screen.getByLabelText("当前位置")).toHaveTextContent("/research-projects");
     expect(fetch.mock.calls.some(([url]) => String(url).includes("/api/v1/research-projects"))).toBe(false);
   });
 

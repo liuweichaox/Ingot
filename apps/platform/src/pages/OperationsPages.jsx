@@ -105,11 +105,18 @@ export function WorkbenchPage({ identity }) {
     tone: state.executionTotal > 1 ? "border-l-blue-500" : "border-l-amber-500",
     action: state.executionTotal > 1 ? "开始分析" : "查看运行",
   };
+  const recipeAction = {
+    title: "处理配方建议",
+    description: "用已完成运行生成下一版配方，并登记采用、修改或拒绝。",
+    to: "/recipe-suggestions",
+    tone: "border-l-blue-500",
+    action: "去建议",
+  };
   const dailyActions = isQualityRole && !isEngineeringRole
     ? [qualityAction, analysisAction, platformAction]
     : isAdministrator
-      ? [analysisAction, platformAction, qualityAction]
-      : [analysisAction, qualityAction, platformAction];
+      ? [recipeAction, analysisAction, platformAction]
+      : [recipeAction, analysisAction, qualityAction];
   const overviewItems = [
     { label: "生产运行", value: state.executionTotal, hint: `${activeProcessExecutions} 个进行中`, icon: CircleStackIcon, tone: "text-trajectory-100 bg-trajectory-500/12 ring-trajectory-500/20" },
     { label: "待处理质检", value: pendingInspections, hint: "录入与复核", icon: ClipboardDocumentCheckIcon, tone: pendingInspections ? "text-amber-200 bg-amber-500/12 ring-amber-500/20" : "text-emerald-200 bg-emerald-500/12 ring-emerald-500/20" },
@@ -403,6 +410,7 @@ export function ProcessExecutionDetailPage() {
           <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/process-executions">返回运行记录</Link>
           <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/events?executionId=${encodedId}`}>查看全部事件</Link>
           <LinkButton to={`/comparisons?executionId=${encodedId}`}>历史对比</LinkButton>
+          <LinkButton to="/recipe-suggestions">配方建议</LinkButton>
         </>
       )}
     >

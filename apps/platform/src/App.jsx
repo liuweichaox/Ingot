@@ -38,6 +38,7 @@ const QualityAnalysisPage = lazyNamed(() => import("./pages/InspectionPages"), "
 const ExecutionComparisonPage = lazyNamed(() => import("./pages/AnalysisPages"), "ExecutionComparisonPage");
 const DataQualityPage = lazyNamed(() => import("./pages/AnalysisPages"), "DataQualityPage");
 const AnalysisHubPage = lazyNamed(() => import("./pages/AnalysisHubPage"), "AnalysisHubPage");
+const RecipeSuggestionsPage = lazyNamed(() => import("./pages/RecipeSuggestionsPage"), "RecipeSuggestionsPage");
 const ConfigurationHubPage = lazyNamed(() => import("./pages/RegistryPages"), "ConfigurationHubPage");
 const ProcessDataModelsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessDataModelsPage");
 const ProcessSpecificationsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessSpecificationsPage");
@@ -86,7 +87,7 @@ const sections = [
   },
   {
     id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
-      { label: "追因分析", items: [["/analysis", "追因总览"], ["/data-quality", "数据质量"], ["/comparisons", "运行对比"]] },
+      { label: "追因分析", items: [["/analysis", "追因总览"], ["/data-quality", "数据质量"], ["/comparisons", "运行对比"], ["/recipe-suggestions", "配方建议"]] },
       { label: "辅助研判", items: [["/chat", "分析助手"]] },
     ],
   },
@@ -119,6 +120,7 @@ const pageDetails = {
   "/inspections": ["检验任务", "处理视觉检查、人工质检与原图复核"],
   "/quality-analysis": ["偏差分析", "按产品、配方版本和运行上下文定位质量偏差并追溯证据"],
   "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
+  "/recipe-suggestions": ["配方建议", "用真实运行和质量结果生成下一版配方，并登记决定与后续结果"],
   "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
   "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
   "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量与工装配置"],
@@ -446,8 +448,8 @@ function AppRoutes({ identity, canConfigure }) {
       <Routes>
         <Route path="/" element={<Navigate to="/workbench" replace />} />
         <Route path="/workbench" element={<WorkbenchPage identity={identity} />} />
-        <Route path="/research-projects" element={<Navigate to="/configuration/process-specifications" replace />} />
         <Route path="/analysis" element={<AnalysisHubPage identity={identity} />} />
+        <Route path="/recipe-suggestions" element={<RecipeSuggestionsPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
         <Route path="/explorer" element={<ObjectExplorerPage />} />

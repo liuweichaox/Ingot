@@ -1,7 +1,7 @@
 
 // 呈现运行对比、候选原因与数据可信度，并在证据不足时阻止结论升级。
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { useIsMounted } from "../hooks/useIsMounted";
@@ -344,7 +344,7 @@ export function ExecutionComparisonPage() {
               ]}
             />
           </Card></div></details>
-          <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。">
+          <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/recipe-suggestions">去配方建议</Link>}>
             {causeRows.length ? (
               <>
                 <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
