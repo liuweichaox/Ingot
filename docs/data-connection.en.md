@@ -1,8 +1,12 @@
 # Data integration
 
-> Status: **current technical guide**. The purpose of connectivity is not to accumulate more points, but to make one real run useful for engineering judgment.
+> Status: **current technical guide**. This guide defines the connection contract for deployers who choose to connect equipment or business data.
 
 This document defines the integration contract for equipment and business data entering Ingot, including the identity semantics of `SiteId`, `EdgeId`, and `ExecutionId`, plus provenance, mapping, time, quality-result linkage, and analysis-admission requirements. Every real integration must verify data ownership, traceable provenance, and quality-result linkage.
+
+## Scope of this guide
+
+This guide covers equipment-data integration and the run-evidence chain. CSV functions in the field-integration page configure equipment data sources and task bindings; they do not import experiment results. Each run is an experiment; run records and quality outcomes provide factual inputs for analysis and recommendations. See [Current status](status.en.md) for capability boundaries.
 
 ## Definition of a complete connection
 
@@ -19,7 +23,7 @@ Data enters process diagnosis and recipe optimization only when these facts can 
 
 ## Data sources
 
-Ingot does not treat a PLC as the only source. One run may combine:
+A production-run record may combine the following data sources:
 
 - recipe versions, state, stages, and process signals from a control system;
 - measurements from instruments, sensors, vision, or edge gateways;

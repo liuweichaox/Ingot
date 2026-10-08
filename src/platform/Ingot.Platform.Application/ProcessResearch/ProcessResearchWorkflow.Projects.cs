@@ -449,13 +449,11 @@ public sealed partial class ProcessResearchWorkflow
 
     private static void ValidateProjectScope(ResearchProject project)
     {
-        if (string.IsNullOrWhiteSpace(project.SiteCode))
-            throw new ProcessResearchRuleException("研发项目进入执行阶段前必须绑定站点。");
         var selectors = project.Context.Keys
             .Select(static key => key.Trim().ToLowerInvariant())
             .Where(ResearchProjectScopeKeys.SelectorKeys.Contains)
             .ToArray();
-        if (selectors.Length == 0)
+        if (!string.IsNullOrWhiteSpace(project.SiteCode) && selectors.Length == 0)
             throw new ProcessResearchRuleException(
                 "研发项目进入执行阶段前必须至少绑定一个产品、设备、配方版本或产出物料范围。");
         if (project.Context.TryGetValue(ResearchProjectScopeKeys.ProcessSpecificationVersion, out var version) &&

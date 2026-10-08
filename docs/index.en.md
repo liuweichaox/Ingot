@@ -1,8 +1,8 @@
 # Ingot documentation
 
-> **Core value**: Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.
+> **Core value**: Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-**Product category:** Open-source Process Diagnosis & Optimization. Ingot links run conditions, process trajectories, production context, and quality outcomes so normal recipe runs become optimization observations that support the next recipe recommendation.
+**Product category:** Open-source Process R&D and Optimization System. The documentation covers R&D projects and experiment records, quality analysis, process diagnosis, recipe optimization, system design, and deployment.
 
 The documentation can be read by task rather than in sequence.
 
@@ -11,14 +11,15 @@ The documentation can be read by task rather than in sequence.
 | Objective | Read first | Continue with |
 |---|---|---|
 | Evaluate the product workflow | [Getting started](getting-started.en.md) | [Current status](status.en.md) |
-| Connect a real problem | [Recipe-optimization pilot guide](pilot.en.md) | [Data integration](data-connection.en.md) |
+| Deploy Ingot | [Getting started](getting-started.en.md) | [Current status](status.en.md) |
+| Validate the current production-evidence workflow | [Recipe-optimization pilot guide](pilot.en.md) | [Data integration](data-connection.en.md) |
 | Prepare production | [Production architecture](production-architecture.en.md) | [Deployment](deployment.en.md) |
 | Review how the system forms a recommendation | [System design](design.en.md) | [Analysis and optimization](optimization.en.md) |
 | Build process knowledge | [Mechanism knowledge design](mechanism-knowledge.en.md) | [Analysis and optimization](optimization.en.md) |
 | Review effect claims | [Current status](status.en.md) | [Analysis and optimization](optimization.en.md) |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | [System design](design.en.md) |
 
-## Product loop
+## Current production-evidence workflow
 
 ```text
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
@@ -27,7 +28,7 @@ Process configuration → Field integration → Production runs → Quality mana
 ```
 
 1. **Process configuration** tells the system which variables, units, quality rules, and safety boundaries matter.
-2. **Field integration** turns control, instrument, and business data into consistent process fields.
+2. **Field integration** can turn control, instrument, and business data into consistent process fields.
 3. **Production runs** record actual conditions, stages, trajectories, and manufacturing context.
 4. **Quality management** links inspections uniquely and subjects them to independent review.
 5. **Process diagnosis** checks whether the data are reliable, compares runs, and finds differences worth testing.
@@ -37,7 +38,7 @@ This order means “what must exist before the next step.” Navigation may foll
 
 ## Current maturity
 
-The main software workflow runs and is covered by automated tests. The repository bundles no scenario-specific validation data or results; users evaluate optimization effects, applicability, and production safety with their own data.
+The production-run recommendation workflow is implemented. The Web app manages recipe-version parameters through process configuration; each run is an experiment, and run records with quality outcomes provide factual inputs for analysis and optimization. R&D project APIs retain objectives, scope, and evidence references. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for capability, validation, and planned-work boundaries.
 
 See [Current status](status.en.md) for the complete boundary.
 

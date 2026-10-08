@@ -6,17 +6,19 @@ This document defines component responsibilities, dependency direction, systems 
 
 ## Design objective
 
-Ingot's core value is fixed by the [Brand guide](brand.en.md): turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+
+Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; project management and record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional extensions and must not become required dependencies of core R&D workflows. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
 
 The architecture must therefore:
 
-1. **Establish trustworthy facts first**: every analysis traces to a real run, actual conditions, process data, and quality outcomes.
+1. **Establish trustworthy facts first**: every analysis traces to experiment or run records with provenance, units, time, and version.
 2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
-3. **Let production naturally form optimization samples**: completed recipe runs automatically link actual parameters, process context, and quality outcomes.
-4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
-5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
+2. **Support independent R&D records**: R&D does not depend on production systems being online or field connectors being available; production runs are one optional evidence source.
+3. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
+4. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
-The system is designed for one company on its factory network, shared by process, quality, equipment, and R&D teams.
+The system is designed to run self-hosted for one team and used by R&D and process engineers; production, quality, and equipment teams may collaborate.
 
 ## Product model
 
@@ -24,21 +26,22 @@ The system is designed for one company on its factory network, shared by process
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
 ```
 
-The first four steps follow business dependencies to organize field activity into trustworthy run facts. The last two use those facts to support engineering decisions. Process diagnosis explains an observed result; recipe optimization directly consumes normal production runs and recommends the next recipe within objectives, safety boundaries, and observed coverage, then retains the engineer decision and actual outcome.
+This is the currently implemented production-evidence workflow: it organizes run data into trustworthy facts for analysis and recommendations. Next-recipe recommendations depend on completed production runs, inspection outcomes, and adequate coverage. Each run is an experiment: run records retain actual parameters and process trajectories, while quality records retain experiment outcomes. See [Current status](status.en.md).
 
-The current Web information architecture balances the decision chain with frequent role-based tasks through seven business entries:
+The current Web information architecture balances the decision chain with frequent role-based tasks through six business entries:
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
 2. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
-3. **Process configuration**: configuration overview, data dictionaries, recipe versions, analysis rules, quality configuration, tooling configuration, and configuration publishing;
+3. **Process configuration**: configuration overview, data dictionaries, recipe versions, analysis rules, quality configuration, and tooling configuration;
 4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
 5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
-6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain;
-7. **Recipe optimization**: optimization tasks, real-run observations, next-recipe recommendations, engineer decisions, and process knowledge.
+6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, and the analysis assistant; AI is an analysis method rather than a standalone business domain.
 
-After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Recipe optimization.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Production runs also covers production preparation, collection, and traceability; Quality management covers inspection and quality-deviation work; and the complete data loop additionally depends on cross-entry evidence such as data trust and run context.
+After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Recipe recommendations, engineer decisions, and outcome materialization are available through server APIs; the current Web app does not yet provide a complete recipe-optimization interface. See [Current status](status.en.md).
 
-System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, only canonical current URLs are retained; development-era page aliases are not preserved. After production release, URLs and data contracts follow controlled version-migration discipline.
+Recipe versions are the common source of experiment parameter settings. Parameter codes, names, data types, units, bounds, and steps come from the referenced process data dictionary; recipe versions retain settings, revision reasons, and evidence. A separate project form must not redefine parameters. All parameters are analysis variables; optimization changes still respect data types, change-allowed flags, and safety bounds.
+
+System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 

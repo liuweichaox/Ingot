@@ -65,9 +65,13 @@ public sealed class ResearchProjectsController(
     {
         var identity = ResolveResearchIdentity();
         if (identity.Result is not null) return identity.Result;
-        var siteScope = PlatformSiteScope.Resolve(identity.Identity!, request.SiteCode, false, out var siteId);
-        if (siteScope == SiteScopeFailure.Forbidden) return AuthorizationDenied();
-        if (siteScope == SiteScopeFailure.Missing) return InvalidRequest("研发项目必须绑定一个有权访问的站点。");
+        string? siteId = null;
+        if (!string.IsNullOrWhiteSpace(request.SiteCode))
+        {
+            var siteScope = PlatformSiteScope.Resolve(identity.Identity!, request.SiteCode, false, out siteId);
+            if (siteScope == SiteScopeFailure.Forbidden) return AuthorizationDenied();
+            if (siteScope == SiteScopeFailure.Missing) return InvalidRequest("研发项目引用的站点无效。");
+        }
         return await ExecuteRuleAsync(async () => Ok(await workflow.CreateProjectAsync(
             request with { SiteCode = siteId }, identity.Identity!.UserId, ct).ConfigureAwait(false))).ConfigureAwait(false);
     }
@@ -76,9 +80,13 @@ public sealed class ResearchProjectsController(
     public Task<IActionResult> Update(Guid projectId, [FromBody] ResearchProject request, CancellationToken ct)
         => ExecuteForProjectAsync(projectId, true, async identity =>
         {
-            var siteScope = PlatformSiteScope.Resolve(identity, request.SiteCode, false, out var siteId);
-            if (siteScope == SiteScopeFailure.Forbidden) return AuthorizationDenied();
-            if (siteScope == SiteScopeFailure.Missing) return InvalidRequest("研发项目必须绑定一个有权访问的站点。");
+            string? siteId = null;
+            if (!string.IsNullOrWhiteSpace(request.SiteCode))
+            {
+                var siteScope = PlatformSiteScope.Resolve(identity, request.SiteCode, false, out siteId);
+                if (siteScope == SiteScopeFailure.Forbidden) return AuthorizationDenied();
+                if (siteScope == SiteScopeFailure.Missing) return InvalidRequest("研发项目引用的站点无效。");
+            }
             return Ok(await workflow.UpdateProjectAsync(projectId, request with { SiteCode = siteId }, identity.UserId, ct)
                 .ConfigureAwait(false));
         }, ct);
@@ -93,7 +101,7 @@ public sealed class ResearchProjectsController(
         if (project is null) return ResourceNotFound("研发项目不存在。");
         var isAdministrator = identity.Identity!.HasAnyRole(PlatformRoles.PlatformAdministrator);
         if (!isAdministrator && (!string.Equals(project.OwnerUserId, identity.Identity.UserId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(project.SiteCode) || !identity.Identity.CanAccessSite(project.SiteCode)))
+            !string.IsNullOrWhiteSpace(project.SiteCode) && !identity.Identity.CanAccessSite(project.SiteCode)))
             return AuthorizationDenied("只有项目负责人或平台管理员可以管理项目成员。");
         return await ExecuteRuleAsync(async () => Ok(await workflow.UpdateProjectMembersAsync(projectId,
             request.Revision, request.MemberUserIds, identity.Identity.UserId, isAdministrator, ct).ConfigureAwait(false)));
@@ -207,7 +215,7 @@ public sealed class ResearchProjectsController(
         if (identity.HasAnyRole(PlatformRoles.PlatformAdministrator)) return true;
         return (string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
             project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal)) &&
-            !string.IsNullOrWhiteSpace(project.SiteCode) && identity.CanAccessSite(project.SiteCode);
+            (string.IsNullOrWhiteSpace(project.SiteCode) || identity.CanAccessSite(project.SiteCode));
     }
 
     private async Task<IActionResult> ExecuteRuleAsync(Func<Task<IActionResult>> operation)

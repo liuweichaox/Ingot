@@ -24,21 +24,29 @@ public sealed class ProcessResearchWorkflowProjectLifecycleTests : ProcessResear
     }
 
     [Fact]
-    public async Task Project_RequiresAnExplicitProductionScopeBeforeActivation()
+    public async Task StandaloneProject_CanStartWithoutAProductionScope()
     {
         var store = new MemoryStore();
         var workflow = CreateWorkflow(store);
         var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "scope-required", Context = new Dictionary<string, string>() },
+            ProjectDraft() with
+            {
+                Code = "standalone-research",
+                SiteCode = null,
+                Context = new Dictionary<string, string>()
+            },
             "engineer-a");
 
-        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() => workflow.ChangeProjectStatusAsync(
+        var started = await workflow.ChangeProjectStatusAsync(
             project.ProjectId,
             ResearchProjectStatuses.Active,
             "engineer-a",
-            expectedRevision: project.Revision));
+            expectedRevision: project.Revision);
 
-        Assert.Contains("至少绑定一个产品", error.Message, StringComparison.Ordinal);
+        Assert.Equal(ResearchProjectStatuses.Active, started.Status);
+        Assert.Null(started.SiteCode);
+        var visibleToOwner = await store.ListProjectsAsync("engineer-a", false, [], 50, 0);
+        Assert.Contains(visibleToOwner, value => value.ProjectId == project.ProjectId);
     }
 
     [Fact]

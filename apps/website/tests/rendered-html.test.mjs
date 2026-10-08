@@ -39,24 +39,24 @@ test("source does not enable mandatory scroll snap", async () => {
   assert.doesNotMatch(`${tsx}\n${css}`, /scroll-snap-type\s*:[^;]*\bmandatory\b/i);
 });
 
-test("Chinese home presents the production-to-recommendation flow", async () => {
+test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   const source = await html();
-  assert.match(source, /<title>Ingot — 开源工艺追因与优化系统<\/title>/i);
-  assert.match(source, /开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议/);
-  assert.doesNotMatch(source, /面向工艺工程师的开源工艺追因与优化系统/);
-  assert.match(source, /从真实运行/);
-  assert.match(source, /到下一份配方建议/);
+  assert.match(source, /<title>Ingot — 开源工艺研发与优化系统<\/title>/i);
+  assert.match(source, /组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
+  assert.match(source, /从工艺数据，/);
+  assert.match(source, /到有依据的研发决策。/);
   assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);
   assert.match(source, /先确认数据是否可靠，再形成可审计的工艺修订/);
   assert.match(source, /直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方/);
   assert.match(source, /已复核工艺资料片段/);
   assert.match(source, /片段级引用/);
-  for (const stage of ["建立运行证据", "完成工艺追因", "审核下一份配方", "修订配方版本并回流"]) {
+  for (const stage of ["组织研发记录", "核对运行与质量", "分析工艺差异", "审核配方建议"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /工艺能力持续升级，证据边界始终不变/);
   assert.match(source, /可在厂内自托管/);
   assert.match(source, /真实工厂收益验证尚未完成/);
+  assert.match(source, /每次工艺运行就是一次实验/);
   assert.match(source, /具体场景评估由部署方用自己的数据完成/);
   assert.doesNotMatch(source, /公开验证协议与结果可以独立复现/);
   assert.doesNotMatch(source, /自动发现确定根因|已经减少\s*\d+%|FX3U|光学镜片|模压/);
@@ -65,25 +65,25 @@ test("Chinese home presents the production-to-recommendation flow", async () => 
   assert.doesNotMatch(source, retired);
 });
 
-test("English home presents the production-to-recommendation flow", async () => {
+test("English home presents R&D, analysis, and recipe decisions", async () => {
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
-  assert.match(source, /<title>Ingot — Open-source Process Diagnosis &amp; Optimization<\/title>/i);
-  assert.match(source, /system that turns linked equipment, production, and inspection data into trustworthy evidence/i);
-  assert.doesNotMatch(source, /system for process engineers/i);
-  assert.match(source, /From real runs/);
-  assert.match(source, /to the next recipe recommendation/);
+  assert.match(source, /<title>Ingot — Open-source Process R&amp;D and Optimization System<\/title>/i);
+  assert.match(source, /Organize R&amp;D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
+  assert.match(source, /From process data/);
+  assert.match(source, /to evidence-based R&amp;D decisions/);
   assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);
   assert.match(source, /Confirm that data are trustworthy before forming an auditable revision/);
   assert.match(source, /directly links actual settings, process context, and quality outcomes from completed runs without manual recipe reclassification/);
   assert.match(source, /reviewed process-document references/i);
   assert.match(source, /Fragment citations/);
-  for (const stage of ["Build run evidence", "Complete process diagnosis", "Review the next recommendation", "Revise and return through production"]) {
+  for (const stage of ["Organize research records", "Check runs and quality", "Analyze process differences", "Review recipe recommendations"]) {
     assert.match(source, new RegExp(stage));
   }
   assert.match(source, /Process capabilities evolve/);
   assert.match(source, /self-hostable inside the plant/);
   assert.match(source, /real-factory benefit validation remains incomplete/i);
+  assert.match(source, /Each process run is an experiment/i);
   assert.match(source, /scenario-specific evaluation belongs to the deployer(?:'|&#x27;)s own data/i);
   assert.doesNotMatch(source, /public validation protocols and results are independently reproducible/i);
   assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|molding|one real lens/i);

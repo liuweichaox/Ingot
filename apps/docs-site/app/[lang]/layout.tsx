@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       template: lang === "zh" ? "%s · Ingot 文档" : "%s · Ingot Documentation",
     },
     description: lang === "zh"
-      ? "了解 Ingot 如何把真实配方运行变成优化证据，并在安全边界内推荐下一份配方"
-      : "Learn how Ingot turns real recipe runs into optimization evidence and recommends the next recipe within safety boundaries",
+      ? "组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。"
+      : "Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
     robots: { index: true, follow: true },
   };
 }

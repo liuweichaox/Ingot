@@ -56,18 +56,17 @@ if grep -RInE --exclude='package-lock.json' --exclude='verify-product-scope.sh' 
   exit 1
 fi
 
-# Retired planning vocabulary must stay outside current code, contracts, UI,
-# tests, and documentation. Historical migration scripts remain immutable
-# because deployed databases verify their committed checksums.
-legacy_en='exper''iment'
-legacy_run_word='tri''al'
-legacy_zh='实''验'
-legacy_zh_alt='试''验'
+# Retired parallel run-planning concepts stay out of current code, contracts,
+# UI, tests, and documentation. Executions are the sole experiment records.
+# Historical migrations stay immutable because deployed databases verify checksums.
+retired_planning_pattern='IResearchExperimentRecordStore|ResearchExperimentRecordService|ResearchExperimentRecord|experiment-records|research_manual_experiment_records|Experiment.{0,20}(Plan|Planning|Workflow|Schedule)|Trial.{0,20}(Plan|Planning|Workflow|Schedule)|实验.{0,6}(计划|排程|工作流|状态机)|试验.{0,6}(计划|排程|工作流|状态机)'
 if grep -RIniE \
   --exclude='package-lock.json' \
   --exclude='*.tsbuildinfo' \
   --exclude='verify-product-scope.sh' \
   --exclude='0001_baseline.sql' \
+  --exclude='0024_standalone_experiment_records.sql' \
+  --exclude='0025_remove_parallel_experiment_records.sql' \
   --exclude='0008_recipe_recommendations.sql' \
   --exclude='0013_research_evidence_integrity.sql' \
   --exclude='0015_retire_experiment_workflow.sql' \
@@ -81,7 +80,7 @@ if grep -RIniE \
   --exclude-dir=obj \
   --exclude-dir=.venv \
   --exclude-dir=.pytest_cache \
-  "(^|[^[:alnum:]_])${legacy_en}(s|al|ation|ing)?([^[:alnum:]_]|$)|(^|[^[:alnum:]_])${legacy_run_word}(s|ing)?([^[:alnum:]_]|$)|${legacy_zh}([^室]|$)|${legacy_zh_alt}([^室]|$)" \
+  "$retired_planning_pattern" \
   README.md README.en.md CONTRIBUTING.md CONTRIBUTING.en.md SECURITY.md CHANGELOG.md \
   docs apps optimizer src tests .github; then
   echo "Retired run-planning vocabulary is forbidden outside immutable cleanup migrations." >&2
@@ -91,6 +90,8 @@ fi
 if grep -RInE \
   --exclude='verify-product-scope.sh' \
   --exclude='0001_baseline.sql' \
+  --exclude='0024_standalone_experiment_records.sql' \
+  --exclude='0025_remove_parallel_experiment_records.sql' \
   --exclude='0013_research_evidence_integrity.sql' \
   --exclude='0014_shadow_recommendation_execution_links.sql' \
   --exclude='0015_retire_experiment_workflow.sql' \

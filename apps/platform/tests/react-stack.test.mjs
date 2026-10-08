@@ -57,7 +57,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 });
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/workbench", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
+    "/workbench", "/research-projects", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -68,7 +68,7 @@ test("all platform routes remain available after the React migration", () => {
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.doesNotMatch(app, /\/research-projects/);
+  assert.match(app, /\/research-projects/);
   assert.doesNotMatch(app, /\/research-assets/);
   assert.doesNotMatch(app, /\/configuration\/scenario-packages/);
   for (const retiredAlias of ["/production-setup", "/quality-plans", "/process-improvement", "/profiles", "/users"]) {
@@ -76,9 +76,10 @@ test("all platform routes remain available after the React migration", () => {
   }
 });
 
-test("platform identity presents Ingot as a process diagnosis and optimization system", () => {
-  assert.match(html, /Ingot · 工艺追因与优化系统/);
-  assert.match(html, /真实生产条件、过程轨迹与质量结果/);
+test("platform identity describes research, analysis, and optimization", () => {
+  assert.match(html, /Ingot · 工艺研发与优化/);
+  assert.match(html, /开源工艺研发与优化系统/);
+  assert.match(html, /组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
@@ -90,11 +91,10 @@ test("navigation and overlays are accessible Headless UI components", () => {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
   assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
-  assert.doesNotMatch(app, /id: "research"/);
   assert.doesNotMatch(app, /id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
-  assert.match(app, /roles \|\| \[\]\)\.includes\("platform\.admin"\)/);
+  assert.match(app, /roles\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
   assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\]/);
   assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
@@ -134,7 +134,8 @@ test("navigation and overlays are accessible Headless UI components", () => {
   for (const label of itemLabels) {
     assert.ok([...label].length >= 3 && [...label].length <= 4, `menu label ${label} should contain 3–4 characters`);
   }
-  assert.doesNotMatch(pages, /ResearchProjectsPage|ResearchAssetsPage|MechanismKnowledgeWorkbench/);
+  assert.doesNotMatch(pages, /export function ResearchProjectsPage\(\)/);
+  assert.doesNotMatch(pages, /ResearchAssetsPage|MechanismKnowledgeWorkbench/);
 });
 
 test("authenticated application exposes the identity administration surface", () => {
@@ -217,7 +218,8 @@ test("versioned tooling remains unique and configuration records stay bounded", 
   assert.match(pages, /getRowKey=\{section === "type" \? row => `\$\{row\[resource\.key\]\}:\$\{row\.version \?\? 1\}` : undefined\}/);
   assert.match(pages, /<option value="Information">信息<\/option>/);
   assert.doesNotMatch(pages, /ImprovementPanel|process-investigations|parameter-recommendations/);
-  assert.doesNotMatch(pages, /research-projects|research-assets|recipe-recommendation-flows/);
+  assert.doesNotMatch(pages, /research-projects/);
+  assert.doesNotMatch(pages, /research-assets|recipe-recommendation-flows/);
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
@@ -347,12 +349,12 @@ test("dynamic pages and operational evidence keep business-facing labels", () =>
 
 test("local authentication has a complete login and session-expiry experience", () => {
   assert.match(main, /<AuthGate>/);
-  assert.match(auth, /PROCESS DIAGNOSIS · RECIPE RECOMMENDATION/);
-  assert.match(auth, /从真实运行，/);
-  assert.match(auth, /到下一份配方建议。/);
+  assert.match(auth, /PROCESS R&D · ANALYSIS · OPTIMIZATION/);
+  assert.match(auth, /从工艺数据，/);
+  assert.match(auth, /到有依据的研发决策。/);
   assert.match(auth, /ENGINEERING DECISION · EVIDENCE/);
   assert.match(auth, /结论可复用/);
-  assert.match(auth, /真实运行、质量结果、工艺追因与配方版本/);
+  assert.match(auth, /维护配方版本、查看运行与质量记录/);
   assert.match(auth, /下一份配方/);
   assert.match(auth, /\/api\/v1\/auth\/me/);
   assert.match(auth, /\/api\/v1\/auth\/login/);

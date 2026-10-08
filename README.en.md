@@ -5,8 +5,8 @@
     <img src="apps/website/public/brand/ingot-lockup.svg" alt="Ingot" width="340">
   </a>
 
-  <p><strong>Open-source Process Diagnosis &amp; Optimization</strong></p>
-  <p>From run evidence to the next recipe.</p>
+  <p><strong>Open-source Process R&amp;D and Optimization System</strong></p>
+  <p>From process data to evidence-based R&amp;D decisions.</p>
 
   [![CI](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml/badge.svg)](https://github.com/liuweichaox/Ingot/actions/workflows/ci.yml)
   [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-E8AD56.svg)](LICENSE)
@@ -21,7 +21,7 @@
 </div>
 
 <a href="https://ingotstack.com/en/">
-  <img src="apps/website/public/og.png" alt="Ingot: From run evidence to the next recipe." width="100%">
+  <img src="apps/website/public/og.png" alt="Ingot: From process data to evidence-based R&amp;D decisions." width="100%">
 </a>
 
 <details>
@@ -45,9 +45,9 @@
 
 ## Project overview
 
-Ingot is an open-source process diagnosis and optimization system. The system links equipment records, production runs, process trajectories, inspection results, and R&D context into comparable, traceable run evidence.
+Ingot is an Open-source Process R&D and Optimization System. It organizes R&D around project objectives, experiment records, actual settings, process trajectories, quality outcomes, and engineering judgment, helping engineers review data, compare runs, analyze candidate causes, and develop recipe recommendations under explicit constraints.
 
-For real recipe runs, Ingot provides three engineering capabilities:
+The currently implemented production-evidence workflow provides three engineering capabilities:
 
 - **Run reconstruction**: establish actual conditions, process changes, material, tooling, and quality outcomes;
 - **Optimization observations**: automatically link actual recipes, process context, and quality outcomes while excluding untrustworthy runs;
@@ -55,18 +55,19 @@ For real recipe runs, Ingot provides three engineering capabilities:
 
 The fixed design objective is:
 
-> **Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.**
+> **Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
 
-Ingot applies where recipe runs are expensive, samples are limited, and quality objectives and safety boundaries are explicit. The normal workflow is real recipe run → automatic optimization observation → next-recipe recommendation → engineer confirmation in the existing production flow → continued learning from the new run. The system keeps this as the only real-run loop and does not add a separate planning, approval, or result state machine. Engineers define objectives and boundaries, review recommendations, and decide whether a recipe may enter production.
+Ingot serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. See [Current status](docs/status.en.md) and the [Roadmap](docs/project-plan.en.md) for implemented capabilities and planned work.
 
 Methods are selected by question type, data coverage, and constraints. Available methods include DOE, response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
 
 ## Capability scope
 
-Ingot does not replace production-execution, real-time-control, quality-compliance, or laboratory-management systems. The current domain model covers the following engineering tasks:
+Ingot supports R&D records, quality analysis, evidence review, and constrained recipe optimization. Current capabilities include:
 
 | Typical task | System output |
 |---|---|
+| Manage R&D projects and experiment records | Project objectives and scope, run parameters, process trajectories, quality outcomes, and audit |
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
 | Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
 | New material, machine, or extrapolated setting | Collect additional real runs through existing production and compliance processes; Ingot only records and explains their evidence |
@@ -88,11 +89,11 @@ Process configuration → Field integration → Production runs → Quality mana
 | Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
 | Recipe optimization | Learn from real recipe runs and recommend the next recipe within safety boundaries and observed coverage |
 
-Trustworthy run facts are a prerequisite for analysis and recommendations. Data acquisition and optimization methods serve the same evidence chain.
+Trustworthy production-run facts are prerequisites for the current recommendation workflow. Each process run is an experiment; the run and its quality outcomes constitute the experiment record.
 
 ## Current status
 
-The main software workflow is implemented: the system can link real recipe runs to quality outcomes, decide whether they are usable for optimization, and generate an engineer-reviewed next-recipe recommendation that is never dispatched automatically.
+The main production-evidence workflow is implemented: the system links real recipe runs to quality outcomes, checks whether they are usable for optimization, and generates engineer-reviewed next-recipe recommendations that are never dispatched automatically. The process-configuration UI manages recipe versions and all their parameters. Each run records actual execution parameters and process data, while quality records retain experiment outcomes; admitted runs can form optimization observations.
 
 The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
 
@@ -104,8 +105,8 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 
 | Adjacent system or method | Relationship to Ingot | System boundary |
 |---|---|---|
-| MES, SCADA, historian | Receive run, equipment, and process facts | Does not replace execution, monitoring, or real-time control |
-| LIMS, QMS, ELN | Link inspection results, review, and R&D context | Does not replace complete sample, compliance, or document management |
+| MES, ERP, SCADA, historian | Optional source of run, equipment, and process facts | Not required for deployment; does not replace execution, monitoring, or real-time control |
+| LIMS, QMS, ELN | Optional source of inspection results, review, and R&D context | Not required for deployment; does not replace complete sample, compliance, or document management |
 | Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs | Does not treat one algorithm as the answer to every process problem |
 | AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, replace engineer recipe approval, or control equipment |
 
@@ -166,7 +167,7 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 
 ## Roadmap
 
-The near-term objective is tighter admission of natural-run data, clearer recipe-recommendation explanations, and stronger deployment reliability. Model-independent agent protocols and a manufacturing-evidence specification come later. See the [Roadmap](docs/project-plan.en.md) for the detailed boundaries.
+Near-term work focuses on run-evidence admission, Web workflows for recommendation decisions and outcome tracking, knowledge reuse, and deployment reliability. See the [Roadmap](docs/project-plan.en.md) for acceptance criteria and boundaries.
 
 ## Contributing
 

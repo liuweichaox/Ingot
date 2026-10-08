@@ -253,6 +253,38 @@ public sealed class ProductionConfigurationValidatorTests
     }
 
     [Fact]
+    public void Platform_AcceptsStandaloneConfigurationWithoutEdgeConnections()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["Authentication:Mode"] = "Local",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Cors:AllowedOrigins:0"] = "http://localhost:3000"
+        });
+
+        PlatformValidator.Validate(configuration);
+    }
+
+    [Fact]
+    public void Platform_RejectsIncompleteOptionalEdgeConfiguration()
+    {
+        var configuration = Build(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Events"] = "Host=postgres;Database=ingot",
+            ["EventIngest:RequireToken"] = "true",
+            ["EventIngest:EdgeTokens:EDGE-001"] = "edge-token-with-at-least-24-characters",
+            ["InspectionAttachments:ArchiveRootPath"] = "/archive/inspection-attachments",
+            ["ProcessKnowledge:ArchiveRootPath"] = "/archive/process-knowledge",
+            ["Cors:AllowedOrigins:0"] = "http://localhost:3000"
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
+        Assert.Contains("EdgeSites", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Platform_RejectsRetiredDisabledAuthMode()
     {
         var values = CompletePlatformOidcConfiguration();

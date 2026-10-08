@@ -4,7 +4,7 @@
 
 ## Conclusion summary
 
-Ingot's main software workflow is implemented, including field-data integration, run comparison, process diagnosis, and engineer-confirmed next-recipe recommendations generated directly from real recipe runs.
+Ingot implements quality analysis, process diagnosis, and recipe recommendations based on production-run evidence. The Web app manages recipe versions through process configuration: parameter codes, names, types, units, and bounds come from the process data dictionary, while settings belong to recipe versions. It does not create a separate experiment-variable definition. Each process run is an experiment: recipe versions define parameter settings, runs record actual execution parameters and process trajectories, and quality records retain experiment outcomes. The system has no separate experiment-record model.
 
 The repository claims only code, database contracts, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data, historical protocols, or effect results.
 
@@ -15,7 +15,11 @@ The repository claims only code, database contracts, automated tests, and reprod
 
 | Layer | Current status | Supported conclusion |
 |---|---|---|
-| Local stack | Runnable | The principal pages and business workflow can be run |
+| Local stack | Runnable | See [Getting started](getting-started.en.md) for deployment components and instructions |
+| Recipe versions and parameters | Web/API implemented | Parameter definitions reference the process data dictionary; recipe versions retain multiple parameter settings |
+| R&D projects | Server APIs implemented | Project creation and activation, retaining objectives, scope, and evidence references |
+| Runs and experiment outcomes | Web/API implemented | Each run is an experiment linking actual parameters, process data, and quality outcomes; admitted runs form optimization observations |
+| Recipe recommendations and engineer decisions | Server APIs implemented; complete Web interface remains planned | APIs can generate recommendations, append decisions, link runs, and materialize outcomes; interface illustrations do not represent a delivered complete Web workflow |
 | Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and explain why |
 | Production operation | Single-machine reference deployment available | Deployers still complete site security, recovery, capacity, and operations configuration |
 
@@ -23,6 +27,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 
 The repository currently covers:
 
+- recipe-version and process-data-dictionary management, plus server APIs for R&D project creation and activation; run and quality records constitute experiment facts;
 - connecting field sources, standardizing fields and units, and resuming delivery after a network outage;
 - linking equipment, product, specification, material, tooling, process curves, and quality outcomes to one run;
 - checking completeness, actual execution values, units, sources, and versions before analysis;

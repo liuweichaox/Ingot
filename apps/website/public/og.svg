@@ -26,7 +26,7 @@
   <rect x="20" y="20" width="1160" height="590" rx="22" fill="none" stroke="#E8AD56" stroke-opacity="0.5"/>
 
   <!-- Eyebrow -->
-  <text x="64" y="90" font-size="14" font-weight="700" fill="#5FD4C8" letter-spacing="2.2">OPEN SOURCE · PROCESS DIAGNOSIS &amp; OPTIMIZATION</text>
+  <text x="64" y="90" font-size="14" font-weight="700" fill="#5FD4C8" letter-spacing="1.4">OPEN-SOURCE PROCESS R&amp;D AND OPTIMIZATION SYSTEM</text>
 
   <!-- Logo lockup -->
   <g transform="translate(64,112)">
@@ -42,13 +42,14 @@
   </g>
 
   <!-- Headline -->
-  <g transform="translate(64,270)">
-    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">From run evidence</text>
-    <text y="52" font-size="38" font-weight="800" fill="#F4F8F6">to the next recipe.</text>
+  <g transform="translate(64,250)">
+    <text y="0" font-size="38" font-weight="800" fill="#F4F8F6">From process data</text>
+    <text y="46" font-size="38" font-weight="800" fill="#F4F8F6">to evidence-based</text>
+    <text y="92" font-size="38" font-weight="800" fill="#F4F8F6">R&amp;D decisions.</text>
   </g>
 
   <!-- Subheadline -->
-  <text x="64" y="408" font-size="18" fill="#9FB0AA">Real recipe runs · observations · next recipe</text>
+  <text x="64" y="408" font-size="17" fill="#9FB0AA">Research records · quality · diagnosis · optimization</text>
 
   <!-- Divider -->
   <path d="M64 442h300" stroke="#E8AD56" stroke-opacity="0.4" stroke-width="1.5"/>

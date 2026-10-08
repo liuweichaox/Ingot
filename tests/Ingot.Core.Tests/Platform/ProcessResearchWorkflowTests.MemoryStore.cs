@@ -29,7 +29,7 @@ public abstract partial class ProcessResearchWorkflowTestBase
             => Task.FromResult<IReadOnlyList<ResearchProject>>(projects.Values
                 .Where(value => includeAll || value.MemberUserIds.Contains(userId))
                 .Where(value => includeAll ||
-                    (!string.IsNullOrWhiteSpace(value.SiteCode) && siteIds is not null &&
+                    (string.IsNullOrWhiteSpace(value.SiteCode) || siteIds is not null &&
                      siteIds.Contains(value.SiteCode, StringComparer.OrdinalIgnoreCase)))
                 .Skip(offset).Take(limit).ToArray());
 

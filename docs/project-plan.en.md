@@ -4,11 +4,11 @@
 
 ## Product Direction
 
-> **From run evidence to the next recipe.**
+> **From process data to evidence-based R&D decisions.**
 
-Ingot is an Open-source Process Diagnosis & Optimization system. Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.
+Ingot is an Open-source Process R&D and Optimization System. Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-Ingot has one formal loop:
+The currently implemented recommendation loop still uses production-run evidence:
 
 ```text
 R&D project → real production-run evidence → next-recipe recommendation
@@ -18,15 +18,19 @@ R&D project → real production-run evidence → next-recipe recommendation
 
 Projects retain objectives, scope, hypotheses, evidence, and knowledge. They do not retain a second run-plan, approval, execution, or outcome state machine. Engineers always decide whether to adopt a recommendation; the system never dispatches a recipe to equipment automatically.
 
+Experiment settings reuse process configuration: the process data dictionary defines parameters, and recipe versions retain all parameter settings. R&D work references these configurations instead of establishing parallel variable definitions. Each run is an experiment; actual parameters, process trajectories, and quality outcomes reuse run and quality records.
+
+Current recommendations require admitted runs, actual settings, and quality outcomes. Future work follows this evidence path to improve data-admission explanations, engineer decisions, and outcome tracking.
+
 ## Near-Term Priorities
 
 | Priority | Objective | Completion signal |
 | --- | --- | --- |
-| P0 | Trustworthy run facts | Identity, units, provenance, actual values, and quality review are traceable. |
-| P1 | Decision loop | Every recommendation records adoption, modification, or rejection, its reason, and its actual-execution link. |
-| P2 | Outcome loop | Parameter readback and inspection facts freeze an outcome from source data exactly once. |
+| P0 | Run-evidence completeness | Reuse all recipe-version parameters and quality configuration; clearly show actual values, provenance, missing data, and quality-review status. |
+| P1 | Recommendation admission explanations | Show why runs qualify as optimization observations; insufficient samples and out-of-scope inputs have explicit rejection reasons traceable to run and quality records. |
+| P2 | Decision and outcome interface | Connect existing recommendation, decision, and outcome APIs so engineers can review, adopt, modify, or reject recommendations, link later runs, and view materialized outcomes in the Web app. |
 | P3 | Knowledge reuse | Sourced, scoped, conflict-checked knowledge can explain or constrain later recommendations. |
-| P4 | Production resilience | Site isolation, backup/restore, capacity, and alerting meet the deployer's requirements. |
+| P4 | Deployment resilience | Local installation, backup/restore, capacity, and alerting can be accepted independently; connector failures do not block querying or reviewing existing runs and quality outcomes. |
 
 ## Method and Effect Boundary
 
@@ -36,7 +40,7 @@ The repository bundles no scenario-effect data or benefit conclusion. Deployers 
 
 ## Long-Term Boundary
 
-Ingot does not expand into MES, SCADA, equipment interlocks, production scheduling, a general data lake, or unattended control. Any future equipment action must be a separate safety-engineering project governed by interlocks, permissions, stopping, and recovery policy; it cannot alter the current engineer-confirmed recommendation loop.
+Ingot focuses on R&D records, analysis, and optimization rather than production execution, enterprise resource planning, full quality-compliance or laboratory management, equipment interlocks, production scheduling, a general data lake, or unattended control. Any future equipment action must be a separate safety-engineering project governed by interlocks, permissions, stopping, and recovery policy; it cannot alter the engineer-confirmed recommendation loop.
 
 ## Related Documents
 

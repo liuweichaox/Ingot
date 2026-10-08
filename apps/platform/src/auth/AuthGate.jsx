@@ -238,9 +238,9 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
           <img src="/brand/ingot-lockup-dark.svg" alt="Ingot" className="relative h-11 w-auto" />
 
           <div className="relative max-w-2xl py-14">
-            <p className="data-label text-evidence-400">PROCESS DIAGNOSIS · RECIPE RECOMMENDATION</p>
-            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从真实运行，<br /><span className="text-evidence-400">到下一份配方建议。</span></h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺追因与优化系统。把设备、生产和检验数据关联成可信证据，支持工程师审核下一份配方建议，并按需修订下一配方版本。</p>
+            <p className="data-label text-evidence-400">PROCESS R&D · ANALYSIS · OPTIMIZATION</p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从工艺数据，<br /><span className="text-evidence-400">到有依据的研发决策。</span></h1>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺研发与优化系统。组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。</p>
 
             <div className="mt-10 overflow-hidden rounded-lg border border-white/12 bg-black/15 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
@@ -270,7 +270,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
         <section className="app-canvas grid min-h-screen place-items-center px-5 py-10">
           <div className="w-full max-w-md">
             <header className="mb-10 flex items-center justify-between lg:hidden">
-              <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-coal-950"><img src="/ingot-mark.svg" alt="" className="size-8" /></span><div><strong className="text-base text-slate-950">Ingot</strong><p className="text-xs text-slate-500">工艺证据工作台</p></div></div>
+              <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-coal-950"><img src="/ingot-mark.svg" alt="" className="size-8" /></span><div><strong className="text-base text-slate-950">Ingot</strong><p className="text-xs text-slate-500">工艺研发与优化</p></div></div>
               <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">平台环境</span>
             </header>
             <div className="mb-8">
@@ -279,7 +279,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
                 <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">平台环境</span>
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">进入 Ingot</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续查看真实运行、质量结果、工艺追因与配方版本。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">登录后继续维护配方版本、查看运行与质量记录，开展质量分析、工艺追因与配方优化。</p>
             </div>
             {authMode === "oidc" ? (
               <div className="space-y-4">

@@ -1,13 +1,13 @@
 # 快速开始
 
-> 文档状态：**当前操作指南**。本页提供本地完整栈启动说明。真实试点要求见[配方优化试点指南](pilot.md)。
+> 文档状态：**当前操作指南**。本页提供本地部署、启动与登录说明。能力范围见[当前状态](status.md)。
 
 ## 选择路径
 
 | 目标 | 使用路径 | 完成标志 |
 |---|---|---|
-| 本地运行完整系统 | [启动完整栈](#启动完整栈) | Web、API、Optimizer 和数据库健康 |
-| 准备真实项目 | [配方优化试点指南](pilot.md) | 第一批可信优化观察和第一份下一配方建议 |
+| 部署系统 | [启动完整栈](#启动完整栈) | Web、API、Optimizer 和数据库健康；无需外部系统账号或连接 |
+| 验证当前生产证据流程 | [配方优化试点指南](pilot.md) | 有效生产运行证据和第一份下一配方建议 |
 | 准备生产环境 | [生产架构](production-architecture.md) → [部署运维](deployment.md) | 站点独立完成安全、恢复、容量和观察验收 |
 | 参与开发 | [贡献指南](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.md) | 本地通过 `./scripts/verify.sh` |
 
@@ -23,7 +23,7 @@ cd Ingot
 cp .env.example .env
 ```
 
-修改 `.env` 中的数据库密码、Edge 上送令牌和管理员配置。至少替换所有 `change-this-` 占位值；生产环境必须使用随机生成且彼此不同的密码和令牌。
+修改 `.env` 中的数据库密码和管理员配置。至少替换所有 `change-this-` 占位值；生产环境必须使用随机生成且彼此不同的密码和令牌。
 
 先校验配置，再启动：
 
@@ -42,7 +42,7 @@ docker compose -f docker-compose.app.yml ps -a
 
 - `platform-migrate` 成功退出；
 - `postgres`、`optimizer`、`platform-api` 和 `platform-web` 为 `healthy`；
-- `platform-worker` 和 `connector-host` 持续为 `healthy`；
+- `platform-worker` 持续为 `healthy`；
 - 没有容器处于反复重启状态。
 
 然后访问：
@@ -61,6 +61,8 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 ```
 
 后续修改 `.env` 不会重置已有账户。
+
+此部署启动 Ingot 自身的 Web、API、数据库、优化器和后台服务，无需外部业务系统账号或连接。设备及企业系统连接器按需配置和启用。登录后从工艺配置管理数据字典和配方版本；每次工艺运行就是一次实验，运行和质量记录共同保存实验事实，具体能力与推荐所需数据见[当前状态](status.md)。
 
 ## 常见启动问题
 

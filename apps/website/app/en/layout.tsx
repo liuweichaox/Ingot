@@ -8,8 +8,8 @@ const origin = "https://ingotstack.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
-  title: "Ingot — Open-source Process Diagnosis & Optimization",
-  description: "An open-source process diagnosis and optimization system that turns real production runs and quality outcomes into evidence for reviewing the next recipe recommendation.",
+  title: "Ingot — Open-source Process R&D and Optimization System",
+  description: "Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "process diagnosis", "recipe optimization", "process optimization", "process engineer decisions",
@@ -26,19 +26,19 @@ export const metadata: Metadata = {
     apple: "/brand/ingot-mark-dark.svg",
   },
   openGraph: {
-    title: "Ingot — From run evidence to the next recipe.",
-    description: "Connect real production runs and review the next recipe recommendation from quality and diagnostic evidence.",
+    title: "Ingot — From process data to evidence-based R&D decisions.",
+    description: "Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
     siteName: "Ingot",
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — From run evidence to the next recipe." }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ingot — From process data to evidence-based R&D decisions." }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ingot — Open-source Process Diagnosis & Optimization",
-    description: "Use traceable real runs for process diagnosis and next-recipe recommendations.",
+    title: "Ingot — Open-source Process R&D and Optimization System",
+    description: "Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
     images: ["/og.png"],
   },
 };

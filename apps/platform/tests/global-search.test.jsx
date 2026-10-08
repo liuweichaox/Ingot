@@ -3,7 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router";
-import App from "../src/App";
+import App, { sectionsForIdentity } from "../src/App";
 
 afterEach(() => {
   cleanup();
@@ -27,6 +27,33 @@ async function openSearch(roles = ["process.engineer"]) {
 }
 
 describe("功能搜索", () => {
+  it("参数配置统一使用配方版本入口，不展示重复的研发变量入口", () => {
+    for (const roles of [["quality.inspector"], ["process.engineer"], ["platform.admin"]]) {
+      const sections = sectionsForIdentity({ roles });
+      expect(sections.some(section => section.id === "research")).toBe(false);
+      expect(sections.flatMap(section => section.groups.flatMap(group => group.items))
+        .some(([path]) => path === "/configuration/process-specifications")).toBe(true);
+    }
+  });
+
+  it("已撤下的研发页链接进入配方版本，不请求另一套变量定义", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { headers: { "Content-Type": "application/json" } })));
+    render(<MemoryRouter initialEntries={["/research-projects"]}><App identity={{ roles: ["process.engineer"] }} logout={vi.fn()} /><CurrentPath /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-specifications"));
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("/api/v1/research-projects"))).toBe(false);
+  });
+
+  it.each([
+    [["process.engineer"], "/workbench"],
+    [["quality.inspector"], "/workbench"],
+  ])("首页按岗位进入可访问的工作区", async (roles, expectedPath) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", {
+      headers: { "Content-Type": "application/json" },
+    })));
+    render(<MemoryRouter initialEntries={["/"]}><App identity={{ roles }} logout={vi.fn()} /><CurrentPath /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent(expectedPath));
+  });
+
   it("上下键循环选择可见结果，Enter 打开选中的功能", async () => {
     const input = await openSearch();
     const dialog = screen.getByRole("dialog");
@@ -42,7 +69,7 @@ describe("功能搜索", () => {
     expect(input).toHaveFocus();
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges");
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges"));
   });
 
   it("筛选后重置选项，空结果不会跳转，重新打开清除查询", async () => {

@@ -1,10 +1,10 @@
 # Recipe-Optimization Pilot Guide
 
-> Document status: **current operating guide**. The first pilot follows one real-production evidence loop.
+> Document status: **current operating guide**. This guide validates the implemented production-evidence recommendation workflow. Next-recipe recommendations require admitted production-run evidence; each run is an experiment, with actual parameters and quality outcomes retained in the run-evidence chain. See [Current status](status.en.md) for the full capability boundary.
 
 ## Pilot Scope
 
-Limit the pilot to one product, equipment scope, and quality objective. Connect real recipe runs, actual settings, process context, and quality outcomes; first verify that identity, units, provenance, and quality review are reliable.
+Limit the pilot to one product or process scope and one quality objective. Provide real recipe runs, actual settings, process context, and quality outcomes for the current production-evidence workflow; data may come from manual operations or connectors configured by the deployer. First verify that identity, units, provenance, and quality review are reliable.
 
 ## Operating Sequence
 

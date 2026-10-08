@@ -11,9 +11,7 @@ public static class ProductionConfigurationValidator
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("Events")))
             errors.Add("ConnectionStrings:Events is required.");
 
-        RequireProtectedMap(configuration, "EventIngest", "EdgeTokens", errors);
-        RequireEdgeSiteBindings(configuration, errors);
-        RequireEdgeDiagnosticsBindings(configuration, errors);
+        ValidateOptionalEdgeConfiguration(configuration, errors);
 
         var authMode = configuration["Authentication:Mode"] ?? "Local";
         if (!string.Equals(authMode, "Local", StringComparison.OrdinalIgnoreCase) &&
@@ -51,27 +49,26 @@ public static class ProductionConfigurationValidator
             throw new InvalidOperationException($"Invalid production configuration:{Environment.NewLine}- {string.Join($"{Environment.NewLine}- ", errors)}");
     }
 
-    private static void RequireProtectedMap(
+    private static void ValidateOptionalEdgeConfiguration(
         IConfiguration configuration,
-        string sectionName,
-        string mapName,
         ICollection<string> errors)
     {
-        if (!configuration.GetValue<bool>($"{sectionName}:RequireToken"))
+        var tokens = configuration.GetSection("EventIngest:EdgeTokens").GetChildren().ToArray();
+        var sites = configuration.GetSection("EventIngest:EdgeSites").GetChildren().ToArray();
+        var diagnosticTokens = configuration.GetSection("EdgeDiagnostics:EdgeTokens").GetChildren().ToArray();
+        var diagnosticUrls = configuration.GetSection("EdgeDiagnostics:EdgeBaseUrls").GetChildren().ToArray();
+        if (tokens.Length + sites.Length + diagnosticTokens.Length + diagnosticUrls.Length == 0)
+            return;
+
+        if (!configuration.GetValue<bool>("EventIngest:RequireToken"))
         {
-            errors.Add($"{sectionName}:RequireToken must be true.");
+            errors.Add("EventIngest:RequireToken must be true when optional Edge ingestion is configured.");
             return;
         }
-
-        var entries = configuration.GetSection($"{sectionName}:{mapName}").GetChildren().ToArray();
-        if (entries.Length == 0)
-        {
-            errors.Add($"{sectionName}:{mapName} must contain at least one credential.");
-            return;
-        }
-
-        if (entries.Any(static entry => !IsStrongSecret(entry.Value)))
-            errors.Add($"Every {sectionName}:{mapName} credential must contain at least {MinimumSecretLength} characters and must not be a placeholder.");
+        if (tokens.Length == 0 || tokens.Any(static entry => !IsStrongSecret(entry.Value)))
+            errors.Add($"Optional EventIngest:EdgeTokens credentials must contain at least {MinimumSecretLength} characters and must not be placeholders.");
+        RequireEdgeSiteBindings(configuration, errors);
+        RequireEdgeDiagnosticsBindings(configuration, errors);
     }
 
     private static bool IsStrongSecret(string? value) =>

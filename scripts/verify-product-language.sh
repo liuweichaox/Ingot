@@ -46,7 +46,7 @@ if grep -RInE \
   exit 1
 fi
 
-# Guard the stable product baseline. Algorithms, interface labels, and roadmap
+# Guard the process-R&D baseline. Algorithms, interface labels, and roadmap
 # phases may evolve; the core value and public claim boundaries do not drift with them.
 if grep -RInE --exclude='package-lock.json' \
   '制造生产数据与工艺分析系统|生产事件平台|工艺改进工作台|候选解释|产品面|深度调查' "${public_files[@]}"; then
@@ -75,8 +75,7 @@ check_entry_order docs/design.md \
   '3. **工艺配置**' \
   '4. **生产运行**' \
   '5. **质量管理**' \
-  '6. **工艺追因**' \
-  '7. **配方优化**'
+  '6. **工艺追因**'
 
 check_entry_order docs/design.en.md \
   '1. **Workbench**' \
@@ -84,21 +83,20 @@ check_entry_order docs/design.en.md \
   '3. **Process configuration**' \
   '4. **Production runs**' \
   '5. **Quality management**' \
-  '6. **Process diagnosis**' \
-  '7. **Recipe optimization**'
+  '6. **Process diagnosis**'
 
-canonical_nav_zh='现场接入 → 工艺配置 → 生产运行 → 质量管理 → 工艺追因 → 配方优化'
-canonical_nav_en='Field integration → Process configuration → Production runs → Quality management → Process diagnosis → Recipe optimization'
+canonical_nav_zh='现场接入 → 工艺配置 → 生产运行 → 质量管理 → 工艺追因'
+canonical_nav_en='Field integration → Process configuration → Production runs → Quality management → Process diagnosis'
 if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
    ! grep -Fq "$canonical_nav_en" docs/design.en.md; then
   echo "System design navigation summaries must match the canonical product order." >&2
   exit 1
 fi
 
-canonical_zh='把每次真实配方运行变成优化证据，在安全边界和历史覆盖范围内持续推荐下一份配方。'
-canonical_en='Turn every real recipe run into optimization evidence and continuously recommend the next recipe within safety boundaries and observed coverage.'
-canonical_category_zh='开源工艺追因与优化系统'
-canonical_category_en_pattern='Open-source Process Diagnosis (&|&amp;) Optimization'
+canonical_zh='组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。'
+canonical_en='Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.'
+canonical_category_zh='开源工艺研发与优化系统'
+canonical_category_en_pattern='Open-source Process R(&|&amp;)D and Optimization System'
 
 for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
   if ! grep -Fq "$canonical_zh" "$file"; then
@@ -122,8 +120,8 @@ for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.
 done
 
 if grep -RIniE --exclude='package-lock.json' \
-  '开源工业工艺优化系统|open-source industrial process optimization system' \
-  README.md README.en.md docs apps/website/app apps/docs-site/app; then
+  '开源工业工艺优化系统|open-source industrial process optimization system|开源工艺追因与优化系统|Open-source Process Diagnosis (&|&amp;) Optimization|开源、可独立部署的工艺研发与优化工作台|Open-source, Standalone Process R(&|&amp;)D and Optimization Workbench|独立工艺研发工作台|工艺证据工作台|从(独立)?实验记录，到可复核的研发证据|From (independent )?experiment records to reviewable R(&|&amp;)D evidence' \
+  README.md README.en.md docs apps/website/app apps/docs-site/app apps/platform/src apps/platform/index.html; then
   echo "Public copy contains a non-canonical product category. Follow docs/brand.md." >&2
   exit 1
 fi
@@ -134,6 +132,36 @@ for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.
     exit 1
   fi
 done
+
+# Headline fragments may be separated by markup for responsive line wrapping.
+# Keep the login page, public hero, metadata, and share-card sources aligned.
+for file in README.md docs/brand.md docs/project-plan.md \
+  apps/platform/src/auth/AuthGate.jsx apps/website/app/IngotSite.tsx \
+  'apps/website/app/(zh)/layout.tsx' apps/website/public/og.zh.svg; do
+  if ! grep -Fq '从工艺数据，' "$file" || ! grep -Fq '到有依据的研发决策。' "$file"; then
+    echo "$file must use the canonical Chinese product headline." >&2
+    exit 1
+  fi
+done
+for file in README.en.md docs/brand.en.md docs/project-plan.en.md \
+  apps/website/app/IngotSite.tsx apps/website/app/en/layout.tsx; do
+  if ! grep -Fq 'From process data' "$file" || ! grep -Eq 'to evidence-based R(&|&amp;)D decisions\.' "$file"; then
+    echo "$file must use the canonical English product headline." >&2
+    exit 1
+  fi
+done
+for file in apps/platform/src/auth/AuthGate.jsx apps/platform/index.html apps/website/app/IngotSite.tsx; do
+  if ! grep -Fq "$canonical_category_zh" "$file" || ! grep -Fq "$canonical_zh" "$file"; then
+    echo "$file must describe the same product category and capabilities as docs/brand.md." >&2
+    exit 1
+  fi
+done
+
+if grep -RInE '从真实运行，|从运行证据，|From real runs to the next recipe\.|From run evidence' \
+  apps/platform/src/auth apps/website/app apps/website/public/og.svg apps/website/public/og.zh.svg; then
+  echo "Product entry points must use the canonical headline rather than a single-workflow slogan." >&2
+  exit 1
+fi
 
 if grep -RIniE --exclude='package-lock.json' \
   'closed-loop process optimization|optimization brain' \

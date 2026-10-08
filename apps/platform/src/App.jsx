@@ -100,9 +100,10 @@ const systemSection = {
   ],
 };
 
-export const sectionsForIdentity = identity => (identity?.roles || []).includes("platform.admin")
-  ? [...sections, systemSection]
-  : sections;
+export const sectionsForIdentity = identity => {
+  const roles = identity?.roles || [];
+  return roles.includes("platform.admin") ? [...sections, systemSection] : sections;
+};
 
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
@@ -334,11 +335,11 @@ export default function App({ identity, logout }) {
     <div className="app-canvas min-h-screen text-slate-900">
       <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-white/8 bg-coal-950 text-white shadow-[12px_0_40px_rgba(7,16,14,.08)] transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
         <div className={cx("flex h-16 shrink-0 items-center border-b border-white/8", sidebarCollapsed ? "justify-center px-3" : "justify-between px-4")}>
-          <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate("/workbench")} aria-label="返回工作台">
+          <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate("/workbench")} aria-label="打开 Ingot 首页">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/6 ring-1 ring-white/12">
               <img src="/ingot-mark.svg" alt="" className="size-7" />
             </span>
-            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-white">Ingot</strong><small className="truncate text-xs text-slate-400">工艺证据工作台</small></span>}
+            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-white">Ingot</strong><small className="truncate text-xs text-slate-400">工艺研发与优化</small></span>}
           </button>
           {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
         </div>
@@ -405,7 +406,7 @@ export default function App({ identity, logout }) {
         <DialogBackdrop className="fixed inset-0 bg-coal-950/55 backdrop-blur-sm" />
         <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-coal-950 text-white shadow-2xl">
           <div className="flex h-16 items-center justify-between border-b border-white/8 px-4">
-            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-xs text-slate-400">工艺证据工作台</small></span></button>
+            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8" /><span><strong className="block">Ingot</strong><small className="text-xs text-slate-400">工艺研发与优化</small></span></button>
             <button className="grid size-9 place-items-center rounded-lg text-slate-400 hover:bg-white/8 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
               <XMarkIcon className="size-5" />
             </button>
@@ -445,6 +446,7 @@ function AppRoutes({ identity, canConfigure }) {
       <Routes>
         <Route path="/" element={<Navigate to="/workbench" replace />} />
         <Route path="/workbench" element={<WorkbenchPage identity={identity} />} />
+        <Route path="/research-projects" element={<Navigate to="/configuration/process-specifications" replace />} />
         <Route path="/analysis" element={<AnalysisHubPage identity={identity} />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />

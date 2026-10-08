@@ -1,13 +1,13 @@
 # Getting started
 
-> Document status: **current operating guide**. This page provides instructions for starting the complete local stack. Requirements for a real pilot are defined in the [Recipe-optimization pilot guide](pilot.en.md).
+> Document status: **current operating guide**. This page covers local deployment, startup, and sign-in. See [Current status](status.en.md) for capability boundaries.
 
 ## Choose a path
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Run the complete system locally | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy |
-| Prepare a real project | [Recipe-optimization pilot guide](pilot.en.md) | Produce the first qualified observations and next-recipe recommendation |
+| Deploy Ingot | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy; no external-system account or connection is required |
+| Validate the current production-evidence workflow | [Recipe-optimization pilot guide](pilot.en.md) | Qualified production-run evidence and the first next-recipe recommendation |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
 
@@ -23,7 +23,7 @@ cd Ingot
 cp .env.example .env
 ```
 
-Change the database passwords, Edge delivery token, and administrator settings in `.env`. Replace every `change-this-` placeholder. Production uses randomly generated, distinct passwords and tokens.
+Change the database passwords and administrator settings in `.env`. Replace every `change-this-` placeholder. Production uses randomly generated, distinct passwords and tokens.
 
 Validate the configuration, then start:
 
@@ -42,7 +42,7 @@ Confirm at least that:
 
 - `platform-migrate` exited successfully;
 - `postgres`, `optimizer`, `platform-api`, and `platform-web` are `healthy`;
-- `platform-worker` and `connector-host` remain `healthy`;
+- `platform-worker` remains `healthy`;
 - no container is restarting repeatedly.
 
 Then open:
@@ -61,6 +61,8 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 ```
 
 Changing `.env` later does not reset an existing account.
+
+This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage data dictionaries and recipe versions through process configuration. Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
 
 ## Common startup problems
 

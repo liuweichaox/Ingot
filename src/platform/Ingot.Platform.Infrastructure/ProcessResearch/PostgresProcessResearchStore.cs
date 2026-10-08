@@ -41,13 +41,15 @@ public sealed partial class PostgresProcessResearchStore : IProcessResearchStore
             """
             SELECT project.payload
             FROM process_research_projects project
-            WHERE $1 OR EXISTS (
-              SELECT 1
-              FROM research_project_members member
-              WHERE member.project_id = project.project_id
-                AND member.user_id = $2
+            WHERE $1 OR (
+              EXISTS (
+                SELECT 1
+                FROM research_project_members member
+                WHERE member.project_id = project.project_id
+                  AND member.user_id = $2
+              )
+              AND (project.payload->>'siteCode' IS NULL OR lower(project.payload->>'siteCode') = ANY($3))
             )
-            AND ($1 OR lower(project.payload->>'siteCode') = ANY($3))
             ORDER BY project.updated_at DESC, project.project_id
             LIMIT $4 OFFSET $5
             """);

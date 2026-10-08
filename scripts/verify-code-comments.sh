@@ -5,6 +5,29 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+# Keep this repository check usable in minimal WSL/CI images that have grep but
+# do not install ripgrep. The wrapper covers only the rg options used below.
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    case "$1" in
+      --files)
+        git ls-files --cached --others --exclude-standard
+        ;;
+      -q)
+        shift
+        grep -Eq -- "$1" "${@:2}"
+        ;;
+      -v)
+        shift
+        grep -Ev -- "$1" "${@:2}"
+        ;;
+      *)
+        grep -E -- "$1" "${@:2}"
+        ;;
+    esac
+  }
+fi
+
 # 历史代码按增量基线治理；新建或修改的文件必须满足当前注释契约。
 source_file_list="$(mktemp)"
 trap 'rm -f -- "$source_file_list"' EXIT
