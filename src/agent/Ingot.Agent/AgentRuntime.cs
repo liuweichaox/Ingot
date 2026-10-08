@@ -238,7 +238,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             try
             {
                 executionOwnsAdmission = true;
-                await ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token, lease)
+                await ExecuteAsync(run, request, accessScope, model, tools, settings, runCts.Token, lease, hostToken: ct)
                     .ConfigureAwait(false);
             }
             finally
@@ -579,7 +579,8 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         IReadOnlyDictionary<string, IAnalysisTool> tools,
         EntryPointSettings settings,
         CancellationToken ct,
-        AgentRunLease? lease = null)
+        AgentRunLease? lease = null,
+        CancellationToken hostToken = default)
     {
         var run = initial;
         var started = Stopwatch.StartNew();
@@ -835,6 +836,11 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             await EmitAsync(run.RunId, AgentStreamEventTypes.RunCompleted,
                     new { run.RunId, answer }, CancellationToken.None, lease)
                 .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lease is not null && hostToken.IsCancellationRequested)
+        {
+            // 宿主停机不是业务取消；保留非终态快照和租约，交由后续 Worker 恢复。
+            throw;
         }
         catch (OperationCanceledException)
         {

@@ -1,0 +1,13 @@
+{
+  "outcome_kind": "binary",
+  "features": [
+    {"data_source": "control-parameter:x", "source_kind": "control-parameter", "actionability": "controllable"}
+  ],
+  "observations": [
+    {"run_key": "run-0", "outcome": 0, "weight": 1, "values": {"control-parameter:x": 0}, "context": {"equipment_id": "PRESS-A"}, "occurred_at": 0},
+    {"run_key": "run-1", "outcome": 1, "weight": 1, "values": {"control-parameter:x": 1}, "context": {"equipment_id": "PRESS-A"}, "occurred_at": 1},
+    {"run_key": "run-2", "outcome": 0, "weight": 1, "values": {"control-parameter:x": 2}, "context": {"equipment_id": "PRESS-A"}, "occurred_at": 2},
+    {"run_key": "run-3", "outcome": 1, "weight": 1, "values": {"control-parameter:x": 3}, "context": {"equipment_id": "PRESS-A"}, "occurred_at": 3}
+  ],
+  "seed": 17
+}

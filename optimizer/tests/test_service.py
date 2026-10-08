@@ -1,5 +1,6 @@
 """Verify service success, rejection, and boundary behavior."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,37 @@ from service import SuggestionResponse, app
 
 
 client = TestClient(app)
+
+
+def diagnosis_contract_body():
+    fixture = (
+        Path(__file__).parents[2]
+        / "tests"
+        / "contract-fixtures"
+        / "optimizer-diagnosis-request.json"
+    )
+    return json.loads(fixture.read_text())
+
+
+def test_shared_diagnosis_request_fixture_is_accepted():
+    response = client.post("/v1/diagnosis", json=diagnosis_contract_body())
+    assert response.status_code == 200, response.text
+    assert response.json()["algorithm_version"] == "adaptive-context-diagnosis-v1"
+
+
+@pytest.mark.parametrize("replacement", [None, "execution_key"])
+def test_diagnosis_contract_rejects_missing_or_misnamed_run_identity(replacement):
+    request = diagnosis_contract_body()
+    observation = request["observations"][0]
+    run_key = observation.pop("run_key")
+    if replacement:
+        observation[replacement] = run_key
+    response = client.post("/v1/diagnosis", json=request)
+    assert response.status_code == 422
+    assert any(
+        error["type"] == "missing" and error["loc"][-1] == "run_key"
+        for error in response.json()["detail"]
+    )
 
 
 def test_shared_suggestion_response_fixture_matches_python_contract():

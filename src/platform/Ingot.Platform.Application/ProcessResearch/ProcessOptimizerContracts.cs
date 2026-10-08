@@ -304,7 +304,7 @@ public sealed record ProcessDiagnosticFeatureInput
 
 public sealed record ProcessDiagnosticObservationInput
 {
-    [JsonPropertyName("execution_key")]
+    [JsonPropertyName("run_key")]
     public required string ExecutionKey { get; init; }
 
     public double Outcome { get; init; }

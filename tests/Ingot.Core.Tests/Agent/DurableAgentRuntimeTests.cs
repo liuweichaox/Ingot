@@ -1,3 +1,4 @@
+// 验证持久 Agent 的授权、租约隔离、停机恢复与业务取消边界。
 using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
@@ -9,6 +10,106 @@ namespace Ingot.Core.Tests.Agent;
 
 public sealed class DurableAgentRuntimeTests
 {
+    [Fact]
+    public async Task ProcessNextAsync_HostShutdown_PreservesRunUntilLeaseExpiresAndNextWorkerCompletes()
+    {
+        using var hostStop = new CancellationTokenSource();
+        var store = new DurableRunStore();
+        await store.CreateAsync(QueuedRun("shutdown"));
+        var sink = new RecordingLifecycleSink();
+        var tool = new RecordingTool
+        {
+            BeforeResult = async ct =>
+            {
+                await hostStop.CancelAsync();
+                ct.ThrowIfCancellationRequested();
+            }
+        };
+        var runtime = CreateRuntime(store, tool, new AllowAuthorization(), sink);
+
+        Assert.True(await runtime.ProcessNextAsync("worker-a", hostStop.Token));
+
+        var interrupted = await store.GetAsync("shutdown");
+        Assert.True(tool.Executed);
+        Assert.Equal(AgentRunStatuses.Running, interrupted!.Status);
+        Assert.Null(interrupted.CompletedAt);
+        Assert.Null(interrupted.CancellationReason);
+        Assert.Empty(sink.TerminalRuns);
+        Assert.DoesNotContain(await store.ReadEventsAsync("shutdown", 0, 100),
+            item => item.Type == AgentStreamEventTypes.RunCancelled ||
+                    item.Type == AgentStreamEventTypes.RunFailed);
+        Assert.Equal("worker-a", store.CurrentLeaseOwner);
+        Assert.False(await runtime.ProcessNextAsync("worker-b"));
+
+        store.ExpireLease();
+        var recoveryTool = new RecordingTool();
+        var recovery = CreateRuntime(store, recoveryTool, new AllowAuthorization(), sink);
+        Assert.True(await recovery.ProcessNextAsync("worker-b"));
+        Assert.True(recoveryTool.Executed);
+        Assert.Equal(AgentRunStatuses.Completed, (await store.GetAsync("shutdown"))!.Status);
+        Assert.Equal(AgentRunStatuses.Completed, Assert.Single(sink.TerminalRuns).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProcessNextAsync_UserCancellation_IsPreservedAcrossHostShutdown(bool stopHost)
+    {
+        using var hostStop = new CancellationTokenSource();
+        var store = new DurableRunStore();
+        await store.CreateAsync(QueuedRun("user-cancel"));
+        var sink = new RecordingLifecycleSink();
+        AgentRuntime runtime = null!;
+        var tool = new RecordingTool
+        {
+            BeforeResult = async ct =>
+            {
+                Assert.True(await runtime.CancelAsync(
+                    ProductEntryPoints.Chat, "user-cancel", "operator", "用户取消测试"));
+                if (stopHost)
+                    await hostStop.CancelAsync();
+                ct.ThrowIfCancellationRequested();
+            }
+        };
+        runtime = CreateRuntime(store, tool, new AllowAuthorization(), sink);
+
+        Assert.True(await runtime.ProcessNextAsync("worker-a", hostStop.Token));
+        if (stopHost)
+        {
+            Assert.Equal(AgentRunStatuses.Cancelling, (await store.GetAsync("user-cancel"))!.Status);
+            Assert.Empty(sink.TerminalRuns);
+            store.ExpireLease();
+            var recoveryTool = new RecordingTool();
+            var recovery = CreateRuntime(store, recoveryTool, new AllowAuthorization(), sink);
+            Assert.True(await recovery.ProcessNextAsync("worker-b"));
+            Assert.False(recoveryTool.Executed);
+        }
+        var cancelled = await store.GetAsync("user-cancel");
+        Assert.Equal(AgentRunStatuses.Cancelled, cancelled!.Status);
+        Assert.Equal("用户取消测试", cancelled.CancellationReason);
+        Assert.Equal(AgentRunStatuses.Cancelled, Assert.Single(sink.TerminalRuns).Status);
+        Assert.Single(await store.ReadEventsAsync("user-cancel", 0, 100),
+            item => item.Type == AgentStreamEventTypes.RunCancelled);
+    }
+
+    [Fact]
+    public async Task ProcessNextAsync_RunTimeout_RemainsTerminalWithoutHostShutdown()
+    {
+        var store = new DurableRunStore();
+        await store.CreateAsync(QueuedRun("timeout"));
+        var sink = new RecordingLifecycleSink();
+        var tool = new RecordingTool { BeforeResult = ct => Task.Delay(Timeout.InfiniteTimeSpan, ct) };
+        var runtime = CreateRuntime(store, tool, new AllowAuthorization(), sink, maxRunSeconds: 1);
+
+        Assert.True(await runtime.ProcessNextAsync("worker-a").WaitAsync(TimeSpan.FromSeconds(10)));
+
+        Assert.True(tool.Executed);
+        var cancelled = await store.GetAsync("timeout");
+        Assert.Equal(AgentRunStatuses.Cancelled, cancelled!.Status);
+        Assert.NotNull(cancelled.CompletedAt);
+        Assert.Equal(AgentRunStatuses.Cancelled, Assert.Single(sink.TerminalRuns).Status);
+    }
+
     [Fact]
     public async Task ProcessNextAsync_RevokedAuthorization_FailsBeforeAToolCanReadData()
     {
@@ -56,7 +157,9 @@ public sealed class DurableAgentRuntimeTests
     private static AgentRuntime CreateRuntime(
         DurableRunStore store,
         IAnalysisTool tool,
-        IAgentRunAuthorization authorization)
+        IAgentRunAuthorization authorization,
+        IAgentRunLifecycleSink? lifecycleSink = null,
+        int maxRunSeconds = 10)
     {
         var options = Options.Create(new ChatOptions
         {
@@ -64,7 +167,7 @@ public sealed class DurableAgentRuntimeTests
             Provider = "Deterministic",
             FastModel = "deterministic-v1",
             ReasoningModel = "deterministic-v1",
-            MaxRunSeconds = 10
+            MaxRunSeconds = maxRunSeconds
         });
         return new AgentRuntime(
             store,
@@ -73,7 +176,7 @@ public sealed class DurableAgentRuntimeTests
             new DefaultPlanValidator(options),
             new DefaultAnalysisResultValidator(),
             new BoundedCombinedAnalysisWorkflow(options),
-            new NullAgentRunLifecycleSink(),
+            lifecycleSink ?? new NullAgentRunLifecycleSink(),
             options,
             NullLogger<AgentRuntime>.Instance,
             new FixedModelSettings(),
@@ -132,9 +235,21 @@ public sealed class DurableAgentRuntimeTests
             => Task.FromResult<AgentAccessScope?>(null);
     }
 
+    private sealed class RecordingLifecycleSink : IAgentRunLifecycleSink
+    {
+        public List<AgentRunSnapshot> TerminalRuns { get; } = [];
+
+        public Task OnTerminalAsync(AgentRunSnapshot run, CancellationToken ct = default)
+        {
+            TerminalRuns.Add(run);
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class RecordingTool : IAnalysisTool
     {
         public bool Executed { get; private set; }
+        public Func<CancellationToken, Task>? BeforeResult { get; init; }
 
         public AnalysisToolDefinition Definition { get; } = new()
         {
@@ -152,19 +267,21 @@ public sealed class DurableAgentRuntimeTests
             })
         };
 
-        public Task<AnalysisToolResult> ExecuteAsync(
+        public async Task<AnalysisToolResult> ExecuteAsync(
             AnalysisToolCall call,
             AgentExecutionContext context,
             CancellationToken ct = default)
         {
             Executed = true;
-            return Task.FromResult(new AnalysisToolResult
+            if (BeforeResult is not null)
+                await BeforeResult(ct);
+            return new AnalysisToolResult
             {
                 Tool = call.Tool,
                 Summary = "已检查。",
                 Data = JsonSerializer.SerializeToElement(new { count = 1 }),
                 RelatedRecords = [new RelatedRecordRef { Kind = "dataset", Id = "1", Label = "test" }]
-            });
+            };
         }
     }
 
@@ -175,10 +292,13 @@ public sealed class DurableAgentRuntimeTests
         private string? leaseOwner;
         private long generation;
         private long sequence;
+        private bool leaseExpired;
 
         public bool ThrowOnHistoryRead { get; init; }
         public bool LoseLeaseOnFirstUpdate { get; init; }
         public string? CurrentLeaseOwner => leaseOwner;
+
+        public void ExpireLease() => leaseExpired = true;
 
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -227,11 +347,17 @@ public sealed class DurableAgentRuntimeTests
         public Task<ClaimedAgentRun?> ClaimNextAsync(
             string owner, TimeSpan leaseDuration, CancellationToken ct = default)
         {
-            if (run is null || run.Status != AgentRunStatuses.Queued)
+            if (run is null || (run.Status != AgentRunStatuses.Queued &&
+                !(leaseExpired && run.Status is AgentRunStatuses.Running or AgentRunStatuses.Cancelling)))
                 return Task.FromResult<ClaimedAgentRun?>(null);
             leaseOwner = owner;
+            leaseExpired = false;
             generation++;
-            run = run with { Status = AgentRunStatuses.Running };
+            run = run with
+            {
+                Status = run.Status == AgentRunStatuses.Cancelling
+                    ? AgentRunStatuses.Cancelling : AgentRunStatuses.Running
+            };
             return Task.FromResult<ClaimedAgentRun?>(new ClaimedAgentRun(
                 run, new AgentRunLease(run.RunId, owner, generation)));
         }
@@ -255,6 +381,8 @@ public sealed class DurableAgentRuntimeTests
                 return Task.FromResult(false);
             }
             if (!Owns(lease))
+                return Task.FromResult(false);
+            if (run!.Status == AgentRunStatuses.Cancelling && value.Status != AgentRunStatuses.Cancelled)
                 return Task.FromResult(false);
             run = value;
             return Task.FromResult(true);

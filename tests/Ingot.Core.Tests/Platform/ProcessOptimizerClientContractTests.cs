@@ -2,6 +2,7 @@
 
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessResearch;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,43 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class ProcessOptimizerClientContractTests
 {
+    [Fact]
+    public async Task DiagnoseAsync_ShouldSendSharedPythonRequestContract()
+    {
+        var fixture = await File.ReadAllTextAsync(Path.Combine(
+            AppContext.BaseDirectory, "contract-fixtures", "optimizer-diagnosis-request.json"));
+        using var httpClient = new HttpClient(new DiagnosisContractHandler(fixture))
+        {
+            BaseAddress = new Uri("http://optimizer.test/")
+        };
+        var client = new ProcessOptimizerClient(
+            httpClient, Options.Create(new ProcessOptimizerOptions { Enabled = true }));
+
+        var response = await client.DiagnoseAsync(new ProcessDiagnosisCall
+        {
+            Features =
+            [
+                new ProcessDiagnosticFeatureInput
+                {
+                    DataSource = "control-parameter:x",
+                    SourceKind = "control-parameter",
+                    Actionability = "controllable"
+                }
+            ],
+            Observations = Enumerable.Range(0, 4).Select(index => new ProcessDiagnosticObservationInput
+            {
+                ExecutionKey = $"run-{index}",
+                Outcome = index % 2,
+                Values = new Dictionary<string, double> { ["control-parameter:x"] = index },
+                Context = new Dictionary<string, string> { ["equipment_id"] = "PRESS-A" },
+                OccurredAt = index
+            }).ToArray(),
+            Seed = 17
+        });
+
+        Assert.Equal("adaptive-context-diagnosis-v1", response.AlgorithmVersion);
+    }
+
     [Fact]
     public async Task SuggestAsync_ShouldRejectMismatchedFeatureSetContract()
     {
@@ -67,6 +105,26 @@ public sealed class ProcessOptimizerClientContractTests
             ]
         }
     };
+
+    private sealed class DiagnosisContractHandler(string fixture) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/v1/diagnosis", request.RequestUri!.AbsolutePath);
+            var actual = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(fixture), JsonNode.Parse(actual)),
+                $"诊断请求与 Python 共享契约不一致：{actual}");
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""
+                    {"algorithm_version":"adaptive-context-diagnosis-v1",
+                     "model_family":"robust-screening-only","adjustment_method":"none"}
+                    """, Encoding.UTF8, "application/json")
+            };
+        }
+    }
 
     private sealed class JsonResponseHandler(string response) : HttpMessageHandler
     {
