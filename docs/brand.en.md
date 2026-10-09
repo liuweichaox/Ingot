@@ -47,7 +47,7 @@ Without evidence from real projects, public material must not claim that:
 - one successful setting proves a complete operating region;
 - results from one scenario transfer unconditionally to another.
 
-Observational data can support candidate causes, stable associations, confounded associations, or insufficient-evidence judgments. The system never automatically promotes those judgments to a root cause or an equipment-control command. Each run is an experiment, with run and quality records retaining experiment facts; next-recipe recommendations use admitted run evidence. Public descriptions must distinguish implemented server-side recommendations from planned Web workflow improvements; see [Current status](status.en.md).
+Observational data can support candidate causes, stable associations, confounded associations, or insufficient-evidence judgments. The system never automatically promotes those judgments to a root cause or an equipment-control command. Each run is an experiment, with run and quality records retaining experiment facts; next-recipe recommendations use admitted run evidence. The current Web app and API support recommendations and engineering decisions: adopting a correction retains the current published recipe version, while a significant change creates a revision draft. See [Current status](status.en.md) for capabilities, data requirements, and deployment boundaries.
 
 ## Canonical language
 

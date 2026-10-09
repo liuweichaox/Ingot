@@ -30,44 +30,18 @@ const copy = {
     primary: "阅读快速开始",
     secondary: "了解工作方式",
     truth: ["证据可追溯", "原因可验证", "建议可审核", "结论可复用"],
-    panelKicker: "ENGINEERING DECISION · EVIDENCE",
-    panelTitle: "一次运行的工程证据",
-    panelCampaign: "RECIPE RECOMMENDATION · RUN-042",
-    panelBadge: "配方建议待确认",
-    parameters: [
-      ["实际控制变量", "42.0", ""],
-      ["阶段轨迹偏差", "+1.8σ", ""],
-      ["工装版本", "TOOLING-A", ""],
-    ],
-    predictions: [
-      ["关键差异", "阶段 2"],
-      ["有效运行", "12 条"],
-      ["下一份配方", "待审核"],
-    ],
-    panelFoot: "产品界面示意 · 同时呈现事实、差异、不确定性和后续建议",
     productKicker: "FROM DATA TO DECISION",
     productTitle: "把研发记录、工艺分析和配方决策放在同一工作流中。",
     productText: "围绕配方版本组织目标、实验记录和工程判断；直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方。比较差异、检查证据，再审核建议与配方修订。",
     productCards: [
-      ["01", "组织研发记录", "选定配方版本，定义质量目标、可调参数和范围，保存实验实测值与来源说明。"],
+      ["01", "组织研发记录", "选定配方版本，定义质量目标、可调参数与边界。每次运行就是一次实验，实测值保存在运行与质量记录中。"],
       ["02", "核对运行与质量", "关联实际参数、过程轨迹与检验结果，检查完整性和适用条件。"],
       ["03", "分析工艺差异", "比较可比运行，整理关键差异、候选原因与证据缺口。"],
-      ["04", "审核配方建议", "基于合格运行证据提出候选设置，记录工程师的决定与修订理由。"],
+      ["04", "审核配方建议", "基于合格运行证据提出下一轮校正。工程师审核后在同版本下验证，显著变更才创建修订草稿。"],
     ],
-    shotsKicker: "REAL WORKBENCH",
-    shotsTitle: "查看运行、比较差异、审核建议与配方版本。",
-    shotsText: "每一步都能查看关联事实、分析依据和工程师决定，便于核对建议形成的过程。",
-    viewImage: "查看大图",
-    shots: [
-      ["/screenshots/production-run.png", "真实生产运行", "查看实际使用的配方版本、过程数据、质量结果和生产上下文"],
-      ["/screenshots/diagnosis.png", "工艺追因", "从待分析运行进入差异比较与候选原因"],
-      ["/screenshots/optimization.png", "配方优化", "按已确认的证据范围整理候选参数与下一步验证"],
-      ["/screenshots/next-recipe.png", "配方建议与配方版本草稿", "审核建议后，以已发布配方版本为基准保存修订理由与实际运行引用"],
-    ],
-    shotsNote: "界面与数据用于产品说明，不证明真实工艺收益。配方建议页面为设计示意，当前 Web 支持范围见状态文档。",
     loopKicker: "ENGINEER IN THE LOOP",
     loopTitle: "系统组织事实与建议，工程师掌握研发决策。",
-    loopText: "配方版本保存参数与记录，分析说明差异和证据边界，建议保留输入与理由。工程师审核是否采用、如何修订，并根据后续结果继续判断。",
+    loopText: "配方版本保存参数设定，运行与质量记录保存实际过程和结果，分析说明差异和证据边界，建议保留输入与理由。工程师审核是否采用、如何校正，并根据后续结果继续判断。",
     loopSteps: [
       ["01", "定义", "问题 · 变量 · 边界"],
       ["02", "记录", "参数 · 轨迹 · 结果"],
@@ -77,22 +51,22 @@ const copy = {
       ["06", "复核", "决定 · 修订 · 后续结果"],
     ],
     optimizerKicker: "THE ENGINEERING TOOLBOX",
-    optimizerTitle: "先确认数据是否可靠，再形成可审计的工艺修订。",
+    optimizerTitle: "先确认数据是否可靠，再审核下一轮校正。",
     optimizerText: "推荐器先确认生产运行是否完整、可比且关联质量结果，再在声明的变量、安全边界和历史覆盖内形成候选建议。工程师负责审核建议；系统不自动修改生产参数。",
     methodA: "确认数据可用",
-    methodAText: "核对数据是否完整、实际值与单位是否一致、时间和来源是否明确，并识别版本变化与漂移。",
+    methodAText: "核对数据是否完整、实际值与单位是否一致、时间和来源是否明确，并检查版本变化与适用范围。",
     methodB: "工艺追因",
     methodBText: "使用匹配比较、稳健统计、阶段轨迹和上下文分层缩小候选范围。",
     methodC: "固化机理依据",
     methodCText: "将参数作用、已知边界和工程判断附着到具体配方版本，并引用对应运行、质量证据和已复核工艺资料片段。",
-    methodD: "修订下一配方版本",
-    methodDText: "继承完整参数与适用条件，只调整确认需要变化的控制参数，并形成可追溯草稿。",
+    methodD: "审核下一轮校正",
+    methodDText: "小校正留在当前配方版本，下一轮同版本运行自动接续。显著变更使用建议参数创建修订草稿，保留来源与理由。",
     engineFeatures: ["数据质量", "真实运行", "版本谱系", "片段级引用", "已复核知识", "工程决策"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "研发记录、分析与决策，各有明确职责。",
     archText: "Web、API、数据库与优化服务构成自身运行栈，连接器是可选的数据来源。正式记录保存来源、版本与审核状态，分析和建议引用这些事实；工程师确认参数变化与适用范围。",
     layers: [
-      ["研发记录", "配方 · 变量 · 实验", "组织目标、实际参数、实测结果和数据来源"],
+      ["研发记录", "配方 · 变量 · 边界", "组织目标、参数设定、可调范围和适用条件"],
       ["运行与质量", "参数 · 轨迹 · 检验", "关联运行上下文与质量结果，核对版本、完整性和审核状态"],
       ["分析与建议", "比较 · 追因 · 优化", "整理候选原因，形成受证据和安全边界约束的配方建议"],
       ["工程决策", "审核 · 版本 · 知识", "保存采用、修改或拒绝的理由，并引用经过复核的工艺资料"],
@@ -108,15 +82,17 @@ const copy = {
     openKicker: "RUN IT YOURSELF",
     openTitle: "开源工艺研发与优化系统。",
     openText: "Ingot 采用 Apache-2.0 许可，可在厂内自托管。源码、部署说明和方法边界均可查阅，具体场景评估由部署方用自己的数据完成。",
-    command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
+    command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\n# 编辑 .env，替换所有 change-this 占位值\ndocker compose -f docker-compose.app.yml config --quiet\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "阅读快速开始",
     contribute: "参与贡献",
     reportIssue: "报告问题",
     statusLabel: "当前成熟度",
-    statusText: "每次工艺运行就是一次实验，配方版本保存参数设定，运行记录关联实际参数、过程数据和质量结果；符合准入条件的运行证据用于配方建议。主要软件流程已有自动化测试，真实工厂收益验证尚未完成。详细能力与限制见当前状态文档。",
+    statusText: "每次工艺运行就是一次实验，配方版本保存参数设定，运行记录关联实际参数、过程数据和质量结果；符合准入条件的运行证据用于配方建议，实际运行、参数回读和检验记录用于一次性冻结最终结果。主要软件流程已有自动化测试，真实工厂收益验证尚未完成。默认 Compose 提供单机参考部署，部署方仍需完成站点安全、恢复、容量和运维验收。",
+    statusLink: "当前能力与限制",
+    deploymentLink: "部署与生产验收",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "从一个真实工艺问题开始。",
-    ctaText: "发布配方版本记录变量与结果，或从已有运行开始核对质量、比较差异并审核配方建议。",
+    ctaText: "发布配方版本明确变量与边界，关联运行和质量记录，或从已有运行开始比较差异并审核下一轮校正。",
     ctaPrimary: "建立第一个数据闭环",
     ctaSecondary: "打开 GitHub",
     footer: "Ingot · 从工艺数据，到有依据的研发决策。",
@@ -141,44 +117,18 @@ const copy = {
     primary: "Read the quickstart",
     secondary: "See how it works",
     truth: ["Traceable evidence", "Testable causes", "Reviewable recommendations", "Reusable conclusions"],
-    panelKicker: "ENGINEERING DECISION · EVIDENCE",
-    panelTitle: "Engineering evidence from a run",
-    panelCampaign: "RECIPE RECOMMENDATION · RUN-042",
-    panelBadge: "Recommendation awaiting review",
-    parameters: [
-      ["Actual control value", "42.0", ""],
-      ["Phase trajectory deviation", "+1.8σ", ""],
-      ["Tooling version", "TOOLING-A", ""],
-    ],
-    predictions: [
-      ["Key difference", "Phase 2"],
-      ["Qualified runs", "12"],
-      ["Next recipe", "Awaiting review"],
-    ],
-    panelFoot: "Product illustration · facts, differences, uncertainty, and follow-up recommendations",
     productKicker: "FROM DATA TO DECISION",
     productTitle: "Bring research records, process analysis, and recipe decisions into one workflow.",
     productText: "Organize objectives, experiment records, and engineering judgment by recipe version. The system directly links actual settings, process context, and quality outcomes from completed runs without manual recipe reclassification. Compare differences and check evidence before reviewing recommendations and recipe revisions.",
     productCards: [
-      ["01", "Organize research records", "Select a recipe version, define quality objectives, adjustable parameters, and scope, and retain measured experiment values and provenance."],
+      ["01", "Organize research records", "Select a recipe version and define objectives, adjustable parameters, and boundaries. Each run is an experiment; run and quality records retain measured values."],
       ["02", "Check runs and quality", "Link actual settings, process trajectories, and inspection outcomes; check completeness and applicability."],
       ["03", "Analyze process differences", "Compare compatible runs and organize key differences, candidate causes, and evidence gaps."],
-      ["04", "Review recipe recommendations", "Use qualified run evidence to propose candidate settings and retain engineering decisions and revision rationale."],
+      ["04", "Review recipe recommendations", "Use qualified run evidence to propose the next correction. Engineers review it for another run on the same version; significant changes create a revision draft."],
     ],
-    shotsKicker: "REAL WORKBENCH",
-    shotsTitle: "Review runs, compare differences, and inspect recommendations and recipe versions.",
-    shotsText: "Inspect linked facts, analytical rationale, and engineering decisions at each step to check how a recommendation was formed.",
-    viewImage: "View full-size image",
-    shots: [
-      ["/screenshots/production-run.png", "Real production run", "Review the applied recipe version, process data, quality outcome, and production context"],
-      ["/screenshots/diagnosis.png", "Process diagnosis", "Start from runs that need attention and narrow candidate causes"],
-      ["/screenshots/optimization.png", "Recipe optimization", "Organize candidate parameters and the next validation step within the evidence boundary"],
-      ["/screenshots/next-recipe.png", "Recommendation and revision draft", "Review a recommendation, then carry its rationale and real-run evidence into a recipe version draft"],
-    ],
-    shotsNote: "Interfaces and data illustrate the product and do not establish real process outcomes. Recipe-recommendation screens are design illustrations; see current status for Web coverage.",
     loopKicker: "ENGINEER IN THE LOOP",
     loopTitle: "The system organizes facts and recommendations; engineers make R&D decisions.",
-    loopText: "Recipe versions retain parameters and records, analysis explains differences and evidence boundaries, and recommendations preserve inputs and rationale. Engineers review adoption and revisions, then use later outcomes to reassess their decisions.",
+    loopText: "Recipe versions retain parameter settings; run and quality records retain actual process data and outcomes. Analysis explains differences and evidence boundaries, and recommendations preserve inputs and rationale. Engineers review adoption and corrections, then use later outcomes to reassess their decisions.",
     loopSteps: [
       ["01", "Define", "question · variables · boundaries"],
       ["02", "Record", "settings · trajectories · outcomes"],
@@ -188,22 +138,22 @@ const copy = {
       ["06", "Review", "decisions · revisions · later outcomes"],
     ],
     optimizerKicker: "THE ENGINEERING TOOLBOX",
-    optimizerTitle: "Confirm that data are trustworthy before forming an auditable revision.",
+    optimizerTitle: "Confirm that data are trustworthy before reviewing the next correction.",
     optimizerText: "The recommender checks whether production runs are complete, comparable, and linked to quality outcomes before forming a candidate within declared variables, safety boundaries, and observed coverage. Engineers review recommendations; the system never changes production parameters automatically.",
     methodA: "Confirm data usability",
-    methodAText: "Check completeness, actual values, units, time, and provenance, and identify version changes or drift.",
+    methodAText: "Check completeness, actual values, units, time, and provenance, together with version changes and applicability.",
     methodB: "Process diagnosis",
     methodBText: "Use matching, robust statistics, stage trajectories, and context stratification to narrow candidates.",
     methodC: "Preserve mechanism notes",
     methodCText: "Attach parameter effects, known boundaries, and engineering judgment to a specific recipe version with run, quality, and reviewed process-document references.",
-    methodD: "Revise the next recipe version",
-    methodDText: "Inherit complete parameters and applicability, change only confirmed control values, and create a traceable draft.",
+    methodD: "Review the next correction",
+    methodDText: "Small corrections stay on the current recipe version; the next same-version run links automatically. Significant changes use proposed settings to create a revision draft with provenance and rationale.",
     engineFeatures: ["Data quality", "Real runs", "Version lineage", "Fragment citations", "Reviewed knowledge", "Engineering decisions"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "Research records, analysis, and decisions have clear responsibilities.",
     archText: "The Web app, API, database, and optimizer form the runtime stack; connectors are optional data sources. Formal records retain provenance, versions, and review status, and analysis and recommendations reference those facts. Engineers confirm parameter changes and applicability.",
     layers: [
-      ["RESEARCH RECORDS", "recipes · variables · experiments", "Organize objectives, actual settings, measured outcomes, and provenance"],
+      ["RESEARCH RECORDS", "recipes · variables · boundaries", "Organize objectives, settings, adjustable scope, and applicability"],
       ["RUNS AND QUALITY", "settings · trajectories · inspections", "Link run context and quality outcomes; check versions, completeness, and review status"],
       ["ANALYSIS AND RECOMMENDATIONS", "comparison · diagnosis · optimization", "Organize candidate causes and recipe recommendations constrained by evidence and safety boundaries"],
       ["ENGINEERING DECISIONS", "review · versions · knowledge", "Retain adoption, revision, or rejection rationale and reference reviewed process material"],
@@ -219,15 +169,17 @@ const copy = {
     openKicker: "RUN IT YOURSELF",
     openTitle: "Open-source Process R&D and Optimization System.",
     openText: "Ingot is Apache-2.0 licensed and self-hostable inside the plant. Source code, deployment instructions, and method boundaries are available for inspection; scenario-specific evaluation belongs to the deployer's own data.",
-    command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\ndocker compose -f docker-compose.app.yml up -d --build",
+    command: "git clone https://github.com/liuweichaox/Ingot.git\ncd Ingot\ncp .env.example .env\n# Edit .env: replace every change-this placeholder\ndocker compose -f docker-compose.app.yml config --quiet\ndocker compose -f docker-compose.app.yml up -d --build",
     readDocs: "Read the quickstart",
     contribute: "Contribute",
     reportIssue: "Report an issue",
     statusLabel: "Current maturity",
-    statusText: "Each process run is an experiment. Recipe versions hold parameter settings, and run records link actual parameters, process data, and quality outcomes. Admitted run evidence feeds recipe recommendations. Core software workflows have automated tests; real-factory benefit validation remains incomplete. See the current-status document for detailed capabilities and limits.",
+    statusText: "Each process run is an experiment. Recipe versions hold parameter settings, and run records link actual parameters, process data, and quality outcomes. Admitted run evidence feeds recipe recommendations. Actual runs, parameter readback, and inspection records freeze the final outcome once. Core software workflows have automated tests; real-factory benefit validation remains incomplete. Default Compose provides a single-host reference deployment; deployers still own site security, recovery, capacity, and operational acceptance.",
+    statusLink: "Current capabilities and limits",
+    deploymentLink: "Deployment and production acceptance",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "Begin with a process question.",
-    ctaText: "Publish a recipe version to record variables and outcomes, or start with existing runs to check quality, compare differences, and review recipe recommendations.",
+    ctaText: "Publish a recipe version with variables and boundaries, link run and quality records, or start with existing runs to compare differences and review the next correction.",
     ctaPrimary: "Build the first data loop",
     ctaSecondary: "Open GitHub",
     footer: "Ingot · From process data to evidence-based R&D decisions.",
@@ -235,9 +187,35 @@ const copy = {
 } as const;
 
 const github = "https://github.com/liuweichaox/Ingot";
-const storyShotIndex = [0, 1, 3, 2] as const;
 
 type SiteCopy = (typeof copy)[Locale];
+
+const workflows = {
+  zh: {
+    title: "每一轮判断，都能回到运行证据。",
+    note: "工作方式示意 · 非实际产品界面 · 无收益数据",
+    nodes: [["配方版本", "目标、参数与安全边界"], ["运行", "实际参数、轨迹与上下文"], ["质量", "检验结果与来源"], ["证据", "可比运行、差异与候选原因"], ["校正", "工程师决定与下一轮验证"]],
+    next: "下一轮同版本运行 → 检验结果 → 继续判断",
+    records: [
+      [["配方版本", "已发布参数 · 目标 · 可调范围"], ["运行记录", "使用的版本 · 实际参数 · 过程上下文"], ["实验事实", "由运行与质量记录承载，无独立实验录入"]],
+      [["过程证据", "实际参数 · 阶段轨迹 · 时间与来源"], ["质量记录", "实测结果 · 检验依据 · 关联运行"], ["准入检查", "完整性 · 可比性 · 适用条件"]],
+      [["运行比较", "核对版本、参数与生产上下文"], ["候选原因", "差异证据 · 不确定性 · 待验证项"], ["知识引用", "已复核工艺资料片段与适用范围"]],
+      [["下一轮校正", "候选设置 · 约束 · 工程师采用、修改或拒绝"], ["版本分支", "小校正保持版本，显著变更创建修订草稿"], ["实际结果", "同版本运行自动接续，按实际证据一次性冻结结果"]],
+    ],
+  },
+  en: {
+    title: "Every decision traces back to run evidence.",
+    note: "Workflow illustration · Not the actual interface · No outcome data",
+    nodes: [["Recipe version", "Objectives, settings, safety boundaries"], ["Run", "Actual settings, trajectories, context"], ["Quality", "Inspection outcomes and provenance"], ["Evidence", "Comparable runs, differences, candidate causes"], ["Correction", "Engineer decisions and the next validation"]],
+    next: "Next same-version run → inspection outcomes → reassess",
+    records: [
+      [["Recipe version", "Published settings · objectives · adjustable scope"], ["Run record", "Applied version · actual settings · process context"], ["Experiment facts", "Retained in run and quality records, without separate experiment entry"]],
+      [["Process evidence", "Actual settings · stage trajectories · time and provenance"], ["Quality record", "Measured outcomes · inspection basis · linked run"], ["Admission checks", "Completeness · comparability · applicability"]],
+      [["Run comparison", "Check versions, parameters, and production context"], ["Candidate causes", "Difference evidence · uncertainty · validation gaps"], ["Knowledge references", "Reviewed process-document fragments and applicability"]],
+      [["Next correction", "Candidate settings · constraints · engineer adoption, revision, or rejection"], ["Version branch", "Small corrections retain the version; significant changes create a revision draft"], ["Actual outcome", "Automatically link the next same-version run and freeze the outcome once from actual evidence"]],
+    ],
+  },
+} as const;
 
 function usePageMotion() {
   useEffect(() => {
@@ -283,6 +261,7 @@ function Reveal({ children, className = "", delay = 0 }: { children: ReactNode; 
 }
 
 function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
+  const flow = workflows[locale];
   return (
     <section className="hero" id="main-content">
       <div className="frame hero-layout">
@@ -296,15 +275,17 @@ function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
           </div>
         </div>
         <div className="product-frame hero-product">
-          <div className="product-frame-bar" aria-hidden="true"><i /><span>INGOT / WORKBENCH</span><small>ILLUSTRATIVE DATA</small></div>
-          <Image
-            src="/screenshots/workbench.png"
-            alt={locale === "zh" ? "Ingot 工作台示意界面" : "Ingot workbench with illustrative data"}
-            width={1600}
-            height={1000}
-            priority
-            unoptimized
-          />
+          <div className="product-frame-bar"><i /><span>INGOT / EVIDENCE LOOP</span></div>
+          <div className="evidence-flow">
+            <p className="flow-title">{flow.title}</p>
+            <ol className="flow-nodes">
+              {flow.nodes.map(([title, description], index) => (
+                <li key={title}><span className="flow-number">0{index + 1}</span><div><strong>{title}</strong><p>{description}</p></div><span className="flow-arrow" aria-hidden="true">↓</span></li>
+              ))}
+            </ol>
+            <p className="flow-return"><span aria-hidden="true">↳</span>{flow.next}</p>
+            <p className="flow-note">{flow.note}</p>
+          </div>
         </div>
       </div>
       <div className="frame hero-truth" role="list" aria-label={locale === "zh" ? "产品原则" : "Product principles"}>
@@ -316,7 +297,7 @@ function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
 
 function Story({ t, locale }: { t: SiteCopy; locale: Locale }) {
   const [activeStep, setActiveStep] = useState(0);
-  const activeShot = t.shots[storyShotIndex[activeStep]];
+  const flow = workflows[locale];
 
   return (
     <>
@@ -331,7 +312,7 @@ function Story({ t, locale }: { t: SiteCopy; locale: Locale }) {
             <ol className="story-steps">
               {t.productCards.map(([number, title, text], index) => (
                 <li className={index === activeStep ? "is-active" : ""} key={title}>
-                  <button type="button" onClick={() => setActiveStep(index)} aria-pressed={index === activeStep}>
+                  <button type="button" onClick={() => setActiveStep(index)} aria-pressed={index === activeStep} aria-controls="workflow-records">
                     <span>{number}</span>
                     <span>
                       <strong>{title}</strong>
@@ -343,44 +324,18 @@ function Story({ t, locale }: { t: SiteCopy; locale: Locale }) {
             </ol>
           </div>
           <div className="story-visual">
-            <div className="product-frame story-product" data-step={activeStep} role="group" aria-label={locale === "zh" ? "对应步骤的产品界面" : "Product interface for the selected step"}>
-              <div className="product-frame-bar"><i /><span>{t.panelCampaign}</span><small>ILLUSTRATIVE DATA</small></div>
-              <div className="story-product-shots">
-                {storyShotIndex.map((shotIndex, index) => {
-                  const [src, title] = t.shots[shotIndex];
-                  return (
-                    <div className={`story-product-shot${index === activeStep ? " is-active" : ""}`} key={src}>
-                      <Image src={src} alt={`${title} — Ingot`} width={1600} height={1000} unoptimized />
-                    </div>
-                  );
-                })}
+            <div className="product-frame story-product" data-step={activeStep} id="workflow-records" role="group" aria-label={locale === "zh" ? "所选步骤的关联业务记录" : "Linked business records for the selected step"}>
+              <div className="product-frame-bar"><i /><span>{locale === "zh" ? "关联记录" : "LINKED RECORDS"}</span><small>0{activeStep + 1} / 04</small></div>
+              <div className="workflow-records" aria-live="polite" aria-atomic="true">
+                <p className="record-step">{t.productCards[activeStep][1]}</p>
+                {flow.records[activeStep].map(([title, description], index) => (
+                  <div className="workflow-record" key={title}><span className="record-node" aria-hidden="true">0{index + 1}</span><div><h3>{title}</h3><p>{description}</p></div></div>
+                ))}
               </div>
             </div>
-            <p className="story-shot-caption"><strong>{activeShot[1]}</strong>{activeShot[2]}</p>
-            <p className="story-note">{t.shotsNote}</p>
+            <p className="story-note">{flow.note}</p>
+            <a className="evidence-link" href={`${t.docs}/status`}>{t.statusLink} <span aria-hidden="true">↗</span></a>
           </div>
-        </div>
-      </section>
-      <section className="screen-gallery" id="screenshots">
-        <div className="frame">
-          <div className="screen-gallery-heading">
-            <div>
-              <p className="eyebrow">{t.shotsKicker}</p>
-              <h2>{t.shotsTitle}</h2>
-            </div>
-            <p className="screen-gallery-copy">{t.shotsText}</p>
-          </div>
-          <div className="screen-grid">
-            {t.shots.map(([src, title, text]) => (
-              <figure className="screen-card" key={title}>
-                <a className="screen-card-media" href={src} target="_blank" rel="noreferrer" aria-label={`${title} — ${t.viewImage}`}>
-                  <Image src={src} alt={`${title} — Ingot`} loading="lazy" width={1600} height={1000} unoptimized />
-                </a>
-                <figcaption><strong>{title}</strong><span>{text}</span></figcaption>
-              </figure>
-            ))}
-          </div>
-          <p className="shots-note">{t.shotsNote}</p>
         </div>
       </section>
     </>
@@ -488,7 +443,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
               <a className="button quiet" href={`${github}/blob/main/CONTRIBUTING${initialLocale === "en" ? ".en" : ""}.md`}>{t.contribute}</a>
               <a className="button quiet" href={`${github}/issues`}>{t.reportIssue}</a>
             </div>
-            <div className="status-note"><strong>{t.statusLabel}</strong><p>{t.statusText}</p></div>
+            <div className="status-note"><strong>{t.statusLabel}</strong><p>{t.statusText}</p><div className="status-links"><a href={`${t.docs}/status`}>{t.statusLink} ↗</a><a href={`${t.docs}/deployment`}>{t.deploymentLink} ↗</a></div></div>
           </Reveal>
           <Reveal className="terminal" delay={140}><div className="terminal-bar"><i /><i /><i /><span>QUICKSTART</span></div><pre><code>{t.command}</code></pre></Reveal>
         </div>

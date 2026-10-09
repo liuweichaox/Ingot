@@ -15,18 +15,70 @@ async function html(pathname = "/") {
 
 const retired = /Ingot Agent|desktop Agent|connector-workspaces|awaiting-package-approval|FactoryScene3D|制造生产数据与工艺分析系统|Connected production history/i;
 
-test("Chinese and English homes expose the workbench story and engineering loop", async () => {
+function visibleText(source) {
+  return source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+}
+
+function assertInOrder(source, steps) {
+  let previous = -1;
+  for (const step of steps) {
+    const index = source.indexOf(step, previous + 1);
+    assert.ok(index > previous, `Expected deployment step after its prerequisite: ${step}`);
+    previous = index;
+  }
+}
+
+test("Chinese and English homes expose the current workflow without obsolete screenshots", async () => {
   for (const pathname of ["/", "/en/"]) {
     const source = await html(pathname);
-    assert.match(source, /<div class="product-frame hero-product">[\s\S]*?<img[^>]+src="\/screenshots\/workbench\.png"/i);
     assert.match(source, /<section class="story section" id="product"/i);
-    assert.match(source, /class="product-frame story-product"[^>]*data-step="0"/i);
     assert.match(source, /<section class="closed-loop section" id="loop"/i);
     assert.match(source, /class="loop-rail"[^>]*aria-label="(?:工程闭环|Engineering loop)"/i);
     assert.match(source, /class="[^"]*\bloop-step\b[^"]*"/i);
-    assert.match(source, /<section class="screen-gallery" id="screenshots">/i);
-    for (const screenshot of ["production-run.png", "diagnosis.png", "optimization.png", "next-recipe.png"]) {
-      assert.match(source, new RegExp(`/screenshots/${screenshot}`));
+    assert.doesNotMatch(source, /(?:src|href)="[^"]*\/screenshots\//i);
+    assert.doesNotMatch(source, /独立优化任务|优化任务工作区|Independent optimization tasks|optimization task workspace/i);
+  }
+});
+
+test("both locales describe run experiments and the two recipe decision paths", async () => {
+  const expectations = [
+    ["/", /每次工艺运行就是一次实验/, /小校正[^。]*当前(?:配方)?版本/, /显著变更[^。]*修订草稿/],
+    ["/en/", /Each process run is an experiment/i, /Small corrections[^.]*current (?:recipe )?version/i, /Significant changes[^.]*revision draft/i],
+  ];
+  for (const [pathname, experiment, correction, revision] of expectations) {
+    const text = visibleText(await html(pathname));
+    assert.match(text, experiment);
+    assert.match(text, correction);
+    assert.match(text, revision);
+    assert.doesNotMatch(text, /修订下一配方版本|Revise the next recipe version/i);
+  }
+});
+
+test("both locales require replacing placeholder secrets before validation and startup", async () => {
+  for (const pathname of ["/", "/en/"]) {
+    const source = await html(pathname);
+    const command = source.match(/<pre\b[^>]*>\s*<code\b[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/i)?.[1];
+    assert.ok(command, "Expected a copyable deployment command block");
+    assertInOrder(visibleText(command), [
+      "cp .env.example .env",
+      "change-this",
+      "docker compose -f docker-compose.app.yml config --quiet",
+      "docker compose -f docker-compose.app.yml up -d --build",
+    ]);
+    const text = visibleText(source);
+    assert.match(text, pathname === "/" ? /替换|修改/ : /replace/i);
+  }
+});
+
+test("maturity and deployment references are clickable and locale specific", async () => {
+  for (const [pathname, locale] of [["/", "zh"], ["/en/", "en"]]) {
+    const source = await html(pathname);
+    for (const document of ["status", "deployment"]) {
+      const href = `https://docs.ingotstack.com/${locale}/${document}`;
+      const anchor = source.match(new RegExp(`<a\\b[^>]*href="${href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>([\\s\\S]*?)<\\/a>`, "i"));
+      assert.ok(anchor, `Expected a clickable ${document} reference for ${pathname}`);
+      assert.ok(visibleText(anchor[1]).trim(), "Reference must have a visible label");
     }
   }
 });
@@ -45,9 +97,6 @@ test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
   assert.match(source, /从工艺数据，/);
   assert.match(source, /到有依据的研发决策。/);
-  assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);
-  assert.match(source, /先确认数据是否可靠，再形成可审计的工艺修订/);
-  assert.match(source, /直接关联已完成运行的实际参数、过程上下文和质量结果，无需工程师重新归类配方/);
   assert.match(source, /已复核工艺资料片段/);
   assert.match(source, /片段级引用/);
   for (const stage of ["组织研发记录", "核对运行与质量", "分析工艺差异", "审核配方建议"]) {
@@ -72,9 +121,6 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
   assert.match(source, /From process data/);
   assert.match(source, /to evidence-based R&amp;D decisions/);
-  assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);
-  assert.match(source, /Confirm that data are trustworthy before forming an auditable revision/);
-  assert.match(source, /directly links actual settings, process context, and quality outcomes from completed runs without manual recipe reclassification/);
   assert.match(source, /reviewed process-document references/i);
   assert.match(source, /Fragment citations/);
   for (const stage of ["Organize research records", "Check runs and quality", "Analyze process differences", "Review recipe recommendations"]) {
@@ -93,8 +139,8 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
 
 test("public source uses brand assets instead of an inline logo and links project surfaces", async () => {
   const source = await readFile(new URL("../app/IngotSite.tsx", import.meta.url), "utf8");
-    assert.match(source, /ingot-lockup-dark\.svg/);
-    assert.match(source, /ingot-lockup\.svg/);
+  assert.match(source, /ingot-lockup-dark\.svg/);
+  assert.match(source, /ingot-lockup\.svg/);
   assert.match(source, /github\.com\/liuweichaox\/Ingot/);
   assert.match(source, /docs\.ingotstack\.com/);
   assert.doesNotMatch(source, /function Mark|<svg/i);
