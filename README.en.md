@@ -75,29 +75,29 @@ Ingot supports R&D records, quality analysis, evidence review, and constrained r
 ## Domain workflow
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
-           ↑                                                                                         ↓
-           └──────── Validated recipe versions and mechanism knowledge return to production ─────────┘
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis
+           ↑                                                                                 ↓
+           └── The next recipe returns to the published version and, after the engineer decides, starts the next run ──┘
 ```
 
 | Stage | Primary responsibility |
 |---|---|
-| Process configuration | Define variables, units, quality rules, and safety boundaries |
+| Process configuration | Publish process variables, recipe versions, process analysis, quality plans, and tooling. Each recipe version's launch check verifies that version's acquisition, analysis, and quality dependencies |
 | Field integration | Map equipment points and business data to consistent process fields |
 | Production runs | Record actual conditions, process trajectories, and production context |
 | Quality management | Link inspection results and perform independent review |
 | Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
-| Recipe optimization | Learn from real recipe runs and recommend the next recipe within safety boundaries and observed coverage |
+| Recipe optimization | On a published recipe version, propose the next recipe from real runs, safety boundaries, and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft |
 
 Trustworthy production-run facts are prerequisites for the current recommendation workflow. Each process run is an experiment; the run and its quality outcomes constitute the experiment record.
 
 ## Current status
 
-The main production-evidence workflow is implemented: the system links real recipe runs to quality outcomes, checks whether they are usable for optimization, and generates engineer-reviewed next-recipe recommendations that are never dispatched automatically. The process-configuration UI manages recipe versions and all their parameters. Each run records actual execution parameters and process data, while quality records retain experiment outcomes; admitted runs can form optimization observations.
+The main production-evidence workflow is implemented: the system links real recipe runs to quality outcomes, checks whether they are usable for optimization, and generates engineer-reviewed next-recipe recommendations on the published recipe version. Recommendations are never dispatched automatically. Adoption keeps the version unchanged and the next run of that version links automatically; a significant change creates a revision draft from the recommended settings. Process configuration manages process variables, recipe versions, process analysis, and quality plans, and each recipe version's launch check lists the dependencies that version still lacks. Each run records actual execution parameters and process data, while quality records retain experiment outcomes; admitted runs can form optimization observations.
 
 The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
 
-When data or methods fail admission, the system stops the recommendation, records the reason, and falls back to a response-surface or DOE path.
+When data or methods fail admission, the system stops the recommendation and records the reason. Methods are selected by data conditions among response surfaces, Gaussian processes, and constrained Bayesian optimization; conflicting, expired, or out-of-scope knowledge degrades or stops the recommendation.
 
 See [Current status](docs/status.en.md) for capability and production boundaries.
 
@@ -141,7 +141,7 @@ cp .env.example .env
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Before startup, change the database passwords, Edge ingestion token, and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
+Before startup, change the database passwords and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
 
 ## Development verification
 
@@ -167,7 +167,7 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 
 ## Roadmap
 
-Near-term work focuses on run-evidence admission, Web workflows for recommendation decisions and outcome tracking, knowledge reuse, and deployment reliability. See the [Roadmap](docs/project-plan.en.md) for acceptance criteria and boundaries.
+Adopting, modifying, rejecting, and freezing a recommendation already happens on the published recipe version. Near-term work still covers complete presentation of run evidence, recommendation-admission explanations, knowledge reuse, and deployment reliability. See the [Roadmap](docs/project-plan.en.md) for acceptance criteria and boundaries.
 
 ## Contributing
 
