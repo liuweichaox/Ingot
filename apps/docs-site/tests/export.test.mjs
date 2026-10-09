@@ -41,7 +41,7 @@ test("publishes product capabilities and public references without interface doc
   for (const lang of ["zh", "en"]) {
     const index = await readFile(path.join(out, lang, "index.html"), "utf8");
     const design = await readFile(path.join(out, lang, "design", "index.html"), "utf8");
-    assert.match(index, lang === "zh" ? /组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化/ : /Organize R(?:&amp;|&)D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
+    assert.match(index, lang === "zh" ? /组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化/ : /Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
     assert.match(design, lang === "zh" ? /设计目标/ : /Design objective/i);
     assert.match(index, lang === "zh" ? /下一份配方建议/ : /next recipe recommendation/i);
     assert.match(index, lang === "zh" ? /工艺配置.*现场接入.*生产运行.*质量管理.*工艺追因.*配方优化/s : /process configuration.*field integration.*production runs.*quality management.*diagnosis.*recipe optimization/is);

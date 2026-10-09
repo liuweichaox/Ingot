@@ -70,15 +70,16 @@ public interface IResearchAssetStore
         string sourceKind,
         string fileName,
         string mediaType,
+        string siteCode,
         IReadOnlyDictionary<string, string> contextSelector,
         string userId,
         CancellationToken ct = default);
     Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default);
     Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
-        Guid projectId, int limit, string? cursor, CancellationToken ct = default);
+        string siteCode, int limit, string? cursor, CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
-        Guid projectId,
+        string siteCode,
         CancellationToken ct = default);
     Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<KnowledgeSource> SaveKnowledgeSourceMetadataAsync(KnowledgeSource value, CancellationToken ct = default);

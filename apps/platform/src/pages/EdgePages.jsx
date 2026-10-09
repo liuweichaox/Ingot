@@ -12,7 +12,7 @@ export function EdgesPage() {
   return (
     <Page
       title="现场节点"
-      actions={<LinkButton to="/configuration/ingestion-tasks">配置数据源</LinkButton>}
+      actions={<LinkButton to="/configuration/ingestion-tasks">配置采集</LinkButton>}
     >
       <RequestError error={error} title="现场节点暂不可用" onRetry={reload} />
       <div className="grid gap-4 sm:grid-cols-3">
@@ -85,7 +85,7 @@ export function EdgeDetailPage() {
       actions={(
         <>
           <Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/edges">返回现场节点</Link>
-          <LinkButton to="/configuration/ingestion-tasks">配置数据源</LinkButton>
+          <LinkButton to="/configuration/ingestion-tasks">配置采集</LinkButton>
         </>
       )}
     >
@@ -111,7 +111,7 @@ export function EdgeDetailPage() {
       ) : !deliveryReady ? (
         <Alert tone="warning" title="数据源尚未具备工艺闭环条件">
           <ul className="list-disc space-y-1 pl-5">
-            {runningTasks === 0 && <li>尚无运行中的采集任务，请先发布并下发数据源配置。</li>}
+            {runningTasks === 0 && <li>尚无运行中的采集任务，请先发布采集配置。</li>}
             {processSignalCount === 0 && <li>尚未映射过程信号，无法形成可分析的过程曲线。</li>}
             {controlParameterMappingCount === 0 && <li>尚未回读实际控制参数，无法区分真实执行条件。</li>}
             {lifecycleTaskCount === 0 && <li>尚未映射过程执行边界，连续数据无法自动归属到一次运行。</li>}
@@ -132,7 +132,7 @@ export function EdgeDetailPage() {
       <Card
         title="数据源交付情况"
         description="查看已发布数据源的过程信号、控制参数和运行边界映射。"
-        actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/configuration/ingestion-tasks">查看数据源配置</Link>}
+        actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/configuration/ingestion-tasks">查看采集配置</Link>}
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="已发布数据源" value={publishedTasks.length} hint={allTaskDefinitionsResolved ? "运行任务已关联配置版本" : tasks.length ? "有运行任务尚未匹配配置版本" : "尚未加载运行任务"} />
@@ -192,7 +192,7 @@ export function EdgeDetailPage() {
           配置来源：{acquisition.data?.configurationSource || "尚未上报"} · 期望集合 {acquisition.data?.desiredConfigurationSetHash?.slice(0, 12) || "—"} · 已应用集合 {acquisition.data?.appliedConfigurationSetHash?.slice(0, 12) || "—"}
         </p>
       </Card>
-      <Card title="运行中的数据源" description="每行对应一份已下发到节点的不可变数据源配置版本。">
+      <Card title="已下发的采集配置" description="每行对应一份已下发到节点的采集配置版本。">
         <DataTable
           rows={taskRows}
           keyField="configurationKey"

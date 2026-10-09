@@ -1,9 +1,7 @@
 // 验证平台组件 MechanismKnowledgeService 的成功、拒绝和安全边界。
 
-using Ingot.Contracts.ProcessResearch;
 using Ingot.Contracts.ResearchAssets;
 using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Infrastructure.ResearchAssets;
 using Xunit;
 
 namespace Ingot.Core.Tests.Platform;
@@ -11,14 +9,61 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class MechanismKnowledgeServiceTests
 {
     [Fact]
-    public async Task Draft_RejectsUnknownResearchProject()
+    public async Task Draft_RejectsRecipeWithoutPublishedVersion()
     {
-        var service = new MechanismKnowledgeService(
-            new MemoryMechanismKnowledgeStore(),
-            new MissingResearchProjectContextReader());
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
+
+        var error = await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with { ProcessSpecificationId = "unknown-spec" }, "engineer"));
+        Assert.Contains("已发布版本", error.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with { SiteCode = "" }, "engineer"));
+    }
+
+    [Fact]
+    public async Task Draft_RejectsVariablesOutsideTheRecipe()
+    {
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
+
+        var unknown = await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with
+            {
+                Variables = [new MechanismClaimVariable
+                    { VariableCode = "cooling.rate", VariableRole = "cause", Unit = "Cel/s" }]
+            }, "engineer"));
+        Assert.Contains("cooling.rate", unknown.Message, StringComparison.Ordinal);
+
+        var fixedParameter = await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with
+            {
+                Constraints = [new MechanismClaimConstraint
+                    { VariableCode = "mold.code", ConstraintKind = "range", Maximum = 3, Unit = "1" }]
+            }, "engineer"));
+        Assert.Contains("允许调整", fixedParameter.Message, StringComparison.Ordinal);
 
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
-            Guid.CreateVersion7(), Draft(), "engineer"));
+            Draft() with
+            {
+                Variables = [new MechanismClaimVariable
+                    { VariableCode = "holding.temperature", VariableRole = "cause", Unit = "s" }]
+            }, "engineer"));
+    }
+
+    [Fact]
+    public async Task Draft_RejectsApplicabilityOutsideItsSiteOrRecipe()
+    {
+        var service = CreateService(new MemoryMechanismKnowledgeStore());
+
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with
+            {
+                Applicability = [new MechanismClaimApplicability { DimensionCode = "site", DimensionValue = "site-b" }]
+            }, "engineer"));
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft() with
+            {
+                Applicability = [new MechanismClaimApplicability { DimensionCode = "material", DimensionValue = "m-1" }]
+            }, "engineer"));
     }
 
     [Fact]
@@ -26,14 +71,17 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var store = new MemoryMechanismKnowledgeStore();
         var service = CreateService(store);
-        var projectId = Guid.CreateVersion7();
 
-        var draft = await service.SaveDraftAsync(projectId, Draft(), "engineer-a");
+        var draft = await service.SaveDraftAsync(Draft(), "engineer-a");
 
         Assert.Equal(1, draft.Version);
         Assert.Equal(MechanismClaimStatuses.Draft, draft.Status);
+        Assert.Equal(SiteCode, draft.SiteCode);
+        Assert.Equal(RecipeConfigurationTestStore.SpecificationId, draft.ProcessSpecificationId);
         Assert.Single(draft.Variables);
-        Assert.Single(draft.Applicability);
+        Assert.Contains(draft.Applicability, value => value is { DimensionCode: "site", DimensionValue: "site-a" });
+        Assert.Contains(draft.Applicability, value => value.DimensionCode == "process-specification");
+        Assert.Contains(draft.Applicability, value => value.DimensionCode == "product");
         Assert.Single(draft.Evidence);
         Assert.Equal(64, draft.ContentHash.Length);
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.ReviewAsync(
@@ -51,15 +99,15 @@ public sealed class MechanismKnowledgeServiceTests
     }
 
     [Fact]
-    public async Task Draft_RejectsMissingApplicabilityOrEvidence()
+    public async Task Draft_RejectsMissingOrForeignEvidence()
     {
-        var service = CreateService(new MemoryMechanismKnowledgeStore());
-        var projectId = Guid.CreateVersion7();
+        var service = CreateService(new MemoryMechanismKnowledgeStore(evidenceExists: false));
 
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
-            projectId, Draft() with { Applicability = [] }, "engineer"));
-        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
-            projectId, Draft() with { Evidence = [] }, "engineer"));
+            Draft() with { Evidence = [] }, "engineer"));
+        var foreignEvidence = await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
+            Draft(), "engineer"));
+        Assert.Contains("站点和配方", foreignEvidence.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -67,11 +115,19 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var store = new MemoryMechanismKnowledgeStore();
         var service = CreateService(store);
-        var projectId = Guid.CreateVersion7();
-        var left = await service.SaveDraftAsync(projectId, Draft() with { Name = "温度升高改善流动" }, "a");
-        var right = await service.SaveDraftAsync(projectId, Draft() with { Name = "温度升高导致降解" }, "b");
+        var left = await service.SaveDraftAsync(Draft() with { Name = "温度升高改善流动" }, "a");
+        var right = await service.SaveDraftAsync(Draft() with { Name = "温度升高导致降解" }, "b");
+        var otherSite = await service.SaveDraftAsync(Draft() with { SiteCode = "site-b" }, "c");
 
-        var conflict = await service.AddConflictAsync(projectId, new MechanismClaimConflictRequest
+        await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.AddConflictAsync(
+            new MechanismClaimConflictRequest
+            {
+                LeftClaimId = left.ClaimId,
+                RightClaimId = otherSite.ClaimId,
+                ConflictKind = "scope-overlap",
+                Rationale = "跨站点声明不能登记冲突。"
+            }, "reviewer"));
+        var conflict = await service.AddConflictAsync(new MechanismClaimConflictRequest
         {
             LeftClaimId = left.ClaimId,
             LeftClaimVersion = left.Version,
@@ -91,10 +147,9 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var store = new MemoryMechanismKnowledgeStore();
         var service = CreateService(store);
-        var projectId = Guid.CreateVersion7();
-        var left = await service.SaveDraftAsync(projectId, Draft(), "a");
-        var right = await service.SaveDraftAsync(projectId, Draft() with { Name = "相反声明" }, "b");
-        var conflict = await service.AddConflictAsync(projectId, new MechanismClaimConflictRequest
+        var left = await service.SaveDraftAsync(Draft(), "a");
+        var right = await service.SaveDraftAsync(Draft() with { Name = "相反声明" }, "b");
+        var conflict = await service.AddConflictAsync(new MechanismClaimConflictRequest
         {
             LeftClaimId = left.ClaimId,
             RightClaimId = right.ClaimId,
@@ -103,11 +158,11 @@ public sealed class MechanismKnowledgeServiceTests
         }, "registrar");
 
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.ResolveConflictAsync(
-            projectId, conflict.ConflictId,
+            conflict.ConflictId,
             new MechanismClaimConflictResolutionRequest { Resolution = "限定不同温度区间。" },
             "registrar"));
         var resolved = await service.ResolveConflictAsync(
-            projectId, conflict.ConflictId,
+            conflict.ConflictId,
             new MechanismClaimConflictResolutionRequest { Resolution = "限定不同温度区间。" },
             "independent-reviewer");
 
@@ -123,7 +178,7 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var service = CreateService(new MemoryMechanismKnowledgeStore());
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.SaveDraftAsync(
-            Guid.CreateVersion7(), Draft() with
+            Draft() with
             {
                 Variables = [new MechanismClaimVariable
                     { VariableCode = "holding.temperature", VariableRole = role, Direction = direction,
@@ -136,44 +191,40 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var store = new MemoryMechanismKnowledgeStore();
         var service = CreateService(store);
-        var projectId = Guid.CreateVersion7();
-        var claim = await service.SaveDraftAsync(projectId, Draft(), "creator");
+        var claim = await service.SaveDraftAsync(Draft(), "creator");
         claim = await service.ReviewAsync(
             claim.ClaimId, new MechanismClaimReviewRequest("approve", "结构正确"), "reviewer");
 
         var firstResult = Guid.CreateVersion7().ToString();
-        claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
+        claim = await service.TransitionAsync(claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Supported,
             EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = firstResult,
             ContentHash = new string('b', 64),
-            ValidationHypothesisId = Guid.CreateVersion7(),
             EvaluationSummary = "真实运行结果覆盖声明变量并观察到预期方向。"
         }, "validator-a");
         Assert.Equal(MechanismClaimStatuses.Supported, claim.Status);
 
         await Assert.ThrowsAsync<ResearchAssetRuleException>(() => service.TransitionAsync(
-            projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
+            claim.ClaimId, new MechanismClaimLifecycleRequest
             {
                 TargetStatus = MechanismClaimStatuses.Validated,
                 EvidenceKind = "recipe-recommendation-outcome",
                 ReferenceId = firstResult,
                 ContentHash = new string('b', 64),
-                ValidationHypothesisId = Guid.CreateVersion7(),
                 EvaluationSummary = "重复引用应被拒绝。"
             }, "validator-b"));
 
-        claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
+        claim = await service.TransitionAsync(claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Validated,
             EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = Guid.CreateVersion7().ToString(),
             ContentHash = new string('c', 64),
-            ValidationHypothesisId = Guid.CreateVersion7(),
             EvaluationSummary = "独立真实运行再次观察到预期方向。"
         }, "validator-b");
-        claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
+        claim = await service.TransitionAsync(claim.ClaimId, new MechanismClaimLifecycleRequest
         { TargetStatus = MechanismClaimStatuses.Active, Comment = "两轮真实运行均支持。" }, "approver");
 
         Assert.Equal(MechanismClaimStatuses.Active, claim.Status);
@@ -184,18 +235,16 @@ public sealed class MechanismKnowledgeServiceTests
     {
         var store = new MemoryMechanismKnowledgeStore();
         var service = CreateService(store);
-        var projectId = Guid.CreateVersion7();
-        var claim = await service.SaveDraftAsync(projectId, Draft(), "creator");
+        var claim = await service.SaveDraftAsync(Draft(), "creator");
         claim = await service.ReviewAsync(
             claim.ClaimId, new MechanismClaimReviewRequest("approve", "结构正确"), "reviewer");
 
-        claim = await service.TransitionAsync(projectId, claim.ClaimId, new MechanismClaimLifecycleRequest
+        claim = await service.TransitionAsync(claim.ClaimId, new MechanismClaimLifecycleRequest
         {
             TargetStatus = MechanismClaimStatuses.Falsified,
             EvidenceKind = "recipe-recommendation-outcome",
             ReferenceId = Guid.CreateVersion7().ToString(),
             ContentHash = new string('d', 64),
-            ValidationHypothesisId = Guid.CreateVersion7(),
             EvaluationOutcome = "falsifies",
             EvaluationSummary = "真实运行结果明确未达到预注册最小效应。",
             Comment = "终止该声明。"
@@ -208,24 +257,23 @@ public sealed class MechanismKnowledgeServiceTests
     public async Task Draft_NormalizesControlledScopeAndEngineeringUnits()
     {
         var service = CreateService(new MemoryMechanismKnowledgeStore());
-        var saved = await service.SaveDraftAsync(Guid.CreateVersion7(), Draft() with
+        var saved = await service.SaveDraftAsync(Draft() with
         {
             Variables = [new MechanismClaimVariable { VariableCode = "temperature", VariableRole = "cause", Unit = "℃" }],
-            Applicability = [new MechanismClaimApplicability { DimensionCode = "Material", DimensionValue = "Material-A" }],
+            Applicability = [new MechanismClaimApplicability { DimensionCode = "Product", DimensionValue = "Product-A" }],
             Constraints = [new MechanismClaimConstraint { VariableCode = "temperature", ConstraintKind = "range", Maximum = 530, Unit = "°C" }]
         }, "engineer");
 
         Assert.Equal("Cel", saved.Variables[0].Unit);
         Assert.Equal("Cel", saved.Constraints[0].Unit);
-        Assert.Equal("material", saved.Applicability[0].DimensionCode);
-        Assert.Equal("material-a", saved.Applicability[0].DimensionValue);
+        Assert.Contains(saved.Applicability, value => value is { DimensionCode: "product", DimensionValue: "product-a" });
     }
 
     [Fact]
     public async Task Draft_NormalizesAndValidatesForbiddenCombination()
     {
         var service = CreateService(new MemoryMechanismKnowledgeStore());
-        var saved = await service.SaveDraftAsync(Guid.CreateVersion7(), Draft() with
+        var saved = await service.SaveDraftAsync(Draft() with
         {
             ForbiddenCombinations =
             [
@@ -249,65 +297,26 @@ public sealed class MechanismKnowledgeServiceTests
         Assert.Equal("s", saved.ForbiddenCombinations[0].Factors[1].Unit);
     }
 
+    private const string SiteCode = "site-a";
+
     private static MechanismClaimVersion Draft() => new()
     {
+        SiteCode = SiteCode,
+        ProcessSpecificationId = RecipeConfigurationTestStore.SpecificationId,
         Name = "保压温度对缺陷的影响",
         MechanismType = "monotonic",
         Statement = "在指定材料与设备范围内，提高保压温度会降低未充满风险。",
         FalsificationCondition = "温度提高后未充满率没有下降，或材料降解指标恶化。",
         Variables = [new MechanismClaimVariable { VariableCode = "holding.temperature", VariableRole = "cause", Direction = "increase", Unit = "°C" }],
-        Applicability = [new MechanismClaimApplicability { DimensionCode = "material", DimensionValue = "material-a" }],
+        Applicability = [new MechanismClaimApplicability { DimensionCode = "product", DimensionValue = "product-a" }],
         Evidence = [new MechanismClaimEvidence { EvidenceKind = "knowledge-fragment", ReferenceId = Guid.CreateVersion7().ToString(), ContentHash = new string('a', 64) }],
         ContentHash = "request-placeholder"
     };
 
     private static MechanismKnowledgeService CreateService(IMechanismKnowledgeStore store)
-        => new(store, new TestResearchProjectContextReader());
+        => new(store, new RecipeKnowledgeScopeReader(RecipeConfigurationTestStore.OpticalPress()));
 
-    private sealed class TestResearchProjectContextReader : IResearchProjectContextReader
-    {
-        public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<ResearchProject?>(new ResearchProject
-            {
-                ProjectId = projectId,
-                Code = "mechanism-tests",
-                Name = "机理知识测试项目",
-                ProcessName = "test-process",
-                MaterialName = "material-a",
-                Variables =
-                [
-                    new ResearchVariable
-                    {
-                        Code = "holding.temperature",
-                        Name = "保压温度",
-                        Role = ResearchVariableRoles.Control,
-                        Unit = "Cel"
-                    },
-                    new ResearchVariable
-                    {
-                        Code = "temperature",
-                        Name = "温度",
-                        Role = ResearchVariableRoles.Control,
-                        Unit = "Cel"
-                    },
-                    new ResearchVariable
-                    {
-                        Code = "holding.time",
-                        Name = "保压时间",
-                        Role = ResearchVariableRoles.Control,
-                        Unit = "s"
-                    }
-                ]
-            });
-    }
-
-    private sealed class MissingResearchProjectContextReader : IResearchProjectContextReader
-    {
-        public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<ResearchProject?>(null);
-    }
-
-    private sealed class MemoryMechanismKnowledgeStore : IMechanismKnowledgeStore
+    private sealed class MemoryMechanismKnowledgeStore(bool evidenceExists = true) : IMechanismKnowledgeStore
     {
         private readonly Dictionary<Guid, List<MechanismClaimVersion>> claims = [];
         private readonly List<MechanismClaimConflict> conflicts = [];
@@ -320,8 +329,11 @@ public sealed class MechanismKnowledgeServiceTests
             return Task.FromResult(versions?.FirstOrDefault(value => value.Version == (version ?? versions.Max(item => item.Version))));
         }
 
-        public Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<MechanismClaimVersion>>(claims.Values.SelectMany(value => value).Where(value => value.ProjectId == projectId).ToArray());
+        public Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(
+            string siteCode, string processSpecificationId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<MechanismClaimVersion>>(claims.Values.SelectMany(value => value)
+                .Where(value => value.SiteCode == siteCode && value.ProcessSpecificationId == processSpecificationId)
+                .ToArray());
 
         public Task<MechanismClaimVersion> SaveDraftAsync(MechanismClaimVersion value, CancellationToken ct = default)
         {
@@ -329,8 +341,10 @@ public sealed class MechanismKnowledgeServiceTests
             versions.Add(value); return Task.FromResult(value);
         }
 
-        public Task<bool> EvidenceExistsAsync(Guid projectId, MechanismClaimEvidence evidence, CancellationToken ct = default)
-            => Task.FromResult(true);
+        public Task<bool> EvidenceExistsAsync(
+            string siteCode, string processSpecificationId, MechanismClaimEvidence evidence,
+            CancellationToken ct = default)
+            => Task.FromResult(evidenceExists);
 
         public Task<MechanismClaimVersion> AddReviewAsync(MechanismClaimReview review, string targetStatus, CancellationToken ct = default)
         {
@@ -353,15 +367,18 @@ public sealed class MechanismKnowledgeServiceTests
             return Task.FromResult(value);
         }
 
-        public Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<MechanismClaimConflict>>(conflicts.Where(value => value.ProjectId == projectId).ToArray());
+        public Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(
+            string siteCode, string processSpecificationId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<MechanismClaimConflict>>(conflicts
+                .Where(value => value.SiteCode == siteCode && value.ProcessSpecificationId == processSpecificationId)
+                .ToArray());
 
         public Task SaveRecipeRecommendationUsagesAsync(
             IReadOnlyList<MechanismClaimUsage> values,
             CancellationToken ct = default)
             => Task.CompletedTask;
 
-        public Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(Guid projectId, CancellationToken ct = default)
+        public Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(Guid recommendationId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<MechanismClaimUsage>>([]);
 
         public Task<bool> LifecycleEvidenceUsedAsync(Guid claimId, string referenceId, CancellationToken ct = default)
@@ -371,11 +388,8 @@ public sealed class MechanismKnowledgeServiceTests
             => Task.FromResult(lifecycleActors.Contains((claimId, userId)));
 
         public Task<bool> RecipeRecommendationOutcomeSupportsClaimAsync(
-            Guid projectId,
             MechanismClaimVersion claim,
-            Guid validationHypothesisId,
             MechanismClaimEvidence evidence,
-            string evaluationOutcome = "supports",
             CancellationToken ct = default)
             => Task.FromResult(true);
 

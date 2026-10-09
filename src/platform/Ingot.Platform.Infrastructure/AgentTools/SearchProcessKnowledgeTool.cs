@@ -11,7 +11,6 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed partial class SearchProcessKnowledgeTool(
     IResearchAssetStore store,
-    IResearchProjectContextReader projects,
     IProcessKnowledgeSearch? search = null) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
@@ -20,7 +19,7 @@ public sealed partial class SearchProcessKnowledgeTool(
         Version = "1.0.0",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "检索已经过现场人员复核的工艺文档、表格、图片说明和现场记录。只查询，不修改数据。",
+        Description = "检索指定站点已经过现场人员复核的工艺文档、表格、图片说明和现场记录。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -28,6 +27,7 @@ public sealed partial class SearchProcessKnowledgeTool(
             properties = new
             {
                 query = new { type = "string", minLength = 1, maxLength = 500 },
+                siteId = new { type = "string", minLength = 1, maxLength = 128 },
                 productFamilyCode = new { type = "string", maxLength = 120 },
                 equipmentId = new { type = "string", maxLength = 120 },
                 limit = new { type = "integer", minimum = 1, maximum = 20 }
@@ -49,35 +49,28 @@ public sealed partial class SearchProcessKnowledgeTool(
                     int.TryParse(limitText, out var parsedLimit)
             ? Math.Clamp(parsedLimit, 1, 20)
             : 8;
-        var projectId = context.Request.PageContext is { Kind: "research-project" } pageContext &&
-                        Guid.TryParse(pageContext.Id, out var parsedProjectId)
-            ? (Guid?)parsedProjectId
-            : null;
-        if (projectId is null)
-            return Insufficient(query, "知识检索必须在工艺研发项目上下文中执行。", productFamilyCode, equipmentId);
-        var project = await projects.GetProjectAsync(projectId.Value, ct).ConfigureAwait(false);
-        var normalizedUserId = context.UserId.Trim().ToLowerInvariant();
-        if (project is null ||
-            !(string.Equals(project.OwnerUserId, normalizedUserId, StringComparison.Ordinal) ||
-              project.MemberUserIds.Contains(normalizedUserId, StringComparer.Ordinal)))
-            return Insufficient(query, "研发项目不存在或当前用户无权访问。", productFamilyCode, equipmentId);
+        call.Arguments.TryGetValue("siteId", out var requestedSiteId);
+        requestedSiteId = string.IsNullOrWhiteSpace(requestedSiteId)
+            ? context.AccessScope.SingleAuthorizedSiteOrDefault()
+            : requestedSiteId;
+        if (string.IsNullOrWhiteSpace(requestedSiteId))
+            return Insufficient(query, "知识检索必须指定站点。", productFamilyCode, equipmentId);
+        string siteId;
         try
         {
-            context.AccessScope.EnsureAuthorizedSite(project.SiteCode);
+            siteId = context.AccessScope.EnsureAuthorizedSite(requestedSiteId);
         }
         catch (UnauthorizedAccessException)
         {
-            return Insufficient(query, "当前用户无权访问该研发项目所在站点。", productFamilyCode, equipmentId);
+            return Insufficient(query, "当前用户无权访问该站点的工艺知识。", productFamilyCode, equipmentId);
         }
 
         var result = search is null
-            ? await SearchFallbackAsync(projectId.Value, query, productFamilyCode, equipmentId, limit, ct).ConfigureAwait(false)
+            ? await SearchFallbackAsync(siteId, query, productFamilyCode, equipmentId, limit, ct).ConfigureAwait(false)
             : await search.SearchAsync(new ProcessKnowledgeSearchRequest
             {
-                ResearchProjectId = projectId.Value,
+                SiteCode = siteId,
                 Query = query.Trim(),
-                AllowAllSites = context.AccessScope.AllowAllSites,
-                SiteIds = context.AccessScope.SiteIds,
                 ProductFamilyCode = NullIfBlank(productFamilyCode),
                 EquipmentId = NullIfBlank(equipmentId),
                 Limit = limit
@@ -108,7 +101,7 @@ public sealed partial class SearchProcessKnowledgeTool(
                 retrievalMode = result.RetrievalMode,
                 appliedContext = new
                 {
-                    researchProjectId = projectId,
+                    siteId,
                     productFamilyCode = NullIfBlank(productFamilyCode),
                     equipmentId = NullIfBlank(equipmentId)
                 },
@@ -142,7 +135,7 @@ public sealed partial class SearchProcessKnowledgeTool(
     }
 
     private async Task<ProcessKnowledgeSearchResult> SearchFallbackAsync(
-        Guid projectId,
+        string siteId,
         string query,
         string? productFamilyCode,
         string? equipmentId,
@@ -150,7 +143,7 @@ public sealed partial class SearchProcessKnowledgeTool(
         CancellationToken ct)
     {
         var terms = BuildTerms(query);
-        var sources = (await store.ListKnowledgeSourcesAsync(projectId, ct).ConfigureAwait(false))
+        var sources = (await store.ListKnowledgeSourcesAsync(siteId, ct).ConfigureAwait(false))
             .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
             .Where(source => MatchesContext(source.ContextSelector, "product_family_code", productFamilyCode))
             .Where(source => MatchesContext(source.ContextSelector, "equipment_id", equipmentId))

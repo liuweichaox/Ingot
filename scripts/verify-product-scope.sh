@@ -105,4 +105,27 @@ if grep -RInE \
   exit 1
 fi
 
+# Recipe recommendations, mechanism knowledge, and knowledge sources are owned by
+# site + recipe. The retired R&D-project container and its hypotheses, operating
+# regions, project knowledge claims, and project audit must not return. The
+# design and data-model documents name them only in their removal records.
+retired_project_pattern='ResearchProject|research-projects|research_project|process_research_projects|process_research_audit|research_hypothes|ResearchHypothes|research_operating_regions|ResearchOperatingRegion|research_knowledge_claims|ResearchKnowledgeClaim|研发项目|R&D projects?|R&amp;D projects?'
+if grep -RIniE \
+  --exclude='package-lock.json' \
+  --exclude='*.tsbuildinfo' \
+  --exclude-dir=sql \
+  --exclude-dir=node_modules \
+  --exclude-dir=dist \
+  --exclude-dir=.next \
+  --exclude-dir=out \
+  --exclude-dir=bin \
+  --exclude-dir=obj \
+  "$retired_project_pattern" \
+  src apps/platform/src apps/platform/index.html apps/website/app apps/docs-site/app \
+  README.md README.en.md optimizer/README.md optimizer/README.en.md \
+  $(find docs -maxdepth 1 -name '*.md' ! -name 'design.md' ! -name 'design.en.md' ! -name 'data-model.md' ! -name 'data-model.en.md'); then
+  echo "The retired R&D-project container is forbidden; recommendations and knowledge are scoped by site and recipe." >&2
+  exit 1
+fi
+
 echo "Platform Web product boundaries verified."

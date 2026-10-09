@@ -29,21 +29,21 @@ public sealed class ResearchObservationAssembler(
         contextAdmission ?? new ResearchContextAdmissionEvaluator();
 
     public async Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         CancellationToken ct = default)
     {
         if (productionRuns is null)
             throw new ProcessResearchRuleException("当前运行时无法读取生产运行，不能形成优化观察。");
-        var siteId = string.IsNullOrWhiteSpace(project.SiteCode)
+        var siteId = string.IsNullOrWhiteSpace(brief.SiteCode)
             ? throw new ProcessResearchRuleException("优化范围必须绑定站点后才能读取生产运行。")
-            : project.SiteCode.Trim();
-        var context = project.Context;
-        var productFamilyCode = ContextValue(context, ResearchProjectScopeKeys.ProductFamilyCode);
-        var productCode = ContextValue(context, ResearchProjectScopeKeys.ProductCode);
-        var equipmentId = ContextValue(context, ResearchProjectScopeKeys.EquipmentId);
-        var processSpecificationId = ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationId);
-        var processSpecificationVersion = ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationVersion);
-        var outputItemId = ContextValue(context, ResearchProjectScopeKeys.OutputItemId);
+            : brief.SiteCode.Trim();
+        var context = brief.Context;
+        var productFamilyCode = ContextValue(context, RecipeRecommendationScopeKeys.ProductFamilyCode);
+        var productCode = ContextValue(context, RecipeRecommendationScopeKeys.ProductCode);
+        var equipmentId = ContextValue(context, RecipeRecommendationScopeKeys.EquipmentId);
+        var processSpecificationId = ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationId);
+        var processSpecificationVersion = ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationVersion);
+        var outputItemId = ContextValue(context, RecipeRecommendationScopeKeys.OutputItemId);
         var from = ParseLookback(context);
         var executionIds = new List<string>();
         var totalMatchingRuns = 0;
@@ -80,16 +80,14 @@ public sealed class ResearchObservationAssembler(
             .ToArray();
         if (distinctIds.Length == 0)
             return new ResearchObservationAssembly([], 0, totalMatchingRuns > MaximumRunsPerAssembly);
-        var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
+        var scenarioPackage = await ResolveContextPolicyAsync(brief, ct).ConfigureAwait(false);
         var candidates = distinctIds.Select((executionId, index) => new CandidateRun(
             new ProductionRunCandidate
             {
                 ExecutionKey = executionId,
                 Sequence = index + 1
-            },
-            DateTimeOffset.MinValue,
-            DateTimeOffset.MinValue)).ToArray();
-        var assembly = await AssembleRunsAsync(project, candidates, scenarioPackage, ct)
+            })).ToArray();
+        var assembly = await AssembleRunsAsync(brief, candidates, scenarioPackage, ct)
             .ConfigureAwait(false);
         return assembly with
         {
@@ -98,27 +96,27 @@ public sealed class ResearchObservationAssembler(
     }
 
     public async Task<ResearchObservationAssembly> AssembleProductionRunAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         string executionKey,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(executionKey))
             throw new ProcessResearchRuleException("实际运行标识不能为空。");
-        var scenarioPackage = await ResolveContextPolicyAsync(project, ct).ConfigureAwait(false);
+        var scenarioPackage = await ResolveContextPolicyAsync(brief, ct).ConfigureAwait(false);
         var run = new ProductionRunCandidate
         {
             ExecutionKey = executionKey.Trim(),
             Sequence = 1
         };
         return await AssembleRunsAsync(
-            project,
-            [new CandidateRun(run, project.CreatedAt, project.UpdatedAt)],
+            brief,
+            [new CandidateRun(run)],
             scenarioPackage,
             ct).ConfigureAwait(false);
     }
 
     private async Task<ResearchObservationAssembly> AssembleRunsAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         IReadOnlyList<CandidateRun> candidates,
         ScenarioPackage? scenarioPackage,
         CancellationToken ct)
@@ -127,9 +125,9 @@ public sealed class ResearchObservationAssembler(
             throw new ProcessResearchRuleException(
                 $"单次优化最多自动装配 {MaximumRunsPerAssembly} 个运行，请缩小范围或归档历史任务。");
 
-        var siteId = string.IsNullOrWhiteSpace(project.SiteCode)
-            ? throw new ProcessResearchRuleException("研发项目必须绑定站点后才能装配生产运行观察。")
-            : project.SiteCode.Trim();
+        var siteId = string.IsNullOrWhiteSpace(brief.SiteCode)
+            ? throw new ProcessResearchRuleException("建议条件必须绑定站点后才能装配生产运行观察。")
+            : brief.SiteCode.Trim();
         var executionKeys = candidates.Select(static item => item.Run.ExecutionKey).ToArray();
         var executionsByRun = await executions.GetProcessExecutionsAsync(executionKeys, ct, siteId)
             .ConfigureAwait(false);
@@ -147,7 +145,7 @@ public sealed class ResearchObservationAssembler(
             ct.ThrowIfCancellationRequested();
             if (!executionsByRun.TryGetValue(candidate.Run.ExecutionKey, out var execution))
                 continue;
-            if (!MatchesProjectScope(project, execution))
+            if (!MatchesBriefScope(brief, execution))
                 continue;
             var inspectionPlan = InspectionPlanMatcher.Resolve(
                 inspectionPlans,
@@ -159,7 +157,7 @@ public sealed class ResearchObservationAssembler(
                 inspectionPlan,
                 latestReviews);
             observations.Add(BuildObservation(
-                project,
+                brief,
                 candidate.Run,
                 execution,
                 eligibleRecords,
@@ -218,17 +216,17 @@ public sealed class ResearchObservationAssembler(
             ? value.Trim()
             : null;
 
-    private static bool MatchesProjectScope(
-        ResearchProject project,
+    private static bool MatchesBriefScope(
+        RecipeRecommendationBrief brief,
         ExecutionComparisonRow execution)
     {
-        var context = project.Context;
-        return Matches(ContextValue(context, ResearchProjectScopeKeys.ProductFamilyCode), execution.ProductFamilyCode) &&
-            Matches(ContextValue(context, ResearchProjectScopeKeys.ProductCode), execution.ProductCode) &&
-            Matches(ContextValue(context, ResearchProjectScopeKeys.EquipmentId), execution.EquipmentId) &&
-            Matches(ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationId), execution.ProcessSpecificationId) &&
-            Matches(ContextValue(context, ResearchProjectScopeKeys.ProcessSpecificationVersion), execution.ProcessSpecificationVersion) &&
-            Matches(ContextValue(context, ResearchProjectScopeKeys.OutputItemId), execution.OutputItemId);
+        var context = brief.Context;
+        return Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProductFamilyCode), execution.ProductFamilyCode) &&
+            Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProductCode), execution.ProductCode) &&
+            Matches(ContextValue(context, RecipeRecommendationScopeKeys.EquipmentId), execution.EquipmentId) &&
+            Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationId), execution.ProcessSpecificationId) &&
+            Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationVersion), execution.ProcessSpecificationVersion) &&
+            Matches(ContextValue(context, RecipeRecommendationScopeKeys.OutputItemId), execution.OutputItemId);
     }
 
     private static bool Matches(string? expected, string? actual)
@@ -236,7 +234,7 @@ public sealed class ResearchObservationAssembler(
 
     private static DateTimeOffset? ParseLookback(IReadOnlyDictionary<string, string> context)
     {
-        var value = ContextValue(context, ResearchProjectScopeKeys.LookbackDays);
+        var value = ContextValue(context, RecipeRecommendationScopeKeys.LookbackDays);
         if (value is null)
             return null;
         if (!int.TryParse(value, out var days) || days is < 1 or > 3650)
@@ -245,7 +243,7 @@ public sealed class ResearchObservationAssembler(
     }
 
     private ResearchRunObservation BuildObservation(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         ProductionRunCandidate run,
         ExecutionComparisonRow execution,
         IReadOnlyList<InspectionRecord> records,
@@ -260,7 +258,7 @@ public sealed class ResearchObservationAssembler(
                 StringComparer.Ordinal);
         var factors = new List<ResearchVariableSetting>();
         var missing = new List<string>();
-        foreach (var variable in project.Variables.Where(
+        foreach (var variable in brief.Variables.Where(
                      static value => value.Role == ResearchVariableRoles.Control))
         {
             if (!TryResolveControlValue(variable, execution, controlParameterValues, out var value, out var reason))
@@ -288,7 +286,7 @@ public sealed class ResearchObservationAssembler(
             Math.Abs(actual - value.Value) > 1e-6 * Math.Max(1, Math.Abs(value.Value)));
 
         var outcomes = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var objective in project.Objectives)
+        foreach (var objective in brief.Objectives)
         {
             if (TryResolveInspectionValue(
                     records,
@@ -302,7 +300,7 @@ public sealed class ResearchObservationAssembler(
                 missing.Add($"目标:{objective.Code}（{reason}）");
         }
         var constraintOutcomes = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var constraint in project.OutcomeConstraints)
+        foreach (var constraint in brief.OutcomeConstraints)
         {
             if (TryResolveInspectionValue(
                     records,
@@ -396,27 +394,27 @@ public sealed class ResearchObservationAssembler(
     }
 
     private async Task<ScenarioPackage?> ResolveContextPolicyAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         CancellationToken ct)
     {
         if (!ResearchContextAdmissionEvaluator.TryParseScenarioPackageReference(
-                project.Context,
+                brief.Context,
                 out var packageId,
                 out var version))
             return null;
         if (processConfigurations is null)
-            throw new ProcessResearchRuleException("当前运行时无法解析研发项目引用的工艺配置。");
+            throw new ProcessResearchRuleException("当前运行时无法解析建议条件引用的工艺配置。");
         var package = await processConfigurations.GetScenarioPackageAsync(packageId, version, ct)
             .ConfigureAwait(false)
-            ?? throw new ProcessResearchRuleException($"研发项目引用的工艺配置不存在：{packageId} v{version}。");
+            ?? throw new ProcessResearchRuleException($"建议条件引用的工艺配置不存在：{packageId} v{version}。");
         if (package.Status == ConfigurationStatuses.Draft)
-            throw new ProcessResearchRuleException("研发项目不能使用仍可修改的草稿工艺配置进行正式分析。");
+            throw new ProcessResearchRuleException("建议条件不能使用仍可修改的草稿工艺配置进行正式分析。");
         var policyHash = ResearchContextAdmissionEvaluator.ComputePolicyHash(package);
-        if (project.Context.TryGetValue(
+        if (brief.Context.TryGetValue(
                 ResearchContextAdmissionEvaluator.PolicyHashContextKey,
                 out var expectedHash) &&
             !string.Equals(expectedHash, policyHash, StringComparison.Ordinal))
-            throw new ProcessResearchRuleException("研发项目冻结的上下文策略哈希与工艺配置不一致。");
+            throw new ProcessResearchRuleException("建议条件冻结的上下文策略哈希与工艺配置不一致。");
         return package;
     }
 
@@ -682,10 +680,7 @@ public sealed class ResearchObservationAssembler(
         public IReadOnlyList<ResearchVariableSetting> Factors { get; init; } = [];
     }
 
-    private sealed record CandidateRun(
-        ProductionRunCandidate Run,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset UpdatedAt);
+    private sealed record CandidateRun(ProductionRunCandidate Run);
 
     private sealed record ActualValue(double Value, string? Unit);
 }

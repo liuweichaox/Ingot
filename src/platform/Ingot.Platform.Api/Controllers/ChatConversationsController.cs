@@ -3,7 +3,6 @@ using Ingot.Contracts.Agents;
 using Ingot.Agent;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Chat;
-using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -12,7 +11,6 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/chat/conversations")]
 public sealed class ChatConversationsController(
     ChatConversationApplication chat,
-    ProcessResearchQueries research,
     IAgentRuntime runtime,
     PlatformUserResolver userResolver) : PlatformApiController
 {
@@ -69,8 +67,8 @@ public sealed class ChatConversationsController(
             return InvalidRequest("请求体不能为空。");
         if (!TryActor(out var userId, out var identity, out var unauthorized))
             return unauthorized!;
-        if (!await CanUsePageContextAsync(request.PageContext, identity!, ct).ConfigureAwait(false))
-            return AuthorizationDenied();
+        if (request.PageContext is not null)
+            return InvalidRequest("对话不支持页面上下文，请在问题中写明站点和对象。");
         try
         {
             var accepted = await chat.StartAsync(
@@ -105,7 +103,7 @@ public sealed class ChatConversationsController(
             var conversation = await chat.GetSummaryAsync(conversationId, userId!, ct).ConfigureAwait(false);
             if (conversation is null)
                 return ResourceNotFound();
-            if (!await CanUsePageContextAsync(conversation.PageContext, identity!, ct).ConfigureAwait(false))
+            if (conversation.PageContext is not null)
                 return AuthorizationDenied();
             var accepted = await chat.SendAsync(
                 conversationId,
@@ -181,32 +179,13 @@ public sealed class ChatConversationsController(
         return true;
     }
 
-    private async Task<bool> CanUsePageContextAsync(
-        PageContextRef? pageContext,
-        PlatformIdentity identity,
-        CancellationToken ct)
-    {
-        if (pageContext is null)
-            return true;
-        if (!string.Equals(pageContext.Kind, "research-project", StringComparison.Ordinal))
-            return false;
-        if (!Guid.TryParse(pageContext.Id, out var projectId))
-            return false;
-        var project = await research.GetProjectAsync(projectId, ct).ConfigureAwait(false);
-        return project is not null &&
-               (identity.HasAnyRole(PlatformRoles.PlatformAdministrator) ||
-                ((string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
-                  project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal)) &&
-                 identity.CanAccessSite(project.SiteCode)));
-    }
-
     private async Task<bool> CanReadConversationAsync(
         ChatConversationSummary conversation,
         string userId,
         PlatformIdentity identity,
         CancellationToken ct)
     {
-        if (!await CanUsePageContextAsync(conversation.PageContext, identity, ct).ConfigureAwait(false))
+        if (conversation.PageContext is not null)
             return false;
         var runs = await runtime.GetConversationAsync(
                 ProductEntryPoints.Chat, userId, conversation.ConversationId, ct)

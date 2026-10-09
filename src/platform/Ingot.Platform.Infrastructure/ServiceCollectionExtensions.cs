@@ -106,7 +106,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAnalysisTool, CompareExecutionsTool>();
         services.AddSingleton<IAnalysisTool, CompareTimeWindowsTool>();
         services.AddSingleton<IAnalysisTool, SearchProcessKnowledgeTool>();
-        services.AddSingleton<IAnalysisTool, GetResearchProjectTool>();
 
         services.AddSingleton<InspectionExecutionReferenceValidator>();
 
@@ -142,6 +141,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ResearchAssetApplication>();
         services.AddSingleton<ResearchAssetWorkflow>();
         services.AddSingleton<IMechanismKnowledgeStore, PostgresMechanismKnowledgeStore>();
+        services.AddSingleton<RecipeKnowledgeScopeReader>();
+        services.AddSingleton<MechanismKnowledgeQueries>();
+        services.AddSingleton<MechanismKnowledgeService>();
+        services.AddSingleton<IMechanismClaimDraftGenerator, OpenAiCompatibleMechanismClaimDraftGenerator>();
+        services.AddSingleton<MechanismClaimDraftService>();
         services.AddSingleton<IKnowledgeContentExtractor, PdfKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, ExcelKnowledgeExtractor>();
         services.AddSingleton<IKnowledgeContentExtractor, PlainTextKnowledgeExtractor>();

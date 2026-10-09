@@ -3,7 +3,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { postJson, putJson } from "../api/http";
-import { extractRows, useApi } from "../hooks/useApi";
+import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, countOnlineEdges, LoadingCard } from "./shared";
 import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
@@ -369,13 +369,13 @@ export function ModelServiceConfigurationPage() {
 
 export function MetricsPage() {
   const edgeResponse = useApi("/api/edges", { interval: 10000 });
+  const siteId = registeredSiteIds(edgeResponse.data)[0] || "";
+  const siteQuery = siteId ? `siteId=${encodeURIComponent(siteId)}` : "";
+  const siteReady = Boolean(siteId);
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
-  const executionResponse = useApi("/api/v1/process-executions?limit=100", { interval: 10000 });
-  const qualityResponse = useApi("/api/v1/inspection-tasks/summary", { interval: 10000 });
+  const executionResponse = useApi(siteReady ? `/api/v1/process-executions?limit=100&${siteQuery}` : "", { enabled: siteReady, interval: 10000 });
+  const qualityResponse = useApi(siteReady ? `/api/v1/inspection-tasks/summary?${siteQuery}` : "", { enabled: siteReady, interval: 10000 });
   const profileResponse = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
-  const contextResponse = useApi("/api/v1/production-contexts", { interval: 10000 });
-  const inspectionResponse = useApi("/api/v1/inspection-records", { interval: 10000 });
-  const reliabilityResponse = useApi("/api/v1/data-reliability/baseline?maximumRuns=2000", { interval: 30000 });
   const rows = extractRows(edgeResponse.data);
   const online = countOnlineEdges(rows);
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;
@@ -386,29 +386,14 @@ export function MetricsPage() {
   const memory = metricTotal(metrics, "process_working_set_bytes");
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
   const publishedProfiles = extractRows(profileResponse.data).filter(row => row.status === "published").length;
-  const contexts = extractRows(contextResponse.data);
-  const executions = extractRows(executionResponse.data);
-  const inspections = extractRows(inspectionResponse.data);
-  const activeContext = contexts.find(item => !item.validTo && item.status !== "closed");
-  const completeContext = activeContext && [activeContext.equipmentId, activeContext.productCode, activeContext.processSpecificationId, activeContext.toolingAssemblyId || activeContext.toolingInstallationId, activeContext.externalBatchRef, activeContext.materialLotRef].every(Boolean);
-  const completedExecutions = executions.filter(item => item.status === "completed" && item.lifecycleComplete !== false);
-  const linkedExecution = completedExecutions.find(execution => inspections.some(record => record.executionId === execution.executionId));
-  const admissionRate = (reliabilityResponse.data?.rates || []).find(item => item.code === "analysis_admission")?.rate || 0;
-  const pilotChecks = [
-    { title: "现场来源运行", passed: publishedProfiles > 0 && online > 0, detail: `${publishedProfiles} 个已发布数据源 · ${online} 个节点在线`, to: "/configuration/ingestion-tasks" },
-    { title: "生产上下文完整", passed: Boolean(completeContext), detail: completeContext ? `${activeContext.equipmentId} · ${activeContext.externalBatchRef}` : "缺少设备、产品、工艺、工装、批次或材料", to: "/production/changeover" },
-    { title: "运行—检验已关联", passed: Boolean(linkedExecution), detail: linkedExecution?.executionId || "尚无完整运行关联检验", to: "/process-executions" },
-    { title: "正式分析可准入", passed: Number(reliabilityResponse.data?.analyzedRunCount || 0) > 0 && admissionRate > 0, detail: `${reliabilityResponse.data?.analyzedRunCount || 0} 条运行 · ${Math.round(admissionRate * 100)}% 准入`, to: "/data-quality" },
-  ];
-  const pilotReady = pilotChecks.every(item => item.passed);
   const actionRequired = qualityResponse.data?.actionRequired ?? 0;
-  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error || contextResponse.error || inspectionResponse.error || reliabilityResponse.error;
+  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="平台状态">
       <RequestError
         error={error}
-        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload(), contextResponse.reload(), inspectionResponse.reload(), reliabilityResponse.reload()])}
+        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
       />
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
@@ -425,24 +410,6 @@ export function MetricsPage() {
         <Metric label="后台排队" value={formatInteger(threadQueue)} />
         <Metric label="现场节点在线" value={`${online}/${rows.length}`} hint={`${offline} 个离线`} />
       </div>
-      <Card
-        title="受控试点业务闭环"
-        description={pilotReady ? "业务数据门槛已满足；仍需独立完成备份恢复、故障、容量、告警送达和连续观察验收。" : "先关闭未通过项，再由部署者运行生产验收脚本。"}
-        actions={<span className={`text-sm font-semibold ${pilotReady ? "text-emerald-700" : "text-amber-700"}`}>{pilotReady ? "业务闭环可验收" : `${pilotChecks.filter(item => !item.passed).length} 项待完成`}</span>}
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {pilotChecks.map(item => (
-            <Link key={item.title} to={item.to} className={`rounded-lg border p-4 transition ${item.passed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-              <p className="flex items-center justify-between gap-2 font-semibold text-slate-950"><span>{item.title}</span><span className={item.passed ? "text-emerald-700" : "text-amber-700"}>{item.passed ? "通过" : "待完成"}</span></p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
-            </Link>
-          ))}
-        </div>
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">记录生产验收</p>
-          <p className="mt-1 text-sm leading-6 text-slate-600">本页只显示业务数据门槛，不会自动生成生产验收结论。完成备份、故障、容量、告警和连续观察演练后，在部署主机运行 <code className="rounded bg-white px-1.5 py-0.5 text-xs">scripts/verify-production-acceptance.sh</code> 固化验收记录。</p>
-        </div>
-      </Card>
       <Card title="现场节点" description="点击诊断可查看采集任务、上行积压和最近日志。">
         <DataTable rows={rows} keyField="edgeId" columns={[
           { key: "edgeId", label: "节点" },
@@ -468,7 +435,7 @@ export function LogsPage() {
     <Page title="平台日志">
       <Card title="查询条件">
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="边缘节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>
+          <Field label="现场节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>
           <Field label="级别"><Select value={level} onChange={event => setLevel(event.target.value)}><option value="">全部</option><option value="Information">信息</option><option value="Warning">警告</option><option value="Error">错误</option></Select></Field>
         </div>
       </Card>

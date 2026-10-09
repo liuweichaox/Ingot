@@ -65,6 +65,30 @@ public sealed class InspectionCommandsTests
     }
 
     [Fact]
+    public async Task CreateReview_AllowsNumericRecordWithoutAttachment()
+    {
+        var record = Record(Guid.CreateVersion7(), submittedBy: "inspector-a");
+        var commands = new InspectionCommands(
+            null!,
+            new RecordStore([record]),
+            null!,
+            new AcceptingReviewStore(),
+            new NumericTaskWorkflow());
+
+        var result = await commands.CreateReviewAsync(
+            new CreateInspectionReviewRequest
+            {
+                ReviewId = Guid.CreateVersion7(),
+                InspectionRecordId = record.RecordId,
+                Decision = InspectionReviewDecisions.Confirmed
+            },
+            "reviewer-b");
+
+        Assert.Equal(InspectionCommandStatus.Created, result.Status);
+        Assert.Equal("reviewer-b", result.Value!.ReviewedBy);
+    }
+
+    [Fact]
     public async Task UpsertScope_UsesAuthenticatedActorInsteadOfClientAuditFields()
     {
         var records = new RecordStore([]);
@@ -243,5 +267,78 @@ public sealed class InspectionCommandsTests
         public Task<IReadOnlyList<FeatureDefinition>> ListFeatureDefinitionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<FeatureDefinition>>([]);
         public Task<FeatureDefinition?> GetFeatureDefinitionAsync(string code, CancellationToken ct = default) => Task.FromResult<FeatureDefinition?>(null);
         public Task<bool> DeleteFeatureDefinitionAsync(string code, CancellationToken ct = default) => Task.FromResult(false);
+    }
+
+    private sealed class NumericTaskWorkflow : IInspectionWorkflowService
+    {
+        public Task<InspectionTask?> GetTaskAsync(string executionId, CancellationToken ct = default, string? siteId = null)
+            => Task.FromResult<InspectionTask?>(new InspectionTask
+            {
+                ExecutionId = executionId,
+                EquipmentId = "press-01",
+                ProductFamilyCode = "lens",
+                InspectionPlanId = "lens-form",
+                InspectionPlanName = "面形",
+                CompletedAt = DateTimeOffset.UtcNow,
+                Status = "review_pending",
+                RequiredInspections =
+                [
+                    new InspectionPlanItem
+                    {
+                        DefinitionCode = "visual",
+                        DefinitionVersion = 1,
+                        RequiresAttachment = false
+                    }
+                ]
+            });
+
+        public Task<IReadOnlyList<InspectionTask>> QueryTasksAsync(string? status, int limit, CancellationToken ct = default, string? siteId = null)
+            => throw new NotSupportedException();
+
+        public Task<InspectionTaskPage> QueryTaskPageAsync(string? status, int offset, int limit, CancellationToken ct = default, string? siteId = null)
+            => throw new NotSupportedException();
+
+        public Task<InspectionTaskSummary> GetSummaryAsync(CancellationToken ct = default, string? siteId = null)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class AcceptingReviewStore : IInspectionReviewStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<StoreInspectionReviewResult> CreateAsync(
+            CreateInspectionReviewRequest request,
+            string executionId,
+            string reviewedBy,
+            CancellationToken ct = default)
+            => Task.FromResult(new StoreInspectionReviewResult
+            {
+                Created = true,
+                PayloadConflict = false,
+                Review = new InspectionReview
+                {
+                    ReviewId = request.ReviewId,
+                    InspectionRecordId = request.InspectionRecordId,
+                    ExecutionId = executionId,
+                    Decision = request.Decision,
+                    ReviewedAt = DateTimeOffset.UtcNow,
+                    ReviewedBy = reviewedBy
+                }
+            });
+
+        public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task LogAccessAsync(Guid? inspectionRecordId, Guid? attachmentId, string action, string actor, string? detail, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<InspectionAuditEntry>> QueryAuditAsync(Guid? inspectionRecordId, Guid? attachmentId, int limit, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

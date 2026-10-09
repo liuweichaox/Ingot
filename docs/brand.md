@@ -4,9 +4,9 @@
 
 ## 核心价值
 
-> **组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。**
+> **组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。**
 
-Ingot 面向工艺、质量、设备与研发工程师，贯穿研发项目、实验记录、运行证据、质量分析、工艺追因和配方优化。
+Ingot 面向工艺、质量、设备与研发工程师，贯穿配方版本、实验记录、运行证据、质量分析、工艺追因和配方优化。
 
 面向产品传播时，优先使用更具体的行动主句：
 
@@ -19,7 +19,7 @@ Ingot 面向工艺、质量、设备与研发工程师，贯穿研发项目、�
 - **产品类别**：开源工艺研发与优化系统 / Open-source Process R&D and Optimization System
 - **主要用户**：负责新产品、新材料和新工艺开发的工艺、质量、设备和研发工程师
 - **工作对象**：工艺实验定义、实际参数、过程轨迹、结果、工程判断和后续实验
-- **产品职责**：组织项目、记录和证据，支持质量分析与工艺追因，并在满足数据准入条件时提供受约束的下一配方建议
+- **产品职责**：组织配方版本、记录和证据，支持质量分析与工艺追因，并在满足数据准入条件时提供受约束的下一配方建议
 - **工程师职责**：确定目标、审核数据与约束、确认建议是否进入正常生产，并解释现场条件
 - **系统边界**：工程师审核结论与配方建议；系统遵守安全约束、审批职责和设备控制边界
 
@@ -31,7 +31,7 @@ Ingot 的工作对象不是孤立点位或单一算法，而是可复核的工�
 
 公开内容可以承诺系统提供以下能力：
 
-- 通过工艺配置管理配方版本参数，以运行记录及质量结果组织实验事实，并通过服务端 API 组织研发项目；
+- 通过工艺配置管理配方版本参数，以运行记录及质量结果组织实验事实，并按站点和配方生成、审核下一配方建议；
 - 关联实际生产条件、过程轨迹和检验结果；
 - 显示数据缺失、来源、版本和不确定性；
 - 帮助工程师比较运行、缩小候选原因范围；
@@ -56,7 +56,7 @@ Ingot 的工作对象不是孤立点位或单一算法，而是可复核的工�
 | 用途 | 中文 | English |
 |---|---|---|
 | 产品类别 | 开源工艺研发与优化系统 | Open-source Process R&D and Optimization System |
-| 核心价值 | 组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化 | Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization |
+| 核心价值 | 组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化 | Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization |
 | 简短标语 | 从工艺数据，到有依据的研发决策。 | From process data to evidence-based R&D decisions. |
 | 业务能力 | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
 | 能力描述 | 运行比较、工艺追因、配方建议、工程师决定、受约束优化 | run comparison, process diagnosis, recipe recommendation, engineer decision, constrained optimization |

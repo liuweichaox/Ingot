@@ -142,7 +142,7 @@ app.Use(async (context, next) =>
     if (!valid)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        await context.Response.WriteAsJsonAsync(new { error = "采集节点访问凭据无效。" }).ConfigureAwait(false);
+        await context.Response.WriteAsJsonAsync(new { error = "现场节点访问凭据无效。" }).ConfigureAwait(false);
         return;
     }
     await next(context).ConfigureAwait(false);

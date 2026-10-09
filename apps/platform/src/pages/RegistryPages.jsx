@@ -1,106 +1,26 @@
 // 提供版本化业务配置注册表及显式创建、发布和退役操作。
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
-import { extractRows, useApi } from "../hooks/useApi";
+import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { recipeLaunchChecks } from "../recipe/launchReadiness";
+import { RecipeVersionProposal } from "../recipe/RecipeVersionProposal";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, LinkButton, Page, RequestError, Select, StatusBadge, Textarea, notify, useConfirmDialog } from "../ui/components";
 import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
-
-export function ConfigurationHubPage() {
-  const modelResponse = useApi("/api/v1/process-data-models");
-  const specificationResponse = useApi("/api/v1/process-specifications");
-  const ingestionResponse = useApi("/api/v1/ingestion-tasks");
-  const analysisResponse = useApi("/api/v1/process-analysis-plans");
-  const definitionResponse = useApi("/api/v1/inspection-definitions");
-  const qualityResponse = useApi("/api/v1/inspection-plans");
-  const readiness = [
-    { title: "数据标准", ready: extractRows(modelResponse.data).some(item => item.status === "published") && extractRows(specificationResponse.data).some(item => item.status === "published"), readyHint: "数据字典和配方版本已发布", pendingHint: "发布数据字典和配方版本", to: "/configuration/process-data-models", action: "检查数据标准", responses: [modelResponse, specificationResponse] },
-    { title: "现场接入", ready: extractRows(ingestionResponse.data).some(item => item.status === "published"), readyHint: "数据源配置已发布", pendingHint: "发布至少一个数据源配置", to: "/configuration/ingestion-tasks", action: "配置数据来源", responses: [ingestionResponse] },
-    { title: "分析规则", ready: extractRows(analysisResponse.data).some(item => item.status === "published"), readyHint: "运行分析规则已发布", pendingHint: "发布运行分析规则", to: "/configuration/process-analysis-plans", action: "配置分析规则", responses: [analysisResponse] },
-    { title: "质量规则", ready: extractRows(definitionResponse.data).length > 0 && extractRows(qualityResponse.data).some(item => item.status === "published"), readyHint: "检测定义和质量方案已就绪", pendingHint: "建立检测定义并发布质量方案", to: "/configuration/quality-plans", action: "配置质量规则", responses: [definitionResponse, qualityResponse] },
-  ].map(item => ({
-    ...item,
-    loading: item.responses.some(response => response.loading && !response.data),
-    error: item.responses.find(response => response.error)?.error || "",
-  }));
-  const readinessLoading = readiness.some(item => item.loading);
-  const readinessError = readiness.find(item => item.error)?.error;
-  const readyCount = readiness.filter(item => item.ready).length;
-  const nextReadiness = readiness.find(item => !item.ready);
-  return (
-    <Page
-      title="配置总览"
-      actions={!readinessLoading && !readinessError && (
-        readyCount === readiness.length
-          ? <LinkButton to="/production/changeover">进入生产切换</LinkButton>
-          : <LinkButton to={nextReadiness?.to || "/configuration"}>继续：{nextReadiness?.action || "完善配置"}</LinkButton>
-      )}
-    >
-      <Card
-        title="配置准备度"
-        actions={!readinessLoading && <span className={`text-sm font-semibold ${readinessError ? "text-rose-700" : readyCount === readiness.length ? "text-emerald-700" : "text-amber-700"}`}>{readinessError ? "检查未完成" : readyCount === readiness.length ? "生产配置已就绪" : `还需完成 ${readiness.length - readyCount} 项`}</span>}
-      >
-        {readinessError && <Alert tone="warning">部分准备度暂时无法读取：{readinessError}</Alert>}
-        <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="配置准备进度" aria-valuemin="0" aria-valuemax={readiness.length} aria-valuenow={readyCount}>
-          <div className={`h-full rounded-full transition-[width] ${readyCount === readiness.length ? "bg-emerald-600" : "bg-amber-500"}`} style={{ width: `${readinessLoading ? 0 : readyCount / readiness.length * 100}%` }} />
-        </div>
-        <DataTable
-          rows={readiness.map((item, index) => ({ ...item, order: index + 1 }))}
-          keyField="title"
-          columns={[
-            { key: "order", label: "序号", render: value => String(value).padStart(2, "0") },
-            { key: "title", label: "模块" },
-            {
-              key: "ready",
-              label: "状态",
-              render: (_, item) => <StatusBadge
-                value={item.loading ? "pending" : item.error ? "unavailable" : item.ready ? "ready" : "incomplete"}
-                label={item.loading ? "检查中" : item.error ? "无法检查" : item.ready ? "已准备" : "待完成"}
-              />,
-            },
-            { key: "pendingHint", label: "当前情况", render: (_, item) => item.error ? "状态接口暂时不可用" : item.ready ? item.readyHint : item.pendingHint },
-            { key: "action", label: "操作", render: (_, item) => <Link to={item.to} className="font-medium text-blue-700 hover:text-blue-900">{item.action}</Link> },
-          ]}
-        />
-      </Card>
-      <details className="group rounded-lg border border-slate-200 bg-white">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
-          <p className="font-semibold text-slate-950">运行数据来源与追溯要求</p>
-          <span className="text-sm font-medium text-blue-700 group-open:hidden">查看详情</span>
-          <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
-        </summary>
-        <div className="grid border-t border-slate-200 md:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
-          {[
-            ["设备与运行身份", "由设备事件、现场节点和数据源配置映射提供。", "/configuration/ingestion-tasks", "检查数据源配置"],
-            ["产品、工艺、材料与批次", "由生产准备或 MES 写入不可变生产上下文。", "/production/changeover", "检查生产上下文"],
-            ["实际装机工装", "由工装装卸记录在运行开始时绑定。", "/production/tooling-installations", "检查工装装卸"],
-            ["字段覆盖率", "由历史已完成运行计算；覆盖不足时可禁止分析或建模。", "/data-quality", "检查数据可信度"],
-          ].map(([title, description, to, action]) => (
-            <div key={title} className="border-b border-slate-200 p-4 md:[&:nth-last-child(-n+2)]:border-b-0 xl:border-b-0">
-              <h3 className="font-semibold text-slate-900">{title}</h3>
-              <p className="mt-1 min-h-12 text-sm leading-6 text-slate-600">{description}</p>
-              <Link to={to} className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:text-blue-900">{action} →</Link>
-            </div>
-          ))}
-        </div>
-      </details>
-    </Page>
-  );
-}
 
 const registryPages = {
   processModels: {
     kind: "processModel",
-    title: "工艺数据字典", description: "定义工艺变量、阶段号和控制参数结构，不包含来源地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
+    title: "工艺变量", description: "定义过程量和控制参数的代码、名称、单位和边界，不包含来源地址和采集频率。", endpoint: "/api/v1/process-data-models", key: "modelId",
     columns: [["modelId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建工艺数据字典",
+    createLabel: "创建工艺变量",
     template: { modelId: "", version: 1, name: "", description: "", status: "draft", acquisition: { dataItems: [] }, controlParameters: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-data-models/${encodeURIComponent(value.modelId)}/${value.version}`,
   },
   processSpecifications: {
     kind: "processSpecificationVersion",
-    title: "配方版本", description: "维护引用工艺数据字典的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
+    title: "配方版本", description: "维护引用工艺变量的完整参数版本。", endpoint: "/api/v1/process-specifications", key: "processSpecificationId",
     columns: [["processSpecificationId", "配方版本"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
     createLabel: "创建配方版本",
     template: { processSpecificationId: "", version: 1, name: "", basedOnVersion: null, dataModelId: "", dataModelVersion: 1, status: "draft", contextSelector: {}, values: [], updatedAt: "" },
@@ -108,9 +28,9 @@ const registryPages = {
   },
   plans: {
     kind: "analysisPlan",
-    title: "运行分析规则", description: "版本化定义同类比较条件、阶段对齐、质量分组和分析数据项。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
+    title: "过程分析", description: "规定参与比较的过程曲线，以及均值、最小值和最大值。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建运行分析规则",
+    createLabel: "创建过程分析",
     template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-execution", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_family_code"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
@@ -141,11 +61,34 @@ function RegistryPage({ definition, canWrite = true }) {
     isProcessSpecification ? "/api/v1/process-data-models" : "",
     { enabled: isProcessSpecification },
   );
+  const ingestionResponse = useApi(isProcessSpecification ? "/api/v1/ingestion-tasks" : "", { enabled: isProcessSpecification });
+  const analysisPlansResponse = useApi(isProcessSpecification ? "/api/v1/process-analysis-plans" : "", { enabled: isProcessSpecification });
+  const qualityPlansResponse = useApi(isProcessSpecification ? "/api/v1/inspection-plans" : "", { enabled: isProcessSpecification });
+  const definitionsResponse = useApi(isProcessSpecification ? "/api/v1/inspection-definitions" : "", { enabled: isProcessSpecification });
+  const launchResponses = [processModelsResponse, ingestionResponse, analysisPlansResponse, qualityPlansResponse, definitionsResponse];
+  const launchLoading = launchResponses.some(response => response.loading && !response.data);
+  const launchError = launchResponses.find(response => response.error)?.error || "";
+  const [launchSource, setLaunchSource] = useState(null);
+  const launchChecksFor = specification => recipeLaunchChecks({
+    specification,
+    models: extractRows(processModelsResponse.data),
+    tasks: extractRows(ingestionResponse.data),
+    analysisPlans: extractRows(analysisPlansResponse.data),
+    qualityPlans: extractRows(qualityPlansResponse.data),
+    definitions: extractRows(definitionsResponse.data),
+  });
+  const edgesResponse = useApi(isProcessSpecification ? "/api/edges" : "", { enabled: isProcessSpecification });
+  const registeredSiteId = registeredSiteIds(edgesResponse.data)[0] || "";
   const executionsResponse = useApi(
-    isProcessSpecification ? "/api/v1/process-executions?status=completed&limit=200" : "",
-    { enabled: isProcessSpecification },
+    isProcessSpecification && registeredSiteId
+      ? `/api/v1/process-executions?status=completed&limit=200&siteId=${encodeURIComponent(registeredSiteId)}`
+      : "",
+    { enabled: isProcessSpecification && Boolean(registeredSiteId) },
   );
   const [open, setOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const openedProposalFromQuery = useRef(false);
+  const [proposalSource, setProposalSource] = useState(null);
   const [nextDraftOpen, setNextDraftOpen] = useState(false);
   const [nextDraftSource, setNextDraftSource] = useState(null);
   const [nextDraftForm, setNextDraftForm] = useState(createNextSpecificationDraftForm);
@@ -198,6 +141,20 @@ function RegistryPage({ definition, canWrite = true }) {
     setOpen(true);
   }
 
+  useEffect(() => {
+    if (!isProcessSpecification || openedProposalFromQuery.current) return;
+    const recipe = searchParams.get("recipe");
+    const version = searchParams.get("version");
+    if (!recipe || !version) return;
+    const row = rows.find(item =>
+      item.processSpecificationId === recipe &&
+      String(item.version) === String(version) &&
+      item.status === "published");
+    if (!row) return;
+    openedProposalFromQuery.current = true;
+    setProposalSource(row);
+  }, [isProcessSpecification, searchParams, rows]);
+
   function openNextDraft(row) {
     setNextDraftSource(row);
     setNextDraftForm(createNextSpecificationDraftForm());
@@ -227,6 +184,21 @@ function RegistryPage({ definition, canWrite = true }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function promoteCorrection(draft) {
+    if (!proposalSource) return;
+    setNextDraftSource(proposalSource);
+    setNextDraftForm({
+      changeReason: draft.changeReason || "",
+      mechanismNotes: "",
+      evidenceReferences: draft.evidenceReferences || [],
+      parameterOverrides: draft.parameterOverrides || [],
+    });
+    setProposalSource(null);
+    setEditorError("");
+    setShowValidation(false);
+    setNextDraftOpen(true);
   }
 
   async function createNextDraft() {
@@ -297,6 +269,21 @@ function RegistryPage({ definition, canWrite = true }) {
       label,
       render: definition.render?.[key] || (key === "status" ? value => <StatusBadge value={value} /> : key.endsWith("At") ? formatTime : undefined),
     })),
+    ...(isProcessSpecification && launchLoading ? [{ key: "_launch", label: "上线检查", sortable: false, render: () => <span className="text-sm text-slate-500">检查中</span> }] : []),
+    ...(isProcessSpecification && !launchLoading ? [{
+      key: "_launch",
+      label: "上线检查",
+      sortable: false,
+      render: (_value, row) => {
+        if (launchError) return <StatusBadge value="unavailable" label="无法检查" />;
+        const missing = launchChecksFor(row).filter(check => !check.ready).length;
+        return (
+          <button type="button" className="rounded-md hover:ring-2 hover:ring-slate-200" onClick={event => { event.stopPropagation(); setLaunchSource(row); }} aria-label={`查看 ${row.processSpecificationId} V${row.version} 的上线检查`}>
+            <StatusBadge value={missing ? "incomplete" : "ready"} label={missing ? `缺 ${missing} 项` : "可以上线"} />
+          </button>
+        );
+      },
+    }] : []),
     {
       key: "_actions",
       label: "操作",
@@ -305,6 +292,9 @@ function RegistryPage({ definition, canWrite = true }) {
           <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
             {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看版本" : "编辑草稿"}
           </Button>
+          {isProcessSpecification && row.status === "published" && (
+            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => setProposalSource(row)}>下一轮校正</Button>
+          )}
           {canWrite && isProcessSpecification && row.status === "published" && (
             <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openNextDraft(row)}>创建修订草稿</Button>
           )}
@@ -380,6 +370,33 @@ function RegistryPage({ definition, canWrite = true }) {
         )}
       </Drawer>
       <Drawer
+        open={Boolean(launchSource)}
+        onClose={() => setLaunchSource(null)}
+        title={launchSource ? `${launchSource.processSpecificationId} V${launchSource.version} 上线检查` : "上线检查"}
+        description="只检查这一版配方自己的依赖。全部通过后，生产切换选择这一版，新运行就会按它采集、分析和判定。"
+        footer={<Button onClick={() => setLaunchSource(null)}>关闭</Button>}
+        size="lg"
+      >
+        {launchSource && <RecipeLaunchChecklist checks={launchChecksFor(launchSource)} />}
+      </Drawer>
+      <Drawer
+        open={Boolean(proposalSource)}
+        onClose={() => setProposalSource(null)}
+        closeOnBackdrop={false}
+        title="这一版的下一轮校正"
+        description="校正留在当前已发布版本上。只有认定为显著变更时，才创建下一版草稿。"
+        footer={<Button onClick={() => setProposalSource(null)}>关闭</Button>}
+        size="xl"
+      >
+        {proposalSource && (
+          <RecipeVersionProposal
+            specification={proposalSource}
+            canWrite={canWrite}
+            onPromote={promoteCorrection}
+          />
+        )}
+      </Drawer>
+      <Drawer
         open={nextDraftOpen}
         onClose={() => setNextDraftOpen(false)}
         closeOnBackdrop={false}
@@ -402,6 +419,32 @@ function RegistryPage({ definition, canWrite = true }) {
       </Drawer>
       {confirmationDialog}
     </Page>
+  );
+}
+
+function RecipeLaunchChecklist({ checks }) {
+  const missing = checks.filter(check => !check.ready);
+  return (
+    <div className="grid gap-4">
+      <ol className="grid divide-y divide-slate-200 rounded-lg border border-slate-200">
+        {checks.map((check, index) => (
+          <li key={check.key} className="flex items-start justify-between gap-4 p-4">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 font-semibold text-slate-900">
+                <span className="text-xs text-slate-400">{String(index + 1).padStart(2, "0")}</span>
+                {check.title}
+                <StatusBadge value={check.ready ? "ready" : "incomplete"} label={check.ready ? "通过" : "待完成"} />
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{check.detail}</p>
+            </div>
+            {!check.ready && <Link to={check.to} className="shrink-0 text-sm font-medium text-blue-700 hover:text-blue-900">{check.action}</Link>}
+          </li>
+        ))}
+      </ol>
+      {missing.length
+        ? <Alert tone="warning" title={`还缺 ${missing.length} 项`}>先完成上面标为待完成的项目，再到生产切换选择这一版。</Alert>
+        : <div className="flex justify-end"><LinkButton to="/production/changeover">去做生产切换</LinkButton></div>}
+    </div>
   );
 }
 

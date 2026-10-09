@@ -31,7 +31,7 @@ A production-run record may combine the following data sources:
 - MES, QMS, work orders, barcodes, and lot traceability;
 - tooling, material, calibration, and maintenance records.
 
-Adapters map raw values to stable business codes, standard units, quality state, time, and provenance. R&D projects reference those semantics rather than vendor addresses or protocols.
+Adapters map raw values to stable business codes, standard units, quality state, time, and provenance. Recipes, analyses, and recommendations reference those semantics rather than vendor addresses or protocols.
 
 ## Identity and linkage
 

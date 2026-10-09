@@ -26,7 +26,7 @@ Each recommendation freezes the knowledge versions, source hashes, and applicabi
 
 ## Knowledge Retrieval
 
-Document knowledge reaches the analysis assistant through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard project and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
+Document knowledge reaches the analysis assistant through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard site and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
 
 The semantic index is rebuildable derived state. It does not change review status or become formal business evidence. Embeddings are disabled by default. When enabled, they reuse the protected model-service configuration and require an OpenAI-compatible `/embeddings` endpoint. If that service is unavailable or a query embedding fails, the system falls back to PostgreSQL keyword retrieval without relaxing authorization or review gates.
 

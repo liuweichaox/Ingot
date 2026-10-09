@@ -13,10 +13,8 @@ public static class ProcessResearchModuleServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddSingleton<IProcessResearchStore, PostgresProcessResearchStore>();
-        services.AddSingleton<ProcessResearchQueries>();
-        services.AddSingleton<IResearchProjectContextReader, ResearchProjectContextReader>();
-        services.AddSingleton<ProcessResearchWorkflow>();
-        services.AddSingleton<ResearchExecutionEvidenceService>();
+        services.AddSingleton<RecipeRecommendationQueries>();
+        services.AddSingleton<RecipeRecommendationBriefPolicy>();
         services.AddSingleton<IResearchObservationAssembler, ResearchObservationAssembler>();
         services.Configure<ProcessOptimizerOptions>(configuration.GetSection("ProcessOptimizer"));
         services.AddTransient<ProcessOptimizerCircuitBreakerHandler>();

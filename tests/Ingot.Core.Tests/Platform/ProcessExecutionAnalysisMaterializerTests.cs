@@ -132,6 +132,25 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
         Assert.Equal(0, store.SaveCount);
     }
 
+    [Fact]
+    public async Task ReadyMaterializations_ServeRunListOnlyForTheOwningSite()
+    {
+        var store = new FakeStore { ExecutionSites = ["SITE-A"] };
+        var materializer = Create(store);
+        await materializer.TryMaterializeForUniqueSiteAsync(
+            "execution-1", "SITE-A", Rows(), Start, Start.AddSeconds(2), Model(), Plan());
+
+        var owning = await materializer.LoadLatestReadyForSiteAsync(
+            [("execution-1", Model(), Plan()), ("execution-2", Model(), Plan())], "SITE-A");
+        var other = await materializer.LoadLatestReadyForSiteAsync(
+            [("execution-1", Model(), Plan())], "SITE-B");
+
+        var ready = Assert.Single(owning);
+        Assert.Equal("execution-1", ready.Key);
+        Assert.Equal("cached", ready.Value.Materialization.Status);
+        Assert.Empty(other);
+    }
+
     private static ProcessExecutionAnalysisMaterializer Create(FakeStore store)
         => new(store, new ProcessExecutionAnalysisEngine(), NullLogger<ProcessExecutionAnalysisMaterializer>.Instance);
 
@@ -223,6 +242,18 @@ public sealed class ProcessExecutionAnalysisMaterializerTests
             ProcessExecutionAnalysisMaterializationKey key,
             CancellationToken ct = default)
             => Task.FromResult(_snapshots.GetValueOrDefault(key));
+
+        public Task<IReadOnlyDictionary<string, ProcessExecutionAnalysisSnapshot>> LoadLatestReadyForSiteAsync(
+            IReadOnlyList<ProcessExecutionAnalysisMaterializationKey> keys,
+            string siteId,
+            CancellationToken ct = default)
+        {
+            IReadOnlyDictionary<string, ProcessExecutionAnalysisSnapshot> result = ExecutionSites.Count == 1 &&
+                string.Equals(ExecutionSites[0], siteId, StringComparison.OrdinalIgnoreCase)
+                    ? keys.Where(_snapshots.ContainsKey).ToDictionary(static key => key.ExecutionId, key => _snapshots[key], StringComparer.Ordinal)
+                    : new Dictionary<string, ProcessExecutionAnalysisSnapshot>(StringComparer.Ordinal);
+            return Task.FromResult(result);
+        }
 
         public Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
             ProcessExecutionAnalysisMaterializationKey key,

@@ -313,7 +313,7 @@ public sealed class IngestionConfigurationController(
         var identity = ResolveIdentity();
         return identity is not null && CanAccessEdge(identity, edgeId)
             ? null
-            : ResourceNotFound("采集节点不存在或当前身份无权访问。");
+            : ResourceNotFound("现场节点不存在或当前身份无权访问。");
     }
 
     private bool CanAccessEdge(PlatformIdentity identity, string? edgeId)

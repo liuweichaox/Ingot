@@ -258,11 +258,21 @@ public sealed partial class InspectionCommands(
         if (string.Equals(record.SubmittedBy, reviewedBy, StringComparison.Ordinal))
             return InspectionCommandResult<InspectionReview>.Invalid("提交者不能复核自己的检测记录。");
         if (record.Attachments.Count == 0)
-            return InspectionCommandResult<InspectionReview>.Invalid("视觉复核必须关联原始附件。");
-        foreach (var attachment in record.Attachments)
         {
-            if (!await attachments.ExistsAsync(attachment.AttachmentId, ct).ConfigureAwait(false))
-                return InspectionCommandResult<InspectionReview>.Invalid($"原始附件不可用：{attachment.AttachmentId}");
+            var task = await workflow.GetTaskAsync(record.ExecutionId, ct, record.SiteId).ConfigureAwait(false);
+            var item = task?.RequiredInspections.FirstOrDefault(candidate =>
+                string.Equals(candidate.DefinitionCode, record.DefinitionCode, StringComparison.OrdinalIgnoreCase) &&
+                candidate.DefinitionVersion == record.DefinitionVersion);
+            if (item is not { RequiresAttachment: false })
+                return InspectionCommandResult<InspectionReview>.Invalid("视觉复核必须关联原始附件。");
+        }
+        else
+        {
+            foreach (var attachment in record.Attachments)
+            {
+                if (!await attachments.ExistsAsync(attachment.AttachmentId, ct).ConfigureAwait(false))
+                    return InspectionCommandResult<InspectionReview>.Invalid($"原始附件不可用：{attachment.AttachmentId}");
+            }
         }
         var result = await reviews.CreateAsync(
             request with { Decision = decision! }, record.ExecutionId, reviewedBy, ct).ConfigureAwait(false);

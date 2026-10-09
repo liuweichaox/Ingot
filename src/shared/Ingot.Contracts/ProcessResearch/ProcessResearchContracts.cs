@@ -1,19 +1,5 @@
-// 定义工艺研发跨层契约；只承载状态、请求和证据快照，不包含存储或执行逻辑。
-using System.Text.Json;
-using Ingot.Contracts.ResearchAssets;
-
+// 定义下一配方建议跨层契约；只承载请求、冻结条件和证据记录，不包含存储或执行逻辑。
 namespace Ingot.Contracts.ProcessResearch;
-
-public static class ResearchProjectStatuses
-{
-    public const string Draft = "draft";
-    public const string Active = "active";
-    public const string Completed = "completed";
-    public const string Archived = "archived";
-
-    public static bool IsValid(string? value)
-        => value is Draft or Active or Completed or Archived;
-}
 
 public static class ResearchVariableRoles
 {
@@ -27,60 +13,6 @@ public static class ResearchVariableRoles
         => value is Control or Process or Material or Environment or Outcome;
 }
 
-public static class ResearchHypothesisStatuses
-{
-    public const string Proposed = "proposed";
-    public const string Selected = "selected";
-    public const string Supported = "supported";
-    public const string Validated = "validated";
-    public const string Rejected = "rejected";
-    public const string Inconclusive = "inconclusive";
-
-    public static bool IsValid(string? value)
-        => value is Proposed or Selected or Supported or Validated or Rejected or Inconclusive;
-}
-
-public static class OperatingRegionStatuses
-{
-    public const string Candidate = "candidate";
-    public const string Validated = "validated";
-    public const string Superseded = "superseded";
-
-    public static bool IsValid(string? value)
-        => value is Candidate or Validated or Superseded;
-}
-
-public static class ResearchKnowledgeStatuses
-{
-    public const string Draft = "draft";
-    public const string Reviewed = "reviewed";
-    public const string Published = "published";
-    public const string Retired = "retired";
-
-    public static bool IsValid(string? value)
-        => value is Draft or Reviewed or Published or Retired;
-}
-
-public static class OperatingRegionValidationLevels
-{
-    public const string Evidence = "evidence";
-    public const string Replay = "replay";
-    public const string Laboratory = "laboratory";
-    public const string Production = "production";
-
-    public static bool IsValid(string? value)
-        => value is Evidence or Replay or Laboratory or Production;
-}
-
-public static class ResearchHypothesisEffectDirections
-{
-    public const string Increase = "increase";
-    public const string Decrease = "decrease";
-
-    public static bool IsValid(string? value)
-        => value is Increase or Decrease;
-}
-
 public static class ResearchOptimizationIntents
 {
     public const string ReachSpecification = "reach-specification";
@@ -89,8 +21,8 @@ public static class ResearchOptimizationIntents
         => value is ReachSpecification;
 }
 
-/// <summary>研发项目用于筛选真实生产运行的结构化范围键。</summary>
-public static class ResearchProjectScopeKeys
+/// <summary>建议条件中用于筛选真实生产运行的结构化范围键。</summary>
+public static class RecipeRecommendationScopeKeys
 {
     public const string ProductFamilyCode = "product_family_code";
     public const string ProductCode = "product_code";
@@ -99,36 +31,6 @@ public static class ResearchProjectScopeKeys
     public const string ProcessSpecificationVersion = "process_specification_version";
     public const string OutputItemId = "output_item_id";
     public const string LookbackDays = "lookback_days";
-
-    public static readonly IReadOnlySet<string> SelectorKeys = new HashSet<string>(StringComparer.Ordinal)
-    {
-        ProductFamilyCode, ProductCode, EquipmentId, ProcessSpecificationId, OutputItemId
-    };
-}
-
-public static class ResearchConfidenceMethods
-{
-    public const string Bootstrap = "bootstrap";
-    public const string Conformal = "conformal";
-    public const string Bayesian = "bayesian";
-    public const string Frequentist = "frequentist";
-
-    public static bool IsValid(string? value)
-        => value is Bootstrap or Conformal or Bayesian or Frequentist;
-}
-
-public static class EvidenceKinds
-{
-    public const string DatasetSnapshot = "dataset-snapshot";
-    public const string AnalysisRun = "analysis-run";
-    public const string ExecutionComparison = "execution-comparison";
-    public const string MechanismModel = "mechanism-model";
-    public const string KnowledgeSource = "knowledge-source";
-    public const string OperatingRegion = "operating-region";
-
-    public static bool IsValid(string? value)
-        => value is DatasetSnapshot or AnalysisRun or ExecutionComparison or
-            MechanismModel or KnowledgeSource or OperatingRegion;
 }
 
 public sealed record ResearchObjective
@@ -150,7 +52,7 @@ public sealed record ResearchVariable
 {
     public required string Code { get; init; }
     public required string Name { get; init; }
-    public string Role { get; init; } = ResearchVariableRoles.Process;
+    public string Role { get; init; } = ResearchVariableRoles.Control;
     public required string Unit { get; init; }
     public double? LowerLimit { get; init; }
     public double? UpperLimit { get; init; }
@@ -217,121 +119,22 @@ public sealed record ResearchOptimizationFeatureSet
     public IReadOnlyList<ResearchDerivedFeature> DerivedFeatures { get; init; } = [];
 }
 
-public sealed record ResearchProject
-{
-    public Guid ProjectId { get; init; }
-    public required string Code { get; init; }
-    public required string Name { get; init; }
-    public required string ProcessName { get; init; }
-    public string? ProductName { get; init; }
-    public string? MaterialName { get; init; }
-    public string? Description { get; init; }
-    public string Status { get; init; } = ResearchProjectStatuses.Draft;
-    public IReadOnlyList<ResearchObjective> Objectives { get; init; } = [];
-    public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
-    public IReadOnlyList<ResearchConstraint> Constraints { get; init; } = [];
-    public IReadOnlyList<ResearchOutcomeConstraint> OutcomeConstraints { get; init; } = [];
-    public ResearchOptimizationFeatureSet OptimizationFeatures { get; init; } = new();
-    public IReadOnlyDictionary<string, string> Context { get; init; } =
-        new Dictionary<string, string>();
-    public string OwnerUserId { get; init; } = "";
-    public IReadOnlyList<string> MemberUserIds { get; init; } = [];
-    public string? SiteCode { get; init; }
-    public DateTimeOffset? TargetCompletionAt { get; init; }
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
-    public int Revision { get; init; }
-}
-
 /// <summary>
-/// 与一条建议一同冻结的项目定义。后续决定和结果只引用其修订号与内容哈希，
-/// 避免项目编辑改变历史证据的解释边界。
+/// 生成一条下一配方建议时使用的全部条件。它属于建议的输入，随建议一同冻结；
+/// 不存在可编辑、可激活或可归档的独立范围对象。
 /// </summary>
-public sealed record ResearchProjectEvidenceSnapshot
+public sealed record RecipeRecommendationBrief
 {
-    public Guid ProjectId { get; init; }
-    public int Revision { get; init; }
-    public string Code { get; init; } = "";
+    public required string SiteCode { get; init; }
+    public required string ProcessSpecificationId { get; init; }
     public string Name { get; init; } = "";
-    public string ProcessName { get; init; } = "";
-    public string? ProductName { get; init; }
-    public string? MaterialName { get; init; }
-    public string? SiteCode { get; init; }
-    public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
     public IReadOnlyList<ResearchObjective> Objectives { get; init; } = [];
+    public IReadOnlyList<ResearchVariable> Variables { get; init; } = [];
     public IReadOnlyList<ResearchConstraint> Constraints { get; init; } = [];
     public IReadOnlyList<ResearchOutcomeConstraint> OutcomeConstraints { get; init; } = [];
     public ResearchOptimizationFeatureSet OptimizationFeatures { get; init; } = new();
     public IReadOnlyDictionary<string, string> Context { get; init; } =
         new Dictionary<string, string>();
-}
-
-public sealed record EvidenceReference
-{
-    public Guid EvidenceId { get; init; }
-    public Guid ProjectId { get; init; }
-    public required string Kind { get; init; }
-    public required string ReferenceId { get; init; }
-    public required string Summary { get; init; }
-    public required string ContentHash { get; init; }
-    public DateTimeOffset CreatedAt { get; init; }
-}
-
-public sealed record ResearchHypothesisCausalLink
-{
-    public required string FromVariableCode { get; init; }
-    public required string ToVariableCode { get; init; }
-    public required string Mechanism { get; init; }
-    public string? Direction { get; init; }
-}
-
-public sealed record ResearchHypothesisTemporalFeature
-{
-    public required string VariableCode { get; init; }
-    public required string FeatureCode { get; init; }
-    public string? PhaseCode { get; init; }
-    public long? DelayMilliseconds { get; init; }
-    public long? WindowMilliseconds { get; init; }
-}
-
-public sealed record ResearchHypothesisInteraction
-{
-    public IReadOnlyList<string> VariableCodes { get; init; } = [];
-    public required string Description { get; init; }
-}
-
-public sealed record ResearchHypothesisFailureCondition
-{
-    public required string Condition { get; init; }
-    public required string ObservableSignal { get; init; }
-    public required string RequiredResponse { get; init; }
-}
-
-public sealed record ResearchHypothesis
-{
-    public Guid HypothesisId { get; init; }
-    public Guid ProjectId { get; init; }
-    public required string Statement { get; init; }
-    public required string Rationale { get; init; }
-    public string Status { get; init; } = ResearchHypothesisStatuses.Proposed;
-    public IReadOnlyList<string> VariableCodes { get; init; } = [];
-    public string? ValidationOutcomeCode { get; init; }
-    public string? ExpectedEffectDirection { get; init; }
-    public double? MinimumEffect { get; init; }
-    public IReadOnlyList<string> PossibleConfounders { get; init; } = [];
-    public string? Applicability { get; init; }
-    public IReadOnlyList<ResearchHypothesisCausalLink> CausalChain { get; init; } = [];
-    public IReadOnlyList<ResearchHypothesisTemporalFeature> TemporalFeatures { get; init; } = [];
-    public IReadOnlyList<ResearchHypothesisInteraction> Interactions { get; init; } = [];
-    public IReadOnlyList<ResearchHypothesisFailureCondition> FailureConditions { get; init; } = [];
-    public IReadOnlyList<string> FalsificationConditions { get; init; } = [];
-    public IReadOnlyList<EvidenceReference> SupportingEvidence { get; init; } = [];
-    public IReadOnlyList<EvidenceReference> OpposingEvidence { get; init; } = [];
-    public IReadOnlyList<EvidenceReference> ValidationEvidence { get; init; } = [];
-    public double Confidence { get; init; }
-    public string CreatedBy { get; init; } = "";
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
 }
 
 public sealed record ResearchVariableSetting
@@ -339,13 +142,6 @@ public sealed record ResearchVariableSetting
     public required string VariableCode { get; init; }
     public required double Value { get; init; }
     public required string Unit { get; init; }
-}
-
-public sealed record ResearchHypothesisFromExecutionComparisonRequest
-{
-    public required string BaselineProcessExecutionId { get; init; }
-    public IReadOnlyList<string> ProcessExecutionIds { get; init; } = [];
-    public int MaximumHypotheses { get; init; } = 3;
 }
 
 public sealed record OptimizationMetricPrediction
@@ -402,7 +198,7 @@ public static class ResearchRecipeRecommendationDecisionStatuses
 }
 
 /// <summary>
-/// 工程师对日常下一配方建议的不可变回执；不构成设备控制命令。
+/// 工程师对下一配方建议的不可变回执；不构成设备控制命令。
 /// </summary>
 public sealed record ResearchRecipeRecommendationDecisionRequest
 {
@@ -412,20 +208,19 @@ public sealed record ResearchRecipeRecommendationDecisionRequest
     public string? UsefulnessRating { get; init; }
 }
 
-/// <summary>把已冻结的日常建议决定关联到一条真实生产运行。</summary>
+/// <summary>把已冻结的建议决定关联到一条真实生产运行。</summary>
 public sealed record ResearchRecipeRecommendationExecutionLinkRequest
 {
     public required string ActualExecutionKey { get; init; }
 }
 
 /// <summary>
-/// 从实际工艺执行、参数回读和检验记录冻结的日常建议结果。
+/// 从实际工艺执行、参数回读和检验记录冻结的建议结果。
 /// </summary>
 public sealed record ResearchRecipeRecommendationOutcome
 {
     public required string ActualExecutionKey { get; init; }
-    public int ProjectRevision { get; init; }
-    public string ProjectSnapshotHash { get; init; } = "none";
+    public required string BriefHash { get; init; }
     public IReadOnlyList<ResearchVariableSetting> ActualParameters { get; init; } = [];
     public IReadOnlyDictionary<string, double> SettingDeviationFromSuggestion { get; init; } =
         new Dictionary<string, double>();
@@ -448,13 +243,12 @@ public sealed record ResearchRecipeRecommendationOutcome
 public sealed record ResearchRecipeRecommendationDecision
 {
     public Guid DecisionId { get; init; }
-    public Guid ProjectId { get; init; }
     public Guid RecommendationId { get; init; }
     public required string RecommendationKey { get; init; }
+    public required string SiteCode { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public required string BriefHash { get; init; }
     public required string Decision { get; init; }
-    public int ProjectRevision { get; init; }
-    public ResearchProjectEvidenceSnapshot ProjectSnapshot { get; init; } = new();
-    public string ProjectSnapshotHash { get; init; } = "none";
     /// <summary>由独立的实际运行关联证据提供；决定本体不因此被覆盖。</summary>
     [System.Text.Json.Serialization.JsonIgnore(
         Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -521,69 +315,6 @@ public sealed record ResearchRunObservation
     public required string SourceContentHash { get; init; }
 }
 
-public sealed record OperatingRegionVariable
-{
-    public required string VariableCode { get; init; }
-    public required double LowerBound { get; init; }
-    public required double UpperBound { get; init; }
-    public required string Unit { get; init; }
-}
-
-public sealed record ResearchOperatingRegion
-{
-    public Guid OperatingRegionId { get; init; }
-    public Guid ProjectId { get; init; }
-    public required string Name { get; init; }
-    public string Status { get; init; } = OperatingRegionStatuses.Candidate;
-    public IReadOnlyList<OperatingRegionVariable> Variables { get; init; } = [];
-    public IReadOnlyList<string> ObjectiveCodes { get; init; } = [];
-    public IReadOnlyList<EvidenceReference> Evidence { get; init; } = [];
-    public double Confidence { get; init; }
-    public required string ConfidenceMethod { get; init; }
-    public Guid AnalysisRunId { get; init; }
-    public required string AnalysisHash { get; init; }
-    public required string Applicability { get; init; }
-    public string ValidationLevel { get; init; } = OperatingRegionValidationLevels.Evidence;
-    public string? ValidationNotes { get; init; }
-    public string? ValidatedBy { get; init; }
-    public DateTimeOffset? ValidatedAt { get; init; }
-    public string CreatedBy { get; init; } = "";
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
-}
-
-public sealed record ResearchKnowledgeClaim
-{
-    public Guid ClaimId { get; init; }
-    public Guid ProjectId { get; init; }
-    public Guid? OperatingRegionId { get; init; }
-    public required string Statement { get; init; }
-    public required string Applicability { get; init; }
-    public string Status { get; init; } = ResearchKnowledgeStatuses.Draft;
-    public IReadOnlyList<EvidenceReference> Evidence { get; init; } = [];
-    public string CreatedBy { get; init; } = "";
-    public string? ReviewedBy { get; init; }
-    public DateTimeOffset? ReviewedAt { get; init; }
-    public DateTimeOffset CreatedAt { get; init; }
-    public DateTimeOffset UpdatedAt { get; init; }
-}
-
-public sealed record ResearchProjectWorkspace
-{
-    public required ResearchProject Project { get; init; }
-    public IReadOnlyList<ResearchHypothesis> Hypotheses { get; init; } = [];
-    public IReadOnlyList<ResearchRecipeRecommendation> RecipeRecommendations { get; init; } = [];
-    public IReadOnlyList<ResearchRecipeRecommendationDecision> RecipeRecommendationDecisions { get; init; } = [];
-    public IReadOnlyList<ResearchRecipeRecommendationFlow> RecipeRecommendationFlows { get; init; } = [];
-    public IReadOnlyList<ResearchOperatingRegion> OperatingRegions { get; init; } = [];
-    public IReadOnlyList<ResearchKnowledgeClaim> KnowledgeClaims { get; init; } = [];
-    public IReadOnlyList<MechanismClaimUsage> MechanismKnowledgeUsages { get; init; } = [];
-    public IReadOnlyList<ResearchAuditEntry> Audit { get; init; } = [];
-    public IReadOnlyDictionary<string, string> NextCursors { get; init; } =
-        new Dictionary<string, string>();
-    public bool HasMoreHistory => NextCursors.Count > 0;
-}
-
 public sealed record ResearchPage<T>
 {
     public IReadOnlyList<T> Items { get; init; } = [];
@@ -592,7 +323,25 @@ public sealed record ResearchPage<T>
 
 public sealed record ResearchRecipeRecommendationRequest
 {
+    public required RecipeRecommendationBrief Brief { get; init; }
     public int Seed { get; init; }
+}
+
+/// <summary>在不调用优化服务的前提下，说明建议条件能装配多少条有效真实运行。</summary>
+public sealed record RecipeRecommendationReadiness
+{
+    public int CandidateRunCount { get; init; }
+    public int ValidObservationCount { get; init; }
+    public int ExcludedObservationCount { get; init; }
+    public bool Truncated { get; init; }
+    public IReadOnlyList<string> ObservedExecutionKeys { get; init; } = [];
+    public IReadOnlyList<RecipeRecommendationExclusion> ExcludedObservations { get; init; } = [];
+}
+
+public sealed record RecipeRecommendationExclusion
+{
+    public required string ExecutionKey { get; init; }
+    public required string Reason { get; init; }
 }
 
 /// <summary>
@@ -601,10 +350,10 @@ public sealed record ResearchRecipeRecommendationRequest
 public sealed record ResearchRecipeRecommendation
 {
     public Guid RecommendationId { get; init; }
-    public Guid ProjectId { get; init; }
-    public int ProjectRevision { get; init; }
-    public ResearchProjectEvidenceSnapshot ProjectSnapshot { get; init; } = new();
-    public string ProjectSnapshotHash { get; init; } = "none";
+    public required string SiteCode { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public required RecipeRecommendationBrief Brief { get; init; }
+    public required string BriefHash { get; init; }
     public required string ModelVersion { get; init; }
     public required string InputHash { get; init; }
     public int ObservationCount { get; init; }
@@ -629,17 +378,4 @@ public sealed record ResearchRecipeRecommendationItem
     public required string RecommendationKey { get; init; }
     public IReadOnlyList<ResearchVariableSetting> Parameters { get; init; } = [];
     public required OptimizationRunPrediction Prediction { get; init; }
-}
-
-public sealed record ResearchAuditEntry
-{
-    public Guid EntryId { get; init; }
-    public Guid ProjectId { get; init; }
-    public required string ResourceType { get; init; }
-    public required string ResourceId { get; init; }
-    public required string Action { get; init; }
-    public string? FromStatus { get; init; }
-    public string? ToStatus { get; init; }
-    public string UserId { get; init; } = "";
-    public DateTimeOffset CreatedAt { get; init; }
 }

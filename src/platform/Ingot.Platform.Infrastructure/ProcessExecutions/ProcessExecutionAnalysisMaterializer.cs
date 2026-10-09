@@ -31,6 +31,21 @@ public sealed class ProcessExecutionAnalysisMaterializer(
         return snapshot is null ? null : FromSnapshot(snapshot, "cached");
     }
 
+    public async Task<IReadOnlyDictionary<string, MaterializedProcessExecutionAnalysis>> LoadLatestReadyForSiteAsync(
+        IReadOnlyList<(string ExecutionId, ProcessDataModel? DataModel, ProcessAnalysisPlan? Plan)> executions,
+        string siteId,
+        CancellationToken ct = default)
+    {
+        var snapshots = await store.LoadLatestReadyForSiteAsync(
+            executions.Select(static item => CreateKey(item.ExecutionId, item.DataModel, item.Plan)).ToArray(),
+            siteId,
+            ct).ConfigureAwait(false);
+        return snapshots.ToDictionary(
+            static pair => pair.Key,
+            static pair => FromSnapshot(pair.Value, "cached"),
+            StringComparer.Ordinal);
+    }
+
     public async Task<MaterializedProcessExecutionAnalysis> GetOrComputeAsync(
         string executionId,
         IReadOnlyList<ProcessSampleFrame> samples,

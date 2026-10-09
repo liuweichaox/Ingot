@@ -57,6 +57,8 @@ cp .env.example .env
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`：Platform 固定访问该 Edge 诊断 API 的可信地址；不得使用节点上报值动态改写
 - `INGOT_ADMIN_PASSWORD`
 
+`docker-compose.app.yml` 把 Edge 令牌、站点绑定和诊断地址传给 Platform API。成功接收事件后，该 Edge 登记到现场节点列表。
+
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。开发环境使用开发身份，不能暴露到厂内网络或反向代理之后。
 
 ### OIDC 身份提供方
@@ -86,7 +88,7 @@ https://platform.example.com/auth/logout-callback
 
 启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
 
-文档检索始终提供 PostgreSQL 关键词路径。语义检索默认关闭；只有配置的模型服务支持 OpenAI-compatible `/embeddings` 且允许向该服务发送已复核文档片段时，才设置 `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true`。可调整 `INGOT_KNOWLEDGE_EMBEDDING_MODEL`、`INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`、`INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY` 和 `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`。Worker 会为已复核片段异步建索引并回填历史缺口；查询嵌入或服务失败时自动退回关键词检索，不放宽项目、站点、适用范围和审核过滤。
+文档检索始终提供 PostgreSQL 关键词路径。语义检索默认关闭；只有配置的模型服务支持 OpenAI-compatible `/embeddings` 且允许向该服务发送已复核文档片段时，才设置 `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true`。可调整 `INGOT_KNOWLEDGE_EMBEDDING_MODEL`、`INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`、`INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY` 和 `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`。Worker 会为已复核片段异步建索引并回填历史缺口；查询嵌入或服务失败时自动退回关键词检索，不放宽站点、适用范围和审核过滤。
 
 模型服务不是采集、检验或数值优化的启动依赖。发送给模型的内容必须经过授权工具和业务权限控制。
 
@@ -241,7 +243,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 - 配方建议决策、证据和审核记录可读取；
 - Edge 离线积压能够无重复补传；
 - 历史观察能够按原版本重建；
-- 已知项目能够重新生成同一分析输入哈希。
+- 已知配方的同一生成条件能够重新生成同一分析输入哈希。
 
 ## 升级
 
@@ -252,7 +254,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 5. 升级 Platform 和数据库依赖；
 6. 分批升级 Edge，确认旧配置持续工作；
 7. 检查积压恢复、重复事件和配置收敛；
-8. 对一个已知项目执行运行装配、比较和建议回归。
+8. 对一个已知配方执行运行装配、比较和建议回归。
 
 ## 安全最小集
 
@@ -270,7 +272,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 上线前至少完成一次：Platform 中断、Edge 重启、网络断开、错误配置发布、数据库恢复、Optimizer 不可用和模型服务不可用演练，并证明采集和正式业务记录按设计降级或恢复。
 
-平台状态页会实时显示现场来源、生产上下文、运行—检验关联和正式分析准入四项业务门槛。它们只表示当前数据链可核对，不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
+配方版本的上线检查和工作台显示工艺变量、配方版本、采集配置、过程分析、质量方案和生产切换是否就绪。平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
 
 `.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期是部署声明。声明本身不是验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
 

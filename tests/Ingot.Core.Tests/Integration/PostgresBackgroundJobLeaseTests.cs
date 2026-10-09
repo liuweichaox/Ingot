@@ -24,7 +24,6 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
         var root = Path.Combine(Path.GetTempPath(), $"ingot-job-lease-{Guid.NewGuid():N}");
         try
         {
-            var projectId = await InsertProjectAsync();
             var store = new PostgresResearchAssetStore(
                 postgres.DataSource,
                 Options.Create(new ProcessKnowledgeOptions { RootPath = root }));
@@ -35,7 +34,8 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
                 "document",
                 "lease-test.txt",
                 "text/plain",
-                new Dictionary<string, string> { ["research-project-id"] = projectId.ToString() },
+                "SITE-LEASE",
+                new Dictionary<string, string>(),
                 "tester");
 
             var first = await store.ClaimKnowledgeExtractionAsync(TimeSpan.FromMinutes(5));
@@ -169,6 +169,26 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
     }
 
     [LinuxDockerFact]
+    public async Task MarkDirty_ShouldQueueExecutionsWithoutMaterialization()
+    {
+        await postgres.EnsureSchemaAsync();
+        var store = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        var executionId = $"fresh-{Guid.NewGuid():N}";
+
+        await store.MarkDirtyAsync([executionId], 42, "production_event_ingested");
+
+        await using var status = postgres.DataSource.CreateCommand(
+            "SELECT status, invalidated_source_max_ingest_id FROM execution_analysis_recompute_jobs WHERE execution_id=@id;");
+        status.Parameters.AddWithValue("id", executionId);
+        await using var reader = await status.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("queued", reader.GetString(0));
+        Assert.Equal(42, reader.GetInt64(1));
+    }
+
+    [LinuxDockerFact]
     public async Task Recompute_ShouldEnterFailedTerminalStateAtAttemptLimit()
     {
         await postgres.EnsureSchemaAsync();
@@ -200,19 +220,5 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
         Assert.Equal("failed", reader.GetString(0));
         Assert.Equal("permanent", reader.GetString(1));
         Assert.True(reader.GetBoolean(2));
-    }
-
-    private async Task<Guid> InsertProjectAsync()
-    {
-        var projectId = Guid.CreateVersion7();
-        await using var command = postgres.DataSource.CreateCommand(
-            """
-            INSERT INTO process_research_projects(project_id,code,status,revision,payload,created_at,updated_at)
-            VALUES(@id,@code,'draft',1,'{}'::jsonb,now(),now());
-            """);
-        command.Parameters.AddWithValue("id", projectId);
-        command.Parameters.AddWithValue("code", $"lease-{projectId:N}");
-        await command.ExecuteNonQueryAsync();
-        return projectId;
     }
 }

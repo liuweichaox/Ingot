@@ -28,7 +28,7 @@ export function DevicePointsPanel({
       <Card
         title="验证连接"
         description={descriptor.probeMode === PROBE_MODE.discover
-          ? `由所选采集节点真实连接设备，成功后显示${descriptor.probeViewLabel}。`
+          ? `由所选现场节点真实连接设备，成功后显示${descriptor.probeViewLabel}。`
           : "该协议无法枚举地址空间，验证连接只会回读下方已配置的点位。"}
         actions={allowProbe ? (
           <Button variant="primary" disabled={probing || Boolean(readiness)} onClick={() => onProbe()}>

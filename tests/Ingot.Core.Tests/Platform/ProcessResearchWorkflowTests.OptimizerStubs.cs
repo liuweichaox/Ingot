@@ -12,13 +12,13 @@ public abstract partial class ProcessResearchWorkflowTestBase
         public string? RequestedExecutionKey { get; private set; }
 
         public Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
-            ResearchProject project,
+            RecipeRecommendationBrief brief,
             CancellationToken ct = default)
             => Task.FromResult(new ResearchObservationAssembly(
                 observation is null ? [] : [observation], observation is null ? 0 : 1));
 
         public Task<ResearchObservationAssembly> AssembleProductionRunAsync(
-            ResearchProject project,
+            RecipeRecommendationBrief brief,
             string executionKey,
             CancellationToken ct = default)
         {

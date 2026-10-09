@@ -1,48 +1,31 @@
-// 定义研发项目、假设、审核与真实运行证据的持久化端口。
+// 定义下一配方建议、工程师决定、实际运行关联和结果冻结的持久化端口。
 using Ingot.Contracts.ProcessResearch;
 
 namespace Ingot.Platform.Application.ProcessResearch;
 
-/// <summary>保存完整研发工作流状态，并提供显式事务操作。</summary>
+/// <summary>按站点和配方筛选建议；站点集合为空表示调用方可访问全部站点。</summary>
+public sealed record RecipeRecommendationFilter(
+    IReadOnlyCollection<string>? SiteCodes,
+    string? ProcessSpecificationId = null);
+
+/// <summary>建议与其证据链只追加写入；决定、关联和结果一经保存不能覆盖。</summary>
 public interface IProcessResearchStore
 {
-    Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default);
-    Task<ResearchProject?> GetProjectByCodeAsync(string code, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchProject>> ListProjectsAsync(
-        string userId,
-        bool includeAll,
-        IReadOnlyCollection<string>? siteIds,
-        int limit,
-        int offset,
-        CancellationToken ct = default);
-    Task<ResearchProject> SaveProjectAsync(ResearchProject value, CancellationToken ct = default);
-
-    Task<ResearchHypothesis?> GetHypothesisAsync(Guid hypothesisId, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchHypothesis>> ListHypothesesAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchHypothesis> SaveHypothesisAsync(
-        ResearchHypothesis value,
-        CancellationToken ct = default);
-
     Task<ResearchRecipeRecommendation?> GetRecipeRecommendationAsync(
         Guid recommendationId,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendation?> GetRecipeRecommendationByInputHashAsync(
-        Guid projectId,
+        string siteCode,
+        string processSpecificationId,
         string inputHash,
         CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchRecipeRecommendation>> ListRecipeRecommendationsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
     Task<ResearchPage<ResearchRecipeRecommendation>> ListRecipeRecommendationsPageAsync(
-        Guid projectId,
+        RecipeRecommendationFilter filter,
         string? cursor,
         int limit,
         CancellationToken ct = default);
-    Task<ResearchRecipeRecommendation> CreateRecipeRecommendationTransactionAsync(
+    Task<ResearchRecipeRecommendation> CreateRecipeRecommendationAsync(
         ResearchRecipeRecommendation value,
-        ResearchAuditEntry audit,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendationDecision?> GetRecipeRecommendationDecisionAsync(
         Guid decisionId,
@@ -51,55 +34,23 @@ public interface IProcessResearchStore
         Guid recommendationId,
         string recommendationKey,
         CancellationToken ct = default);
-    Task<ResearchPage<ResearchRecipeRecommendationDecision>> ListRecipeRecommendationDecisionsPageAsync(
-        Guid projectId,
-        string? cursor,
-        int limit,
-        CancellationToken ct = default);
+    /// <summary>返回同一站点和配方下已接受或已修改、但尚未冻结结果的决定。</summary>
     Task<IReadOnlyList<ResearchRecipeRecommendationDecision>> ListPendingRecipeRecommendationDecisionsAsync(
-        Guid projectId,
+        string siteCode,
+        string processSpecificationId,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendationDecision> CreateRecipeRecommendationDecisionTransactionAsync(
         ResearchRecipeRecommendationDecision value,
         string? actualExecutionKey,
-        ResearchAuditEntry audit,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendationDecision> LinkRecipeRecommendationDecisionExecutionTransactionAsync(
         Guid decisionId,
         string actualExecutionKey,
-        ResearchAuditEntry audit,
+        string linkedBy,
         CancellationToken ct = default);
     Task<ResearchRecipeRecommendationDecision> AttachRecipeRecommendationOutcomeTransactionAsync(
         Guid decisionId,
         ResearchRecipeRecommendationOutcome outcome,
-        ResearchAuditEntry audit,
-        CancellationToken ct = default);
-
-    Task<ResearchOperatingRegion?> GetOperatingRegionAsync(
-        Guid operatingRegionId,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchOperatingRegion>> ListOperatingRegionsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchOperatingRegion> SaveOperatingRegionAsync(
-        ResearchOperatingRegion value,
-        CancellationToken ct = default);
-
-    Task<ResearchKnowledgeClaim?> GetKnowledgeClaimAsync(Guid claimId, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchKnowledgeClaim>> ListKnowledgeClaimsAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchKnowledgeClaim> SaveKnowledgeClaimAsync(
-        ResearchKnowledgeClaim value,
-        CancellationToken ct = default);
-
-    Task AddAuditEntryAsync(ResearchAuditEntry value, CancellationToken ct = default);
-    Task<IReadOnlyList<ResearchAuditEntry>> ListAuditEntriesAsync(
-        Guid projectId,
-        CancellationToken ct = default);
-    Task<ResearchPage<ResearchAuditEntry>> ListAuditEntriesPageAsync(
-        Guid projectId,
-        string? cursor,
-        int limit,
+        string materializedBy,
         CancellationToken ct = default);
 }

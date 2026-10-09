@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     languages: { "zh-CN": "/", en: "/en/" },
   },
   title: "Ingot — 开源工艺研发与优化系统",
-  description: "组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
+  description: "组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "工艺追因", "配方优化", "工艺优化", "工艺工程师决策",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Ingot — 从工艺数据，到有依据的研发决策。",
-    description: "组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
+    description: "组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
     url: origin,
     type: "website",
     locale: "zh_CN",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Ingot — 开源工艺研发与优化系统",
-    description: "组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
+    description: "组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。",
     images: ["/og.zh.png"],
   },
 };

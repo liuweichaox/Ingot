@@ -9,42 +9,40 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTestBase
 {
     [Fact]
-    public async Task CreateNextRecipeRecommendation_UsesOnlyCurrentPendingDecisions()
+    public async Task CreateNextRecipeRecommendation_UsesOnlyPendingDecisionsUnderTheSameBrief()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "pending-recipe-points" }, "engineer-a");
-        project = await workflow.ChangeProjectStatusAsync(
-            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a", expectedRevision: project.Revision);
-        var snapshot = ResearchProjectEvidenceSnapshots.Freeze(project);
-        var snapshotHash = ResearchProjectEvidenceSnapshots.Hash(snapshot);
+        var briefHash = RecipeRecommendationBriefPolicy.Hash(
+            await new RecipeRecommendationBriefPolicy().ResolveAsync(BriefDraft()));
 
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "accepted", Parameters(510, 9),
+        await SaveDecisionAsync(store, briefHash, "accepted", Parameters(510, 9),
             ResearchRecipeRecommendationDecisionStatuses.Accepted, actualExecutionKey: "pending-accepted");
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "modified", Parameters(518, 13),
+        await SaveDecisionAsync(store, briefHash, "modified", Parameters(518, 13),
             ResearchRecipeRecommendationDecisionStatuses.Modified, actualExecutionKey: "pending-modified");
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "rejected", Parameters(524, 14),
+        await SaveDecisionAsync(store, briefHash, "rejected", Parameters(524, 14),
             ResearchRecipeRecommendationDecisionStatuses.Rejected, actualExecutionKey: "rejected-run");
-        var completed = await SaveDecisionAsync(store, project, snapshot, snapshotHash, "completed", Parameters(530, 15),
+        var completed = await SaveDecisionAsync(store, briefHash, "completed", Parameters(530, 15),
             ResearchRecipeRecommendationDecisionStatuses.Accepted, actualExecutionKey: "completed-run");
         await store.AttachRecipeRecommendationOutcomeTransactionAsync(completed.DecisionId, new ResearchRecipeRecommendationOutcome
         {
+            BriefHash = briefHash,
             ActualExecutionKey = "completed-run",
             SourceContentHash = new string('a', 64),
             CapturedAt = DateTimeOffset.UtcNow
-        }, Audit(project.ProjectId));
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "unlinked", Parameters(534, 16),
+        }, "engineer-a");
+        await SaveDecisionAsync(store, briefHash, "unlinked", Parameters(534, 16),
             ResearchRecipeRecommendationDecisionStatuses.Accepted);
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "stale", Parameters(540, 17),
-            ResearchRecipeRecommendationDecisionStatuses.Accepted, project.Revision - 1, "stale-run");
+        await SaveDecisionAsync(store, new string('e', 64), "other-brief", Parameters(540, 17),
+            ResearchRecipeRecommendationDecisionStatuses.Accepted, actualExecutionKey: "other-brief-run");
+        await SaveDecisionAsync(store, briefHash, "other-recipe", Parameters(538, 18),
+            ResearchRecipeRecommendationDecisionStatuses.Accepted, actualExecutionKey: "other-recipe-run",
+            processSpecificationId: "other-spec");
 
         var optimizer = new CapturingOptimizerClient();
-        var service = new ResearchOptimizationService(store, optimizer,
-            new MultipleObservationAssembler(Observation(500, 8), Observation(520, 12), Observation(540, 16)));
+        var service = CreateService(store, optimizer);
 
         var first = await service.CreateNextRecipeRecommendationAsync(
-            project.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a");
+            new ResearchRecipeRecommendationRequest { Brief = BriefDraft(), Seed = 17 }, "engineer-a");
 
         Assert.NotNull(optimizer.LastSuggestionCall);
         var call = optimizer.LastSuggestionCall!;
@@ -55,11 +53,20 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 524, 14));
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 530, 15));
         Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 540, 17));
+        Assert.DoesNotContain(call.PendingPoints, value => Matches(value, 538, 18));
+        Assert.Equal(TestSiteCode, first.SiteCode);
+        Assert.Equal(TestProcessSpecificationId, first.ProcessSpecificationId);
+        Assert.Equal(briefHash, first.BriefHash);
+        Assert.Equal(briefHash, RecipeRecommendationBriefPolicy.Hash(first.Brief));
 
-        await SaveDecisionAsync(store, project, snapshot, snapshotHash, "new-current", Parameters(536, 10),
+        var duplicate = await service.CreateNextRecipeRecommendationAsync(
+            new ResearchRecipeRecommendationRequest { Brief = BriefDraft(), Seed = 17 }, "engineer-a");
+        Assert.Equal(first.RecommendationId, duplicate.RecommendationId);
+
+        await SaveDecisionAsync(store, briefHash, "new-current", Parameters(536, 10),
             ResearchRecipeRecommendationDecisionStatuses.Accepted, actualExecutionKey: "new-current-run");
         var second = await service.CreateNextRecipeRecommendationAsync(
-            project.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a");
+            new ResearchRecipeRecommendationRequest { Brief = BriefDraft(), Seed = 17 }, "engineer-a");
 
         Assert.NotEqual(first.InputHash, second.InputHash);
         Assert.NotEqual(first.RecommendationId, second.RecommendationId);
@@ -67,14 +74,60 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
     }
 
     [Fact]
+    public async Task CreateNextRecipeRecommendation_RejectsBriefWithoutControlBounds()
+    {
+        var service = CreateService(new MemoryStore(), new CapturingOptimizerClient());
+        var draft = BriefDraft();
+
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.CreateNextRecipeRecommendationAsync(new ResearchRecipeRecommendationRequest
+            {
+                Brief = draft with
+                {
+                    Variables = draft.Variables.Select(static value => value with { LowerLimit = null }).ToArray()
+                },
+                Seed = 17
+            }, "engineer-a"));
+    }
+
+    [Fact]
+    public async Task GetReadiness_ReportsObservationsForTheBrief()
+    {
+        var service = CreateService(new MemoryStore(), new CapturingOptimizerClient());
+
+        var readiness = await service.GetReadinessAsync(BriefDraft());
+
+        Assert.Equal(3, readiness.ValidObservationCount);
+        Assert.Equal(3, readiness.ObservedExecutionKeys.Count);
+        Assert.Empty(readiness.ExcludedObservations);
+    }
+
+    [Fact]
+    public void ExplainRationale_TranslatesKnownOptimizerTemplates()
+    {
+        var rationale = ResearchOptimizationService.ExplainRationale(
+            "The production surrogate selected this parameter setting under the versioned capacity-linear-response policy using only visible observations.");
+
+        Assert.Contains("已观察的参数范围", rationale, StringComparison.Ordinal);
+        Assert.DoesNotContain("production surrogate", rationale, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SnapToStep_AlignsToThePublishedControlStep()
+    {
+        Assert.True(RecipeRecommendationBriefPolicy.TrySnapToStep(
+            532.2433280793884, 450, 1, 450, 560, out var snapped));
+        Assert.Equal(532d, snapped);
+    }
+
+    [Fact]
     public async Task CreateNextRecipeRecommendation_RejectsSuggestionOutsideObservedCoverage()
     {
-        // 观察到的保压温度为 500–540，量程门允许到 544；552 只满足项目安全上限。
-        var service = await CreateServiceAsync(new CapturingOptimizerClient(temperature: 548));
+        // 观察到的保压温度为 500–540，量程门允许到 544；548 只满足建议条件的安全上限。
+        var service = CreateService(new MemoryStore(), new CapturingOptimizerClient(temperature: 548));
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => service.Service.CreateNextRecipeRecommendationAsync(
-                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+            () => service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a"));
 
         Assert.Contains("holding-temperature", error.Message, StringComparison.Ordinal);
         Assert.Contains("观察覆盖范围", error.Message, StringComparison.Ordinal);
@@ -83,10 +136,9 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
     [Fact]
     public async Task CreateNextRecipeRecommendation_AcceptsSuggestionInsideObservedCoverage()
     {
-        var service = await CreateServiceAsync(new CapturingOptimizerClient(temperature: 543.5));
+        var service = CreateService(new MemoryStore(), new CapturingOptimizerClient(temperature: 543.5));
 
-        var recommendation = await service.Service.CreateNextRecipeRecommendationAsync(
-            service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a");
+        var recommendation = await service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
 
         Assert.Equal(543.5, recommendation.Items[0].Parameters
             .Single(value => value.VariableCode == "holding-temperature").Value);
@@ -95,11 +147,10 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
     [Fact]
     public async Task CreateNextRecipeRecommendation_StopsWhenCoverageEnvelopeIsMissing()
     {
-        var service = await CreateServiceAsync(new CapturingOptimizerClient(reportCoverage: false));
+        var service = CreateService(new MemoryStore(), new CapturingOptimizerClient(reportCoverage: false));
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => service.Service.CreateNextRecipeRecommendationAsync(
-                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+            () => service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a"));
 
         Assert.Contains("未报告观察覆盖包络", error.Message, StringComparison.Ordinal);
     }
@@ -107,52 +158,41 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
     [Fact]
     public async Task CreateNextRecipeRecommendation_StopsWhenReportedCoverageDisagreesWithObservations()
     {
-        var service = await CreateServiceAsync(
-            new CapturingOptimizerClient(coverageRelativeMargin: 0.40));
+        var service = CreateService(
+            new MemoryStore(), new CapturingOptimizerClient(coverageRelativeMargin: 0.40));
 
         var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
-            () => service.Service.CreateNextRecipeRecommendationAsync(
-                service.ProjectId, new ResearchRecipeRecommendationRequest { Seed = 17 }, "engineer-a"));
+            () => service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a"));
 
         Assert.Contains("覆盖范围与平台依据同一批运行计算的结果不一致", error.Message, StringComparison.Ordinal);
     }
 
-    private static async Task<(ResearchOptimizationService Service, Guid ProjectId)> CreateServiceAsync(
-        CapturingOptimizerClient optimizer)
-    {
-        var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "observed-coverage" }, "engineer-a");
-        project = await workflow.ChangeProjectStatusAsync(
-            project.ProjectId, ResearchProjectStatuses.Active, "engineer-a", expectedRevision: project.Revision);
-        return (new ResearchOptimizationService(store, optimizer,
-            new MultipleObservationAssembler(
-                Observation(500, 8), Observation(520, 12), Observation(540, 16))),
-            project.ProjectId);
-    }
+    private static ResearchRecipeRecommendationRequest Request()
+        => new() { Brief = BriefDraft(), Seed = 17 };
+
+    private static ResearchOptimizationService CreateService(MemoryStore store, CapturingOptimizerClient optimizer)
+        => new(store, optimizer,
+            new MultipleObservationAssembler(Observation(500, 8), Observation(520, 12), Observation(540, 16)),
+            new RecipeRecommendationBriefPolicy());
 
     private static async Task<ResearchRecipeRecommendationDecision> SaveDecisionAsync(
         MemoryStore store,
-        ResearchProject project,
-        ResearchProjectEvidenceSnapshot snapshot,
-        string snapshotHash,
+        string briefHash,
         string key,
         IReadOnlyList<ResearchVariableSetting> parameters,
         string decision,
-        int? projectRevision = null,
-        string? actualExecutionKey = null)
+        string? actualExecutionKey = null,
+        string processSpecificationId = TestProcessSpecificationId)
     {
         var value = new ResearchRecipeRecommendationDecision
         {
             DecisionId = Guid.CreateVersion7(),
-            ProjectId = project.ProjectId,
             RecommendationId = Guid.CreateVersion7(),
             RecommendationKey = key,
+            SiteCode = TestSiteCode,
+            ProcessSpecificationId = processSpecificationId,
+            BriefHash = briefHash,
             Decision = decision,
-            ProjectRevision = projectRevision ?? project.Revision,
-            ProjectSnapshot = snapshot,
-            ProjectSnapshotHash = snapshotHash,
             SuggestedParameters = Parameters(512, 10),
             EngineerSelectedParameters = parameters,
             Prediction = new OptimizationRunPrediction { ExecutionKey = key, Rationale = "test" },
@@ -160,20 +200,8 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
             DecidedBy = "engineer-a",
             DecidedAt = DateTimeOffset.UtcNow
         };
-        return await store.CreateRecipeRecommendationDecisionTransactionAsync(
-            value, actualExecutionKey, Audit(project.ProjectId));
+        return await store.CreateRecipeRecommendationDecisionTransactionAsync(value, actualExecutionKey);
     }
-
-    private static ResearchAuditEntry Audit(Guid projectId) => new()
-    {
-        EntryId = Guid.CreateVersion7(),
-        ProjectId = projectId,
-        ResourceType = "recipe-recommendation-decision",
-        ResourceId = Guid.CreateVersion7().ToString(),
-        Action = "created",
-        UserId = "engineer-a",
-        CreatedAt = DateTimeOffset.UtcNow
-    };
 
     private static ResearchRunObservation Observation(double temperature, double force) => new()
     {
@@ -192,11 +220,11 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
         : IResearchObservationAssembler
     {
         public Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
-            ResearchProject project, CancellationToken ct = default)
+            RecipeRecommendationBrief brief, CancellationToken ct = default)
             => Task.FromResult(new ResearchObservationAssembly(observations, observations.Length));
 
         public Task<ResearchObservationAssembly> AssembleProductionRunAsync(
-            ResearchProject project, string executionKey, CancellationToken ct = default)
+            RecipeRecommendationBrief brief, string executionKey, CancellationToken ct = default)
             => Task.FromResult(new ResearchObservationAssembly(
                 observations.Where(value => value.ExecutionKey == executionKey).ToArray(), observations.Length));
     }

@@ -231,7 +231,7 @@ app.MapGet("/", () => Results.Ok(new
         inspectionReviews = "/api/v1/inspection-reviews",
         executions = "/api/v1/process-executions",
         executionComparisons = "/api/v1/execution-comparisons/{executionId}",
-        researchProjects = "/api/v1/research-projects",
+        recipeRecommendations = "/api/v1/recipe-recommendations",
         trainingDatasets = "/api/v1/training-datasets",
         toolingTypes = "/api/v1/tooling-types",
         toolingComponents = "/api/v1/tooling-components",
@@ -276,7 +276,7 @@ Log.Logger.Information("    > Quality Tasks: {0}/api/v1/inspection-tasks", baseA
 Log.Logger.Information("    > Reviews:       {0}/api/v1/inspection-reviews", baseAddress);
 Log.Logger.Information("    > ProcessExecutions:        {0}/api/v1/process-executions", baseAddress);
 Log.Logger.Information("    > Comparisons:   {0}/api/v1/execution-comparisons/{{executionId}}", baseAddress);
-Log.Logger.Information("    > Research Projects: {0}/api/v1/research-projects", baseAddress);
+Log.Logger.Information("    > Recipe Recs:   {0}/api/v1/recipe-recommendations", baseAddress);
 Log.Logger.Information("    > Tooling Types: {0}/api/v1/tooling-types", baseAddress);
 Log.Logger.Information("    > Components:    {0}/api/v1/tooling-components", baseAddress);
 Log.Logger.Information("    > Assemblies:    {0}/api/v1/tooling-assemblies", baseAddress);

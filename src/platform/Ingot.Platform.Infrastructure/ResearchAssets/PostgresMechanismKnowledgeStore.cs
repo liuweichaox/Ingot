@@ -24,31 +24,34 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     }
 
     public async Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(
-        Guid projectId,
+        string siteCode,
+        string processSpecificationId,
         CancellationToken ct = default)
     {
         var values = new List<MechanismClaimVersion>();
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using (var command = new NpgsqlCommand(
             """
-            SELECT c.claim_id, c.project_id, v.version, c.status, v.name, v.mechanism_type,
+            SELECT c.claim_id, c.site_code, v.version, c.status, v.name, v.mechanism_type,
               v.statement, v.expected_signature, v.falsification_condition, v.evidence_level,
-              v.created_by, v.created_at, v.reviewed_by, v.reviewed_at, v.content_hash, c.updated_at
+              v.created_by, v.created_at, v.reviewed_by, v.reviewed_at, v.content_hash, c.updated_at,
+              c.process_specification_id
             FROM mechanism_claims c
             JOIN mechanism_claim_versions v
               ON v.claim_id = c.claim_id AND v.version = c.current_version
-            WHERE c.project_id = @project_id
+            WHERE c.site_code = @site_code AND c.process_specification_id = @process_specification_id
             ORDER BY c.updated_at DESC, c.claim_id;
             """,
             connection))
         {
-            command.Parameters.AddWithValue("project_id", projectId);
+            AddScope(command, siteCode, processSpecificationId);
             await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 values.Add(new MechanismClaimVersion
                 {
                     ClaimId = reader.GetGuid(0),
-                    ProjectId = reader.GetGuid(1),
+                    SiteCode = reader.GetString(1),
+                    ProcessSpecificationId = reader.GetString(16),
                     Version = reader.GetInt32(2),
                     Status = reader.GetString(3),
                     Name = reader.GetString(4),
@@ -68,12 +71,12 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         if (values.Count == 0) return values;
 
         var variables = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimVariable>());
-        await using (var command = CurrentClaimChildCommand(connection, projectId,
+        await using (var command = CurrentClaimChildCommand(connection, siteCode, processSpecificationId,
             """
             SELECT child.claim_id, child.variable_code, child.variable_role, child.direction, child.delay_ms, child.unit
             FROM mechanism_claim_variables child
             JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
-            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.variable_role, child.variable_code;
+            WHERE claim.site_code=@site_code AND claim.process_specification_id=@process_specification_id ORDER BY child.claim_id, child.variable_role, child.variable_code;
             """))
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -87,12 +90,12 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
                 });
 
         var applicability = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimApplicability>());
-        await using (var command = CurrentClaimChildCommand(connection, projectId,
+        await using (var command = CurrentClaimChildCommand(connection, siteCode, processSpecificationId,
             """
             SELECT child.claim_id, child.dimension_code, child.dimension_value
             FROM mechanism_claim_applicability child
             JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
-            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.dimension_code, child.dimension_value;
+            WHERE claim.site_code=@site_code AND claim.process_specification_id=@process_specification_id ORDER BY child.claim_id, child.dimension_code, child.dimension_value;
             """))
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -100,13 +103,13 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
                 { DimensionCode = reader.GetString(1), DimensionValue = reader.GetString(2) });
 
         var constraints = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimConstraint>());
-        await using (var command = CurrentClaimChildCommand(connection, projectId,
+        await using (var command = CurrentClaimChildCommand(connection, siteCode, processSpecificationId,
             """
             SELECT child.claim_id, child.constraint_id, child.variable_code, child.constraint_kind,
               child.minimum, child.maximum, child.unit, child.severity
             FROM mechanism_claim_constraints child
             JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
-            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.variable_code;
+            WHERE claim.site_code=@site_code AND claim.process_specification_id=@process_specification_id ORDER BY child.claim_id, child.variable_code;
             """))
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -122,14 +125,14 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
                 });
 
         var combinations = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismForbiddenCombination>());
-        await using (var command = CurrentClaimChildCommand(connection, projectId,
+        await using (var command = CurrentClaimChildCommand(connection, siteCode, processSpecificationId,
             """
             SELECT combination.claim_id, combination.combination_id, combination.name,
               factor.variable_code, factor.minimum, factor.maximum, factor.unit
             FROM mechanism_claim_forbidden_combinations combination
             JOIN mechanism_claims claim ON claim.claim_id=combination.claim_id AND claim.current_version=combination.claim_version
             LEFT JOIN mechanism_claim_forbidden_combination_factors factor ON factor.combination_id=combination.combination_id
-            WHERE claim.project_id=@project_id
+            WHERE claim.site_code=@site_code AND claim.process_specification_id=@process_specification_id
             ORDER BY combination.claim_id, combination.name, combination.combination_id, factor.variable_code;
             """))
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
@@ -156,13 +159,13 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         }
 
         var evidence = values.ToDictionary(static value => value.ClaimId, static _ => new List<MechanismClaimEvidence>());
-        await using (var command = CurrentClaimChildCommand(connection, projectId,
+        await using (var command = CurrentClaimChildCommand(connection, siteCode, processSpecificationId,
             """
             SELECT child.claim_id, child.evidence_link_id, child.evidence_kind, child.reference_id,
               child.polarity, child.content_hash
             FROM mechanism_claim_evidence child
             JOIN mechanism_claims claim ON claim.claim_id=child.claim_id AND claim.current_version=child.claim_version
-            WHERE claim.project_id=@project_id ORDER BY child.claim_id, child.created_at, child.evidence_link_id;
+            WHERE claim.site_code=@site_code AND claim.process_specification_id=@process_specification_id ORDER BY child.claim_id, child.created_at, child.evidence_link_id;
             """))
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -186,11 +189,17 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     }
 
     private static NpgsqlCommand CurrentClaimChildCommand(
-        NpgsqlConnection connection, Guid projectId, string sql)
+        NpgsqlConnection connection, string siteCode, string processSpecificationId, string sql)
     {
         var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue("project_id", projectId);
+        AddScope(command, siteCode, processSpecificationId);
         return command;
+    }
+
+    private static void AddScope(NpgsqlCommand command, string siteCode, string processSpecificationId)
+    {
+        command.Parameters.AddWithValue("site_code", siteCode);
+        command.Parameters.AddWithValue("process_specification_id", processSpecificationId);
     }
 
     public async Task<MechanismClaimVersion> SaveDraftAsync(
@@ -201,8 +210,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         await using (var claim = new NpgsqlCommand(
             """
-            INSERT INTO mechanism_claims(claim_id, project_id, current_version, status, created_at, updated_at)
-            VALUES (@claim_id, @project_id, @version, @status, @created_at, @updated_at)
+            INSERT INTO mechanism_claims(
+              claim_id, site_code, process_specification_id, current_version, status, created_at, updated_at)
+            VALUES (
+              @claim_id, @site_code, @process_specification_id, @version, @status, @created_at, @updated_at)
             ON CONFLICT (claim_id) DO UPDATE SET
               current_version = EXCLUDED.current_version,
               status = EXCLUDED.status,
@@ -210,7 +221,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             """, connection, transaction))
         {
             claim.Parameters.AddWithValue("claim_id", value.ClaimId);
-            claim.Parameters.AddWithValue("project_id", value.ProjectId);
+            AddScope(claim, value.SiteCode, value.ProcessSpecificationId);
             claim.Parameters.AddWithValue("version", value.Version);
             claim.Parameters.AddWithValue("status", value.Status);
             claim.Parameters.AddWithValue("created_at", value.CreatedAt);
@@ -255,7 +266,8 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     }
 
     public async Task<bool> EvidenceExistsAsync(
-        Guid projectId,
+        string siteCode,
+        string processSpecificationId,
         MechanismClaimEvidence evidence,
         CancellationToken ct = default)
     {
@@ -263,38 +275,39 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         var sql = evidence.EvidenceKind switch
         {
             "knowledge-source" =>
-                "SELECT EXISTS(SELECT 1 FROM knowledge_sources WHERE source_id=@id AND project_id=@project_id AND sha256=@hash);",
+                "SELECT EXISTS(SELECT 1 FROM knowledge_sources WHERE source_id=@id AND site_code=@site_code AND sha256=@hash);",
             "knowledge-fragment" =>
                 """
                 SELECT EXISTS(
                   SELECT 1 FROM knowledge_fragments fragment
                   JOIN knowledge_sources source ON source.source_id=fragment.source_id
-                  WHERE fragment.record_id=@id AND source.project_id=@project_id AND fragment.content_hash=@hash);
+                  WHERE fragment.record_id=@id AND source.site_code=@site_code AND fragment.content_hash=@hash);
                 """,
             "recipe-recommendation-outcome" =>
                 """
                 SELECT EXISTS(
-                  SELECT 1 FROM research_recipe_recommendation_decision_outcomes
-                  WHERE decision_id=@id AND project_id=@project_id
-                    AND payload->>'sourceContentHash'=@hash
-                    AND COALESCE((payload->>'validForOptimization')::boolean, false));
+                  SELECT 1
+                  FROM research_recipe_recommendation_decision_outcomes outcome
+                  JOIN research_recipe_recommendation_decisions decision ON decision.decision_id = outcome.decision_id
+                  WHERE outcome.decision_id=@id
+                    AND decision.site_code=@site_code
+                    AND decision.process_specification_id=@process_specification_id
+                    AND outcome.payload->>'sourceContentHash'=@hash
+                    AND COALESCE((outcome.payload->>'validForOptimization')::boolean, false));
                 """,
             _ => null
         };
         if (sql is null) return false;
         await using var command = dataSource.CreateCommand(sql);
         command.Parameters.AddWithValue("id", referenceId);
-        command.Parameters.AddWithValue("project_id", projectId);
+        AddScope(command, siteCode, processSpecificationId);
         command.Parameters.AddWithValue("hash", evidence.ContentHash);
         return (bool)(await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? false);
     }
 
     public async Task<bool> RecipeRecommendationOutcomeSupportsClaimAsync(
-        Guid projectId,
         MechanismClaimVersion claim,
-        Guid validationHypothesisId,
         MechanismClaimEvidence evidence,
-        string evaluationOutcome = "supports",
         CancellationToken ct = default)
     {
         if (!Guid.TryParse(evidence.ReferenceId, out var decisionId)) return false;
@@ -304,29 +317,16 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
               SELECT 1
               FROM research_recipe_recommendation_decision_outcomes outcome
               JOIN research_recipe_recommendation_decisions decision ON decision.decision_id = outcome.decision_id
-              JOIN research_hypotheses hypothesis
-                ON hypothesis.hypothesis_id = @hypothesis_id
-               AND hypothesis.project_id = @project_id
               WHERE outcome.decision_id = @decision_id
-                AND outcome.project_id = @project_id
+                AND decision.site_code = @site_code
+                AND decision.process_specification_id = @process_specification_id
                 AND outcome.payload->>'sourceContentHash' = @hash
                 AND COALESCE((outcome.payload->>'validForOptimization')::boolean, false)
-                AND decision.decision IN ('accepted', 'modified')
-                AND hypothesis.validation_outcome_code IS NOT NULL
-                AND hypothesis.expected_effect_direction IS NOT NULL
-                AND hypothesis.minimum_effect IS NOT NULL
-                AND CASE @evaluation_outcome
-                  WHEN 'supports' THEN true
-                  WHEN 'falsifies' THEN true
-                  ELSE false END;
+                AND decision.decision IN ('accepted', 'modified'));
             """);
         command.Parameters.AddWithValue("decision_id", decisionId);
-        command.Parameters.AddWithValue("project_id", projectId);
-        command.Parameters.AddWithValue("hypothesis_id", validationHypothesisId);
-        command.Parameters.AddWithValue("claim_id", claim.ClaimId);
-        command.Parameters.AddWithValue("claim_version", claim.Version);
+        AddScope(command, claim.SiteCode, claim.ProcessSpecificationId);
         command.Parameters.AddWithValue("hash", evidence.ContentHash);
-        command.Parameters.AddWithValue("evaluation_outcome", evaluationOutcome);
         return (bool)(await command.ExecuteScalarAsync(ct).ConfigureAwait(false) ?? false);
     }
 
@@ -390,16 +390,16 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         await using var command = dataSource.CreateCommand(
             """
             INSERT INTO mechanism_claim_conflicts(
-              conflict_id, project_id, left_claim_id, left_claim_version,
+              conflict_id, site_code, process_specification_id, left_claim_id, left_claim_version,
               right_claim_id, right_claim_version, conflict_kind, rationale,
               status, created_by, created_at)
             VALUES (
-              @id, @project_id, @left_id, @left_version,
+              @id, @site_code, @process_specification_id, @left_id, @left_version,
               @right_id, @right_version, @kind, @rationale,
               @status, @created_by, @created_at);
             """);
         command.Parameters.AddWithValue("id", value.ConflictId);
-        command.Parameters.AddWithValue("project_id", value.ProjectId);
+        AddScope(command, value.SiteCode, value.ProcessSpecificationId);
         command.Parameters.AddWithValue("left_id", value.LeftClaimId);
         command.Parameters.AddWithValue("left_version", value.LeftClaimVersion);
         command.Parameters.AddWithValue("right_id", value.RightClaimId);
@@ -426,9 +426,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     {
         await using var command = dataSource.CreateCommand(
             """
-            SELECT conflict_id, project_id, left_claim_id, left_claim_version,
+            SELECT conflict_id, site_code, left_claim_id, left_claim_version,
               right_claim_id, right_claim_version, conflict_kind, rationale,
-              status, created_by, created_at, resolved_by, resolved_at, resolution
+              status, created_by, created_at, resolved_by, resolved_at, resolution,
+              process_specification_id
             FROM mechanism_claim_conflicts WHERE conflict_id = @id;
             """);
         command.Parameters.AddWithValue("id", conflictId);
@@ -444,10 +445,9 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             """
             UPDATE mechanism_claim_conflicts
             SET status='resolved', resolved_by=@resolved_by, resolved_at=@resolved_at, resolution=@resolution
-            WHERE conflict_id=@id AND project_id=@project_id AND status='open';
+            WHERE conflict_id=@id AND status='open';
             """);
         command.Parameters.AddWithValue("id", value.ConflictId);
-        command.Parameters.AddWithValue("project_id", value.ProjectId);
         command.Parameters.AddWithValue("resolved_by", value.ResolvedBy!);
         command.Parameters.AddWithValue("resolved_at", value.ResolvedAt!.Value);
         command.Parameters.AddWithValue("resolution", value.Resolution!);
@@ -457,19 +457,21 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     }
 
     public async Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(
-        Guid projectId,
+        string siteCode,
+        string processSpecificationId,
         CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand(
             """
-            SELECT conflict_id, project_id, left_claim_id, left_claim_version,
+            SELECT conflict_id, site_code, left_claim_id, left_claim_version,
               right_claim_id, right_claim_version, conflict_kind, rationale,
-              status, created_by, created_at, resolved_by, resolved_at, resolution
+              status, created_by, created_at, resolved_by, resolved_at, resolution,
+              process_specification_id
             FROM mechanism_claim_conflicts
-            WHERE project_id = @project_id
+            WHERE site_code = @site_code AND process_specification_id = @process_specification_id
             ORDER BY created_at DESC;
             """);
-        command.Parameters.AddWithValue("project_id", projectId);
+        AddScope(command, siteCode, processSpecificationId);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var values = new List<MechanismClaimConflict>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -480,7 +482,8 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     private static MechanismClaimConflict ReadConflict(NpgsqlDataReader reader) => new()
     {
         ConflictId = reader.GetGuid(0),
-        ProjectId = reader.GetGuid(1),
+        SiteCode = reader.GetString(1),
+        ProcessSpecificationId = reader.GetString(14),
         LeftClaimId = reader.GetGuid(2),
         LeftClaimVersion = reader.GetInt32(3),
         RightClaimId = reader.GetGuid(4),
@@ -522,7 +525,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
     }
 
     public async Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(
-        Guid projectId,
+        Guid recommendationId,
         CancellationToken ct = default)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
@@ -532,14 +535,13 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             SELECT usage.recommendation_id, usage.claim_id, usage.claim_version,
               usage.usage_type, usage.content_hash, version.name
             FROM recipe_recommendation_knowledge_usage usage
-            JOIN mechanism_claims claim ON claim.claim_id = usage.claim_id
             JOIN mechanism_claim_versions version
               ON version.claim_id = usage.claim_id AND version.version = usage.claim_version
-            WHERE claim.project_id = @project_id
-            ORDER BY usage.recommendation_id, version.name, usage.usage_type;
+            WHERE usage.recommendation_id = @recommendation_id
+            ORDER BY version.name, usage.usage_type;
             """, connection))
         {
-            command.Parameters.AddWithValue("project_id", projectId);
+            command.Parameters.AddWithValue("recommendation_id", recommendationId);
             await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
             while (await reader.ReadAsync(ct).ConfigureAwait(false))
                 values.Add(new MechanismClaimUsage
@@ -559,8 +561,6 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             var claim = await ReadClaimAsync(connection, key.ClaimId, key.ClaimVersion, ct)
                 .ConfigureAwait(false)
                 ?? throw new InvalidOperationException("建议引用的机理声明版本不存在。");
-            if (claim.ProjectId != projectId)
-                throw new InvalidOperationException("建议引用的机理声明不属于当前研发项目。");
             claims[key] = claim;
         }
 
@@ -629,10 +629,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             """
             INSERT INTO mechanism_claim_lifecycle_decisions(
               decision_id, claim_id, claim_version, from_status, to_status,
-              evidence_kind, reference_id, content_hash, validation_hypothesis_id,
+              evidence_kind, reference_id, content_hash,
               evaluation_outcome, evaluation_summary, comment, decided_by, decided_at)
             VALUES (@decision_id, @claim_id, @claim_version, @from_status, @to_status,
-              @evidence_kind, @reference_id, @content_hash, @validation_hypothesis_id,
+              @evidence_kind, @reference_id, @content_hash,
               @evaluation_outcome, @evaluation_summary, @comment, @decided_by, @decided_at);
             """, connection, transaction))
         {
@@ -644,7 +644,6 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             AddNullable(insert, "evidence_kind", NpgsqlDbType.Text, decision.EvidenceKind);
             AddNullable(insert, "reference_id", NpgsqlDbType.Text, decision.ReferenceId);
             AddNullable(insert, "content_hash", NpgsqlDbType.Text, decision.ContentHash);
-            AddNullable(insert, "validation_hypothesis_id", NpgsqlDbType.Uuid, decision.ValidationHypothesisId);
             AddNullable(insert, "evaluation_outcome", NpgsqlDbType.Text, decision.EvaluationOutcome);
             AddNullable(insert, "evaluation_summary", NpgsqlDbType.Text, decision.EvaluationSummary);
             AddNullable(insert, "comment", NpgsqlDbType.Text, decision.Comment);
@@ -664,9 +663,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         MechanismClaimVersion? value;
         await using (var command = new NpgsqlCommand(
             """
-            SELECT c.project_id, v.version, c.status, v.name, v.mechanism_type,
+            SELECT c.site_code, v.version, c.status, v.name, v.mechanism_type,
               v.statement, v.expected_signature, v.falsification_condition, v.evidence_level,
-              v.created_by, v.created_at, v.reviewed_by, v.reviewed_at, v.content_hash, c.updated_at
+              v.created_by, v.created_at, v.reviewed_by, v.reviewed_at, v.content_hash, c.updated_at,
+              c.process_specification_id
             FROM mechanism_claims c
             JOIN mechanism_claim_versions v ON v.claim_id = c.claim_id
               AND v.version = COALESCE(@version, c.current_version)
@@ -680,7 +680,8 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             value = new MechanismClaimVersion
             {
                 ClaimId = claimId,
-                ProjectId = reader.GetGuid(0),
+                SiteCode = reader.GetString(0),
+                ProcessSpecificationId = reader.GetString(15),
                 Version = reader.GetInt32(1),
                 Status = reader.GetString(2),
                 Name = reader.GetString(3),

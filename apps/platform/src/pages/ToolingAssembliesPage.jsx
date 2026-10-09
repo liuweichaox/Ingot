@@ -11,7 +11,7 @@ function ToolingRevisionComposition({ revision, template, components, componentT
   const typeByCode = new Map(componentTypes.map(type => [type.componentTypeCode, type]));
   const roles = template?.roles || [];
   if (!revision) {
-    return <EmptyState title="尚未建立配置版本" description="为工装总成的每个装配位置选择具体组件资产后，才能用于设备装卸和运行追溯。" />;
+    return <EmptyState title="尚未建立配置版本" description="为工装总成的每个装配位置选择一件具体组件后，才能用于设备装卸和运行追溯。" />;
   }
   return (
     <div className="space-y-4">
@@ -37,12 +37,12 @@ function ToolingRevisionComposition({ revision, template, components, componentT
               </div>
               {component ? (
                 <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1 text-xs leading-5">
-                  <dt className="text-slate-400">资产编号</dt><dd className="text-slate-700">{component.componentId}</dd>
+                  <dt className="text-slate-400">台账编号</dt><dd className="text-slate-700">{component.componentId}</dd>
                   <dt className="text-slate-400">序列号</dt><dd className="text-slate-700">{component.serialNo}</dd>
                   <dt className="text-slate-400">组件分类</dt><dd className="text-slate-700">{type?.name || component.componentTypeCode}</dd>
                   <dt className="text-slate-400">型号/零件号</dt><dd className="text-slate-700">{component.attributes?.model || "—"} · {component.attributes?.productCode || "—"}</dd>
                 </dl>
-              ) : <p className="mt-3 text-xs text-rose-700">该位置缺少可追溯的组件资产。</p>}
+              ) : <p className="mt-3 text-xs text-rose-700">该位置缺少可追溯的组件。</p>}
             </article>
           );
         })}
@@ -208,7 +208,7 @@ export function ToolingAssembliesPage({ canWrite = true }) {
 
   return (
     <Page
-      title="实际工装总成"
+      title="工装总成"
       actions={canWrite ? <Button variant="primary" onClick={openCreateAssembly}>新建工装总成</Button> : undefined}
     >
       <RequestError
@@ -218,15 +218,15 @@ export function ToolingAssembliesPage({ canWrite = true }) {
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       <WorkflowGuide
         title="工装总成数据的正确关系"
-        description="组件分类说明“是什么”，工装结构定义说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
+        description="组件分类说明“是什么”，工装结构说明“装在哪里”，配置版本说明“这次具体装了哪一件”。"
         steps={[
-          { title: "登记组件资产", description: "每件可更换组件使用独立资产编号和序列号。", state: components.length ? "done" : "current" },
+          { title: "登记组件", description: "每件可更换组件使用独立台账编号和序列号。", state: components.length ? "done" : "current" },
           { title: "建立工装总成配置", description: "按装配位置选择实际组件，形成不可变版本。", state: revisions.length ? "done" : components.length ? "current" : "upcoming" },
           { title: "装入生产设备", description: "安装后新运行自动关联工装总成及全部成员。", state: installations.length ? "done" : revisions.length ? "current" : "upcoming" },
         ]}
       />
       {loading ? <LoadingCard /> : assemblies.length === 0 ? (
-        <EmptyState title="还没有实际工装总成" description="先准备组件分类、组件资产和工装结构定义，再建立工装总成身份。" />
+        <EmptyState title="还没有工装总成" description="先准备组件分类、组件台账和工装结构，再建立工装总成。" />
       ) : (
         <div className="grid gap-5">
           {assemblies.map(assembly => {
@@ -303,7 +303,7 @@ export function ToolingAssembliesPage({ canWrite = true }) {
         open={Boolean(revisionTarget)}
         onClose={() => setRevisionTarget(null)}
         title={revisionTarget ? `${revisionTarget.name} · 配置版本` : "配置版本"}
-        description="每个装配位置选择一件具体组件资产。保存后该版本不可修改，更换组件时创建下一版本。"
+        description="每个装配位置选择一件具体组件。保存后该版本不可修改，更换组件时创建下一版本。"
         footer={<><Button onClick={() => setRevisionTarget(null)}>取消</Button><Button variant="primary" disabled={saving || !revisionValid} onClick={saveRevision}>{saving ? "保存中" : "创建新版本"}</Button></>}
       >
         {actionError && <Alert tone="danger">{actionError}</Alert>}
@@ -319,7 +319,7 @@ export function ToolingAssembliesPage({ canWrite = true }) {
             return (
               <Field key={role.code} label={role.required ? role.name : `${role.name}（可选）`} hint={`允许：${role.acceptedComponentTypeCodes.map(code => componentTypes.find(type => type.componentTypeCode === code)?.name || code).join("、")}`}>
                 <Select value={memberSelection[role.code] || ""} onChange={event => setMemberSelection(current => ({ ...current, [role.code]: event.target.value }))}>
-                  <option value="">{role.required ? "请选择组件资产" : "不装配此位置"}</option>
+                  <option value="">{role.required ? "请选择组件" : "不装配此位置"}</option>
                   {options.map(component => (
                     <option key={component.componentId} value={component.componentId} disabled={selectedIds.has(component.componentId) && memberSelection[role.code] !== component.componentId}>
                       {component.name} · {component.serialNo}

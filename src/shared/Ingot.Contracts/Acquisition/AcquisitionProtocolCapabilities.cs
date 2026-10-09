@@ -77,7 +77,7 @@ public static class AcquisitionProtocolCapabilities
             {
                 Protocol = AcquisitionProtocols.HttpPolling,
                 DisplayName = "HTTP 轮询",
-                Summary = "设备或网关以 HTTP 提供一份 JSON 快照，采集节点按间隔读取。",
+                Summary = "设备或网关以 HTTP 提供一份 JSON 快照，现场节点按间隔读取。",
                 Addressing = AcquisitionAddressingKinds.JsonPath,
                 ProbeMode = AcquisitionProbeModes.Discover,
                 ConnectionSection = "httpPolling",
@@ -97,7 +97,7 @@ public static class AcquisitionProtocolCapabilities
             {
                 Protocol = AcquisitionProtocols.Mqtt,
                 DisplayName = "MQTT 订阅",
-                Summary = "设备或网关主动向消息服务器发布 JSON 报文，采集节点订阅接收。",
+                Summary = "设备或网关主动向消息服务器发布 JSON 报文，现场节点订阅接收。",
                 Addressing = AcquisitionAddressingKinds.JsonPath,
                 ProbeMode = AcquisitionProbeModes.Discover,
                 ConnectionSection = "mqtt",
@@ -130,7 +130,7 @@ public static class AcquisitionProtocolCapabilities
                 SourceDataTypes = DocumentTypes,
                 Constraints =
                 [
-                    "采样时间固定使用服务器提供的 SourceTimestamp，不能改用采集节点接收时间。",
+                    "采样时间固定使用服务器提供的 SourceTimestamp，不能改用现场节点接收时间。",
                     "NodeId 中的命名空间序号由服务器分配；服务器重排命名空间后需要重新验证配置。",
                     "当前驱动订阅变量节点，不采集 OPC UA 事件和报警。"
                 ]

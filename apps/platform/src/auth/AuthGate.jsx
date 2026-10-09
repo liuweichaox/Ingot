@@ -240,7 +240,7 @@ export default function AuthGate({ children, oidcManagerFactory = createOidcMana
           <div className="relative max-w-2xl py-14">
             <p className="data-label text-evidence-400">PROCESS R&D · ANALYSIS · OPTIMIZATION</p>
             <h1 className="mt-5 text-5xl font-semibold leading-[1.06] tracking-normal text-white xl:text-6xl">从工艺数据，<br /><span className="text-evidence-400">到有依据的研发决策。</span></h1>
-            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺研发与优化系统。组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化。</p>
+            <p className="mt-7 max-w-xl text-base leading-8 text-slate-300">开源工艺研发与优化系统。组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。</p>
 
             <div className="mt-10 overflow-hidden rounded-lg border border-white/12 bg-black/15 backdrop-blur-sm">
               <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">

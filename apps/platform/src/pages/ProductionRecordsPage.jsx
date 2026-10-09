@@ -227,9 +227,9 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
             <>
               <WorkflowGuide
                 title="生产开始前"
-                description="现场接入和配方版本发布通常只需配置一次；每次换产品或换配方版本时更新生产配置。"
+                description="采集配置和配方版本通常只需配置一次；每次换产品或换配方版本时做生产切换。"
                 steps={[
-                  { title: "设备已有数据", description: "在“现场接入”中完成数据源配置。", state: rows.length ? "done" : "current" },
+                  { title: "设备已有数据", description: "在采集配置里把设备点位映射到工艺变量。", state: rows.length ? "done" : "current" },
                   { title: "产品与配方版本就绪", description: "准备产品编号和已发布配方版本。", state: rows.some(row => row.processSpecificationId) ? "done" : rows.length ? "current" : "upcoming" },
                   { title: "启用生产配置", description: "确认设备、产品、配方版本和当前工装。", state: activeRows.length ? "done" : "current" },
                 ]}

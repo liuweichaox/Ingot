@@ -1,4 +1,4 @@
-// 验证 Edge 令牌及其站点绑定，防止采集节点跨站提交事件。
+// 验证 Edge 令牌及其站点绑定，防止现场节点跨站提交事件。
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Platform.Application.Events;

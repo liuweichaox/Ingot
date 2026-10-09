@@ -71,20 +71,20 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
     },
     assemblyRevisionId: {
       endpoint: "/api/v1/tooling-assemblies/revisions",
-      label: "工装组合版本",
+      label: "工装总成版本",
       optionValue: row => row.assemblyRevisionId,
       optionLabel: row => `${row.toolingAssemblyId} · 版本 ${row.revision}`,
     },
     componentTypeCode: {
       endpoint: "/api/v1/tooling-component-types",
-      label: "组件类型",
+      label: "组件分类",
       filter: row => row.status !== "inactive",
       optionValue: row => row.componentTypeCode,
       optionLabel: row => `${row.name} · ${row.componentTypeCode}`,
     },
     toolingTypeCode: {
       endpoint: "/api/v1/tooling-types",
-      label: "工装类型",
+      label: "工装结构",
       filter: row => row.status !== "inactive",
       optionValue: row => row.toolingTypeCode,
       optionLabel: row => `${row.name} · ${row.toolingTypeCode} v${row.version}`,

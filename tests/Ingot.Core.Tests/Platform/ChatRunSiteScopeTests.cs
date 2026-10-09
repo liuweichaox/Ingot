@@ -5,7 +5,6 @@ using Ingot.Agent;
 using Ingot.Contracts.Agents;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
-using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
@@ -80,7 +79,6 @@ public sealed class ChatRunSiteScopeTests
         };
         return new ChatRunsController(
             runtime,
-            new ProcessResearchQueries(null!),
             new PlatformUserResolver(new ProductionEnvironment()))
         {
             ControllerContext = new ControllerContext { HttpContext = context }

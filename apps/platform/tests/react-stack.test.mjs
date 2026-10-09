@@ -57,7 +57,7 @@ test("platform uses React, Tailwind, and Headless UI without Vue or Element Plus
 });
 test("all platform routes remain available after the React migration", () => {
   for (const route of [
-    "/workbench", "/recipe-suggestions", "/chat", "/explorer", "/process-executions", "/events", "/production/changeover",
+    "/workbench", "/recipe-suggestions", "/chat", "/analysis", "/explorer", "/process-executions", "/events", "/production/changeover",
     "/production/tooling-installations", "/configuration/component-types", "/configuration/components",
     "/configuration/tooling-types", "/configuration/tooling-assemblies", "/inspections",
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
@@ -79,7 +79,7 @@ test("all platform routes remain available after the React migration", () => {
 test("platform identity describes research, analysis, and optimization", () => {
   assert.match(html, /Ingot · 工艺研发与优化/);
   assert.match(html, /开源工艺研发与优化系统/);
-  assert.match(html, /组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
+  assert.match(html, /组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
   assert.doesNotMatch(html, /制造数据采集与工艺分析平台/);
 });
 
@@ -90,19 +90,26 @@ test("navigation and overlays are accessible Headless UI components", () => {
   for (const [id, domain] of [["overview", "工作台"], ["evidence", "生产运行"], ["quality", "质量管理"], ["diagnosis", "工艺追因"], ["process-definition", "工艺配置"], ["equipment-connection", "现场接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
-  assert.match(app, /id: "overview"[\s\S]*id: "equipment-connection"[\s\S]*id: "process-definition"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
+  assert.match(app, /id: "overview"[\s\S]*id: "process-definition"[\s\S]*id: "equipment-connection"[\s\S]*id: "evidence"[\s\S]*id: "quality"[\s\S]*id: "diagnosis"/);
+  assert.match(app, /id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "\/data-quality"/);
+  assert.doesNotMatch(app, /"追因总览"|"对象目录"|"运行事件"/);
+  assert.match(app, /id: "system"[\s\S]*\["\/events", "原始事件"\]/);
+  assert.match(app, /path="\/analysis" element=\{<Navigate to="\/process-executions\?attention=1" replace \/>\}/);
+  assert.match(app, /path="\/explorer" element=\{<Navigate to="\/process-executions" replace \/>\}/);
   assert.doesNotMatch(app, /id: "optimization"/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles\.includes\("platform\.admin"\)/);
   assert.match(app, /id: "equipment-connection"[\s\S]*\["\/edges", "现场节点"\], \["\/configuration\/ingestion-tasks", "采集配置"\]/);
-  assert.match(app, /id: "process-definition"[\s\S]*\["\/configuration", "配置总览"\][\s\S]*\["\/configuration\/process-data-models", "数据字典"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\]/);
+  assert.match(app, /id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "\/configuration\/process-data-models", groups: \[\s*\{ label: "基础配置", items: \[\["\/configuration\/process-data-models", "工艺变量"\][\s\S]*\["\/configuration\/tooling-types", "工装结构"\]/);
+  assert.doesNotMatch(app, /配置总览|ConfigurationHubPage/);
+  assert.match(app, /path="\/configuration" element=\{<Navigate to="\/configuration\/process-data-models" replace \/>\}/);
   assert.match(app, /id: "system"[\s\S]*label: "身份权限"[\s\S]*label: "平台运维"[\s\S]*label: "助手治理"/);
   assert.match(app, /\["\/chat", "分析助手"\]/);
   assert.match(app, /\["\/production\/changeover", "生产切换"\][\s\S]*\["\/process-executions", "运行记录"\]/);
   assert.match(app, /\["\/data-quality", "数据质量"\], \["\/comparisons", "运行对比"\]/);
   assert.doesNotMatch(app, /优化工作|复用资产/);
-  assert.match(pages, /工艺分析助手/);
+  assert.match(pages, /分析助手/);
   assert.doesNotMatch(app, /label: "AI 助手"/);
   assert.match(app, /aria-label="主导航"/);
   assert.match(app, /aria-label="面包屑"/);
@@ -185,23 +192,17 @@ test("feature search opens a command palette and table columns keep stable uniqu
   assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
   assert.match(app, /\["\/platform-metrics", "平台状态"\]/);
   assert.match(app, /\["\/logs", "平台日志"\]/);
-  assert.match(app, /"\/production\/changeover": "生产上下文 换产 产品切换 工艺切换"/);
+  assert.match(app, /"\/production\/changeover": "生产切换 换产 产品切换 配方切换"/);
   assert.match(app, /"\/inspections": "质量任务 质检 检测任务"/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
-test("object catalog pages use the event summary contract and show an initial loading state", () => {
-  assert.match(app, /\["\/explorer", "对象目录"\]/);
-  assert.match(app, /id: "evidence", label: "生产运行"/);
-  assert.match(pages, /title="对象目录"/);
-  assert.match(pages, /objects\.loading && !objects\.data \? <LoadingCard \/>/);
-  assert.match(pages, /title="对象目录"/);
-  assert.match(pages, /在这个对象中继续工作/);
-  assert.match(pages, /\/process-executions\?equipmentId=/);
-  assert.match(pages, /\/events\?subjectId=/);
-  assert.match(pages, /\/quality-analysis\?subjectType=/);
-  assert.match(pages, /\/data-quality\?subjectType=/);
-  assert.doesNotMatch(pages, /key: "objectType", label: "对象类型"/);
+test("run records carry the needs-attention filter that replaced the diagnosis overview", () => {
+  assert.match(pages, /export function processExecutionNeedsAttention/);
+  assert.match(pages, /<option value="attention">需要处理<\/option>/);
+  assert.match(pages, /params\.get\("attention"\) === "1"/);
+  assert.match(pages, /to="\/process-executions\?attention=1"/);
+  assert.doesNotMatch(pages, /to="\/analysis"/);
 });
 
 test("core workflows tell new users what to do next and confirm completed actions", () => {
@@ -225,7 +226,7 @@ test("versioned tooling remains unique and configuration records stay bounded", 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
   assert.match(pages, /const chatModeLabels = \{/);
   assert.match(pages, /quick: "证据核对"/);
-  assert.match(pages, /aria-label="给工艺分析助手发送消息"/);
+  assert.match(pages, /aria-label="给分析助手发送消息"/);
   assert.match(pages, /aria-label="分析方法"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
@@ -298,7 +299,6 @@ test("configuration surfaces align write actions with platform roles", () => {
   assert.match(app, /const canConfigure = \(identity\?\.roles \|\| \[\]\)\.some/);
   assert.match(app, /role === "process\.engineer" \|\| role === "platform\.admin"/);
   assert.match(app, /const lazyNamed = /);
-  assert.match(app, /<ConfigurationHubPage canWrite=\{canConfigure\}/);
   assert.match(app, /<ProductionSetupPage section="context" canWrite=\{canConfigure\}/);
   assert.match(app, /<IngestionTasksPage canWrite=\{canConfigure\}/);
   assert.match(acquisitionPage, /const readOnly = !canWrite \|\| managedByBinding/);
@@ -413,7 +413,7 @@ test("tooling and configuration workflows avoid editable JSON fields", () => {
   assert.match(pages, /function ToolingAssembliesPage/);
   assert.match(pages, /function ToolingRevisionComposition/);
   assert.match(pages, /更换组件并创建新版本/);
-  assert.match(pages, /每个装配位置选择一件具体组件资产/);
+  assert.match(pages, /每个装配位置选择一件具体组件/);
   assert.match(pages, /\/api\/v1\/tooling-assemblies\/revisions/);
   assert.match(pages, /assemblyRevisionId/);
   assert.doesNotMatch(pages, /BusinessObjectEditor|ImprovementPanel/);

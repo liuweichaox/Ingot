@@ -97,7 +97,7 @@ export function IngestionTaskPage({ canWrite = true }) {
   const advisories = descriptor.advisories ? descriptor.advisories(form) : [];
   const probeValid = Boolean(probe?.success && probe?.mappingsValidated);
   const publishChecklist = [
-    { label: "选择现场节点与工艺数据字典", done: Boolean(form.edgeId && form.dataModel) },
+    { label: "选择现场节点与工艺变量", done: Boolean(form.edgeId && form.dataModel) },
     { label: "填写连接参数", done: !Object.keys(descriptor.validateConnection(form[descriptor.section] || {}) || {}).length },
     {
       label: "映射过程执行必需的工艺变量",
@@ -172,12 +172,12 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
   }
 
-  if (loading) return <Page title="数据源配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
-  if (loadError) return <Page title="数据源配置"><Alert tone="danger">{loadError}</Alert></Page>;
+  if (loading) return <Page title="采集配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
+  if (loadError) return <Page title="采集配置"><Alert tone="danger">{loadError}</Alert></Page>;
 
   return (
     <Page
-      title={isNew ? "配置数据源" : form.name || form.taskId}
+      title={isNew ? "新建采集配置" : form.name || form.taskId}
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
@@ -213,7 +213,7 @@ export function IngestionTaskPage({ canWrite = true }) {
           title="完成 4 步即可发布"
           description="先确定数据归属，再验证真实连接；高级采集策略可在需要时展开。"
           steps={[
-            { title: "选择来源与数据字典", description: "选择现场节点、数据归属和工艺数据字典。", state: form.edgeId && form.dataModel && form.subjectId ? "done" : "current" },
+            { title: "选择来源与工艺变量", description: "选择现场节点、数据归属和工艺变量。", state: form.edgeId && form.dataModel && form.subjectId ? "done" : "current" },
             { title: "填写连接参数", description: `按 ${descriptor.label} 填写设备、仪器或系统连接。`, state: publishChecklist[1].done ? "done" : form.edgeId && form.dataModel && form.subjectId ? "current" : "upcoming" },
             { title: "验证并映射变量", description: "读取真实点位，再映射必需工艺变量。", state: probe ? (publishChecklist[2].done ? "done" : "current") : (publishChecklist[1].done ? "current" : "upcoming") },
             { title: "检查并发布", description: "连接和点位换算全部通过后发布到现场节点。", state: probeValid ? "current" : "upcoming" },
@@ -222,7 +222,7 @@ export function IngestionTaskPage({ canWrite = true }) {
 
         <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
           <div className="grid gap-5">
-            <Card title="基本信息" description="数据来自哪里、关联哪台设备、结果采用哪套工艺数据字典。">
+            <Card title="基本信息" description="数据来自哪里、关联哪台设备、结果采用哪套工艺变量。">
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
                   <Input value={form.taskId} disabled={readOnly || (!isNew && mode !== "create")}
@@ -244,9 +244,9 @@ export function IngestionTaskPage({ canWrite = true }) {
                     ))}
                   </Select>
                 </Field>
-                <Field label="工艺数据字典" hint="规定平台中的工艺变量和单位，不包含来源地址。" error={errors.dataModel}>
+                <Field label="工艺变量" hint="规定过程量和控制参数的代码与单位，不包含来源地址。" error={errors.dataModel}>
                   <Select value={form.dataModel} disabled={readOnly} onChange={event => update({ dataModel: event.target.value })}>
-                    <option value="">请选择工艺数据字典</option>
+                    <option value="">请选择工艺变量</option>
                     {models.map(item => (
                       <option key={`${item.modelId}::${item.version}`} value={modelValue(item.modelId, item.version)}>
                         {item.name || item.modelId} · v{item.version}
@@ -471,7 +471,7 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
   return (
     <Card
       title="过程执行边界识别"
-      description="设备只需提供生产状态；采集节点在生产开始时生成过程执行关联号，结束时关闭过程执行。"
+      description="设备只需提供生产状态；现场节点在生产开始时生成过程执行关联号，结束时关闭过程执行。"
       actions={
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={lifecycle.enabled} disabled={readOnly}
@@ -537,10 +537,10 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
             <Select value={form.timestampMode} disabled={readOnly}
               onChange={event => onChange({ timestampMode: event.target.value })}>
               <option value="source">使用设备时间</option>
-              <option value="edge-received">使用采集节点接收时间</option>
+              <option value="edge-received">使用现场节点接收时间</option>
             </Select>
           ) : (
-            <Input value={descriptor.id === "opc-ua" ? "OPC UA 服务器 SourceTimestamp" : "采集节点接收时间"} disabled />
+            <Input value={descriptor.id === "opc-ua" ? "OPC UA 服务器 SourceTimestamp" : "现场节点接收时间"} disabled />
           )}
         </Field>
         {capabilities.sourceTimestamp && !capabilities.intrinsicSourceTimestamp && form.timestampMode === "source" && (
@@ -645,13 +645,13 @@ export function IngestionTasksPage({ canWrite = true }) {
 
   return (
     <Page
-      title="数据源配置"
+      title="采集配置"
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
             to="/edges">查看现场节点</Link>
           {canWrite && <LinkButton
-            to="/configuration/ingestion-tasks/new">配置数据源</LinkButton>}
+            to="/configuration/ingestion-tasks/new">新建采集配置</LinkButton>}
         </div>
       }
     >
@@ -661,8 +661,8 @@ export function IngestionTasksPage({ canWrite = true }) {
           <details className="group rounded-lg border border-slate-200 bg-white">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
               <div>
-                <p className="font-semibold text-slate-950">批量接入同类设备</p>
-                <p className="mt-1 text-sm text-slate-600">已有 {templates.filter(item => item.status === "published").length} 个模板、{sources.length} 个数据源实例和 {bindings.length} 个任务绑定</p>
+                <p className="font-semibold text-slate-950">多台同类设备</p>
+                <p className="mt-1 text-sm text-slate-600">首台设备发布后再展开。这里维护任务模板、连接实例和任务绑定，已有 {templates.filter(item => item.status === "published").length} 个模板。</p>
               </div>
               <span className="text-sm font-medium text-blue-700 group-open:hidden">展开配置</span>
               <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
@@ -734,7 +734,7 @@ export function IngestionTasksPage({ canWrite = true }) {
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan="7" className="px-3 py-8 text-center text-slate-500">还没有配置任何数据源。</td></tr>
+                  <tr><td colSpan="7" className="px-3 py-8 text-center text-slate-500">还没有采集配置。</td></tr>
                 )}
               </tbody>
             </table>

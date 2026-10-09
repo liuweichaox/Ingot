@@ -167,11 +167,11 @@ public sealed class ResearchAssetWorkflowTests
     {
         var store = new MemoryStore();
         var sourceId = Guid.CreateVersion7();
-        var projectId = Guid.CreateVersion7();
         store.SeedKnowledge(
             new KnowledgeSource
             {
                 SourceId = sourceId,
+                SiteCode = "site-a",
                 Title = "保压阶段作业指导书",
                 Status = KnowledgeSourceStatuses.Reviewed,
                 StorageRef = "process-knowledge://test",
@@ -179,10 +179,6 @@ public sealed class ResearchAssetWorkflowTests
                 MediaType = "application/pdf",
                 FileName = "holding.pdf",
                 SizeBytes = 10,
-                ContextSelector = new Dictionary<string, string>
-                {
-                    ["research-project-id"] = projectId.ToString()
-                },
                 UploadedBy = "engineer",
                 UploadedAt = DateTimeOffset.UtcNow
             },
@@ -211,17 +207,14 @@ public sealed class ResearchAssetWorkflowTests
             new KnowledgeSource
             {
                 SourceId = otherSourceId,
-                Title = "其他项目作业指导书",
+                SiteCode = "site-b",
+                Title = "其他站点作业指导书",
                 Status = KnowledgeSourceStatuses.Reviewed,
                 StorageRef = "process-knowledge://other",
                 Sha256 = "def",
                 MediaType = "application/pdf",
                 FileName = "other.pdf",
                 SizeBytes = 10,
-                ContextSelector = new Dictionary<string, string>
-                {
-                    ["research-project-id"] = Guid.CreateVersion7().ToString()
-                },
                 UploadedBy = "engineer",
                 UploadedAt = DateTimeOffset.UtcNow
             },
@@ -234,7 +227,7 @@ public sealed class ResearchAssetWorkflowTests
                 CreatedBy = "engineer",
                 CreatedAt = DateTimeOffset.UtcNow
             });
-        var tool = new SearchProcessKnowledgeTool(store, Projects(projectId, "engineer"));
+        var tool = new SearchProcessKnowledgeTool(store);
 
         var result = await tool.ExecuteAsync(
             new AgentContracts.AnalysisToolCall
@@ -248,15 +241,10 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
-                AccessScope = new AgentAccessScope { AllowAllSites = true },
+                AccessScope = SiteScope("site-a"),
                 Request = new AgentContracts.CreateChatRunRequest
                 {
                     Question = "保压温度上限是多少？",
-                    PageContext = new AgentContracts.PageContextRef
-                    {
-                        Kind = "research-project",
-                        Id = projectId.ToString()
-                    }
                 }
             });
 
@@ -267,7 +255,7 @@ public sealed class ResearchAssetWorkflowTests
     }
 
     [Fact]
-    public async Task KnowledgeSearch_WithoutResearchProjectContext_ReturnsNoRecords()
+    public async Task KnowledgeSearch_WithoutAResolvableSite_ReturnsNoRecords()
     {
         var store = new MemoryStore();
         var sourceId = Guid.CreateVersion7();
@@ -275,17 +263,14 @@ public sealed class ResearchAssetWorkflowTests
             new KnowledgeSource
             {
                 SourceId = sourceId,
-                Title = "项目内知识",
+                SiteCode = "site-a",
+                Title = "站点知识",
                 Status = KnowledgeSourceStatuses.Reviewed,
                 StorageRef = "process-knowledge://scoped",
                 Sha256 = "abc",
                 MediaType = "text/plain",
                 FileName = "scoped.txt",
                 SizeBytes = 10,
-                ContextSelector = new Dictionary<string, string>
-                {
-                    ["research-project-id"] = Guid.CreateVersion7().ToString()
-                },
                 UploadedBy = "engineer",
                 UploadedAt = DateTimeOffset.UtcNow
             },
@@ -298,7 +283,7 @@ public sealed class ResearchAssetWorkflowTests
                 CreatedBy = "engineer",
                 CreatedAt = DateTimeOffset.UtcNow
             });
-        var tool = new SearchProcessKnowledgeTool(store, Projects());
+        var tool = new SearchProcessKnowledgeTool(store);
 
         var result = await tool.ExecuteAsync(
             new AgentContracts.AnalysisToolCall
@@ -312,7 +297,7 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
-                AccessScope = new AgentAccessScope { AllowAllSites = true },
+                AccessScope = SiteScope("site-a", "site-b"),
                 Request = new AgentContracts.CreateChatRunRequest { Question = "保压温度上限是多少？" }
             });
 
@@ -323,7 +308,7 @@ public sealed class ResearchAssetWorkflowTests
     [Fact]
     public async Task DeterministicPlanner_UsesKnowledgeSearchForSiteInstructionQuestion()
     {
-        var tool = new SearchProcessKnowledgeTool(new MemoryStore(), Projects());
+        var tool = new SearchProcessKnowledgeTool(new MemoryStore());
         var planner = new DeterministicModelClient();
 
         var result = await planner.ResolveIntentAsync(
@@ -341,7 +326,6 @@ public sealed class ResearchAssetWorkflowTests
     [Fact]
     public async Task KnowledgeSearch_HybridResult_UsesFragmentLevelEvidenceReference()
     {
-        var projectId = Guid.CreateVersion7();
         var sourceId = Guid.CreateVersion7();
         var recordId = Guid.CreateVersion7();
         var source = new KnowledgeSource
@@ -376,7 +360,6 @@ public sealed class ResearchAssetWorkflowTests
         };
         var tool = new SearchProcessKnowledgeTool(
             new MemoryStore(),
-            Projects(projectId, "engineer"),
             new StaticProcessKnowledgeSearch(new ProcessKnowledgeSearchResult
             {
                 RetrievalMode = "hybrid",
@@ -404,15 +387,10 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
-                AccessScope = new AgentAccessScope { AllowAllSites = true },
+                AccessScope = SiteScope("site-a"),
                 Request = new AgentContracts.CreateChatRunRequest
                 {
                     Question = "保压温度上限是多少？",
-                    PageContext = new AgentContracts.PageContextRef
-                    {
-                        Kind = "research-project",
-                        Id = projectId.ToString()
-                    }
                 }
             });
 
@@ -426,17 +404,20 @@ public sealed class ResearchAssetWorkflowTests
     }
 
     [Fact]
-    public async Task KnowledgeSearch_MissingProjectAuthorization_FailsClosedBeforeSearch()
+    public async Task KnowledgeSearch_UnauthorizedSite_FailsClosedBeforeSearch()
     {
-        var projectId = Guid.CreateVersion7();
         var search = new RecordingProcessKnowledgeSearch();
-        var tool = new SearchProcessKnowledgeTool(new MemoryStore(), Projects(), search);
+        var tool = new SearchProcessKnowledgeTool(new MemoryStore(), search);
 
         var result = await tool.ExecuteAsync(
             new AgentContracts.AnalysisToolCall
             {
                 Tool = tool.Definition.Name,
-                Arguments = new Dictionary<string, string?> { ["query"] = "保压温度上限" }
+                Arguments = new Dictionary<string, string?>
+                {
+                    ["query"] = "保压温度上限",
+                    ["siteId"] = "site-b"
+                }
             },
             new AgentExecutionContext
             {
@@ -444,15 +425,10 @@ public sealed class ResearchAssetWorkflowTests
                 UserId = "engineer",
                 EntryPoint = AgentContracts.ProductEntryPoints.Chat,
                 Purpose = AgentContracts.RunPurposes.ReadOnlyAnalysis,
-                AccessScope = new AgentAccessScope { AllowAllSites = true },
+                AccessScope = SiteScope("site-a"),
                 Request = new AgentContracts.CreateChatRunRequest
                 {
                     Question = "保压温度上限是多少？",
-                    PageContext = new AgentContracts.PageContextRef
-                    {
-                        Kind = "research-project",
-                        Id = projectId.ToString()
-                    }
                 }
             });
 
@@ -641,11 +617,11 @@ public sealed class ResearchAssetWorkflowTests
         public Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(DatasetQualityValidationReport value, CancellationToken ct = default) { _datasetQualityReports.Add(value); return Task.FromResult(value); }
         public Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<DatasetQualityValidationReport>>(_datasetQualityReports.ToArray());
         public Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<DatasetQualityValidationReport> { Data = _datasetQualityReports.Take(limit).ToArray() });
-        public Task<KnowledgeSource> AddKnowledgeSourceAsync(Stream content, string title, string sourceKind, string fileName, string mediaType, IReadOnlyDictionary<string, string> contextSelector, string userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<KnowledgeSource> AddKnowledgeSourceAsync(Stream content, string title, string sourceKind, string fileName, string mediaType, string siteCode, IReadOnlyDictionary<string, string> contextSelector, string userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult(_knowledgeSources.GetValueOrDefault(sourceId));
         public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.ToArray());
-        public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(Guid projectId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.Where(value => value.ContextSelector.GetValueOrDefault("research-project-id") == projectId.ToString()).ToArray());
-        public async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(Guid projectId, int limit, string? cursor, CancellationToken ct = default) => new() { Data = (await ListKnowledgeSourcesAsync(projectId, ct)).Take(limit).ToArray() };
+        public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(string siteCode, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.Where(value => string.Equals(value.SiteCode, siteCode, StringComparison.OrdinalIgnoreCase)).ToArray());
+        public async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(string siteCode, int limit, string? cursor, CancellationToken ct = default) => new() { Data = (await ListKnowledgeSourcesAsync(siteCode, ct)).Take(limit).ToArray() };
         public Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult<Stream?>(null);
         public Task<KnowledgeSource> SaveKnowledgeSourceMetadataAsync(KnowledgeSource value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeRecord> SaveKnowledgeRecordAsync(KnowledgeRecord value, CancellationToken ct = default) => throw new NotSupportedException();
@@ -765,26 +741,8 @@ public sealed class ResearchAssetWorkflowTests
         }
     }
 
-    private static IResearchProjectContextReader Projects(
-        Guid? projectId = null,
-        string ownerUserId = "engineer")
-        => new StaticProjectContextReader(projectId is null
-            ? null
-            : new ResearchProject
-            {
-                ProjectId = projectId.Value,
-                Code = "knowledge-search",
-                Name = "知识检索",
-                ProcessName = "保压",
-                OwnerUserId = ownerUserId,
-                SiteCode = "site-a"
-            });
-
-    private sealed class StaticProjectContextReader(ResearchProject? project) : IResearchProjectContextReader
-    {
-        public Task<ResearchProject?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult(project?.ProjectId == projectId ? project : null);
-    }
+    private static AgentAccessScope SiteScope(params string[] siteIds)
+        => new() { SiteIds = new HashSet<string>(siteIds, StringComparer.OrdinalIgnoreCase) };
 
     private sealed class EmptyProcessConfigurationStore : IProcessConfigurationStore
     {

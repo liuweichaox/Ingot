@@ -390,11 +390,15 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         string sourceKind,
         string fileName,
         string mediaType,
+        string siteCode,
         IReadOnlyDictionary<string, string> contextSelector,
         string userId,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(content);
+        if (string.IsNullOrWhiteSpace(siteCode))
+            throw new InvalidDataException("知识来源必须绑定站点。");
+        siteCode = siteCode.Trim();
         await InitializeAsync(ct).ConfigureAwait(false);
         var safeFileName = Path.GetFileName(fileName.Trim());
         if (string.IsNullOrWhiteSpace(safeFileName) || safeFileName.Length > 255)
@@ -446,6 +450,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         var source = new KnowledgeSource
         {
             SourceId = Guid.CreateVersion7(),
+            SiteCode = siteCode,
             Title = title.Trim(),
             SourceKind = sourceKind.Trim().ToLowerInvariant(),
             Status = KnowledgeSourceStatuses.Uploaded,
@@ -461,27 +466,24 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             UploadedAt = now
         };
 
-        if (!contextSelector.TryGetValue("research-project-id", out var projectIdText) ||
-            !Guid.TryParse(projectIdText, out var projectId))
-            throw new InvalidDataException("知识来源必须绑定研发项目。");
         await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         var insertedSource = false;
         await using (var insert = new NpgsqlCommand(
             """
             INSERT INTO knowledge_sources(
-              source_id, project_id, title, source_kind, status, storage_ref, sha256,
+              source_id, site_code, title, source_kind, status, storage_ref, sha256,
               media_type, file_name, size_bytes, extraction_status, extractor_version,
               uploaded_by, uploaded_at, updated_at)
             VALUES (
-              @id, @project_id, @title, @source_kind, @status, @storage_ref, @sha256,
+              @id, @site_code, @title, @source_kind, @status, @storage_ref, @sha256,
               @media_type, @file_name, @size_bytes, @extraction_status, @extractor_version,
               @uploaded_by, @uploaded_at, @updated_at)
-            ON CONFLICT (project_id, sha256) DO NOTHING;
+            ON CONFLICT (site_code, sha256) DO NOTHING;
             """, connection, transaction))
         {
             insert.Parameters.AddWithValue("id", source.SourceId);
-            insert.Parameters.AddWithValue("project_id", projectId);
+            insert.Parameters.AddWithValue("site_code", siteCode);
             insert.Parameters.AddWithValue("title", source.Title);
             insert.Parameters.AddWithValue("source_kind", source.SourceKind);
             insert.Parameters.AddWithValue("status", source.Status);
@@ -522,7 +524,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             await job.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
-        return await GetKnowledgeSourceByHashAsync(hash, projectId, ct).ConfigureAwait(false)
+        return await GetKnowledgeSourceByHashAsync(hash, siteCode, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("知识来源写入后无法读取。");
     }
 
@@ -533,19 +535,19 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         => (await ListKnowledgeSourcesPageCoreAsync(null, 200, null, ct).ConfigureAwait(false)).Data;
 
     public async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
-        Guid projectId,
+        string siteCode,
         CancellationToken ct = default)
-        => (await ListKnowledgeSourcesPageAsync(projectId, 200, null, ct).ConfigureAwait(false)).Data;
+        => (await ListKnowledgeSourcesPageAsync(siteCode, 200, null, ct).ConfigureAwait(false)).Data;
 
     public Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
-        Guid projectId,
+        string siteCode,
         int limit,
         string? cursor,
         CancellationToken ct = default)
-        => ListKnowledgeSourcesPageCoreAsync(projectId, limit, cursor, ct);
+        => ListKnowledgeSourcesPageCoreAsync(siteCode, limit, cursor, ct);
 
     private async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageCoreAsync(
-        Guid? projectId,
+        string? siteCode,
         int limit,
         string? cursor,
         CancellationToken ct)
@@ -556,11 +558,11 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             """
             SELECT source_id,updated_at
             FROM knowledge_sources
-            WHERE (@project_id IS NULL OR project_id=@project_id)
+            WHERE (@site_code IS NULL OR site_code=@site_code)
               AND (@cursor_at IS NULL OR (updated_at,source_id::text,0) < (@cursor_at,@cursor_key,@cursor_version))
             ORDER BY updated_at DESC,source_id::text DESC LIMIT @take;
             """);
-        AddNullable(command, "project_id", NpgsqlDbType.Uuid, projectId);
+        AddNullable(command, "site_code", NpgsqlDbType.Text, siteCode);
         AddCursorParameters(command, decoded, limit + 1);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         var rows = new List<(Guid Id, DateTimeOffset At)>();
@@ -1145,29 +1147,29 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
 
     private async Task<KnowledgeSource?> GetKnowledgeSourceByHashAsync(
         string sha256,
-        Guid projectId,
+        string siteCode,
         CancellationToken ct)
-        => await ReadKnowledgeSourceAsync(null, sha256, projectId, ct).ConfigureAwait(false);
+        => await ReadKnowledgeSourceAsync(null, sha256, siteCode, ct).ConfigureAwait(false);
 
     private async Task<KnowledgeSource?> ReadKnowledgeSourceAsync(
         Guid? sourceId,
         string? sha256,
-        Guid? projectId,
+        string? siteCode,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(
             """
             SELECT source_id, title, source_kind, status, storage_ref, sha256, media_type,
               file_name, size_bytes, uploaded_by, uploaded_at, reviewed_by, reviewed_at,
-              extraction_status, extraction_error, extractor_version
+              extraction_status, extraction_error, extractor_version, site_code
             FROM knowledge_sources
             WHERE (@source_id IS NOT NULL AND source_id = @source_id)
-               OR (@sha256 IS NOT NULL AND sha256 = @sha256 AND project_id = @project_id)
+               OR (@sha256 IS NOT NULL AND sha256 = @sha256 AND site_code = @site_code)
             LIMIT 1;
             """);
         AddNullable(command, "source_id", NpgsqlDbType.Uuid, sourceId);
         AddNullable(command, "sha256", NpgsqlDbType.Text, sha256);
-        AddNullable(command, "project_id", NpgsqlDbType.Uuid, projectId);
+        AddNullable(command, "site_code", NpgsqlDbType.Text, siteCode);
         KnowledgeSource? value;
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
         {
@@ -1175,6 +1177,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             value = new KnowledgeSource
             {
                 SourceId = reader.GetGuid(0),
+                SiteCode = reader.GetString(16),
                 Title = reader.GetString(1),
                 SourceKind = reader.GetString(2),
                 Status = reader.GetString(3),

@@ -21,23 +21,23 @@ internal sealed record AppliedMechanismModels(
 internal static class MechanismModelRecommendationPolicy
 {
     public static AppliedMechanismModels Select(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         IReadOnlyList<MechanismModelVersion> models,
         IReadOnlyList<MechanismFusionDefinition> fusions)
     {
-        var context = BuildContext(project);
-        var controls = project.Variables
+        var context = RecipeRecommendationBriefPolicy.ApplicabilityContext(brief);
+        var controls = brief.Variables
             .Where(static value => value.Role == ResearchVariableRoles.Control &&
                 value.LowerLimit is not null && value.UpperLimit is not null)
             .ToDictionary(static value => value.Code, StringComparer.Ordinal);
         var activeModels = models
             .Where(static value => value.Status == MechanismModelStatuses.Active)
             .ToDictionary(static value => (value.ModelId, value.Version));
-        var reservedFeatureNames = project.OptimizationFeatures.DerivedFeatures
+        var reservedFeatureNames = brief.OptimizationFeatures.DerivedFeatures
             .Select(static value => value.Name)
             .Concat(controls.Keys)
             .ToHashSet(StringComparer.Ordinal);
-        var objectiveCodes = project.Objectives.Select(static value => value.Code)
+        var objectiveCodes = brief.Objectives.Select(static value => value.Code)
             .ToHashSet(StringComparer.Ordinal);
         var references = new List<MechanismModelApplicationReference>();
         var features = new List<OptimizerDerivedFeatureInput>();
@@ -129,21 +129,4 @@ internal static class MechanismModelRecommendationPolicy
             actual.TryGetValue(value.Key, out var actualValue) &&
             string.Equals(actualValue, value.Value, StringComparison.OrdinalIgnoreCase));
 
-    private static Dictionary<string, string> BuildContext(ResearchProject project)
-    {
-        var context = new Dictionary<string, string>(project.Context, StringComparer.OrdinalIgnoreCase)
-        {
-            ["project-code"] = project.Code,
-            ["process"] = project.ProcessName
-        };
-        Add(context, "product", project.ProductName);
-        Add(context, "material", project.MaterialName);
-        Add(context, "site", project.SiteCode);
-        return context;
-    }
-
-    private static void Add(IDictionary<string, string> context, string key, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value)) context[key] = value;
-    }
 }

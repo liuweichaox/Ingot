@@ -70,14 +70,16 @@ describe("功能搜索", () => {
     expect(input).toHaveFocus();
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges"));
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-data-models"));
   });
 
   it("筛选后重置选项，空结果不会跳转，重新打开清除查询", async () => {
     const input = await openSearch();
     fireEvent.keyDown(input, { key: "ArrowUp" });
     fireEvent.change(input, { target: { value: "采集配置" } });
-    expect(screen.getByRole("option")).toHaveAttribute("aria-selected", "true");
+    const [firstOption] = screen.getAllByRole("option");
+    expect(firstOption).toHaveTextContent("采集配置");
+    expect(firstOption).toHaveAttribute("aria-selected", "true");
     fireEvent.change(input, { target: { value: "不存在的功能xyz" } });
     expect(screen.queryByRole("option")).toBeNull();
     expect(input).not.toHaveAttribute("aria-activedescendant");

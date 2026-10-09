@@ -104,14 +104,22 @@ public abstract partial class ProcessResearchWorkflowTestBase
     {
         private readonly Dictionary<string, ExecutionComparisonRow> rows =
             new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> sites = new(StringComparer.Ordinal);
 
-        public void Set(ExecutionComparisonRow row) => rows[row.ExecutionId] = row;
+        public void Set(ExecutionComparisonRow row, string siteId = TestSiteCode)
+        {
+            rows[row.ExecutionId] = row;
+            sites[row.ExecutionId] = siteId;
+        }
 
         public Task<ExecutionComparisonRow?> GetProcessExecutionAsync(
             string executionId,
             CancellationToken ct = default,
             string? siteId = null)
-            => Task.FromResult(rows.GetValueOrDefault(executionId));
+            => Task.FromResult(siteId is not null &&
+                               !string.Equals(sites.GetValueOrDefault(executionId), siteId, StringComparison.Ordinal)
+                ? null
+                : rows.GetValueOrDefault(executionId));
 
         public Task<IReadOnlyDictionary<string, ExecutionComparisonRow>> GetProcessExecutionsAsync(
             IReadOnlyCollection<string> executionIds,

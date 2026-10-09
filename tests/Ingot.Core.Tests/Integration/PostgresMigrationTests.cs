@@ -94,16 +94,6 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                     OR routine.proname = concat('reject_shadow_', 'recommendation_mutation')))
               AND NOT EXISTS (
                 SELECT 1
-                FROM process_research_audit
-                WHERE lower(resource_type) LIKE '%' || concat('exper', 'iment') || '%'
-                   OR lower(payload->>'resourceType') LIKE
-                      '%' || concat('exper', 'iment') || '%')
-              AND NOT EXISTS (
-                SELECT 1
-                FROM research_hypothesis_evidence
-                WHERE lower(kind) LIKE '%' || concat('exper', 'iment') || '%')
-              AND NOT EXISTS (
-                SELECT 1
                 FROM mechanism_claim_evidence
                 WHERE lower(evidence_kind) LIKE '%' || concat('exper', 'iment') || '%')
               AND NOT EXISTS (
@@ -117,36 +107,52 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                    OR payload ? concat('exper', 'iment_id'))
               AND NOT EXISTS (
                 SELECT 1
-                FROM research_operating_regions
-                WHERE payload ? concat('supportingExper', 'imentIds')
-                   OR payload ? concat('supporting_exper', 'iment_ids')
-                   OR payload ? 'supportingResultIds'
-                   OR payload ? 'supporting_result_ids'
-                   OR lower((payload->'evidence')::text) LIKE
-                      '%' || concat('"kind": "exper', 'iment-result"') || '%')
-              AND NOT EXISTS (
-                SELECT 1
-                FROM research_knowledge_claims
-                WHERE lower((payload->'evidence')::text) LIKE
-                      '%' || concat('"kind": "exper', 'iment-result"') || '%')
-              AND NOT EXISTS (
-                SELECT 1
                 FROM pg_class
                 WHERE relnamespace = 'public'::regnamespace
-                  AND lower(relname) LIKE '%' || concat('exper', 'iment') || '%')
+                  AND lower(relname) LIKE '%' || concat('exper', 'iment') || '%');
+            """,
+            connection);
+
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
+
+    [LinuxDockerFact]
+    public async Task ResearchProjectSchema_ShouldBeRemovedAndScopedBySiteAndRecipe()
+    {
+        await postgres.EnsureSchemaAsync();
+
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT
+              to_regclass('public.process_research_projects') IS NULL
+              AND to_regclass('public.research_project_members') IS NULL
+              AND to_regclass('public.process_research_audit') IS NULL
+              AND to_regclass('public.research_hypotheses') IS NULL
+              AND to_regclass('public.research_operating_regions') IS NULL
+              AND to_regclass('public.research_knowledge_claims') IS NULL
+              AND to_regclass('public.research_evidence') IS NULL
               AND NOT EXISTS (
                 SELECT 1
-                FROM research_evidence
-                WHERE lower(kind) LIKE '%' || concat('exper', 'iment') || '%'
-                   OR lower(resource_type) LIKE '%' || concat('exper', 'iment') || '%'
-                   OR kind = concat('transfer-', 'assessment')
-                   OR resource_type = concat('transfer-', 'assessment'))
-              AND NOT EXISTS (
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND column_name = 'project_id')
+              AND (
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND column_name IN ('site_code', 'process_specification_id')
+                  AND table_name IN (
+                    'research_recipe_recommendations',
+                    'research_recipe_recommendation_decisions',
+                    'mechanism_claims',
+                    'mechanism_claim_conflicts')) = 8
+              AND EXISTS (
                 SELECT 1
-                FROM research_knowledge_claims
-                WHERE payload ? 'transferAssessmentId'
-                   OR payload ? 'transfer_assessment_id'
-                   OR payload::text LIKE '%' || concat('transfer-', 'assessment') || '%');
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'knowledge_sources'
+                  AND column_name = 'site_code');
             """,
             connection);
 
@@ -556,15 +562,16 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(
             """
-            SELECT count(*) = 4
+            SELECT count(*) = 5
                    AND bool_and(convalidated)
                    AND bool_and(confdeltype = 'a')
             FROM pg_constraint
             WHERE conname IN (
-              'rr_recommendations_project_fk',
-              'rr_decisions_project_recommendation_fk',
-              'rr_decision_executions_project_decision_fk',
-               'rr_decision_outcomes_project_decision_fk');
+              'rr_decisions_scope_recommendation_fk',
+              'rr_decision_executions_decision_fk',
+              'rr_decision_outcomes_execution_fk',
+              'fk_mechanism_conflict_left_scope',
+              'fk_mechanism_conflict_right_scope');
             """,
             connection);
 

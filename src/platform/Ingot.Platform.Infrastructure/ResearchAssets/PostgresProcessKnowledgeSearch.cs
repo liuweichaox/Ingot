@@ -6,7 +6,7 @@ using NpgsqlTypes;
 namespace Ingot.Platform.Infrastructure.ResearchAssets;
 
 /// <summary>
-/// 在 PostgreSQL 内先完成项目、站点和复核状态过滤，再融合词法和向量候选。
+/// 在 PostgreSQL 内先完成站点和复核状态过滤，再融合词法和向量候选。
 /// </summary>
 public sealed class PostgresProcessKnowledgeSearch(
     NpgsqlDataSource dataSource,
@@ -74,13 +74,11 @@ public sealed class PostgresProcessKnowledgeSearch(
                            OR vector.content_hash <> COALESCE(fragment.content_hash, '') THEN 0
                   ELSE GREATEST(0, 1 - (vector.embedding <=> NULLIF(@embedding, '')::vector)) END AS semantic_score
               FROM knowledge_sources source
-              JOIN process_research_projects project ON project.project_id=source.project_id
               JOIN knowledge_fragments fragment ON fragment.source_id=source.source_id
               LEFT JOIN knowledge_fragment_embeddings vector ON vector.record_id=fragment.record_id
-              WHERE source.project_id=@project_id
+              WHERE source.site_code=@site_code
                 AND source.status='reviewed'
                 AND fragment.human_reviewed
-                AND (@allow_all_sites OR lower(COALESCE(project.payload->>'siteCode', '')) = ANY(@site_ids))
                 AND (@product_family_code IS NULL OR NOT EXISTS (
                   SELECT 1 FROM knowledge_source_context context
                   WHERE context.source_id=source.source_id AND context.dimension_code='product_family_code') OR EXISTS (
@@ -101,15 +99,8 @@ public sealed class PostgresProcessKnowledgeSearch(
             LIMIT @limit;
             """);
         command.Parameters.AddWithValue("query", request.Query.Trim());
-        command.Parameters.AddWithValue("project_id", request.ResearchProjectId);
-        command.Parameters.AddWithValue("allow_all_sites", request.AllowAllSites);
-        command.Parameters.AddWithValue(
-            "site_ids",
-            NpgsqlDbType.Array | NpgsqlDbType.Text,
-            request.SiteIds.Select(static value => value.Trim().ToLowerInvariant())
-                .Where(static value => value.Length > 0)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray());
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SiteCode);
+        command.Parameters.AddWithValue("site_code", request.SiteCode.Trim());
         AddNullable(command, "product_family_code", request.ProductFamilyCode);
         AddNullable(command, "equipment_id", request.EquipmentId);
         command.Parameters.AddWithValue("embedding_model", embedding?.Model ?? "");
@@ -121,7 +112,7 @@ public sealed class PostgresProcessKnowledgeSearch(
         var candidates = new List<Candidate>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
-            candidates.Add(ReadCandidate(reader));
+            candidates.Add(ReadCandidate(reader, request.SiteCode.Trim()));
         if (candidates.Count == 0)
             return [];
 
@@ -167,7 +158,7 @@ public sealed class PostgresProcessKnowledgeSearch(
             static pair => (IReadOnlyDictionary<string, string>)pair.Value);
     }
 
-    private static Candidate ReadCandidate(NpgsqlDataReader reader)
+    private static Candidate ReadCandidate(NpgsqlDataReader reader, string siteCode)
     {
         var citation = reader.IsDBNull(29) ? null : new KnowledgeCitation
         {
@@ -181,6 +172,7 @@ public sealed class PostgresProcessKnowledgeSearch(
         var source = new KnowledgeSource
         {
             SourceId = reader.GetGuid(0),
+            SiteCode = siteCode,
             Title = reader.GetString(1),
             SourceKind = reader.GetString(2),
             Status = reader.GetString(3),

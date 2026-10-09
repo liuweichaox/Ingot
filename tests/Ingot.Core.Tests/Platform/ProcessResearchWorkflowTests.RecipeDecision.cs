@@ -12,12 +12,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     public async Task RecipeRecommendationDecision_FreezesChoiceAndActualOutcome()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(ProjectDraft() with
-        {
-            Code = "daily-recipe-decision"
-        }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
         var assembler = new StubObservationAssembler(new ResearchRunObservation
         {
             ExecutionKey = "production-recipe-001",
@@ -56,10 +51,10 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
 
         Assert.Equal(64, recorded.DecisionSnapshotHash.Length);
         Assert.Equal(ResearchRecipeRecommendationDecisionStatuses.Modified, recorded.Decision);
+        Assert.Equal(TestSiteCode, recorded.SiteCode);
+        Assert.Equal(TestProcessSpecificationId, recorded.ProcessSpecificationId);
+        Assert.Equal(recommendation.BriefHash, recorded.BriefHash);
         Assert.Null(recorded.Outcome);
-        Assert.Contains(await store.ListAuditEntriesAsync(project.ProjectId), entry =>
-            entry.ResourceType == "recipe-recommendation-decision" &&
-            entry.Action == "decision-frozen");
 
         var startedAt = recorded.DecidedAt.AddSeconds(1);
         executions.Set(Execution("production-recipe-001", startedAt));
@@ -75,6 +70,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         var completed = await service.MaterializeOutcomeAsync(recorded.DecisionId, "engineer-c");
 
         Assert.NotNull(completed.Outcome);
+        Assert.Equal(recommendation.BriefHash, completed.Outcome.BriefHash);
         Assert.Equal(6, completed.Outcome.SettingDeviationFromSuggestion["holding-temperature"]);
         Assert.Equal(1, completed.Outcome.SettingDeviationFromEngineerSelection["holding-temperature"]);
         Assert.Equal(0.31, completed.Outcome.Outcomes["form-error"]);
@@ -82,20 +78,18 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         Assert.Equal("production-recipe-001", assembler.RequestedExecutionKey);
         var frozen = await service.MaterializeOutcomeAsync(recorded.DecisionId, "engineer-d");
         Assert.Equal(completed.Outcome.CapturedAt, frozen.Outcome!.CapturedAt);
-        var workspace = await workflow.GetWorkspaceAsync(project.ProjectId);
-        Assert.Equal(recorded.DecisionId, Assert.Single(workspace.RecipeRecommendationDecisions).DecisionId);
+
+        var flows = await new RecipeRecommendationQueries(store).ListFlowsAsync(
+            new RecipeRecommendationFilter([TestSiteCode], TestProcessSpecificationId), null, 100);
+        var flow = Assert.Single(flows.Items);
+        Assert.Equal(recorded.DecisionId, flow.Decision!.DecisionId);
     }
 
     [Fact]
     public async Task RecipeRecommendationDecision_ValidatesDecisionAndReturnsFrozenDuplicate()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(ProjectDraft() with
-        {
-            Code = "daily-recipe-decision-validation"
-        }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
         var executions = new MutableExecutionComparisonService();
         var service = new ResearchRecipeRecommendationDecisionService(
             store, new StubObservationAssembler(null), executions);
@@ -141,20 +135,15 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
             service.RecordDecisionAsync(
                 recommendation.RecommendationId, item.RecommendationKey, acceptedRequest, "engineer-c"));
         Assert.Contains("幂等重试", conflict.Message, StringComparison.Ordinal);
-        Assert.Single((await store.ListRecipeRecommendationDecisionsPageAsync(
-            project.ProjectId, null, 100)).Items);
+        Assert.Single(await store.ListPendingRecipeRecommendationDecisionsAsync(
+            TestSiteCode, TestProcessSpecificationId));
     }
 
     [Fact]
     public async Task RecipeRecommendationDecision_CanLinkTheActualRunAfterTheDecision()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(ProjectDraft() with
-        {
-            Code = "daily-recipe-decision-late-execution-link"
-        }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
         var executions = new MutableExecutionComparisonService();
         var service = new ResearchRecipeRecommendationDecisionService(
             store, new StubObservationAssembler(null), executions);
@@ -200,61 +189,36 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     }
 
     [Fact]
-    public async Task RecipeRecommendationDecision_ExactRetriesRemainReadableAfterProjectIsArchived()
+    public async Task RecipeRecommendationDecision_RejectsNewDecisionsOnExpiredRecommendation()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(ProjectDraft() with
-        {
-            Code = "daily-recipe-decision-archived-retry"
-        }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
-        var executions = new MutableExecutionComparisonService();
+        var recommendation = await CreateRecommendationAsync(
+            store, BriefDraft(), expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1));
         var service = new ResearchRecipeRecommendationDecisionService(
-            store, new StubObservationAssembler(null), executions);
+            store, new StubObservationAssembler(null), new MutableExecutionComparisonService());
         var item = Assert.Single(recommendation.Items);
-        var request = new ResearchRecipeRecommendationDecisionRequest
-        {
-            Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
-            EngineerSelectedParameters = item.Parameters
-        };
 
-        var decision = await service.RecordDecisionAsync(
-            recommendation.RecommendationId, item.RecommendationKey, request, "engineer-b");
-        executions.Set(Execution("production-recipe-archived", decision.DecidedAt.AddSeconds(1)));
-        var linked = await service.LinkActualExecutionAsync(
-            decision.DecisionId,
-            new ResearchRecipeRecommendationExecutionLinkRequest
-            {
-                ActualExecutionKey = "production-recipe-archived"
-            },
-            "engineer-b");
-        await store.SaveProjectAsync(project with { Status = ResearchProjectStatuses.Archived });
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            service.RecordDecisionAsync(
+                recommendation.RecommendationId,
+                item.RecommendationKey,
+                new ResearchRecipeRecommendationDecisionRequest
+                {
+                    Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
+                    EngineerSelectedParameters = item.Parameters
+                },
+                "engineer-b"));
 
-        var repeatedDecision = await service.RecordDecisionAsync(
-            recommendation.RecommendationId, item.RecommendationKey, request, "engineer-b");
-        var repeatedLink = await service.LinkActualExecutionAsync(
-            decision.DecisionId,
-            new ResearchRecipeRecommendationExecutionLinkRequest
-            {
-                ActualExecutionKey = "production-recipe-archived"
-            },
-            "engineer-b");
-
-        Assert.Equal(decision.DecisionId, repeatedDecision.DecisionId);
-        Assert.Equal(linked.ActualExecutionKey, repeatedLink.ActualExecutionKey);
+        Assert.Contains("已过期", error.Message, StringComparison.Ordinal);
+        Assert.Empty(await store.ListPendingRecipeRecommendationDecisionsAsync(
+            TestSiteCode, TestProcessSpecificationId));
     }
 
     [Fact]
     public async Task RecipeRecommendationDecision_DoesNotFreezeWithoutAllQualityOutcomes()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(ProjectDraft() with
-        {
-            Code = "daily-recipe-decision-missing-quality"
-        }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
         var item = Assert.Single(recommendation.Items);
         var executions = new MutableExecutionComparisonService();
         var service = new ResearchRecipeRecommendationDecisionService(
@@ -297,10 +261,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     public async Task RecipeRecommendationDecision_RejectedIsTerminalAndNeedsNoParameters()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "daily-recipe-rejected" }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
         var service = new ResearchRecipeRecommendationDecisionService(
             store, new StubObservationAssembler(null), new MutableExecutionComparisonService());
         var item = Assert.Single(recommendation.Items);
@@ -384,10 +345,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         foreach (var variant in variants)
         {
             var store = new MemoryStore();
-            var workflow = CreateWorkflow(store);
-            var project = await workflow.CreateProjectAsync(
-                ProjectDraft() with { Code = $"semantic-retry-{variant.Name}" }, "engineer-a");
-            var recommendation = await CreateRecommendationAsync(store, project);
+            var recommendation = await CreateRecommendationAsync(store, BriefDraft());
             var item = Assert.Single(recommendation.Items);
             var service = new ResearchRecipeRecommendationDecisionService(
                 store, new StubObservationAssembler(null), new MutableExecutionComparisonService());
@@ -419,38 +377,31 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     public async Task RecipeRecommendationDecision_RejectsInvalidExecutionIdentityAndTiming()
     {
         var cases = new (string Name, Func<DateTimeOffset, ExecutionComparisonRow?> Execution,
-            string? ExpectedMessage)[]
+            string? Site, string? ExpectedMessage)[]
         {
-            ("missing", _ => null, "不存在或不在项目站点范围"),
+            ("missing", _ => null, null, "不存在或不在建议所属站点"),
+            ("other-site", decidedAt => Execution("scope-site", decidedAt.AddSeconds(1)), "SITE-002",
+                "不存在或不在建议所属站点"),
             ("family", decidedAt => Execution("scope-family", decidedAt.AddSeconds(1)) with
-                { ProductFamilyCode = "lens-b" }, "产品族"),
+                { ProductFamilyCode = "lens-b" }, null, "产品族"),
             ("product", decidedAt => Execution("scope-product", decidedAt.AddSeconds(1)) with
-                { ProductCode = "product-b" }, "产品"),
+                { ProductCode = "product-b" }, null, "产品"),
             ("equipment", decidedAt => Execution("scope-equipment", decidedAt.AddSeconds(1)) with
-                { EquipmentId = "press-02" }, "设备"),
-            ("simultaneous", decidedAt => Execution("scope-simultaneous", decidedAt),
+                { EquipmentId = "press-02" }, null, "设备"),
+            ("recipe", decidedAt => Execution("scope-recipe", decidedAt.AddSeconds(1)) with
+                { ProcessSpecificationId = "other-spec" }, null, "配方"),
+            ("simultaneous", decidedAt => Execution("scope-simultaneous", decidedAt), null,
                 "决定之后开始"),
-            ("historical", decidedAt => Execution("scope-historical", decidedAt.AddSeconds(-1)),
+            ("historical", decidedAt => Execution("scope-historical", decidedAt.AddSeconds(-1)), null,
                 "决定之后开始"),
             ("known-result", decidedAt => Execution(
-                "scope-known-result", decidedAt.AddSeconds(1), completed: true), null)
+                "scope-known-result", decidedAt.AddSeconds(1), completed: true), null, null)
         };
 
         foreach (var testCase in cases)
         {
             var store = new MemoryStore();
-            var workflow = CreateWorkflow(store);
-            var project = await workflow.CreateProjectAsync(ProjectDraft() with
-            {
-                Code = $"execution-integrity-{testCase.Name}",
-                Context = new Dictionary<string, string>
-                {
-                    ["product_family_code"] = "lens-a",
-                    ["product_code"] = "product-a",
-                    ["equipment_id"] = "press-01"
-                }
-            }, "engineer-a");
-            var recommendation = await CreateRecommendationAsync(store, project);
+            var recommendation = await CreateRecommendationAsync(store, BriefDraft());
             var item = Assert.Single(recommendation.Items);
             var executions = new MutableExecutionComparisonService();
             var service = new ResearchRecipeRecommendationDecisionService(
@@ -467,7 +418,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
             var execution = testCase.Execution(decision.DecidedAt);
             var executionKey = execution?.ExecutionId ?? "missing-run";
             if (execution is not null)
-                executions.Set(execution);
+                executions.Set(execution, testCase.Site ?? TestSiteCode);
 
             if (testCase.ExpectedMessage is not null)
             {
@@ -495,10 +446,8 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     public async Task RecipeRecommendationDecision_RecordsExcludedOutcomeAsTerminal()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var draft = ProjectDraft() with
+        var brief = BriefDraft() with
         {
-            Code = "daily-outcome-retry",
             OutcomeConstraints =
             [
                 new ResearchOutcomeConstraint
@@ -511,8 +460,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
                 }
             ]
         };
-        var project = await workflow.CreateProjectAsync(draft, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
+        var recommendation = await CreateRecommendationAsync(store, brief);
         var item = Assert.Single(recommendation.Items);
         var assembler = new MutableObservationAssembler();
         var executions = new MutableExecutionComparisonService();
@@ -550,15 +498,14 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
     }
 
     [Fact]
-    public async Task RecipeRecommendationDecision_RejectsStaleProjectRevision()
+    public async Task RecipeRecommendationDecision_RejectsTamperedFrozenBrief()
     {
         var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "stale-recipe-decision" }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project);
-        await workflow.UpdateProjectAsync(
-            project.ProjectId, project with { Name = "修订后的项目定义" }, "engineer-a");
+        var brief = BriefDraft();
+        var recommendation = await CreateRecommendationAsync(
+            store,
+            brief,
+            storedBrief: brief with { Name = "建议生成后被改写的条件" });
         var item = Assert.Single(recommendation.Items);
         var service = new ResearchRecipeRecommendationDecisionService(
             store, new StubObservationAssembler(null), new MutableExecutionComparisonService());
@@ -574,35 +521,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
                 },
                 "engineer-b"));
 
-        Assert.Contains("项目定义已在建议生成后变更", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task RecipeRecommendationDecision_UpgradesCurrentLegacyRecommendationAtDecisionTime()
-    {
-        var store = new MemoryStore();
-        var workflow = CreateWorkflow(store);
-        var project = await workflow.CreateProjectAsync(
-            ProjectDraft() with { Code = "legacy-current-recipe-decision" }, "engineer-a");
-        var recommendation = await CreateRecommendationAsync(store, project, includeSnapshot: false);
-        var item = Assert.Single(recommendation.Items);
-        var service = new ResearchRecipeRecommendationDecisionService(
-            store, new StubObservationAssembler(null), new MutableExecutionComparisonService());
-
-        var decision = await service.RecordDecisionAsync(
-            recommendation.RecommendationId,
-            item.RecommendationKey,
-            new ResearchRecipeRecommendationDecisionRequest
-            {
-                Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
-                EngineerSelectedParameters = item.Parameters
-            },
-            "engineer-b");
-
-        Assert.Equal(project.Revision, decision.ProjectSnapshot.Revision);
-        Assert.Equal(project.ProjectId, decision.ProjectSnapshot.ProjectId);
-        Assert.Equal(64, decision.ProjectSnapshotHash.Length);
-        Assert.NotEqual("none", decision.ProjectSnapshotHash);
+        Assert.Contains("冻结条件校验失败", error.Message, StringComparison.Ordinal);
     }
 
     private static ResearchRunObservation Observation(
@@ -619,24 +538,22 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
 
     private static Task<ResearchRecipeRecommendation> CreateRecommendationAsync(
         MemoryStore store,
-        ResearchProject project,
-        bool includeSnapshot = true)
+        RecipeRecommendationBrief brief,
+        DateTimeOffset? expiresAt = null,
+        RecipeRecommendationBrief? storedBrief = null)
     {
         var now = DateTimeOffset.UtcNow;
-        var projectSnapshot = ResearchProjectEvidenceSnapshots.Freeze(project);
         var value = new ResearchRecipeRecommendation
         {
             RecommendationId = Guid.CreateVersion7(),
-            ProjectId = project.ProjectId,
-            ProjectRevision = project.Revision,
-            ProjectSnapshot = includeSnapshot ? projectSnapshot : new ResearchProjectEvidenceSnapshot(),
-            ProjectSnapshotHash = includeSnapshot
-                ? ResearchProjectEvidenceSnapshots.Hash(projectSnapshot)
-                : "none",
+            SiteCode = brief.SiteCode,
+            ProcessSpecificationId = brief.ProcessSpecificationId,
+            Brief = storedBrief ?? brief,
+            BriefHash = RecipeRecommendationBriefPolicy.Hash(brief),
             ModelVersion = "recipe-test-model",
             InputHash = new string('b', 64),
-            FeatureSetId = project.OptimizationFeatures.FeatureSetId,
-            FeatureSetVersion = project.OptimizationFeatures.Version,
+            FeatureSetId = brief.OptimizationFeatures.FeatureSetId,
+            FeatureSetVersion = brief.OptimizationFeatures.Version,
             MechanismKnowledgeSnapshotHash = new string('c', 64),
             MechanismModelSnapshotHash = new string('d', 64),
             Items =
@@ -664,18 +581,10 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
                 }
             ],
             CreatedBy = "engineer-a",
-            GeneratedAt = now
+            GeneratedAt = now,
+            ExpiresAt = expiresAt ?? now.AddHours(24)
         };
-        return store.CreateRecipeRecommendationTransactionAsync(value, new ResearchAuditEntry
-        {
-            EntryId = Guid.CreateVersion7(),
-            ProjectId = project.ProjectId,
-            ResourceType = "recipe-recommendation",
-            ResourceId = value.RecommendationId.ToString(),
-            Action = "generated",
-            UserId = "engineer-a",
-            CreatedAt = now
-        });
+        return store.CreateRecipeRecommendationAsync(value);
     }
 
     private static ExecutionComparisonRow Execution(
@@ -692,7 +601,8 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
             StartedAt = startedAt,
             CompletedAt = completed ? startedAt.AddMinutes(5) : null,
             ProductFamilyCode = "lens-a",
-            ProductCode = "product-a"
+            ProductCode = "product-a",
+            ProcessSpecificationId = TestProcessSpecificationId
         };
 
     private sealed class MutableObservationAssembler : IResearchObservationAssembler
@@ -700,12 +610,12 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         public ResearchRunObservation? Observation { get; set; }
 
         public Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
-            ResearchProject project,
+            RecipeRecommendationBrief brief,
             CancellationToken ct = default)
             => Result();
 
         public Task<ResearchObservationAssembly> AssembleProductionRunAsync(
-            ResearchProject project,
+            RecipeRecommendationBrief brief,
             string executionKey,
             CancellationToken ct = default)
             => Result();

@@ -1,26 +1,22 @@
-using Ingot.Contracts.ProcessResearch;
+// 从同站点知识来源生成未持久化的机理声明草稿；草稿必须再经人工保存、审核和证据升级。
 using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
 public sealed class MechanismClaimDraftService(
     IResearchAssetStore assets,
-    IResearchProjectContextReader projects,
+    RecipeKnowledgeScopeReader scopes,
     IMechanismClaimDraftGenerator generator)
 {
     public async Task<MechanismClaimVersion> GenerateAsync(
-        Guid projectId,
         MechanismClaimDraftGenerationRequest request,
         string userId,
         CancellationToken ct = default)
     {
-        var project = await projects.GetProjectAsync(projectId, ct).ConfigureAwait(false)
-            ?? throw new ResearchAssetRuleException("研发项目不存在。");
         var source = await assets.GetKnowledgeSourceAsync(request.SourceId, ct).ConfigureAwait(false)
             ?? throw new ResearchAssetRuleException("知识来源不存在。");
-        if (!source.ContextSelector.TryGetValue("research-project-id", out var boundProject) ||
-            !Guid.TryParse(boundProject, out var boundProjectId) || boundProjectId != projectId)
-            throw new ResearchAssetRuleException("知识来源不属于当前研发项目。");
+        var scope = await scopes.ReadAsync(source.SiteCode, request.ProcessSpecificationId, ct)
+            .ConfigureAwait(false);
         if (source.ExtractionStatus != "completed")
             throw new ResearchAssetRuleException("知识来源完成确定性提取后才能生成语义草稿。");
         var records = (await assets.ListKnowledgeRecordsAsync(source.SourceId, ct).ConfigureAwait(false))
@@ -29,14 +25,11 @@ public sealed class MechanismClaimDraftService(
             .ToArray();
         if (records.Length == 0)
             throw new ResearchAssetRuleException("知识来源没有可供语义提取的片段。");
-        var context = new Dictionary<string, string>(project.Context, StringComparer.OrdinalIgnoreCase)
+        var context = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["project-code"] = project.Code,
-            ["process"] = project.ProcessName
+            [MechanismKnowledgeService.SiteDimension] = scope.SiteCode,
+            [MechanismKnowledgeService.ProcessSpecificationDimension] = scope.ProcessSpecificationId
         };
-        Add(context, "product", project.ProductName);
-        Add(context, "material", project.MaterialName);
-        Add(context, "site", project.SiteCode);
         var fragments = new List<MechanismDraftFragment>();
         var remainingCharacters = 60_000;
         foreach (var record in records)
@@ -51,16 +44,20 @@ public sealed class MechanismClaimDraftService(
         }
         var generated = await generator.GenerateAsync(new MechanismClaimDraftGenerationContext
         {
-            ProjectName = project.Name,
-            ProjectContext = context,
-            Variables = project.Variables.Select(static value =>
-                new MechanismDraftVariable(value.Code, value.Role, value.Unit)).ToArray(),
+            ProcessSpecificationId = scope.ProcessSpecificationId,
+            ScopeContext = context,
+            Variables = scope.ControlParameters.Values
+                .Select(static value => new MechanismDraftVariable(
+                    value.Code, value.ChangeAllowed ? "control" : "process", value.Unit ?? ""))
+                .Concat(scope.DataItems.Values.Select(static value =>
+                    new MechanismDraftVariable(value.Code, value.Category, value.Unit ?? "")))
+                .ToArray(),
             SourceTitle = source.Title,
             SourceHash = source.Sha256,
             Fragments = fragments,
             Focus = string.IsNullOrWhiteSpace(request.Focus) ? null : request.Focus.Trim()
         }, ct).ConfigureAwait(false);
-        ValidateGeneratedDraft(generated, project, context);
+        ValidateGeneratedDraft(generated, scope, context);
         var recordMap = records.ToDictionary(static value => value.RecordId);
         var evidence = generated.SupportingRecordIds.Distinct().Select(recordId =>
         {
@@ -86,7 +83,8 @@ public sealed class MechanismClaimDraftService(
             UserId = userId,
             Details = new Dictionary<string, string>
             {
-                ["projectId"] = projectId.ToString(),
+                ["siteCode"] = scope.SiteCode,
+                ["processSpecificationId"] = scope.ProcessSpecificationId,
                 ["generatorModel"] = generated.GeneratorModel,
                 ["persisted"] = "false"
             },
@@ -94,7 +92,8 @@ public sealed class MechanismClaimDraftService(
         }, ct).ConfigureAwait(false);
         return new MechanismClaimVersion
         {
-            ProjectId = projectId,
+            SiteCode = scope.SiteCode,
+            ProcessSpecificationId = scope.ProcessSpecificationId,
             Name = generated.Name,
             MechanismType = generated.MechanismType,
             Statement = generated.Statement,
@@ -111,14 +110,9 @@ public sealed class MechanismClaimDraftService(
         };
     }
 
-    private static void Add(IDictionary<string, string> values, string key, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value)) values[key] = value;
-    }
-
     private static void ValidateGeneratedDraft(
         GeneratedMechanismClaimDraft draft,
-        ResearchProject project,
+        RecipeKnowledgeScope scope,
         IReadOnlyDictionary<string, string> context)
     {
         if (string.IsNullOrWhiteSpace(draft.Name) || draft.Name.Length > 240 ||
@@ -126,27 +120,33 @@ public sealed class MechanismClaimDraftService(
             string.IsNullOrWhiteSpace(draft.FalsificationCondition) || draft.FalsificationCondition.Length > 8000 ||
             !MechanismClaimTypes.All.Contains(draft.MechanismType?.Trim().ToLowerInvariant() ?? ""))
             throw new ResearchAssetRuleException("语义草稿缺少有效名称、类型、陈述或反证条件。");
-        if (draft.Variables.Count is < 1 or > 100 || draft.Applicability.Count is < 1 or > 100 ||
+        if (draft.Variables.Count is < 1 or > 100 || draft.Applicability.Count > 100 ||
             draft.Constraints.Count > 100 || draft.ForbiddenCombinations.Count > 100)
             throw new ResearchAssetRuleException("语义草稿的变量、适用范围或约束数量超出限制。");
-        var variables = project.Variables.ToDictionary(static value => value.Code, StringComparer.Ordinal);
-        foreach (var variable in draft.Variables)
+        foreach (var variable in draft.Variables.Where(static value => value.VariableRole != "outcome"))
         {
-            if (!variables.TryGetValue(variable.VariableCode, out var projectVariable) ||
+            var code = variable.VariableCode.Trim().ToLowerInvariant();
+            var unit = scope.ControlParameters.TryGetValue(code, out var parameter)
+                ? parameter.Unit
+                : scope.DataItems.TryGetValue(code, out var item)
+                    ? item.Unit
+                    : throw new ResearchAssetRuleException($"语义草稿引用了配方中不存在的变量：{variable.VariableCode}。");
+            if (!string.IsNullOrWhiteSpace(unit) &&
                 !string.Equals(
                     MechanismKnowledgeService.NormalizeUnit(variable.Unit),
-                    MechanismKnowledgeService.NormalizeUnit(projectVariable.Unit),
+                    MechanismKnowledgeService.NormalizeUnit(unit),
                     StringComparison.Ordinal))
-                throw new ResearchAssetRuleException($"语义草稿引用了未知变量或错误单位：{variable.VariableCode}。");
+                throw new ResearchAssetRuleException($"语义草稿变量单位与配方定义不一致：{variable.VariableCode}。");
         }
-        foreach (var scope in draft.Applicability)
-            if (!context.TryGetValue(scope.DimensionCode, out var value) ||
-                !string.Equals(value, scope.DimensionValue, StringComparison.OrdinalIgnoreCase))
-                throw new ResearchAssetRuleException("语义草稿适用范围不属于当前项目上下文。");
+        foreach (var scopeValue in draft.Applicability)
+            if (context.TryGetValue(scopeValue.DimensionCode, out var value) &&
+                !string.Equals(value, scopeValue.DimensionValue, StringComparison.OrdinalIgnoreCase))
+                throw new ResearchAssetRuleException("语义草稿适用范围不属于当前站点和配方。");
         foreach (var code in draft.Constraints.Select(static value => value.VariableCode)
             .Concat(draft.ForbiddenCombinations.SelectMany(static value => value.Factors)
                 .Select(static value => value.VariableCode)))
-            if (!variables.TryGetValue(code, out var variable) || variable.Role != ResearchVariableRoles.Control)
-                throw new ResearchAssetRuleException($"语义草稿约束引用了非可控变量：{code}。");
+            if (!scope.ControlParameters.TryGetValue(code.Trim().ToLowerInvariant(), out var parameter) ||
+                !parameter.ChangeAllowed)
+                throw new ResearchAssetRuleException($"语义草稿约束引用了不可调整的参数：{code}。");
     }
 }

@@ -15,13 +15,14 @@ public enum KnowledgeExtractionFailureDisposition
 public sealed record MechanismClaimDraftGenerationRequest
 {
     public Guid SourceId { get; init; }
+    public string ProcessSpecificationId { get; init; } = "";
     public string? Focus { get; init; }
 }
 
 public sealed record MechanismClaimDraftGenerationContext
 {
-    public required string ProjectName { get; init; }
-    public IReadOnlyDictionary<string, string> ProjectContext { get; init; }
+    public required string ProcessSpecificationId { get; init; }
+    public IReadOnlyDictionary<string, string> ScopeContext { get; init; }
         = new Dictionary<string, string>();
     public IReadOnlyList<MechanismDraftVariable> Variables { get; init; } = [];
     public required string SourceTitle { get; init; }

@@ -53,11 +53,11 @@ public sealed class ResearchAssetApplication(IResearchAssetStore assets)
         int limit, string? cursor, CancellationToken ct = default)
         => assets.ListDatasetQualityValidationReportsPageAsync(limit, cursor, ct);
     public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
-        Guid projectId, CancellationToken ct = default)
-        => assets.ListKnowledgeSourcesAsync(projectId, ct);
+        string siteCode, CancellationToken ct = default)
+        => assets.ListKnowledgeSourcesAsync(siteCode, ct);
     public Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
-        Guid projectId, int limit, string? cursor, CancellationToken ct = default)
-        => assets.ListKnowledgeSourcesPageAsync(projectId, limit, cursor, ct);
+        string siteCode, int limit, string? cursor, CancellationToken ct = default)
+        => assets.ListKnowledgeSourcesPageAsync(siteCode, limit, cursor, ct);
     public Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid id, CancellationToken ct = default)
         => assets.GetKnowledgeSourceAsync(id, ct);
     public Task<IReadOnlyList<KnowledgeRecord>> ListKnowledgeRecordsAsync(Guid id, CancellationToken ct = default)
@@ -70,11 +70,12 @@ public sealed class ResearchAssetApplication(IResearchAssetStore assets)
         string sourceKind,
         string fileName,
         string mediaType,
+        string siteCode,
         IReadOnlyDictionary<string, string> contextSelector,
         string userId,
         CancellationToken ct = default)
         => assets.AddKnowledgeSourceAsync(
-            content, title, sourceKind, fileName, mediaType, contextSelector, userId, ct);
+            content, title, sourceKind, fileName, mediaType, siteCode, contextSelector, userId, ct);
     public Task EnqueueKnowledgeExtractionAsync(Guid id, string userId, CancellationToken ct = default)
         => assets.EnqueueKnowledgeExtractionAsync(id, userId, ct);
     public Task AddAuditEntryAsync(ResearchAssetAuditEntry value, CancellationToken ct = default)
@@ -86,12 +87,12 @@ public sealed class ResearchAssetApplication(IResearchAssetStore assets)
 
 public sealed class MechanismKnowledgeQueries(IMechanismKnowledgeStore knowledge)
 {
-    public Task<IReadOnlyList<MechanismClaimVersion>> ListClaimsAsync(Guid projectId, CancellationToken ct = default)
-        => knowledge.ListClaimsAsync(projectId, ct);
     public Task<MechanismClaimVersion?> GetClaimAsync(
         Guid id, int? version = null, CancellationToken ct = default)
         => knowledge.GetClaimAsync(id, version, ct);
-    public Task<IReadOnlyList<MechanismClaimConflict>> ListConflictsAsync(
-        Guid projectId, CancellationToken ct = default)
-        => knowledge.ListConflictsAsync(projectId, ct);
+    public Task<MechanismClaimConflict?> GetConflictAsync(Guid id, CancellationToken ct = default)
+        => knowledge.GetConflictAsync(id, ct);
+    public Task<IReadOnlyList<MechanismClaimUsage>> ListUsagesAsync(
+        Guid recommendationId, CancellationToken ct = default)
+        => knowledge.ListUsagesAsync(recommendationId, ct);
 }

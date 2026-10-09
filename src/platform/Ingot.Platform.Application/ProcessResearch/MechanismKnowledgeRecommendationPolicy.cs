@@ -24,7 +24,7 @@ internal static class MechanismKnowledgeRecommendationPolicy
                 .Select(static value => new { value.ClaimId, value.Version, value.ContentHash }))));
 
     public static AppliedMechanismKnowledge Select(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         IReadOnlyList<MechanismClaimVersion> claims,
         IReadOnlyList<MechanismClaimConflict> conflicts)
     {
@@ -32,9 +32,10 @@ internal static class MechanismKnowledgeRecommendationPolicy
             .Where(static value => value.Status == "open")
             .SelectMany(static value => new[] { value.LeftClaimId, value.RightClaimId })
             .ToHashSet();
-        var context = BuildContext(project);
+        var context = RecipeRecommendationBriefPolicy.ApplicabilityContext(brief);
         var selected = claims
-            .Where(value => value.ProjectId == project.ProjectId)
+            .Where(value => string.Equals(value.SiteCode, brief.SiteCode, StringComparison.Ordinal) &&
+                string.Equals(value.ProcessSpecificationId, brief.ProcessSpecificationId, StringComparison.Ordinal))
             .Where(value => value.Status == MechanismClaimStatuses.Active)
             .Where(value => !conflicted.Contains(value.ClaimId))
             .Where(value => value.Applicability.Count > 0 && value.Applicability.All(scope =>
@@ -189,25 +190,4 @@ internal static class MechanismKnowledgeRecommendationPolicy
         return 0;
     }
 
-    private static Dictionary<string, string> BuildContext(ResearchProject project)
-    {
-        var context = new Dictionary<string, string>(project.Context, StringComparer.OrdinalIgnoreCase)
-        {
-            ["project-code"] = project.Code,
-            ["process-name"] = project.ProcessName,
-            ["process"] = project.ProcessName
-        };
-        Add(context, "product-name", project.ProductName);
-        Add(context, "product", project.ProductName);
-        Add(context, "material-name", project.MaterialName);
-        Add(context, "material", project.MaterialName);
-        Add(context, "site-code", project.SiteCode);
-        Add(context, "site", project.SiteCode);
-        return context;
-    }
-
-    private static void Add(IDictionary<string, string> values, string key, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value)) values[key] = value;
-    }
 }

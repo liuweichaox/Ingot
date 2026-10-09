@@ -10,6 +10,7 @@ using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.Manufacturing;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
+using Ingot.Platform.Infrastructure.Services;
 using Ingot.Platform.Infrastructure.TimeSeries;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -29,6 +30,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
     private readonly ProcessAnalysisResolver _analysisResolver;
     private readonly IProcessExecutionAnalysisMaterializationStore _analysisMaterializations;
     private readonly PostgresTimeSeriesStore _timeSeriesStore;
+    private readonly EdgeRegistry? _edgeRegistry;
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private volatile bool _initialized;
 
@@ -40,7 +42,8 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         IManufacturingContextStore manufacturingContexts,
         ProcessAnalysisResolver analysisResolver,
         IProcessExecutionAnalysisMaterializationStore analysisMaterializations,
-        PostgresTimeSeriesStore timeSeriesStore)
+        PostgresTimeSeriesStore timeSeriesStore,
+        EdgeRegistry? edgeRegistry = null)
     {
         _dataSource = dataSource;
         _logger = logger;
@@ -49,6 +52,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         _analysisResolver = analysisResolver;
         _analysisMaterializations = analysisMaterializations;
         _timeSeriesStore = timeSeriesStore;
+        _edgeRegistry = edgeRegistry;
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
@@ -268,7 +272,34 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                 request.EdgeId);
         }
 
+        await RememberEdgeAsync(request, ct).ConfigureAwait(false);
         return response;
+    }
+
+    private async Task RememberEdgeAsync(EventBatchRequest request, CancellationToken ct)
+    {
+        if (_edgeRegistry is null ||
+            string.IsNullOrWhiteSpace(request.EdgeId) ||
+            string.IsNullOrWhiteSpace(request.SiteId))
+            return;
+        try
+        {
+            await _edgeRegistry.UpsertAsync(
+                request.EdgeId,
+                request.SiteId,
+                null,
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "事件批次已经提交，但现场节点登记失败：EdgeId={EdgeId}",
+                request.EdgeId);
+        }
     }
 
     private async Task<ProductionEvent> EnrichOperationContextAsync(

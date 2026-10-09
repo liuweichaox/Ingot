@@ -219,7 +219,7 @@ public sealed class ChatEventReader(
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count() == 1
                 ? latest.EdgeId
-                : "多个采集节点",
+                : "多个现场节点",
             EventCount = rows.Sum(static row => row.EventCount),
             SampleCount = rows.Sum(static row => row.SampleCount),
             OperationCount = rows.Sum(static row => row.OperationCount),

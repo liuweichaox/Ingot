@@ -2,7 +2,7 @@
 
 > Status: current numerical-service development guide.
 
-This directory implements surrogate modeling and sequential recipe optimization within Ingot's method toolbox. It receives a complete project snapshot and valid observations from Platform, then returns candidate recipe parameters for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential runs, not the only answer to every process question and not a replacement product value.
+This directory implements surrogate modeling and sequential recipe optimization within Ingot's method toolbox. It receives a complete frozen brief and valid observations from Platform, then returns candidate recipe parameters for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential runs, not the only answer to every process question and not a replacement product value.
 
 See the [system design](../docs/design.en.md) for boundaries and [analysis and optimization methods](../docs/optimization.en.md) for method-selection principles.
 
@@ -15,7 +15,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
 - GP outcome-safety filtering followed by visible-evidence admission for response surfaces, GP probability, and mechanism features
 - Decision intent is `reach-specification` only: seek the specification inside the observed coverage envelope
-- Safe derived features declared by versioned project configuration, with no hidden behavior selected by industry, equipment, or variable names
+- Safe derived features declared by the frozen brief, with no hidden behavior selected by industry, equipment, or variable names
 - Safe-baseline local cold start, pending recipe points, and idempotent batches
 - Historical pool replay that can select only real, unconsumed parameter settings (`POST /v1/historical-replay`)
 - Stateless `POST /v1/suggestions` HTTP contract
@@ -92,9 +92,9 @@ Synthetic replay truth functions must return `SyntheticTruthResult` with explici
 The .NET platform remains the only business system of record:
 
 1. `ExecutionKey` maps directly to the field run identifier. Platform assembles measured process features, realized control values, and inspection results into one observation.
-2. Platform sends the complete project definition, valid observations, and constraints to this service.
+2. Platform sends the complete frozen brief, valid observations, and constraints to this service.
 3. This service calculates the next parameter batch without retaining business state.
 4. Platform creates next-recipe recommendations with the input hash, model version, and prediction intervals.
-5. After an engineer decides, Platform links later real runs and freezes their quality outcomes. If those runs evaluate a hypothesis, the result interval updates that hypothesis as supported, rejected, or inconclusive.
+5. After an engineer decides, Platform links later real runs and freezes their quality outcomes; valid outcomes join the next observation round for the same site and recipe.
 
 PLC, instrument, vision, file, and API connectors only map source data into this contract; they do not change the optimizer's responsibility or authority.

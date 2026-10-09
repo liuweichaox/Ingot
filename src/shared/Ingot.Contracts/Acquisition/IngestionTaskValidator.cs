@@ -790,7 +790,7 @@ public static partial class IngestionTaskValidator
         var mode = value.TimestampMode?.Trim().ToLowerInvariant();
         if (mode is not ("source" or "edge-received"))
         {
-            found.Add(new AcquisitionValidationError("timestampMode", "时间戳模式必须是源数据时间或采集节点接收时间。"));
+            found.Add(new AcquisitionValidationError("timestampMode", "时间戳模式必须是源数据时间或现场节点接收时间。"));
             return;
         }
 

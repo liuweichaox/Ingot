@@ -77,7 +77,8 @@ public sealed record MechanismClaimEvidence
 public sealed record MechanismClaimVersion
 {
     public Guid ClaimId { get; init; }
-    public Guid ProjectId { get; init; }
+    public string SiteCode { get; init; } = "";
+    public string ProcessSpecificationId { get; init; } = "";
     public int Version { get; init; } = 1;
     public string Status { get; init; } = MechanismClaimStatuses.Draft;
     public required string Name { get; init; }
@@ -113,7 +114,8 @@ public sealed record MechanismClaimReview
 public sealed record MechanismClaimConflict
 {
     public Guid ConflictId { get; init; }
-    public Guid ProjectId { get; init; }
+    public string SiteCode { get; init; } = "";
+    public string ProcessSpecificationId { get; init; } = "";
     public Guid LeftClaimId { get; init; }
     public int LeftClaimVersion { get; init; }
     public Guid RightClaimId { get; init; }
@@ -163,7 +165,6 @@ public sealed record MechanismClaimLifecycleRequest
     public string? EvidenceKind { get; init; }
     public string? ReferenceId { get; init; }
     public string? ContentHash { get; init; }
-    public Guid? ValidationHypothesisId { get; init; }
     public string EvaluationOutcome { get; init; } = "supports";
     public string? EvaluationSummary { get; init; }
     public string? Comment { get; init; }
@@ -179,7 +180,6 @@ public sealed record MechanismClaimLifecycleDecision
     public string? EvidenceKind { get; init; }
     public string? ReferenceId { get; init; }
     public string? ContentHash { get; init; }
-    public Guid? ValidationHypothesisId { get; init; }
     public string? EvaluationOutcome { get; init; }
     public string? EvaluationSummary { get; init; }
     public string? Comment { get; init; }

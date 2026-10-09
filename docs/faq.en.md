@@ -40,7 +40,7 @@ Model complexity does not establish reliability. With limited samples or confoun
 
 ## What responsibilities does the language model have?
 
-A large language model (LLM) parses questions, selects authorized read-only tools, and explains calculated results. Deterministic business tools still query structured facts such as runs, inspections, and configuration. Unstructured knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed fragments inside the current project and applicability scope, with fragment citations retained. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or evidence-based validation and may not generate facts without sources.
+A large language model (LLM) parses questions, selects authorized read-only tools, and explains calculated results. Deterministic business tools still query structured facts such as runs, inspections, and configuration. Unstructured knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed fragments inside the authorized site, with fragment citations retained. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or evidence-based validation and may not generate facts without sources.
 
 ## Does RAG Replace Production-Data Queries?
 
@@ -52,7 +52,7 @@ Ingot's product position does not change with foundation-model capability. Langu
 
 ## Does adding MCP make an agent safe to drive production actions?
 
-No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Project access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
+No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Site access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
 
 ## When is Bayesian optimization appropriate?
 

@@ -62,7 +62,7 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 
 Changing `.env` later does not reset an existing account.
 
-This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage data dictionaries and recipe versions through process configuration. Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
+This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage process variables and recipe versions through process configuration. Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
 
 ## Common startup problems
 

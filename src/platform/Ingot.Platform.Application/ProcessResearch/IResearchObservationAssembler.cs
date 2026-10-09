@@ -16,18 +16,17 @@ public sealed record ResearchObservationAssembly(
 public interface IResearchObservationAssembler
 {
     /// <summary>
-    /// 直接从项目适用范围内的已完成生产运行装配优化观察；不要求用户先创建验证计划。
+    /// 直接从建议条件所属站点和配方范围内的已完成生产运行装配优化观察。
     /// </summary>
     Task<ResearchObservationAssembly> AssembleProductionRunsAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         CancellationToken ct = default);
 
     /// <summary>
     /// 为一条已关联的真实生产运行装配证据，保持建议、实际运行和质量结果的可追溯关系。
     /// </summary>
     Task<ResearchObservationAssembly> AssembleProductionRunAsync(
-        ResearchProject project,
+        RecipeRecommendationBrief brief,
         string executionKey,
         CancellationToken ct = default);
-
 }

@@ -1,8 +1,8 @@
 # Ingot documentation
 
-> **Core value**: Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+> **Core value**: Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-**Product category:** Open-source Process R&D and Optimization System. The documentation covers R&D projects and experiment records, quality analysis, process diagnosis, recipe optimization, system design, and deployment.
+**Product category:** Open-source Process R&D and Optimization System. The documentation covers recipe versions and experiment records, quality analysis, process diagnosis, recipe optimization, system design, and deployment.
 
 The documentation can be read by task rather than in sequence.
 
@@ -24,7 +24,7 @@ The documentation can be read by task rather than in sequence.
 ```text
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
            ↑                                                                                         ↓
-           └──────── Validated specifications, operating regions, and knowledge return to production ────────┘
+           └──────── Validated recipe versions and mechanism knowledge return to production ─────────┘
 ```
 
 1. **Process configuration** tells the system which variables, units, quality rules, and safety boundaries matter.
@@ -38,7 +38,7 @@ This order means “what must exist before the next step.” Navigation may foll
 
 ## Current maturity
 
-The production-run recommendation workflow is implemented. The Web app manages recipe-version parameters through process configuration; each run is an experiment, and run records with quality outcomes provide factual inputs for analysis and optimization. R&D project APIs retain objectives, scope, and evidence references. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for capability, validation, and planned-work boundaries.
+The production-run recommendation workflow is implemented. The Web app manages recipe-version parameters through process configuration; each run is an experiment, and run records with quality outcomes provide factual inputs for analysis and optimization. Recipe recommendations freeze their brief by site and recipe, and engineer decisions and later outcomes are appended. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for capability, validation, and planned-work boundaries.
 
 See [Current status](status.en.md) for the complete boundary.
 

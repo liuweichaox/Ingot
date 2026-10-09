@@ -18,7 +18,11 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
   const results = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return entries;
-    return entries.filter(item => `${item.label} ${item.section} ${item.description} ${item.aliases}`.toLowerCase().includes(keyword));
+    const matches = entries.filter(item => `${item.label} ${item.section} ${item.description} ${item.aliases}`.toLowerCase().includes(keyword));
+    return [
+      ...matches.filter(item => item.label.toLowerCase().includes(keyword)),
+      ...matches.filter(item => !item.label.toLowerCase().includes(keyword)),
+    ];
   }, [entries, query]);
   const selectedIndex = Math.min(activeIndex, results.length - 1);
   const selectedPath = results[selectedIndex]?.path;

@@ -1,4 +1,4 @@
-// 提供 PostgreSQL 存储实现共享的查询、事务和序列化操作。
+// 提供 PostgreSQL 存储实现共享的查询、分页和序列化操作。
 using System.Text.Json;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessResearch;
@@ -9,9 +9,12 @@ namespace Ingot.Platform.Infrastructure.ProcessResearch;
 
 public sealed partial class PostgresProcessResearchStore
 {
+    /// <summary>
+    /// 键集分页：SQL 中 @before_at、@before_id 为上一页最后一行，@take 为本页条数加一。
+    /// </summary>
     private async Task<ResearchPage<T>> ListPageAsync<T>(
         string sql,
-        Guid projectId,
+        Action<NpgsqlCommand> bind,
         string? cursor,
         int limit,
         Func<T, DateTimeOffset> timestamp,
@@ -29,18 +32,10 @@ public sealed partial class PostgresProcessResearchStore
         }
         limit = Math.Clamp(limit, 1, 200);
         await using var command = _dataSource.CreateCommand(sql);
-        command.Parameters.AddWithValue(projectId);
-        command.Parameters.Add(new NpgsqlParameter
-        {
-            NpgsqlDbType = NpgsqlDbType.TimestampTz,
-            Value = (object?)beforeTime ?? DBNull.Value
-        });
-        command.Parameters.Add(new NpgsqlParameter
-        {
-            NpgsqlDbType = NpgsqlDbType.Uuid,
-            Value = (object?)beforeId ?? DBNull.Value
-        });
-        command.Parameters.AddWithValue(limit + 1);
+        bind(command);
+        AddNullable(command, "before_at", NpgsqlDbType.TimestampTz, beforeTime);
+        AddNullable(command, "before_id", NpgsqlDbType.Uuid, beforeId);
+        command.Parameters.AddWithValue("take", limit + 1);
         var values = new List<T>(limit + 1);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -57,11 +52,11 @@ public sealed partial class PostgresProcessResearchStore
 
     private async Task<T?> GetOneAsync<T>(
         string sql,
-        object parameter,
+        Action<NpgsqlCommand> bind,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(sql);
-        command.Parameters.AddWithValue(parameter);
+        bind(command);
         var payload = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         return payload is null or DBNull
             ? default
@@ -70,12 +65,11 @@ public sealed partial class PostgresProcessResearchStore
 
     private async Task<IReadOnlyList<T>> ListAsync<T>(
         string sql,
-        object? parameter,
+        Action<NpgsqlCommand> bind,
         CancellationToken ct)
     {
         await using var command = _dataSource.CreateCommand(sql);
-        if (parameter is not null)
-            command.Parameters.AddWithValue(parameter);
+        bind(command);
         var values = new List<T>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -83,97 +77,9 @@ public sealed partial class PostgresProcessResearchStore
         return values;
     }
 
-    private static async Task SaveChildAsync<T>(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        string sql,
-        Guid id,
-        Guid projectId,
-        string status,
-        T value,
-        DateTimeOffset createdAt,
-        DateTimeOffset updatedAt,
-        CancellationToken ct)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = sql;
-        command.Parameters.AddWithValue(id);
-        command.Parameters.AddWithValue(projectId);
-        command.Parameters.AddWithValue(status);
-        AddJson(command, value);
-        command.Parameters.AddWithValue(createdAt);
-        command.Parameters.AddWithValue(updatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-    }
-
-    private static async Task SyncEvidenceAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        string resourceType,
-        string resourceId,
-        IReadOnlyList<EvidenceReference> evidence,
-        CancellationToken ct)
-    {
-        await using var delete = connection.CreateCommand();
-        delete.Transaction = transaction;
-        delete.CommandText =
-            "DELETE FROM research_evidence WHERE resource_type = $1 AND resource_id = $2";
-        delete.Parameters.AddWithValue(resourceType);
-        delete.Parameters.AddWithValue(resourceId);
-        await delete.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        foreach (var item in evidence
-                     .GroupBy(static value => (value.Kind, value.ReferenceId))
-                     .Select(static group => group.First()))
-        {
-            await using var insert = connection.CreateCommand();
-            insert.Transaction = transaction;
-            insert.CommandText =
-                """
-                INSERT INTO research_evidence
-                  (evidence_id, project_id, resource_type, resource_id, kind,
-                   reference_id, content_hash, payload, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                """;
-            insert.Parameters.AddWithValue(item.EvidenceId);
-            insert.Parameters.AddWithValue(item.ProjectId);
-            insert.Parameters.AddWithValue(resourceType);
-            insert.Parameters.AddWithValue(resourceId);
-            insert.Parameters.AddWithValue(item.Kind);
-            insert.Parameters.AddWithValue(item.ReferenceId);
-            insert.Parameters.AddWithValue(item.ContentHash);
-            AddJson(insert, item);
-            insert.Parameters.AddWithValue(item.CreatedAt);
-            await insert.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
-    }
-
-    private static async Task InsertAuditAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        ResearchAuditEntry audit,
-        CancellationToken ct)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            INSERT INTO process_research_audit
-              (entry_id, project_id, resource_type, resource_id, action, payload, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            """;
-        command.Parameters.AddWithValue(audit.EntryId);
-        command.Parameters.AddWithValue(audit.ProjectId);
-        command.Parameters.AddWithValue(audit.ResourceType);
-        command.Parameters.AddWithValue(audit.ResourceId);
-        command.Parameters.AddWithValue(audit.Action);
-        AddJson(command, audit);
-        command.Parameters.AddWithValue(audit.CreatedAt);
-        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-    }
-
-    private static void AddJson<T>(NpgsqlCommand command, T value)
+    private static void AddJson<T>(NpgsqlCommand command, string name, T value)
         => command.Parameters.AddWithValue(
+            name,
             NpgsqlDbType.Jsonb,
             JsonSerializer.Serialize(value, JsonOptions));
 
@@ -183,8 +89,4 @@ public sealed partial class PostgresProcessResearchStore
     private static T Deserialize<T>(string payload)
         => JsonSerializer.Deserialize<T>(payload, JsonOptions)
            ?? throw new InvalidDataException($"无法解析 {typeof(T).Name}。");
-
-    private static JsonSerializerOptions CreateJsonOptions()
-        => new(JsonSerializerDefaults.Web);
-
 }

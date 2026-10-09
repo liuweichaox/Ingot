@@ -19,6 +19,11 @@ public interface IProcessExecutionAnalysisMaterializationStore : IProcessExecuti
         ProcessExecutionAnalysisMaterializationKey key,
         CancellationToken ct = default);
 
+    Task<IReadOnlyDictionary<string, ProcessExecutionAnalysisSnapshot>> LoadLatestReadyForSiteAsync(
+        IReadOnlyList<ProcessExecutionAnalysisMaterializationKey> keys,
+        string siteId,
+        CancellationToken ct = default);
+
     Task<ProcessExecutionAnalysisSnapshot> SaveAsync(
         ProcessExecutionAnalysisMaterializationKey key,
         ProcessExecutionAnalysisSourceFingerprint source,

@@ -17,7 +17,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
 import { cx, LinkButton, LoadingCard, ToastHost } from "./ui/components";
@@ -31,15 +31,11 @@ const ProcessExecutionsPage = lazyNamed(() => import("./pages/OperationsPages"),
 const ProcessExecutionDetailPage = lazyNamed(() => import("./pages/OperationsPages"), "ProcessExecutionDetailPage");
 const EventsPage = lazyNamed(() => import("./pages/ConversationPages"), "EventsPage");
 const ChatPage = lazyNamed(() => import("./pages/ConversationPages"), "ChatPage");
-const ObjectExplorerPage = lazyNamed(() => import("./pages/ObjectPages"), "ObjectExplorerPage");
 const ProductionSetupPage = lazyNamed(() => import("./pages/ManufacturingPages"), "ProductionSetupPage");
 const InspectionsPage = lazyNamed(() => import("./pages/InspectionPages"), "InspectionsPage");
 const QualityAnalysisPage = lazyNamed(() => import("./pages/InspectionPages"), "QualityAnalysisPage");
 const ExecutionComparisonPage = lazyNamed(() => import("./pages/AnalysisPages"), "ExecutionComparisonPage");
 const DataQualityPage = lazyNamed(() => import("./pages/AnalysisPages"), "DataQualityPage");
-const AnalysisHubPage = lazyNamed(() => import("./pages/AnalysisHubPage"), "AnalysisHubPage");
-const RecipeSuggestionsPage = lazyNamed(() => import("./pages/RecipeSuggestionsPage"), "RecipeSuggestionsPage");
-const ConfigurationHubPage = lazyNamed(() => import("./pages/RegistryPages"), "ConfigurationHubPage");
 const ProcessDataModelsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessDataModelsPage");
 const ProcessSpecificationsPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessSpecificationsPage");
 const ProcessAnalysisPlansPage = lazyNamed(() => import("./pages/RegistryPages"), "ProcessAnalysisPlansPage");
@@ -62,21 +58,21 @@ const sections = [
     ],
   },
   {
-    id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/edges", groups: [
-      { label: "接入配置", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]] },
-    ],
-  },
-  {
-    id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration", groups: [
-      { label: "基础配置", items: [["/configuration", "配置总览"], ["/configuration/process-data-models", "数据字典"], ["/configuration/process-specifications", "配方版本"], ["/configuration/process-analysis-plans", "分析规则"]] },
+    id: "process-definition", label: "工艺配置", icon: AdjustmentsHorizontalIcon, path: "/configuration/process-data-models", groups: [
+      { label: "基础配置", items: [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-specifications", "配方版本"], ["/configuration/process-analysis-plans", "过程分析"]] },
       { label: "质量配置", items: [["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
       { label: "工装配置", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
     ],
   },
   {
+    id: "equipment-connection", label: "现场接入", icon: SignalIcon, path: "/edges", groups: [
+      { label: "接入配置", items: [["/edges", "现场节点"], ["/configuration/ingestion-tasks", "采集配置"]] },
+    ],
+  },
+  {
     id: "evidence", label: "生产运行", icon: CircleStackIcon, path: "/process-executions", groups: [
       { label: "生产准备", items: [["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"]] },
-      { label: "运行追溯", items: [["/process-executions", "运行记录"], ["/explorer", "对象目录"], ["/events", "运行事件"]] },
+      { label: "运行追溯", items: [["/process-executions", "运行记录"]] },
     ],
   },
   {
@@ -86,8 +82,8 @@ const sections = [
     ],
   },
   {
-    id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/analysis", groups: [
-      { label: "追因分析", items: [["/analysis", "追因总览"], ["/data-quality", "数据质量"], ["/comparisons", "运行对比"], ["/recipe-suggestions", "配方建议"]] },
+    id: "diagnosis", label: "工艺追因", icon: MagnifyingGlassCircleIcon, path: "/data-quality", groups: [
+      { label: "追因分析", items: [["/data-quality", "数据质量"], ["/comparisons", "运行对比"]] },
       { label: "辅助研判", items: [["/chat", "分析助手"]] },
     ],
   },
@@ -96,7 +92,7 @@ const sections = [
 const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
     { label: "身份权限", items: [["/identity/users", "用户权限"]] },
-    { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"]] },
+    { label: "平台运维", items: [["/platform-metrics", "平台状态"], ["/logs", "平台日志"], ["/events", "原始事件"]] },
     { label: "助手治理", items: [["/model-service", "模型服务"]] },
   ],
 };
@@ -110,27 +106,23 @@ const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
   "/workbench": ["工作台", "集中查看待办、生产状态与质量风险"],
-  "/chat": ["工艺分析助手", "用自然语言查询运行、质量与配置证据"],
-  "/analysis": ["追因总览", "从生产运行和可信证据进入差异比较、候选原因与工程验证"],
-  "/explorer": ["对象目录", "选择真实业务对象，再进入它的运行、事件、质量与数据健康视图"],
-  "/process-executions": ["运行记录", "查看生产运行及其数据、工艺与质量上下文"],
-  "/events": ["运行事件", "查询、追溯并关联运行上下文"],
+  "/chat": ["分析助手", "用自然语言查询运行、质量与配置证据"],
+  "/process-executions": ["运行记录", "查看每次运行的设定、材料、过程曲线和质量结果"],
+  "/events": ["原始事件", "查询现场节点上报的原始记录，用于审计和排查接入"],
   "/production/changeover": ["生产切换", "让设备、产品、配方版本和已装工装对接下来的运行生效"],
-  "/production/tooling-installations": ["工装装卸", "记录工装组合版本在设备上的装入与卸下区间"],
-  "/inspections": ["检验任务", "处理视觉检查、人工质检与原图复核"],
-  "/quality-analysis": ["偏差分析", "按产品、配方版本和运行上下文定位质量偏差并追溯证据"],
-  "/comparisons": ["运行对比", "比较同类生产运行、运行段或时间窗口，生成待验证的候选原因"],
-  "/recipe-suggestions": ["配方建议", "用真实运行和质量结果生成下一版配方，并登记决定与后续结果"],
+  "/production/tooling-installations": ["工装装卸", "记录工装总成版本在设备上的装入与卸下区间"],
+  "/inspections": ["检验任务", "录入和复核检测结果"],
+  "/quality-analysis": ["偏差分析", "按产品和配方版本查看哪些结果超出质量范围"],
+  "/comparisons": ["运行对比", "比较同类运行的设定和过程曲线，解释这些运行为什么不一样"],
   "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
-  "/data-quality": ["数据质量", "检查运行对象的数据范围、采样连续性与运行完整性"],
-  "/configuration": ["配置总览", "按依赖顺序完成数据、接入、分析、质量与工装配置"],
-  "/configuration/process-analysis-plans": ["分析规则", "版本化定义同类比较条件、对齐方式、质量分组和数据项"],
-  "/configuration/process-data-models": ["数据字典", "定义工艺变量、阶段号和控制参数，供现场数据源统一映射"],
-  "/configuration/process-specifications": ["配方版本", "维护引用数据模型的完整配方版本"],
+  "/data-quality": ["数据质量", "检查采样是否连续、运行是否完整，以及能否进入下一轮校正"],
+  "/configuration/process-analysis-plans": ["过程分析", "规定哪些过程曲线参与比较，以及均值、最小值和最大值"],
+  "/configuration/process-data-models": ["工艺变量", "定义过程量和控制参数，供配方版本与现场采集共用"],
+  "/configuration/process-specifications": ["配方版本", "维护引用工艺变量的完整配方版本"],
   "/configuration/ingestion-tasks": ["采集配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
-  "/configuration/component-types": ["组件分类", "维护可复用物理资产的业务分类；装配位置由工装结构定义"],
+  "/configuration/component-types": ["组件分类", "维护可复用物理组件的业务分类；装配位置由工装结构规定"],
   "/configuration/components": ["组件台账", "登记具有独立资产编号和序列号的可更换物理组件"],
   "/configuration/tooling-types": ["工装结构", "定义工装总成结构、装配位置和各位置允许的组件分类"],
   "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
@@ -141,14 +133,13 @@ const pageDetails = {
 };
 
 const searchAliases = {
-  "/explorer": "工业对象 对象目录 设备 工件",
-  "/production/changeover": "生产上下文 换产 产品切换 工艺切换",
+  "/process-executions": "运行 设备 工件 批次 需要处理 质量异常 追因",
+  "/events": "运行事件 上报记录 审计",
+  "/production/changeover": "生产切换 换产 产品切换 配方切换",
   "/inspections": "质量任务 质检 检测任务",
   "/quality-analysis": "质量偏差分析 不良 偏差",
-  "/analysis": "工艺分析 分析总览 原因分析",
   "/data-quality": "数据质量 完整性 分析准入",
-  "/configuration": "配置中心",
-  "/configuration/process-specifications": "配方版本 参数版本 工艺规范",
+  "/configuration/process-specifications": "配方版本 参数版本 工艺规范 下一轮校正",
   "/configuration/ingestion-tasks": "采集 PLC 点位映射",
   "/platform-metrics": "平台运行状态 系统状态",
   "/logs": "运行日志 系统日志",
@@ -331,7 +322,7 @@ export default function App({ identity, logout }) {
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
       : location.pathname.startsWith("/configuration/ingestion-tasks/")
-          ? ["配置数据源", "配置设备连接、工艺映射和发布前验证"]
+          ? ["采集配置", "选择现场节点和工艺变量，把设备点位映射上去并发布"]
           : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
   return (
     <div className="app-canvas min-h-screen text-slate-900">
@@ -442,17 +433,27 @@ export function RequireRole({ identity, roles, children }) {
   );
 }
 
+function LegacyRecipeSuggestionsRedirect() {
+  const [params] = useSearchParams();
+  const recipe = params.get("recipe");
+  const version = params.get("version");
+  const target = recipe && version
+    ? `/configuration/process-specifications?recipe=${encodeURIComponent(recipe)}&version=${encodeURIComponent(version)}`
+    : "/configuration/process-specifications";
+  return <Navigate to={target} replace />;
+}
+
 function AppRoutes({ identity, canConfigure }) {
   return (
     <Suspense fallback={<div className="p-6"><LoadingCard /></div>}>
       <Routes>
         <Route path="/" element={<Navigate to="/workbench" replace />} />
         <Route path="/workbench" element={<WorkbenchPage identity={identity} />} />
-        <Route path="/analysis" element={<AnalysisHubPage identity={identity} />} />
-        <Route path="/recipe-suggestions" element={<RecipeSuggestionsPage />} />
+        <Route path="/analysis" element={<Navigate to="/process-executions?attention=1" replace />} />
+        <Route path="/recipe-suggestions" element={<LegacyRecipeSuggestionsRedirect />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
-        <Route path="/explorer" element={<ObjectExplorerPage />} />
+        <Route path="/explorer" element={<Navigate to="/process-executions" replace />} />
         <Route path="/process-executions" element={<ProcessExecutionsPage />} />
         <Route path="/process-executions/:executionId" element={<ProcessExecutionDetailPage />} />
         <Route path="/events" element={<EventsPage />} />
@@ -469,7 +470,7 @@ function AppRoutes({ identity, canConfigure }) {
         <Route path="/comparisons" element={<ExecutionComparisonPage />} />
         <Route path="/model-service" element={<RequireRole identity={identity} roles={["platform.admin"]}><ModelServiceConfigurationPage /></RequireRole>} />
         <Route path="/data-quality" element={<DataQualityPage />} />
-        <Route path="/configuration" element={<ConfigurationHubPage canWrite={canConfigure} />} />
+        <Route path="/configuration" element={<Navigate to="/configuration/process-data-models" replace />} />
         <Route path="/configuration/process-analysis-plans" element={<ProcessAnalysisPlansPage canWrite={canConfigure} />} />
         <Route path="/configuration/process-data-models" element={<ProcessDataModelsPage canWrite={canConfigure} />} />
         <Route path="/configuration/process-specifications" element={<ProcessSpecificationsPage canWrite={canConfigure} />} />

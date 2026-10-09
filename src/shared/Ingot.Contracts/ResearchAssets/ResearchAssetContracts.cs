@@ -115,6 +115,8 @@ public sealed record ModelDriftReading
 public sealed record KnowledgeSource
 {
     public Guid SourceId { get; init; }
+    /// <summary>知识来源只在所属站点内检索和引用。</summary>
+    public string SiteCode { get; init; } = "";
     public required string Title { get; init; }
     public string SourceKind { get; init; } = "document";
     public string Status { get; init; } = KnowledgeSourceStatuses.Uploaded;

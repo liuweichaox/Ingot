@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getBlob, getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
-import { extractRows, useApi } from "../hooks/useApi";
+import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
 import { useIsMounted } from "../hooks/useIsMounted";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
 import { formatTime, LoadingCard, uuidv7 } from "./shared";
@@ -516,6 +516,8 @@ function evaluateMeasurement(value, characteristic) {
 }
 
 export function QualityAnalysisPage() {
+  const edges = useApi("/api/edges");
+  const siteId = registeredSiteIds(edges.data)[0] || "";
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState({
     productFamilyCode: "",
@@ -528,7 +530,10 @@ export function QualityAnalysisPage() {
     if (searchParams.get("subjectId")) params.set("subjectId", searchParams.get("subjectId"));
     return params.toString();
   });
-  const { data, loading, error, reload } = useApi(`/api/v1/quality-analysis?${query}`);
+  const { data, loading, error, reload } = useApi(
+    siteId ? `/api/v1/quality-analysis?${query}&siteId=${encodeURIComponent(siteId)}` : "",
+    { enabled: Boolean(siteId) },
+  );
   const records = extractRows(data);
   const summary = records.reduce((result, row) => {
     const outcome = String(row.outcome || "INCONCLUSIVE").toUpperCase();
@@ -555,7 +560,7 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="偏差分析">
+    <Page title="偏差分析" description="按产品和配方版本查看哪些结果超出质量范围。过程曲线的差异在运行对比里看。">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
           <Field label="产品系列"><Input value={filters.productFamilyCode} onChange={event => setFilters({ ...filters, productFamilyCode: event.target.value })} /></Field>

@@ -1,18 +1,12 @@
-// Provides only the project fixtures required by the recipe recommendation decision workflow.
+// 提供下一配方建议闭环测试使用的建议条件夹具。
 using Ingot.Contracts.ProcessResearch;
-using Ingot.Platform.Application.ProcessConfiguration;
-using Ingot.Platform.Application.ProcessResearch;
-using Ingot.Platform.Application.ResearchAssets;
 
 namespace Ingot.Core.Tests.Platform;
 
 public abstract partial class ProcessResearchWorkflowTestBase
 {
-    protected static ProcessResearchWorkflow CreateWorkflow(
-        IProcessResearchStore store,
-        IProcessConfigurationStore? processConfigurations = null,
-        IMechanismKnowledgeStore? mechanismKnowledgeStore = null)
-        => new(store, processConfigurations, mechanismKnowledgeStore);
+    protected const string TestSiteCode = "SITE-001";
+    protected const string TestProcessSpecificationId = "optical-press-spec";
 
     protected static IReadOnlyList<ResearchVariableSetting> Parameters(double temperature, double force)
         =>
@@ -21,18 +15,18 @@ public abstract partial class ProcessResearchWorkflowTestBase
             new ResearchVariableSetting { VariableCode = "press-force", Value = force, Unit = "kN" }
         ];
 
-    protected static ResearchProject ProjectDraft()
+    protected static RecipeRecommendationBrief BriefDraft()
         => new()
         {
-            Code = "optical-molding-window",
+            SiteCode = TestSiteCode,
+            ProcessSpecificationId = TestProcessSpecificationId,
             Name = "光学模压配方优化",
-            ProcessName = "光学玻璃精密模压",
-            SiteCode = "SITE-001",
             Context = new Dictionary<string, string>
             {
-                [ResearchProjectScopeKeys.ProductFamilyCode] = "lens-a",
-                [ResearchProjectScopeKeys.ProductCode] = "product-a",
-                [ResearchProjectScopeKeys.EquipmentId] = "press-01"
+                [RecipeRecommendationScopeKeys.ProductFamilyCode] = "lens-a",
+                [RecipeRecommendationScopeKeys.ProductCode] = "product-a",
+                [RecipeRecommendationScopeKeys.EquipmentId] = "press-01",
+                [RecipeRecommendationScopeKeys.ProcessSpecificationId] = TestProcessSpecificationId
             },
             Objectives =
             [

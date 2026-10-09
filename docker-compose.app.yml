@@ -109,6 +109,10 @@ services:
       - KnowledgeEmbedding__Model=${INGOT_KNOWLEDGE_EMBEDDING_MODEL:-text-embedding-3-small}
       - KnowledgeEmbedding__RequestTimeout=${INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT:-00:00:30}
       - Cors__AllowedOrigins__0=http://localhost:3000
+      - EventIngest__EdgeTokens__${INGOT_EDGE_ID:?INGOT_EDGE_ID is required}=${INGOT_EDGE_TOKEN:?INGOT_EDGE_TOKEN is required}
+      - EventIngest__EdgeSites__${INGOT_EDGE_ID}=${INGOT_SITE_ID:?INGOT_SITE_ID is required}
+      - EdgeDiagnostics__EdgeTokens__${INGOT_EDGE_ID}=${INGOT_CONNECTOR_LOCAL_TOKEN:?INGOT_CONNECTOR_LOCAL_TOKEN is required}
+      - EdgeDiagnostics__EdgeBaseUrls__${INGOT_EDGE_ID}=${INGOT_EDGE_DIAGNOSTICS_BASE_URL:-http://connector-host:8001}
     depends_on:
       platform-migrate:
         condition: service_completed_successfully

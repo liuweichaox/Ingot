@@ -4,9 +4,9 @@
 
 ## Core value
 
-> **Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
+> **Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
 
-Ingot serves process, quality, equipment, and R&D engineers across R&D projects, experiment records, run evidence, quality analysis, process diagnosis, and recipe optimization.
+Ingot serves process, quality, equipment, and R&D engineers across recipe versions, experiment records, run evidence, quality analysis, process diagnosis, and recipe optimization.
 
 For product communication, prefer the more concrete action line:
 
@@ -19,7 +19,7 @@ The product summary covers R&D management, data and evidence, analysis, and opti
 - **Category**: Open-source Process R&D and Optimization System / 开源工艺研发与优化系统
 - **Primary users**: process, quality, equipment, and R&D engineers developing new products, materials, and processes
 - **Unit of work**: process-experiment definition, actual settings, trajectory, result, engineering judgment, and follow-up experiment
-- **Product responsibility**: organize projects, records, and evidence; support quality analysis and process diagnosis; provide constrained next-recipe recommendations when data-admission conditions are met
+- **Product responsibility**: organize recipe versions, records, and evidence; support quality analysis and process diagnosis; provide constrained next-recipe recommendations when data-admission conditions are met
 - **Engineer responsibility**: define objectives, review data and constraints, confirm whether a recommendation enters normal production, and interpret field context
 - **System boundary**: engineers review conclusions and recipe recommendations; the system respects safety constraints, approval responsibilities, and equipment-control boundaries
 
@@ -31,7 +31,7 @@ Ingot works on reviewable process-run evidence rather than isolated data points 
 
 Public material may state that the system can:
 
-- manage recipe-version parameters through process configuration, retain experiment facts through run and quality records, and organize R&D projects through server APIs;
+- manage recipe-version parameters through process configuration, retain experiment facts through run and quality records, and generate and review next-recipe recommendations by site and recipe;
 - link actual production conditions, process trajectories, and inspection results;
 - expose missingness, provenance, versions, and uncertainty;
 - help engineers compare runs and narrow candidate causes;
@@ -54,7 +54,7 @@ Observational data can support candidate causes, stable associations, confounded
 | Use | Chinese | English |
 |---|---|---|
 | Product category | 开源工艺研发与优化系统 | Open-source Process R&D and Optimization System |
-| Core value | 组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化 | Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization |
+| Core value | 组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化 | Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization |
 | Short tagline | 从工艺数据，到有依据的研发决策。 | From process data to evidence-based R&D decisions. |
 | Business capabilities | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
 | Capability terms | 运行比较、工艺追因、配方建议、工程师决定、受约束优化 | run comparison, process diagnosis, recipe recommendation, engineer decision, constrained optimization |

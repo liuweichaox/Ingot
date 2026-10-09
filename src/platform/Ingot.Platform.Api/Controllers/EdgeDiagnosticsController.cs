@@ -28,7 +28,7 @@ public sealed class EdgeDiagnosticsController(
         var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
         if (denied is not null) return denied;
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl == null) return InvalidRequest("该采集节点未配置可信诊断地址，无法代理 logs。");
+        if (baseUrl == null) return InvalidRequest("该现场节点未配置可信诊断地址，无法代理 logs。");
 
         var query = new Dictionary<string, string?>
         {
@@ -58,7 +58,7 @@ public sealed class EdgeDiagnosticsController(
         {
             return ProblemResponse(
                 StatusCodes.Status502BadGateway,
-                "采集节点不可访问，请检查节点网络或上报地址。",
+                "现场节点不可访问，请检查节点网络或上报地址。",
                 [("upstreamDetail", exception.Message)]);
         }
     }
@@ -76,7 +76,7 @@ public sealed class EdgeDiagnosticsController(
 
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl is null)
-            return InvalidRequest("该采集节点未配置可信诊断地址，无法查询任务状态。");
+            return InvalidRequest("该现场节点未配置可信诊断地址，无法查询任务状态。");
 
         var uri = new Uri(new Uri(baseUrl), "/api/v1/acquisition/status");
         var client = CreateEdgeClient(edgeId);
@@ -92,7 +92,7 @@ public sealed class EdgeDiagnosticsController(
         {
             return ProblemResponse(
                 StatusCodes.Status502BadGateway,
-                "采集节点不可访问。",
+                "现场节点不可访问。",
                 [("upstreamDetail", exception.Message)]);
         }
     }
@@ -113,7 +113,7 @@ public sealed class EdgeDiagnosticsController(
             return AuthorizationDenied();
         var edge = await registry.FindAsync(edgeId, ct).ConfigureAwait(false);
         if (edge is null || !identity.CanAccessSite(edge.SiteId))
-            return ResourceNotFound("采集节点不存在。");
+            return ResourceNotFound("现场节点不存在。");
         return null;
     }
 
@@ -131,7 +131,7 @@ public sealed class EdgeDiagnosticsController(
         {
             return ProblemResponse(
                 StatusCodes.Status502BadGateway,
-                "平台无法通过节点诊断凭据访问该采集节点，请检查节点凭据配置。",
+                "平台无法通过节点诊断凭据访问该现场节点，请检查节点凭据配置。",
                 [("edgeStatus", (int)response.StatusCode)]);
         }
 

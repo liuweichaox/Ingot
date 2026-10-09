@@ -9,7 +9,7 @@ import { PlatformUptimeMetric } from "../src/pages/AdministrationPages";
 import { ProductionRecordsPage } from "../src/pages/ProductionRecordsPage";
 import { isProductionEditorValid } from "../src/pages/ProductionRecordForm";
 import { productionResources } from "../src/pages/manufacturingResources";
-import { ConfigurationHubPage, ProcessSpecificationsPage } from "../src/pages/RegistryPages";
+import { ProcessSpecificationsPage } from "../src/pages/RegistryPages";
 import { DataTable, EmptyState, Field, Input } from "../src/ui/components";
 
 afterEach(() => {
@@ -118,47 +118,42 @@ describe("生产界面状态反馈", () => {
     expect(screen.getByRole("button", { name: "查看现场节点" })).toBeInTheDocument();
   });
 
-  it("为未完成配置提供进度和可直达的操作", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(jsonResponse([]))));
+  it("在配方版本列表列出缺少的上线依赖并直达修复页面", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(url => {
+      const path = String(url);
+      if (path.includes("/process-specifications")) return Promise.resolve(jsonResponse([
+        { processSpecificationId: "spec-lens-a", version: 1, name: "镜片配方", dataModelId: "model-lens", dataModelVersion: 1, status: "published", contextSelector: {} },
+      ]));
+      if (path.includes("/process-data-models")) return Promise.resolve(jsonResponse([
+        { modelId: "model-lens", version: 1, status: "published", controlParameters: [{ code: "holding.temperature" }], acquisition: { dataItems: [{ code: "mold.temperature", category: "process" }] } },
+      ]));
+      if (path.includes("/ingestion-tasks")) return Promise.resolve(jsonResponse([
+        { taskId: "press-01", dataModelId: "model-lens", dataModelVersion: 1, status: "draft" },
+      ]));
+      return Promise.resolve(jsonResponse([]));
+    }));
 
-    render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
+    render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
-    await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "0"));
-    expect(screen.getByText("还需完成 4 项")).toBeInTheDocument();
-    expect(screen.getAllByText("待完成")).toHaveLength(4);
-    screen.getAllByText("待完成").forEach(badge => expect(badge).toHaveClass("bg-amber-50"));
-    expect(screen.getByRole("link", { name: /配置数据来源/ })).toHaveAttribute("href", "/configuration/ingestion-tasks");
+    const launchButton = await screen.findByRole("button", { name: "查看 spec-lens-a V1 的上线检查" }, { timeout: 3000 });
+    expect(launchButton).toHaveTextContent("缺 3 项");
+    fireEvent.click(launchButton);
+    expect(await screen.findByText("采集配置 press-01 还没有发布。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "配置采集" })).toHaveAttribute("href", "/configuration/ingestion-tasks");
+    expect(screen.getByRole("link", { name: "配置过程分析" })).toHaveAttribute("href", "/configuration/process-analysis-plans");
+    expect(screen.getByRole("link", { name: "配置质量方案" })).toHaveAttribute("href", "/configuration/quality-plans");
+    expect(screen.queryByRole("link", { name: "去做生产切换" })).toBeNull();
   });
 
-  it("用规范状态值呈现准备度检查中的黄色徽标", () => {
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise(() => {})));
+  it("配置读取失败时上线检查显示无法检查", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(url => String(url).includes("/process-specifications")
+      ? Promise.resolve(jsonResponse([{ processSpecificationId: "spec-lens-a", version: 1, dataModelId: "model-lens", dataModelVersion: 1, status: "published" }]))
+      : Promise.resolve(new Response("读取失败", { status: 503 }))));
 
-    render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
+    render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
-    expect(screen.getAllByText("检查中")).toHaveLength(4);
-    screen.getAllByText("检查中").forEach(badge => expect(badge).toHaveClass("bg-amber-50"));
-  });
-
-  it("用规范状态值呈现无法检查的红色徽标", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("读取失败", { status: 503 })));
-
-    render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
-
-    const badges = await screen.findAllByText("无法检查");
-    expect(badges).toHaveLength(4);
-    badges.forEach(badge => expect(badge).toHaveClass("bg-rose-50"));
-  });
-
-  it("用规范状态值呈现已准备的绿色徽标", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockImplementation(url => Promise.resolve(jsonResponse(
-      String(url).includes("/inspection-definitions") ? [{ definitionId: "definition-01" }] : [{ status: "published" }],
-    ))));
-
-    render(<MemoryRouter><ConfigurationHubPage /></MemoryRouter>);
-
-    await waitFor(() => expect(screen.getByRole("progressbar", { name: "配置准备进度" })).toHaveAttribute("aria-valuenow", "4"));
-    expect(screen.getAllByText("已准备")).toHaveLength(4);
-    screen.getAllByText("已准备").forEach(badge => expect(badge).toHaveClass("bg-emerald-50"));
+    const badge = await screen.findByText("无法检查", {}, { timeout: 3000 });
+    expect(badge).toHaveClass("bg-rose-50");
   });
 
   it("允许新增任意组件分类，不预设模压分类", async () => {
@@ -176,7 +171,7 @@ describe("生产界面状态反馈", () => {
     fireEvent.click(await screen.findByRole("button", { name: "新增组件分类" }));
     expect(screen.queryByText("模芯")).toBeNull();
     expect(screen.queryByText("模架")).toBeNull();
-    fireEvent.change(screen.getByLabelText("组件类型代码"), { target: { value: "thermal-sleeve" } });
+    fireEvent.change(screen.getByLabelText("组件分类"), { target: { value: "thermal-sleeve" } });
     fireEvent.change(screen.getByLabelText("名称"), { target: { value: "加热套" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
@@ -229,6 +224,7 @@ describe("生产界面状态反馈", () => {
         createdPayload = JSON.parse(options.body);
         return Promise.resolve(jsonResponse(createdPayload));
       }
+      if (String(url).includes("/api/edges")) return Promise.resolve(jsonResponse([{ edgeId: "edge-01", siteId: "SITE-001" }]));
       if (String(url).includes("/process-specifications")) return Promise.resolve(jsonResponse([specification]));
       if (String(url).includes("/process-data-models")) return Promise.resolve(jsonResponse([{
         modelId: "model-lens",
@@ -249,7 +245,7 @@ describe("生产界面状态反馈", () => {
     render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "创建修订草稿" }));
-    expect(await screen.findByLabelText("引用运行 RUN-005")).toBeInTheDocument();
+    expect(await screen.findByLabelText("引用运行 RUN-005", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.queryByText("RUN-004")).toBeNull();
     expect(screen.queryByText("RUN-OTHER")).toBeNull();
     fireEvent.change(screen.getByLabelText("修订理由"), { target: { value: "针对面形偏差调整保压温度" } });

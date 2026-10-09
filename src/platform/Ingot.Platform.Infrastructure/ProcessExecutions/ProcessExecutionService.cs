@@ -59,7 +59,7 @@ public sealed class ProcessExecutionService(
             .LastOrDefault(static row => row.Event.EventType == "process.execution.completed")
             ?.Event.OccurredAt;
         if (!startedAt.HasValue || !completedAt.HasValue)
-            return ProcessExecutionAnalysisRecomputeOutcome.Retryable;
+            return ProcessExecutionAnalysisRecomputeOutcome.Completed;
 
         var resolved = (await analysisResolver.ResolveManyAsync(
             [ResolveContext(ordered)], "production-execution", ct).ConfigureAwait(false))[0];
@@ -269,16 +269,17 @@ public sealed class ProcessExecutionService(
         var recordsByExecution = records
             .GroupBy(static record => record.ExecutionId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        var ready = await _materializer!.LoadLatestReadyForSiteAsync(
+            ids.Select(id => (id, analyses[id]?.DataModel, analyses[id]?.Plan)).ToArray(),
+            siteId,
+            ct).ConfigureAwait(false);
         var rows = new List<ProcessExecutionSummary>(ids.Length);
         foreach (var id in ids)
         {
             if (!sourceByExecution.TryGetValue(id, out var source) || source.Events.Count == 0)
                 continue;
             var resolved = analyses[id];
-            // Analysis materializations are currently keyed only by execution id. Until the
-            // projection key includes site id, a scoped list must not reuse a possibly
-            // same-named execution from another site.
-            var materialized = PendingAnalysis(source.SampleCount);
+            var materialized = ready.GetValueOrDefault(id) ?? PendingAnalysis(source.SampleCount);
             rows.Add(BuildSummary(
                 id,
                 source.Events,

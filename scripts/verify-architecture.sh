@@ -247,19 +247,15 @@ check "process-research-application-rules" src/platform/Ingot.Platform.Applicati
 
 check "application-context-direction" src/platform/Ingot.Platform.Application/ResearchAssets \
   'using Ingot\.Platform\.Application\.ProcessResearch' \
-  "ResearchAssets 不得反向依赖 ProcessResearch；项目上下文必须通过窄端口读取"
+  "ResearchAssets 不得反向依赖 ProcessResearch；配方范围必须通过 RecipeKnowledgeScopeReader 读取"
 
 unexpected_research_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/ProcessResearch \
   -type f -name '*.cs' \
   ! -name 'PostgresProcessResearchStore.cs' \
-  ! -name 'PostgresProcessResearchStore.Audit.cs' \
-  ! -name 'PostgresProcessResearchStore.Hypotheses.cs' \
   ! -name 'PostgresProcessResearchStore.Persistence.cs' \
-  ! -name 'PostgresProcessResearchStore.OperatingKnowledge.cs' \
   ! -name 'PostgresProcessResearchStore.Recommendations.cs' \
   ! -name 'ProcessOptimizerCircuitBreakerHandler.cs' \
   ! -name 'ProcessOptimizerClient.cs' \
-  ! -name 'ResearchResultMaterializationHostedService.cs' \
   ! -name 'ResearchObservationAssembler.cs' \
   ! -name 'ProcessResearchModuleServiceCollectionExtensions.cs' \
   -print)
@@ -269,6 +265,29 @@ if [[ -n "$unexpected_research_infrastructure" ]]; then
   fail=1
 else
   echo "✓ [process-research-module-ownership]"
+fi
+
+check "recipe-recommendation-application-purity" src/platform/Ingot.Platform.Application/ProcessResearch \
+  'using (Npgsql|System\.Net\.Http|Ingot\.Platform\.Infrastructure)' \
+  "配方建议规则不得依赖数据库驱动、HTTP 客户端或 Infrastructure"
+
+check "recipe-recommendation-api-boundary" src/platform/Ingot.Platform.Api/Controllers/RecipeRecommendationsController.cs \
+  'using Ingot\.Platform\.Infrastructure|IProcessResearchStore|IResearchObservationAssembler' \
+  "配方建议控制器只做传输、身份解析和站点授权，业务操作必须委托 Application 用例"
+
+recipe_brief_writers=$(grep -rnE 'new ResearchRecipeRecommendation[[:space:]]*(\{|$)' \
+  src --include='*.cs' 2>/dev/null \
+  | grep -v 'Ingot.Platform.Application/ProcessResearch/ResearchOptimizationService.cs' || true)
+if ! grep -qE 'new ResearchRecipeRecommendation[[:space:]]*(\{|$)' \
+  src/platform/Ingot.Platform.Application/ProcessResearch/ResearchOptimizationService.cs; then
+  recipe_brief_writers="ResearchOptimizationService.cs 不再创建建议记录，门禁需要同步更新"
+fi
+if [[ -n "$recipe_brief_writers" ]]; then
+  echo "✗ [recipe-brief-single-writer] 只有 ResearchOptimizationService 可以创建并冻结下一配方建议"
+  echo "$recipe_brief_writers" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [recipe-brief-single-writer]"
 fi
 
 unexpected_inspection_infrastructure=$(find src/platform/Ingot.Platform.Infrastructure/Inspections \

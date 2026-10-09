@@ -223,11 +223,16 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
                     GREATEST(invalidated_source_max_ingest_id, @invalidated_source_max_ingest_id),
                   invalidation_reason = @reason
               WHERE execution_id = ANY(@execution_ids)
-              RETURNING execution_id, invalidated_source_max_ingest_id)
+              RETURNING execution_id, invalidated_source_max_ingest_id),
+            requested AS (
+              SELECT unnest(@execution_ids::text[]) AS execution_id,
+                     @invalidated_source_max_ingest_id::bigint AS invalidated_source_max_ingest_id
+              UNION ALL
+              SELECT execution_id, invalidated_source_max_ingest_id FROM dirty)
             INSERT INTO execution_analysis_recompute_jobs(
               execution_id,invalidated_source_max_ingest_id,reason,status,available_at,updated_at)
             SELECT execution_id,max(invalidated_source_max_ingest_id),@reason,'queued',now(),now()
-            FROM dirty GROUP BY execution_id
+            FROM requested GROUP BY execution_id
             ON CONFLICT(execution_id) DO UPDATE SET
               invalidated_source_max_ingest_id=GREATEST(
                 execution_analysis_recompute_jobs.invalidated_source_max_ingest_id,
@@ -414,6 +419,69 @@ public sealed class PostgresProcessExecutionAnalysisMaterializationStore : IProc
                 jobs.Add(job);
         }
         return jobs;
+    }
+
+    public async Task<IReadOnlyDictionary<string, ProcessExecutionAnalysisSnapshot>> LoadLatestReadyForSiteAsync(
+        IReadOnlyList<ProcessExecutionAnalysisMaterializationKey> keys,
+        string siteId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(siteId))
+            throw new ArgumentException("站点标识不能为空。", nameof(siteId));
+        var snapshots = new Dictionary<string, ProcessExecutionAnalysisSnapshot>(StringComparer.Ordinal);
+        if (keys.Count == 0)
+            return snapshots;
+        await InitializeAsync(ct).ConfigureAwait(false);
+        await using var command = _dataSource.CreateCommand(
+            """
+            SELECT m.execution_id, m.result::text, m.computed_at,
+                   m.source_min_ingest_id, m.source_max_ingest_id,
+                   m.source_event_count, m.source_content_hash
+            FROM unnest(
+                   @execution_ids::text[], @algorithm_versions::text[],
+                   @data_model_ids::text[], @data_model_versions::int[],
+                   @analysis_plan_ids::text[], @analysis_plan_versions::int[])
+                 AS k(execution_id, algorithm_version, data_model_id, data_model_version,
+                      analysis_plan_id, analysis_plan_version)
+            JOIN execution_analysis_materializations m
+              ON m.execution_id = k.execution_id
+             AND m.algorithm_version = k.algorithm_version
+             AND m.data_model_id = k.data_model_id
+             AND m.data_model_version = k.data_model_version
+             AND m.analysis_plan_id = k.analysis_plan_id
+             AND m.analysis_plan_version = k.analysis_plan_version
+            WHERE m.status = 'ready'
+              AND NOT EXISTS (
+                SELECT 1 FROM production_events pe
+                WHERE pe.execution_id = m.execution_id AND pe.site_id <> @site_id
+                UNION ALL
+                SELECT 1 FROM process_sample_frames ps
+                WHERE ps.execution_id = m.execution_id AND ps.site_id <> @site_id
+              );
+            """);
+        command.Parameters.AddWithValue("execution_ids", keys.Select(static key => key.ExecutionId).ToArray());
+        command.Parameters.AddWithValue("algorithm_versions", keys.Select(static key => key.AlgorithmVersion).ToArray());
+        command.Parameters.AddWithValue("data_model_ids", keys.Select(static key => key.DataModelId).ToArray());
+        command.Parameters.AddWithValue("data_model_versions", keys.Select(static key => key.DataModelVersion).ToArray());
+        command.Parameters.AddWithValue("analysis_plan_ids", keys.Select(static key => key.AnalysisPlanId).ToArray());
+        command.Parameters.AddWithValue("analysis_plan_versions", keys.Select(static key => key.AnalysisPlanVersion).ToArray());
+        command.Parameters.AddWithValue("site_id", siteId.Trim());
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var executionId = reader.GetString(0);
+            var result = JsonSerializer.Deserialize<WholeProcessExecutionAnalysisResult>(reader.GetString(1), JsonOptions)
+                         ?? throw new InvalidOperationException($"过程执行 {executionId} 的物化分析结果无法反序列化。");
+            snapshots[executionId] = new ProcessExecutionAnalysisSnapshot(
+                result,
+                reader.GetFieldValue<DateTimeOffset>(2),
+                new ProcessExecutionAnalysisSourceFingerprint(
+                    reader.GetInt64(3),
+                    reader.GetInt64(4),
+                    reader.GetInt32(5),
+                    reader.GetString(6)));
+        }
+        return snapshots;
     }
 
     public async Task<IReadOnlyList<ProcessExecutionFeatureAggregate>> QueryFeatureAggregatesAsync(

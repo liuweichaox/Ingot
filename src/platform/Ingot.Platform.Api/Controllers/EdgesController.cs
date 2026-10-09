@@ -116,7 +116,7 @@ public class EdgesController(
             return AuthorizationDenied();
         var edge = await registry.FindAsync(edgeId, ct).ConfigureAwait(false);
         if (edge is null || !identity.CanAccessSite(edge.SiteId))
-            return ResourceNotFound("采集节点不存在。");
+            return ResourceNotFound("现场节点不存在。");
         return null;
     }
 }

@@ -25,7 +25,7 @@ public sealed class MechanismClaimDraftGeneratorTests
         var error = await Assert.ThrowsAsync<ResearchAssetRuleException>(() => generator.GenerateAsync(
             new MechanismClaimDraftGenerationContext
             {
-                ProjectName = "Test project",
+                ProcessSpecificationId = "test-spec",
                 SourceTitle = "Test source",
                 SourceHash = "hash"
             }));
@@ -87,7 +87,7 @@ public sealed class MechanismClaimDraftGeneratorTests
 
     private static MechanismClaimDraftGenerationContext Context() => new()
     {
-        ProjectName = "Test project",
+        ProcessSpecificationId = "test-spec",
         SourceTitle = "Test source",
         SourceHash = "hash"
     };

@@ -1,14 +1,12 @@
-// 验证正式 Chat 会话在读取时按当前研究项目站点权限重新授权。
+// 验证正式 Chat 会话在读取时按捕获的站点权限重新授权，并拒绝已退役的页面上下文。
 
 using System.Reflection;
 using System.Security.Claims;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
-using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Application.Chat;
-using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
@@ -20,13 +18,10 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ChatConversationSiteScopeTests
 {
     [Fact]
-    public async Task ListAndGet_DenyConversation_WhenOwnerNoLongerHasProjectSiteAccess()
+    public async Task ListAndGet_DenyConversation_WithRetiredPageContext()
     {
-        var projectId = Guid.CreateVersion7();
-        var conversation = Conversation(projectId);
-        var researchStore = DispatchProxy.Create<IProcessResearchStore, ResearchStoreProxy>();
-        ((ResearchStoreProxy)(object)researchStore).Project = Project(projectId, "SITE-A");
-        var controller = Controller(conversation, researchStore, Identity("operator", "SITE-B"));
+        var conversation = Conversation(new PageContextRef { Kind = "research-project", Id = Guid.CreateVersion7().ToString() });
+        var controller = Controller(conversation, Identity("operator", "SITE-A"));
 
         var list = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
         Assert.Empty(Assert.IsType<ChatConversationPage>(list.Value).Items);
@@ -39,7 +34,6 @@ public sealed class ChatConversationSiteScopeTests
     public async Task ListAndGet_DenyConversation_WhenCapturedRunScopeIsNoLongerAccessible()
     {
         var conversation = Conversation(null);
-        var researchStore = DispatchProxy.Create<IProcessResearchStore, ResearchStoreProxy>();
         var run = new AgentRunSnapshot
         {
             RunId = Guid.CreateVersion7().ToString(),
@@ -57,7 +51,7 @@ public sealed class ChatConversationSiteScopeTests
             CreatedAt = DateTimeOffset.UtcNow,
             Usage = new AgentUsageSummary()
         };
-        var controller = Controller(conversation, researchStore, Identity("operator", "SITE-B"), [run]);
+        var controller = Controller(conversation, Identity("operator", "SITE-B"), [run]);
 
         var list = Assert.IsType<OkObjectResult>(await controller.List(ct: default));
         Assert.Empty(Assert.IsType<ChatConversationPage>(list.Value).Items);
@@ -68,7 +62,6 @@ public sealed class ChatConversationSiteScopeTests
 
     private static ChatConversationsController Controller(
         ChatConversationSummary conversation,
-        IProcessResearchStore researchStore,
         ClaimsPrincipal principal,
         IReadOnlyList<AgentRunSnapshot>? runs = null)
     {
@@ -77,7 +70,6 @@ public sealed class ChatConversationSiteScopeTests
         ((RuntimeProxy)(object)runtime).Runs = runs ?? [];
         return new ChatConversationsController(
             new ChatConversationApplication(new ReadOnlyConversationStore(conversation), new NoopRunGateway()),
-            new ProcessResearchQueries(researchStore),
             runtime,
             new PlatformUserResolver(new ProductionEnvironment()))
         {
@@ -85,25 +77,15 @@ public sealed class ChatConversationSiteScopeTests
         };
     }
 
-    private static ChatConversationSummary Conversation(Guid? projectId) => new()
+    private static ChatConversationSummary Conversation(PageContextRef? pageContext) => new()
     {
         ConversationId = Guid.CreateVersion7().ToString(),
         Title = "站点范围会话",
-        PageContext = projectId is null ? null : new PageContextRef { Kind = "research-project", Id = projectId.Value.ToString() },
+        PageContext = pageContext,
         Status = ChatConversationStatuses.Active,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
         LastMessageAt = DateTimeOffset.UtcNow
-    };
-
-    private static ResearchProject Project(Guid projectId, string siteCode) => new()
-    {
-        ProjectId = projectId,
-        Code = "chat-site-scope",
-        Name = "Chat site scope",
-        ProcessName = "test-process",
-        OwnerUserId = "operator",
-        SiteCode = siteCode
     };
 
     private static ClaimsPrincipal Identity(string userId, string siteId)
@@ -152,16 +134,6 @@ public sealed class ChatConversationSiteScopeTests
             => throw new NotSupportedException();
         public Task<bool> DeleteConversationAsync(string conversationId, string userId, CancellationToken ct = default)
             => throw new NotSupportedException();
-    }
-
-    public class ResearchStoreProxy : DispatchProxy
-    {
-        public ResearchProject? Project { get; set; }
-
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-            => targetMethod?.Name == nameof(IProcessResearchStore.GetProjectAsync)
-                ? Task.FromResult(Project)
-                : throw new NotSupportedException(targetMethod?.Name);
     }
 
     public class RuntimeProxy : DispatchProxy

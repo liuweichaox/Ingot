@@ -73,3 +73,7 @@ export function extractRows(payload) {
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
 }
+
+export function registeredSiteIds(payload) {
+  return [...new Set(extractRows(payload).map(item => item?.siteId).filter(Boolean))];
+}

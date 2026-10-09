@@ -18,7 +18,7 @@ function stubWorkbench(executionTotal = 2) {
       : path.includes("/inspection-tasks/summary")
         ? { pending: 2 }
         : path.includes("/edges")
-          ? [{ edgeId: "edge-01", lastSeen: new Date().toISOString() }]
+          ? [{ edgeId: "edge-01", siteId: "SITE-001", lastSeen: new Date().toISOString() }]
           : path.includes("/production-contexts")
             ? [{ contextId: "context-01" }]
             : [];
@@ -30,12 +30,12 @@ function stubWorkbench(executionTotal = 2) {
 
 describe("工作台岗位操作", () => {
   it.each([
-    ["检验员", ["quality.inspector"], "质量待办", ["/inspections", "/analysis", "/edges"]],
-    ["质量复核员", ["quality.reviewer"], "质量待办", ["/inspections", "/analysis", "/edges"]],
-    ["工程师", ["process.engineer"], "下一步", ["/analysis", "/inspections", "/edges"]],
-    ["管理员", ["platform.admin"], "下一步", ["/analysis", "/edges", "/inspections"]],
-    ["工程与质量兼岗", ["process.engineer", "quality.inspector"], "下一步", ["/analysis", "/inspections", "/edges"]],
-    ["无特定岗位", [], "下一步", ["/analysis", "/inspections", "/edges"]],
+    ["检验员", ["quality.inspector"], "质量待办", ["/inspections", "/process-executions?attention=1", "/edges"]],
+    ["质量复核员", ["quality.reviewer"], "质量待办", ["/inspections", "/process-executions?attention=1", "/edges"]],
+    ["工程师", ["process.engineer"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/inspections"]],
+    ["管理员", ["platform.admin"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/edges"]],
+    ["工程与质量兼岗", ["process.engineer", "quality.inspector"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/inspections"]],
+    ["无特定岗位", [], "下一步", ["/process-executions?attention=1", "/inspections", "/edges"]],
   ])("为%s提供三个不同入口并保持优先级", async (_name, roles, heading, expectedPaths) => {
     stubWorkbench();
     render(<MemoryRouter><WorkbenchPage identity={{ roles }} /></MemoryRouter>);
@@ -44,6 +44,8 @@ describe("工作台岗位操作", () => {
     const paths = within(card).getAllByRole("link").map(link => link.getAttribute("href"));
     expect(paths).toEqual(expectedPaths);
     expect(new Set(paths).size).toBe(3);
+    const urls = fetch.mock.calls.map(call => String(call[0]));
+    expect(urls.some(url => url.includes("/api/v1/process-executions") && url.includes("siteId=SITE-001"))).toBe(true);
   });
 
   it("在运行不足时将工程师分析入口指向运行记录", async () => {
@@ -52,6 +54,6 @@ describe("工作台岗位操作", () => {
 
     const card = (await screen.findByRole("heading", { name: "下一步", exact: true })).closest("section");
     expect(within(card).getAllByRole("link").map(link => link.getAttribute("href")))
-      .toEqual(["/process-executions", "/inspections", "/edges"]);
+      .toEqual(["/configuration/process-specifications", "/process-executions", "/inspections"]);
   });
 });

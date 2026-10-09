@@ -80,7 +80,7 @@ const httpPolling = {
   section: "httpPolling",
   addressing: ADDRESSING.jsonPath,
   probeMode: PROBE_MODE.discover,
-  summary: "设备或网关以 HTTP 提供一份 JSON 快照，采集节点按间隔读取。",
+  summary: "设备或网关以 HTTP 提供一份 JSON 快照，现场节点按间隔读取。",
   pointLabel: "JSON 字段",
   probeViewLabel: "JSON 字段树",
   dataTypes: DOCUMENT_TYPES,
@@ -106,7 +106,7 @@ const httpPolling = {
     { name: "baseUrl", label: "服务地址", type: "text", placeholder: "http://192.168.1.10",
       hint: "设备或网关提供 HTTP 服务的根地址。" },
     { name: "snapshotPath", label: "数据路径", type: "text", placeholder: "/api/v1/snapshot",
-      hint: "采集节点向该路径发起 GET 请求。" },
+      hint: "现场节点向该路径发起 GET 请求。" },
     { name: "pollIntervalMs", label: "轮询间隔（ms）", type: "number", min: 1,
       hint: "一次请求完成后等待多久再发起下一次；不是固定采样周期。" },
     { name: "method", label: "请求方法", type: "select", options: [["get", "GET"], ["post", "POST"]] },
@@ -148,7 +148,7 @@ const mqtt = {
   section: "mqtt",
   addressing: ADDRESSING.jsonPath,
   probeMode: PROBE_MODE.discover,
-  summary: "设备或网关主动向消息服务器发布 JSON 报文，采集节点订阅接收。",
+  summary: "设备或网关主动向消息服务器发布 JSON 报文，现场节点订阅接收。",
   pointLabel: "JSON 字段",
   probeViewLabel: "报文字段树",
   dataTypes: DOCUMENT_TYPES,
@@ -179,7 +179,7 @@ const mqtt = {
     { name: "port", label: "端口", type: "number", min: 1, max: 65535 },
     { name: "protocolVersion", label: "协议版本", type: "select",
       options: [["5.0", "MQTT 5.0"], ["3.1.1", "MQTT 3.1.1"]] },
-    { name: "clientId", label: "客户端编号", type: "text", hint: "留空时由采集节点生成唯一编号。" },
+    { name: "clientId", label: "客户端编号", type: "text", hint: "留空时由现场节点生成唯一编号。" },
     { name: "keepAliveSeconds", label: "保活时间（秒）", type: "number", min: 1 },
     { name: "snapshotMaxAgeSeconds", label: "值的最大陈旧时间（秒）", type: "number", min: 0,
       hint: "跨主题合并时，超过该时间未更新的值视为缺失；订阅多个主题时必须大于 0。" },
@@ -191,10 +191,10 @@ const mqtt = {
       type: "checkbox" },
     { name: "username", label: "用户名", type: "text", group: "认证" },
     { name: "passwordSecretRef", label: "密码凭据", type: "text", group: "认证",
-      hint: "填写采集节点密钥库中的名称，不在配置中保存明文。" },
+      hint: "填写现场节点密钥库中的名称，不在配置中保存明文。" },
     { name: "useTls", label: "启用 TLS", type: "checkbox", group: "认证" },
     { name: "caCertificatePath", label: "CA 证书", type: "text", group: "认证",
-      when: connection => connection.useTls, hint: "采集节点上的证书文件路径。" },
+      when: connection => connection.useTls, hint: "现场节点上的证书文件路径。" },
     { name: "clientCertificatePath", label: "客户端证书", type: "text", group: "认证",
       when: connection => connection.useTls },
     { name: "clientCertificatePasswordSecretRef", label: "客户端证书密码凭据", type: "text", group: "认证",
@@ -327,7 +327,7 @@ const opcUa = {
     bitAddressing: false,
   },
   constraints: [
-    "采样时间固定使用服务器提供的 SourceTimestamp，不能改用采集节点接收时间。",
+    "采样时间固定使用服务器提供的 SourceTimestamp，不能改用现场节点接收时间。",
     "NodeId 中的命名空间序号由服务器分配；服务器重排命名空间后需要重新验证配置。",
     "当前驱动订阅变量节点，不采集 OPC UA 事件和报警。",
   ],
@@ -528,7 +528,7 @@ const modbusTcp = {
     if (duplicated.length)
       notes.push({ tone: "warning", message: `有 ${duplicated.length} 组点位指向完全相同的寄存器地址，采集结果会互相覆盖。` });
     if (form.modbusTcp?.addressBase === "one-based")
-      notes.push({ tone: "info", message: "当前按手册地址填写，采集节点发送请求前会自动减 1。" });
+      notes.push({ tone: "info", message: "当前按手册地址填写，现场节点发送请求前会自动减 1。" });
     return notes;
   },
 };

@@ -6,17 +6,17 @@ This document defines component responsibilities, dependency direction, systems 
 
 ## Design objective
 
-Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; project management and record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional extensions and must not become required dependencies of core R&D workflows. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
+Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional extensions and must not become required dependencies of core R&D workflows. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
 
 The architecture must therefore:
 
 1. **Establish trustworthy facts first**: every analysis traces to experiment or run records with provenance, units, time, and version.
 2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
-2. **Support independent R&D records**: R&D does not depend on production systems being online or field connectors being available; production runs are one optional evidence source.
-3. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
-4. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
+3. **Support independent R&D records**: R&D does not depend on production systems being online or field connectors being available; production runs are one optional evidence source.
+4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
+5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
 The system is designed to run self-hosted for one team and used by R&D and process engineers; production, quality, and equipment teams may collaborate.
 
@@ -31,15 +31,19 @@ This is the currently implemented production-evidence workflow: it organizes run
 The current Web information architecture balances the decision chain with frequent role-based tasks through six business entries:
 
 1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
-2. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
-3. **Process configuration**: configuration overview, data dictionaries, recipe versions, analysis rules, quality configuration, and tooling configuration;
-4. **Production runs**: production preparation, tooling installation, run records, the object catalog, and run events;
-5. **Quality management**: inspection tasks, independent review, quality records, and deviation analysis, with direct access for daily quality work;
-6. **Process diagnosis**: the diagnosis overview, data quality, run comparison, recipe suggestions, and the analysis assistant; AI is an analysis method rather than a standalone business domain.
+2. **Process configuration**: process variables, recipe versions, process analysis, quality configuration, and tooling configuration. Each recipe version has a “Launch check” that lists the dependencies that version still lacks;
+3. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
+4. **Production runs**: production changeover, tooling installation, and run records. Run records provide a “Needs attention” filter that lists completed runs whose quality failed, whose outcome is inconclusive, or whose process data is unavailable;
+5. **Quality management**: inspection tasks, independent review, and quality records. Deviation analysis shows which results fall outside the quality range for a product or recipe version, with direct access for daily quality work;
+6. **Process diagnosis**: data quality, run comparison, and the analysis assistant. Run comparison explains why comparable runs differ. Diagnosis uses run and quality records that already exist. The next-run correction is completed on the published recipe version. AI is an analysis method rather than a standalone business domain.
 
-After the workbench, the primary business entries follow “Field integration → Process configuration → Production runs → Quality management → Process diagnosis.” This navigation order prioritizes frequent role-specific work; it is not the business dependency order above. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. Recipe recommendations, engineer decisions, and outcome materialization are completed on the recipe-suggestion page under process diagnosis. See [Current status](status.en.md).
+Raw events reported by edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
 
-Recipe versions are the common source of experiment parameter settings. Parameter codes, names, data types, units, bounds, and steps come from the referenced process data dictionary; recipe versions retain settings, revision reasons, and evidence. A separate project form must not redefine parameters. All parameters are analysis variables; optimization changes still respect data types, change-allowed flags, and safety bounds.
+A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published process analysis references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range. When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has four fixed trace sources: equipment and run identity come from the edge node and acquisition setup; product, recipe, and material lot come from production changeover; installed tooling comes from tooling installation; and process-field coverage is determined by the acquisition mappings.
+
+After the workbench, the primary business entries follow “Process configuration → Field integration → Production runs → Quality management → Process diagnosis,” which matches the business dependency order: a new scenario defines and publishes process semantics before mapping real sources to those semantics. The next-run correction, the engineer decision, and outcome materialization are completed on the published recipe version. A small correction does not create a version; a significant change creates a revision draft. See [Current status](status.en.md).
+
+Recipe versions are the common source of experiment parameter settings. Parameter codes, names, data types, units, bounds, and steps come from the referenced process variables; recipe versions retain settings, revision reasons, and evidence. No separate form may redefine parameters. All parameters are analysis variables; optimization changes still respect data types, change-allowed flags, and safety bounds.
 
 System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
 
@@ -105,7 +109,7 @@ Chat uses `ChatConversation` and ordered `ChatMessage` records as its formal use
 
 The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. After the message transaction commits, API only creates a queued run; an independent Platform Worker claims, renews, and executes it through a database lease. Restarting API does not lose an accepted answer task, and a later Worker instance can reclaim an expired lease after interruption. A continuing conversation assembles only bounded summaries, findings, and limitations from recent completed answers instead of feeding unbounded charts, proposals, or old record references back to the model; an old answer also cannot replace a production-data query required by the current question.
 
-Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, acquisition configuration, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points. New business controllers handle transport and authorization, then delegate business operations through Application use cases. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still injects Infrastructure services directly into API; `ARCH-001` below constrains this gap, which must not expand into new business-write paths. Migrator bootstraps the first local user under a transactional lock, and Worker owns periodic maintenance. Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence enters research only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
+Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, acquisition configuration, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points. New business controllers handle transport and authorization, then delegate business operations through Application use cases. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still injects Infrastructure services directly into API; `ARCH-001` below constrains this gap, which must not expand into new business-write paths. Migrator bootstraps the first local user under a transactional lock, and Worker owns periodic maintenance. Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence becomes optimization observations only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
 
 ### Architecture debt register
 
@@ -129,7 +133,7 @@ Platform separates policy from implementation by use case: `Platform.Application
 - Organize facts, cite sources, explain limits, and suggest next steps.
 - Never compute or invent numerical process settings itself and never turn language probability into an engineering conclusion.
 
-Agent uses two separate evidence paths. Structured production facts such as runs, inspections, configuration, and optimization always come from authorized business tools. Document knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed sources and fragments inside the authorized project, site, product, and equipment scope. PostgreSQL combines full-text and similarity matching with optional semantic-vector ranking, returning fragment-level source, page or sheet, source SHA, and content hash. When semantic embeddings are disabled, unavailable, or fail for a query, retrieval falls back to keywords. Retrieved material is read-only evidence for an answer; it cannot replace a current production-data query, establish root cause, or modify equipment.
+Agent uses two separate evidence paths. Structured production facts such as runs, inspections, configuration, and optimization always come from authorized business tools. Document knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed sources and fragments inside the authorized site. PostgreSQL combines full-text and similarity matching with optional semantic-vector ranking, returning fragment-level source, page or sheet, source SHA, and content hash. When semantic embeddings are disabled, unavailable, or fail for a query, retrieval falls back to keywords. Retrieved material is read-only evidence for an answer; it cannot replace a current production-data query, establish root cause, or modify equipment.
 
 ### Web
 
@@ -154,7 +158,7 @@ Stable identifiers connect these facts:
 
 - `ExecutionId`: the real run identity in Platform;
 - `ExecutionId`: the correlation identity for field events or process executions;
-- `ExecutionKey`: the association between an R&D recommendation record and real execution;
+- `ExecutionKey`: the association between a next-recipe recommendation record and real execution;
 - `EquipmentId`, product/process object, and recipe version number: minimum run identity;
 - planned and actually applied recipe versions remain separate, and comparable cohorts use the actual recipe version dimension declared by the analysis plan;
 - content hash: the fixed analytical input and its provenance.
@@ -205,7 +209,46 @@ actual recipe + process context + valid quality outcome
        engineer confirmation through the existing production flow
 ```
 
-A production run requires no engineer reclassification. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale; engineers then append adoption, modification, or rejection and its reason, link actual execution, and let parameter readback and inspection results freeze the outcome. A new recommendation requires a new input snapshot after another real run arrives.
+A production run requires no engineer reclassification. The next-version proposal is opened from the published recipe already in view. Site, product, equipment, adjustable parameters, and the numeric quality objective come from that version, its process variables, the quality plan that covers it, and the runs already completed on it. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale. Before persistence, recommended parameters snap to the process-variable step and are checked against observed coverage; the rationale shown to engineers is in Chinese. Engineers then append adoption, modification, or rejection and its reason. Adopting a next-run correction agrees to run those settings on the current published version. It publishes no new version and does not download setpoints to equipment. The next completed run of the same recipe version that starts after the decision attaches automatically, and parameter readback plus inspection results freeze the outcome. When an engineer treats the change as significant, the suggested settings open that version's revision draft. The published version stays as it is until the draft is published. A recipe version does not open a second correction while one is still unfrozen. Rejection, expiry, or a frozen outcome is what allows another correction from the newer runs.
+
+## Recipe recommendation architecture constraints
+
+This section defines mandatory constraints for next-recipe recommendations, mechanism knowledge, and process knowledge. `scripts/verify-architecture.sh`, `scripts/verify-product-scope.sh`, and backend tests guard them.
+
+### Ownership and records
+
+The system has no “R&D project” container. The only business scope for next-recipe recommendations and mechanism knowledge is “site + recipe”; process-knowledge sources belong to a site.
+
+| Record | Ownership key | Only write path | Mutability |
+| --- | --- | --- | --- |
+| Next-recipe recommendation | site + recipe + input hash | `ResearchOptimizationService` | Append-only; freezes the brief and its hash; expires after 24 hours |
+| Engineer decision | recommendation + item | `ResearchRecipeRecommendationDecisionService` | At most once per item |
+| Execution link | decision; actual execution key is globally unique | `ResearchRecipeRecommendationDecisionService` | At most once per decision, recording who linked it |
+| Frozen outcome | decision | `ResearchRecipeRecommendationDecisionService` | At most once per decision, computed from source data, recording who froze it |
+| Mechanism claims and conflicts | site + recipe | `MechanismKnowledgeService` | Content appends by version; status transitions are recorded |
+| Process-knowledge source | site + content SHA-256 | knowledge-source registration | Immutable content; searchable only after review |
+
+### Invariants
+
+1. **Frozen brief**: `RecipeRecommendationBrief` contains only the site, recipe, quality objectives, adjustable parameters and bounds, parameter and outcome constraints, derived features, and context scope. `RecipeRecommendationBriefPolicy` normalizes it and validates it against the published recipe at generation time; it is stored with `BriefHash`. Recording a decision, linking a run, and freezing an outcome all recompute the hash and reject any mismatch.
+2. **Parameters come only from the recipe**: adjustable parameters must be change-allowed numeric parameters in the process variables referenced by the selected recipe version, with matching units and bounds inside the process-variable range.
+3. **Observation scope comes from the brief**: observation assembly admits only completed runs inside the brief's site, recipe, and context scope (product family, product, equipment, recipe version, output item, and lookback days).
+4. **Pending points share the brief**: only accepted or modified decisions with the same site, recipe, and `BriefHash` and without a frozen outcome are sent to Optimizer as pending points.
+5. **One-way decision chain**: recommendation → decision → execution link → outcome is append-only and never moves backward. Expired recommendations accept no new decisions; rejection is terminal; a linked run must belong to the recommendation's site, start after the decision, and fall inside the brief scope.
+6. **Mechanism knowledge stays in scope**: claim variables must come from that recipe's process variables; applicability may use only site, recipe, product, and equipment dimensions; evidence may come only from same-site knowledge sources or fragments, or frozen recommendation outcomes for the same site and recipe; conflicts are recorded only inside one scope.
+7. **Knowledge search is site-scoped**: the assistant must resolve one authorized site before searching process knowledge or return insufficient evidence; conversations do not accept page context, so the question itself names the site and object.
+
+### Dependency direction
+
+- `Ingot.Contracts`: data contracts for briefs, recommendations, decisions, and outcomes, with no implementation dependency;
+- `Platform.Application`: `RecipeRecommendationBriefPolicy`, `ResearchOptimizationService`, `ResearchRecipeRecommendationDecisionService`, `RecipeRecommendationQueries`, `RecipeKnowledgeScopeReader`, `MechanismKnowledgeService`, and storage ports, with no reference to Npgsql, HTTP clients, or the inspection module;
+- `Platform.Infrastructure`: PostgreSQL stores, `ResearchObservationAssembler`, and the optimizer client; the assembler is the only path for inspection, run, and configuration evidence to enter recommendations;
+- `Platform.Api`: `RecipeRecommendationsController` handles only transport, identity resolution, and site authorization; rule conflicts return 409 and optimizer unavailability returns 503;
+- Web: the published recipe version submits the brief directly and keeps no recommendation state in the browser. Adopting a small correction does not create a version; a significant change uses that version's revision draft.
+
+### Removed concepts
+
+R&D projects, project members, research hypotheses, operating regions, project knowledge claims, project audit, and conversation page context have been removed. Migration `0026_remove_research_projects` drops their tables and refuses to run when any project-owned recommendation, mechanism, or knowledge data exists rather than guessing a new owner. `/research-projects` exists neither as a page address nor as an API, and the gates reject reintroducing these concepts.
 
 ## Consistency and replay
 
@@ -231,14 +274,14 @@ It should not rewrite run identity, evidence relationships, execution state mach
 
 ## Agent capability and interoperability boundary
 
-Agents do not depend directly on internal Platform CRUD and do not gain business permission merely because MCP, OpenAPI, or an SDK is used. The interoperability adapter handles discovery, schemas, and invocation. Platform continues to enforce project isolation, evidence citations, state transitions, approval, idempotency, audit, and rollback.
+Agents do not depend directly on internal Platform CRUD and do not gain business permission merely because MCP, OpenAPI, or an SDK is used. The interoperability adapter handles discovery, schemas, and invocation. Platform continues to enforce site isolation, evidence citations, state transitions, approval, idempotency, audit, and rollback.
 
-HTTP errors use `application/problem+json` with a stable `code`, request `traceId`, and standard `detail` field. Monotonically growing research histories use opaque cursors and bounded `limit` values. The project workspace returns only the newest page plus `nextCursors`; external implementations must not depend on unbounded arrays.
+HTTP errors use `application/problem+json` with a stable `code`, request `traceId`, and standard `detail` field. Monotonically growing histories such as recipe-recommendation flows use opaque cursors and bounded `limit` values; external implementations must not depend on unbounded arrays.
 
 Capabilities open progressively by risk:
 
 - **Read**: query authorized runs, evidence, quality, context, and applicability.
-- **Propose**: create investigation, hypothesis, or investigation drafts without changing formal state.
+- **Propose**: create investigation drafts or mechanism-claim drafts without changing formal state.
 - **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
 - **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
 

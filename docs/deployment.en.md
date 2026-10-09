@@ -57,6 +57,8 @@ Change at least:
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
+`docker-compose.app.yml` passes the Edge token, site binding, and diagnostics address to the Platform API. A successfully ingested batch registers that Edge in the site-node list.
+
 Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 
 ### OIDC identity provider
@@ -86,7 +88,7 @@ Never commit `.env` or real equipment credentials. Inject device passwords and c
 
 When enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, Chat model IDs, and API key once under System Administration > Model Services. Chat, model-assisted mechanism drafts, and optional knowledge embeddings reuse the same protected endpoint and key. Knowledge embeddings do not create a second provider credential, but `INGOT_KNOWLEDGE_EMBEDDING_MODEL` selects the embedding model independently. Switching compatible services does not require an Ingot source-code change. The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. Platform probes only the model list during startup; a feature sends only the permission-controlled context required for its model call. Before enabling an external service, confirm that these materials may be sent to its service region. Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
 
-Document retrieval always provides a PostgreSQL keyword path. Semantic retrieval is disabled by default. Set `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true` only when the configured model service supports an OpenAI-compatible `/embeddings` endpoint and reviewed document fragments may be sent to that service. Operators can also tune `INGOT_KNOWLEDGE_EMBEDDING_MODEL`, `INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`, `INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY`, and `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`. The Worker builds indexes asynchronously for reviewed fragments and backfills historical gaps. A query-embedding or service failure falls back to keywords without relaxing project, site, applicability, or review filters.
+Document retrieval always provides a PostgreSQL keyword path. Semantic retrieval is disabled by default. Set `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true` only when the configured model service supports an OpenAI-compatible `/embeddings` endpoint and reviewed document fragments may be sent to that service. Operators can also tune `INGOT_KNOWLEDGE_EMBEDDING_MODEL`, `INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`, `INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY`, and `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`. The Worker builds indexes asynchronously for reviewed fragments and backfills historical gaps. A query-embedding or service failure falls back to keywords without relaxing site, applicability, or review filters.
 
 The model service is not a startup dependency for acquisition, inspection, or numerical optimization. Content sent to it remains subject to authorized tools and business permissions.
 
@@ -238,7 +240,7 @@ A recovery exercise verifies more than service startup:
 - recipe decisions, evidence, and reviews are readable;
 - Edge backlog replays without duplicates;
 - historical observations rebuild under their original versions;
-- a known project reproduces the same analytical input hash.
+- the same brief for a known recipe reproduces the same analytical input hash.
 
 ## Upgrade
 
@@ -249,7 +251,7 @@ A recovery exercise verifies more than service startup:
 5. Upgrade Platform and database dependencies.
 6. Upgrade Edge instances in batches and confirm the old configuration remains available.
 7. Check backlog recovery, duplicate events, and configuration convergence.
-8. Regress run assembly, comparison, and recommendation on a known project.
+8. Regress run assembly, comparison, and recommendation on a known recipe.
 
 ## Minimum security set
 
@@ -267,7 +269,7 @@ A recovery exercise verifies more than service startup:
 
 Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
 
-The Platform status page reports four live business gates: a running field source, complete production context, run-to-inspection linkage, and formal analysis admission. These checks only show that the current data chain is inspectable; they do not complete production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
+The recipe-version launch check and the workbench show whether process variables, recipe versions, acquisition setup, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether the central service and edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
 
 The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment declarations, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
 

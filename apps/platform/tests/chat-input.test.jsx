@@ -26,7 +26,7 @@ async function renderChat() {
     }));
   }));
   render(<MemoryRouter initialEntries={["/chat"]}><ChatPage /></MemoryRouter>);
-  const input = screen.getByRole("textbox", { name: "给工艺分析助手发送消息" });
+  const input = screen.getByRole("textbox", { name: "给分析助手发送消息" });
   await waitFor(() => expect(input).toBeEnabled());
   fireEvent.change(input, { target: { value: "核对运行记录" } });
   return { input, submitted };

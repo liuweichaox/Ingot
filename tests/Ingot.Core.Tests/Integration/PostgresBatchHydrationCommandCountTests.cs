@@ -1,6 +1,5 @@
 // 验证 PostgresBatchHydrationCommandCount 的真实基础设施集成、失败和恢复行为。
 
-using Ingot.Platform.Infrastructure.ProcessResearch;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -12,11 +11,12 @@ namespace Ingot.Core.Tests.Integration;
 public sealed class PostgresBatchHydrationCommandCountTests(PostgresIntegrationFixture postgres)
 {
     [LinuxDockerFact]
-    public async Task ListHypothesesAndClaims_UseConstantCommandCountsFor250Rows()
+    public async Task ListClaims_UsesConstantCommandCountFor250Rows()
     {
         await postgres.EnsureSchemaAsync();
-        var projectId = Guid.CreateVersion7();
-        await SeedAsync(projectId);
+        var siteCode = $"site-{Guid.NewGuid():N}";
+        const string specificationId = "hydration-spec";
+        await SeedAsync(siteCode, specificationId);
         var counter = new CommandCounterProvider();
         using var loggerFactory = LoggerFactory.Create(builder =>
             builder.SetMinimumLevel(LogLevel.Debug).AddProvider(counter));
@@ -25,33 +25,21 @@ public sealed class PostgresBatchHydrationCommandCountTests(PostgresIntegrationF
             .Build();
 
         counter.Reset();
-        var hypotheses = await new PostgresProcessResearchStore(countedDataSource)
-            .ListHypothesesAsync(projectId);
-        Assert.Equal(250, hypotheses.Count);
-        Assert.InRange(counter.CommandCount, 1, 2);
-
-        counter.Reset();
         var claims = await new PostgresMechanismKnowledgeStore(countedDataSource)
-            .ListClaimsAsync(projectId);
+            .ListClaimsAsync(siteCode, specificationId);
         Assert.Equal(250, claims.Count);
+        Assert.All(claims, claim => Assert.Equal(siteCode, claim.SiteCode));
         Assert.InRange(counter.CommandCount, 1, 6);
     }
 
-    private async Task SeedAsync(Guid projectId)
+    private async Task SeedAsync(string siteCode, string specificationId)
     {
         await using var command = postgres.DataSource.CreateCommand(
             """
-            INSERT INTO process_research_projects(project_id,code,status,revision,payload,created_at,updated_at)
-            VALUES(@project_id,CAST(@project_id AS text),'draft',1,'{}'::jsonb,now(),now());
-
-            INSERT INTO research_hypotheses(
-              hypothesis_id,project_id,status,statement,rationale,confidence,created_by,created_at,updated_at)
-            SELECT gen_random_uuid(),@project_id,'proposed','statement-'||value,'rationale',0,'tester',now(),now()
-            FROM generate_series(1,250) value;
-
             WITH inserted AS (
-              INSERT INTO mechanism_claims(claim_id,project_id,current_version,status,created_at,updated_at)
-              SELECT gen_random_uuid(),@project_id,1,'draft',now(),now()
+              INSERT INTO mechanism_claims(
+                claim_id,site_code,process_specification_id,current_version,status,created_at,updated_at)
+              SELECT gen_random_uuid(),@site_code,@process_specification_id,1,'draft',now(),now()
               FROM generate_series(1,250)
               RETURNING claim_id)
             INSERT INTO mechanism_claim_versions(
@@ -61,7 +49,8 @@ public sealed class PostgresBatchHydrationCommandCountTests(PostgresIntegrationF
               'engineering-observation','tester',now(),md5(claim_id::text)||md5(claim_id::text)
             FROM inserted;
             """);
-        command.Parameters.AddWithValue("project_id", projectId);
+        command.Parameters.AddWithValue("site_code", siteCode);
+        command.Parameters.AddWithValue("process_specification_id", specificationId);
         await command.ExecuteNonQueryAsync();
     }
 

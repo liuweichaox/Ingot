@@ -42,7 +42,7 @@ test("source does not enable mandatory scroll snap", async () => {
 test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   const source = await html();
   assert.match(source, /<title>Ingot — 开源工艺研发与优化系统<\/title>/i);
-  assert.match(source, /组织研发项目、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
+  assert.match(source, /组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化/);
   assert.match(source, /从工艺数据，/);
   assert.match(source, /到有依据的研发决策。/);
   assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);
@@ -69,7 +69,7 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
   const source = await html("/en/");
   assert.match(source, /<html lang="en">/);
   assert.match(source, /<title>Ingot — Open-source Process R&amp;D and Optimization System<\/title>/i);
-  assert.match(source, /Organize R&amp;D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
+  assert.match(source, /Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization/i);
   assert.match(source, /From process data/);
   assert.match(source, /to evidence-based R&amp;D decisions/);
   assert.match(source, /RECIPE RECOMMENDATION · RUN-042/);

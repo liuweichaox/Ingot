@@ -6,21 +6,21 @@
 
 > **From process data to evidence-based R&D decisions.**
 
-Ingot is an Open-source Process R&D and Optimization System. Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
 The currently implemented recommendation loop still uses production-run evidence:
 
 ```text
-R&D project → real production-run evidence → next-recipe recommendation
+site + published recipe → real production-run evidence → next-recipe recommendation
             → engineer adoption / modification / rejection and reason
             → actual-execution link → frozen quality outcome → next observation
 ```
 
-Projects retain objectives, scope, hypotheses, evidence, and knowledge. They do not retain a second run-plan, approval, execution, or outcome state machine. Engineers always decide whether to adopt a recommendation; the system never dispatches a recipe to equipment automatically.
+Each recommendation freezes its site, recipe, quality objectives, and adjustable parameters with bounds. It does not retain a second run-plan, approval, execution, or outcome state machine. Engineers always decide whether to adopt a recommendation; the system never dispatches a recipe to equipment automatically.
 
-Experiment settings reuse process configuration: the process data dictionary defines parameters, and recipe versions retain all parameter settings. R&D work references these configurations instead of establishing parallel variable definitions. Each run is an experiment; actual parameters, process trajectories, and quality outcomes reuse run and quality records.
+Experiment settings reuse process configuration: process variables define parameters, and recipe versions retain all parameter settings. R&D work references these configurations instead of establishing parallel variable definitions. Each run is an experiment; actual parameters, process trajectories, and quality outcomes reuse run and quality records.
 
-Current recommendations require admitted runs, actual settings, and quality outcomes. Engineers record decisions, link later runs, and freeze outcomes on the recipe-suggestion page; the server explains why a suggestion stops when data is insufficient.
+Current recommendations require admitted runs, actual settings, and quality outcomes. Engineers record a next-run correction on the published recipe version, or turn a significant change into a revision draft. The server explains why a suggestion stops when data is insufficient.
 
 ## Near-Term Priorities
 
@@ -28,7 +28,7 @@ Current recommendations require admitted runs, actual settings, and quality outc
 | --- | --- | --- |
 | P0 | Run-evidence completeness | Reuse all recipe-version parameters and quality configuration; clearly show actual values, provenance, missing data, and quality-review status. |
 | P1 | Recommendation admission explanations | Show why runs qualify as optimization observations; insufficient samples and out-of-scope inputs have explicit rejection reasons traceable to run and quality records. |
-| P2 | Decision and outcome interface | The recipe-suggestion page under process diagnosis connects recommendation, decision, and outcome APIs. Engineers can review, adopt, modify, or reject a suggestion, link a later run, and view the frozen outcome. |
+| P2 | Decision and outcome interface | The published recipe version connects recommendation, decision, and outcome APIs. Engineers can adopt a suggestion as a next-run correction or create a revision draft for a significant change, then view the frozen outcome. |
 | P3 | Knowledge reuse | Sourced, scoped, conflict-checked knowledge can explain or constrain later recommendations. |
 | P4 | Deployment resilience | Local installation, backup/restore, capacity, and alerting can be accepted independently; connector failures do not block querying or reviewing existing runs and quality outcomes. |
 

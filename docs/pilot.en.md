@@ -8,7 +8,7 @@ Limit the pilot to one product or process scope and one quality objective. Provi
 
 ## Operating Sequence
 
-1. Define product scope, quality objectives, controllable variables, and safety boundaries in an R&D project.
+1. In the recipe-recommendation brief, select the site and published recipe, then define product scope, quality objectives, adjustable parameters, and safety boundaries.
 2. Let completed real recipe runs in scope enter admission checks automatically.
 3. Generate one next-recipe recommendation after at least three valid runs cover two distinct actual recipes.
 4. Record engineer adoption, modification, or rejection, with the reason and final actual recipe.

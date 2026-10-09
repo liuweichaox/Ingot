@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
-import { extractRows, useApi } from "../hooks/useApi";
+import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
 import { useIsMounted } from "../hooks/useIsMounted";
 import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea } from "../ui/components";
 import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, toFiniteNumber, LoadingCard } from "./shared";
@@ -93,6 +93,8 @@ export function AnalysisReadinessCard({ diagnosis = {} }) {
 export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
   const requestedSiteId = params.get("siteId") || "";
+  const edges = useApi(requestedSiteId ? "" : "/api/edges", { enabled: !requestedSiteId });
+  const siteId = requestedSiteId || registeredSiteIds(edges.data)[0] || "";
   const isMounted = useIsMounted();
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
   const [candidate, setCandidate] = useState("");
@@ -109,7 +111,14 @@ export function ExecutionComparisonPage() {
   useEffect(() => {
     const search = executionFilter.trim();
     const query = new URLSearchParams({ status: "completed", limit: "200" });
-    if (requestedSiteId) query.set("siteId", requestedSiteId);
+    if (!siteId) {
+      if (!edges.loading) {
+        setCatalogLoading(false);
+        setError(edges.error || "还没有登记现场节点。");
+      }
+      return undefined;
+    }
+    query.set("siteId", siteId);
     if (search) query.set("search", search);
     setCatalogLoading(true);
     getJson(`/api/v1/process-executions?${query}`).then(executionPayload => {
@@ -124,21 +133,21 @@ export function ExecutionComparisonPage() {
     }).finally(() => {
       if (isMounted()) setCatalogLoading(false);
     });
-  }, [catalogRetryKey, executionFilter, requestedSiteId]);
+  }, [catalogRetryKey, edges.error, edges.loading, executionFilter, siteId]);
 
   useEffect(() => {
-    if (!baseline || executions.some(item => item.executionId === baseline)) {
+    if (!baseline || !siteId || executions.some(item => item.executionId === baseline)) {
       setLinkedBaseline(null);
       return;
     }
-    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(requestedSiteId)}&limit=1`)
+    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(siteId)}&limit=1`)
       .then(payload => {
         if (isMounted()) setLinkedBaseline(extractRows(payload)[0] || null);
       })
       .catch(() => {
         if (isMounted()) setLinkedBaseline(null);
       });
-  }, [baseline, executions, requestedSiteId]);
+  }, [baseline, executions, siteId]);
 
   const baselineProcessExecution = executions.find(item => item.executionId === baseline) || linkedBaseline;
   const normalizedProcessExecutionFilter = executionFilter.trim().toLowerCase();
@@ -186,17 +195,17 @@ export function ExecutionComparisonPage() {
     setError("");
     try {
       const baselineProcessExecutionId = baseline.trim();
-      const siteId = baselineProcessExecution?.siteId || requestedSiteId;
+      const comparisonSiteId = baselineProcessExecution?.siteId || siteId;
       const knownUnmeasuredConfounders = additionalConfounders
         .split(/[\n,，]+/)
         .map(value => value.trim())
         .filter(Boolean);
       if (comparisonScope === "cohort") {
-        const query = new URLSearchParams({ limit: "24", siteId });
+        const query = new URLSearchParams({ limit: "24", siteId: comparisonSiteId });
         knownUnmeasuredConfounders.forEach(value => query.append("knownUnmeasuredConfounder", value));
         setResult(await getJson(`/api/v1/execution-comparisons/${encodeURIComponent(baselineProcessExecutionId)}?${query}`));
       } else {
-        setResult(await postJson(`/api/v1/execution-comparisons?siteId=${encodeURIComponent(siteId)}`, {
+        setResult(await postJson(`/api/v1/execution-comparisons?siteId=${encodeURIComponent(comparisonSiteId)}`, {
           baselineProcessExecutionId,
           processExecutionIds: [baselineProcessExecutionId, candidate],
           additionalKnownUnmeasuredConfounders: knownUnmeasuredConfounders,
@@ -247,7 +256,7 @@ export function ExecutionComparisonPage() {
     phaseLabel: item.phaseName || item.phaseCode || "全运行",
   }));
   return (
-    <Page title="运行对比">
+    <Page title="运行对比" description="比较同类运行的设定和过程曲线，解释这些运行为什么不一样。">
       <RequestError error={error} onRetry={() => { setError(""); setCatalogRetryKey(value => value + 1); }} />
       <Card title="对比条件">
         <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>
@@ -291,7 +300,7 @@ export function ExecutionComparisonPage() {
             <Metric label="运行完整" value={result.acceptance?.completeProcessExecutionCount ?? 0} hint="同时具有生产开始与结束事件" />
             <Metric label="分析证据" value={<EvidenceLevel value={result.evidenceLevel} />} />
           </div>
-          <Card title="调查报告" description="汇总运行匹配、数据质量、首次偏离和后续验证建议。">
+          <Card title="差异说明" description="汇总同类运行是否匹配、数据是否可用，以及第一次出现的偏离。">
             <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <Metric label="调查状态" value={investigation?.status === "ready" ? "可进入验证" : investigation?.status === "exploratory" ? "探索性" : "数据不足"} />
               <Metric label="目标数据" value={<StatusBadge value={investigation?.dataQuality?.targetStatus || "unknown"} />} hint={`证据权重 ${formatDecimal(investigation?.dataQuality?.targetEvidenceWeight)}`} />
@@ -319,11 +328,11 @@ export function ExecutionComparisonPage() {
             <div className="grid gap-4 xl:grid-cols-2">
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-900">反证与边界</h4>
-                {(investigation?.counterEvidence || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.counterEvidence.map((item, index) => <li key={`${item.candidateId}-${item.kind}-${index}`}>{item.statement}</li>)}</ul> : <p className="text-sm text-slate-500">尚无候选原因可进行反证检查。</p>}
+                {(investigation?.counterEvidence || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.counterEvidence.map((item, index) => <li key={`${item.candidateId}-${item.kind}-${index}`}>{item.statement}</li>)}</ul> : <p className="text-sm text-slate-500">还没有可核对的差异。</p>}
               </div>
               <div>
                 <h4 className="mb-2 text-sm font-semibold text-slate-900">缺失数据</h4>
-                {(investigation?.missingData || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.missingData.map(item => <li key={item}>{item}</li>)}</ul> : <p className="text-sm text-emerald-700">当前调查所需的关键数据项已覆盖。</p>}
+                {(investigation?.missingData || []).length ? <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">{investigation.missingData.map(item => <li key={item}>{item}</li>)}</ul> : <p className="text-sm text-emerald-700">对比所需的数据已经齐。</p>}
               </div>
             </div>
             <ConclusionBoundary>{investigation?.conclusionGuardrail || "当前结果只能作为待验证假设。"}</ConclusionBoundary>
@@ -344,7 +353,7 @@ export function ExecutionComparisonPage() {
               ]}
             />
           </Card></div></details>
-          <Card title="质量候选原因" description="同时比较实际控制参数与过程轨迹特征；优先选择能直接映射到可控变量的候选原因。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/recipe-suggestions">去配方建议</Link>}>
+          <Card title="可能相关的控制参数" description="列出与质量差异同时出现、并且能对应到控制参数的差异。过程曲线只用来解释这些参数。" actions={<Link className="text-sm font-semibold text-trajectory-700" to="/configuration/process-specifications">去配方版本</Link>}>
             {causeRows.length ? (
               <>
                 <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -357,7 +366,7 @@ export function ExecutionComparisonPage() {
                   rows={causeRows}
                   keyField="candidateId"
                   columns={[
-                    { key: "displayName", label: "候选原因" },
+                    { key: "displayName", label: "控制参数" },
                     { key: "sourceLabel", label: "来源" },
                     { key: "actionabilityLabel", label: "可操作性", render: (value, row) => <Badge tone={row.actionability === "controllable" ? "success" : "warning"}>{value}</Badge> },
                     { key: "passMedian", label: "合格组中位数", render: formatDecimal },
@@ -406,7 +415,7 @@ export function ExecutionComparisonPage() {
                   </Alert>
                 )}
               </>
-            ) : <EmptyState title="尚无质量候选原因" description="至少需要合格与不合格运行，并且配方版本或过程特征具有可比较差异。" />}
+            ) : <EmptyState title="还没有能对应到控制参数的差异" description="至少需要合格与不合格运行，并且控制参数或过程曲线具有可比较差异。" />}
           </Card>
           <details className="rounded-lg border border-slate-200 bg-white"><summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看全部信号差异（{signalRows.length} 项）</summary><div className="border-t border-slate-100 p-5"><Card title="信号差异" description="按变化幅度列出前 30 项，便于工程师核对阶段和参数差异。">
             {signalRows.length ? (
@@ -433,6 +442,8 @@ export function ExecutionComparisonPage() {
 
 export function DataQualityPage() {
   const [params] = useSearchParams();
+  const edges = useApi("/api/edges");
+  const siteId = registeredSiteIds(edges.data)[0] || "";
   const objectQuery = new URLSearchParams({ limit: "200" });
   if (params.get("subjectType")) objectQuery.set("subjectType", params.get("subjectType"));
   if (params.get("subjectId")) objectQuery.set("subjectId", params.get("subjectId"));
@@ -440,7 +451,8 @@ export function DataQualityPage() {
   if ((!params.get("subjectType") || params.get("subjectType") === "equipment") && params.get("subjectId")) {
     baselineQuery.set("equipmentId", params.get("subjectId"));
   }
-  const baseline = useApi(`/api/v1/data-reliability/baseline?${baselineQuery}`);
+  if (siteId) baselineQuery.set("siteId", siteId);
+  const baseline = useApi(siteId ? `/api/v1/data-reliability/baseline?${baselineQuery}` : "", { enabled: Boolean(siteId) });
   const objects = useApi(`/api/v1/data-objects?${objectQuery}`);
   const rates = baseline.data?.rates || [];
   const contexts = Array.from(new Map(
@@ -474,8 +486,8 @@ export function DataQualityPage() {
     <Page
       title="数据质量"
       description={params.get("subjectId")
-        ? `检查对象 ${params.get("subjectId")} 的证据完整性、实际参数、上下文和质量关联。`
-        : undefined}
+        ? `检查对象 ${params.get("subjectId")} 的采样是否连续、运行是否完整，以及能否进入下一轮校正。`
+        : "先看采样是否连续、运行是否完整，以及这些运行能否进入下一轮校正。"}
     >
       <RequestError error={error} onRetry={() => Promise.all([baseline.reload(), objects.reload()])} />
       {loading ? <LoadingCard /> : (
@@ -500,7 +512,7 @@ export function DataQualityPage() {
             ))}
           </dl>
           <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
-            <Card title="正式分析准入">
+            <Card title="能否进入下一轮校正">
               <dl className="mb-4 grid divide-y divide-slate-200 rounded-md border border-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                 {[
                   ["准入率", rateValue("analysis_admission"), `${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`],
@@ -567,8 +579,10 @@ export function DataQualityPage() {
               ]}
             />
           </Card>
-          <div className="grid gap-5 xl:grid-cols-2">
-            <Card title="上下文分层统计" description="按设备、工装和材料批次展示运行、过程完整性和质量结果；这里只描述观察事实，不直接宣称因果。">
+          <details className="rounded-lg border border-slate-200 bg-white">
+            <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">查看分层与因素重叠</summary>
+            <div className="grid gap-5 border-t border-slate-100 p-5 xl:grid-cols-2">
+            <Card title="上下文分层统计" description="按设备、工装和材料批次展示运行、过程完整性和质量结果。">
               {factorRows.length ? (
                 <DataTable
                   rows={factorRows}
@@ -599,7 +613,8 @@ export function DataQualityPage() {
                 ]}
               />
             </Card>
-          </div>
+            </div>
+          </details>
           <Card title="工业对象采样范围" description="用于定位具体设备的数据量、最近采样和最大间隔。">
             <DataTable
               rows={objectRows}

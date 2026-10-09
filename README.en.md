@@ -45,7 +45,7 @@
 
 ## Project overview
 
-Ingot is an Open-source Process R&D and Optimization System. It organizes R&D around project objectives, experiment records, actual settings, process trajectories, quality outcomes, and engineering judgment, helping engineers review data, compare runs, analyze candidate causes, and develop recipe recommendations under explicit constraints.
+Ingot is an Open-source Process R&D and Optimization System. It organizes R&D around quality objectives, recipe versions, experiment records, actual settings, process trajectories, quality outcomes, and engineering judgment, helping engineers review data, compare runs, analyze candidate causes, and develop recipe recommendations under explicit constraints.
 
 The currently implemented production-evidence workflow provides three engineering capabilities:
 
@@ -55,7 +55,7 @@ The currently implemented production-evidence workflow provides three engineerin
 
 The fixed design objective is:
 
-> **Organize R&D projects, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
+> **Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
 
 Ingot serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. See [Current status](docs/status.en.md) and the [Roadmap](docs/project-plan.en.md) for implemented capabilities and planned work.
 
@@ -67,7 +67,7 @@ Ingot supports R&D records, quality analysis, evidence review, and constrained r
 
 | Typical task | System output |
 |---|---|
-| Manage R&D projects and experiment records | Project objectives and scope, run parameters, process trajectories, quality outcomes, and audit |
+| Manage recipe versions and experiment records | Recipe parameters and bounds, run parameters, process trajectories, quality outcomes, and audit |
 | Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
 | Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
 | New material, machine, or extrapolated setting | Collect additional real runs through existing production and compliance processes; Ingot only records and explains their evidence |
@@ -77,7 +77,7 @@ Ingot supports R&D records, quality analysis, evidence review, and constrained r
 ```text
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
            ↑                                                                                         ↓
-           └──────── Validated specifications, operating regions, and knowledge return to production ────────┘
+           └──────── Validated recipe versions and mechanism knowledge return to production ─────────┘
 ```
 
 | Stage | Primary responsibility |
@@ -114,7 +114,7 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 
 ![Ingot runtime components, code ownership, systems of record, and cross-service data flows](docs/architecture/system-architecture.en.svg)
 
-Platform API is the system of record for factory business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through project- and applicability-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
+Platform API is the system of record for factory business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through site-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
 
 ## Repository structure
 

@@ -3,7 +3,6 @@ using System.Text.Json;
 using Ingot.Agent;
 using Ingot.Contracts.Agents;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Application.ProcessResearch;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
@@ -12,7 +11,6 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/chat/runs")]
 public sealed class ChatRunsController(
     IAgentRuntime runtime,
-    ProcessResearchQueries researchStore,
     PlatformUserResolver userResolver) : PlatformApiController
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -25,20 +23,8 @@ public sealed class ChatRunsController(
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
         var identity = userResolver.ResolveIdentity(User)!;
-        if (normalized!.PageContext is { Kind: "research-project" } pageContext)
-        {
-            if (!Guid.TryParse(pageContext.Id, out var projectId))
-                return InvalidRequest("研发项目上下文标识无效。");
-            var project = await researchStore.GetProjectAsync(projectId, ct).ConfigureAwait(false);
-            var isAdministrator = identity.HasAnyRole(PlatformRoles.PlatformAdministrator);
-            var canAccess = project is not null &&
-                            (isAdministrator ||
-                             ((string.Equals(project.OwnerUserId, identity.UserId, StringComparison.Ordinal) ||
-                               project.MemberUserIds.Contains(identity.UserId, StringComparer.Ordinal)) &&
-                              identity.CanAccessSite(project.SiteCode)));
-            if (!canAccess)
-                return AuthorizationDenied();
-        }
+        if (normalized!.PageContext is not null)
+            return InvalidRequest("对话不支持页面上下文，请在问题中写明站点和对象。");
 
         try
         {

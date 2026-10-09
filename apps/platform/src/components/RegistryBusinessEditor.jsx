@@ -75,7 +75,7 @@ function controlParameter(value = {}) {
 }
 
 const opticalMoldingStarter = {
-  name: "精密模压工艺数据字典",
+  name: "精密模压工艺变量",
   description: "精密模压通用起始结构；发布前请按现场设备和产品补充、删减变量。",
   dataItems: [
     dataItem({ code: "mold.temperature", displayName: "模具温度", unit: "°C", nullable: false }),
@@ -311,12 +311,12 @@ export function registryBusinessValidation(kind, form) {
     if (allItems.some(item => !codePattern.test(item.code.trim()) || !item.displayName.trim())) return "工艺变量和控制参数需填写有效代码与显示名称。";
   }
   if (kind === "processSpecificationVersion") {
-    if (!form.dataModel) return "请选择工艺数据字典。";
+    if (!form.dataModel) return "请选择工艺变量。";
     if (form.basedOnVersion && !form.changeReason.trim()) return "请说明本次修订理由。";
     if (form.values.some(item => !item.code || item.value === "")) return "控制参数需选择参数并填写值。";
   }
   if (kind === "analysisPlan") {
-    if (!form.dataModel) return "请选择工艺数据字典。";
+    if (!form.dataModel) return "请选择工艺变量。";
     if (!form.comparisonKeys.trim()) return "请至少填写一个同类比较字段。";
     if (form.signals.length === 0 || form.signals.some(item => !item.dataItemCode)) return "请至少选择一个分析数据项。";
     if (form.knownUnmeasuredConfounders.some(item => !codePattern.test(item.code.trim()) || !item.name.trim())) return "潜在未测量混杂因素需填写有效代码和名称。";
@@ -454,15 +454,15 @@ function ProcessModelEditor({ form, onChange, readOnly, lockIdentity }) {
   }
   return (
     <div className="grid gap-5">
-      <IdentityFields form={form} onChange={onChange} idField="modelId" idLabel="数据字典代码" readOnly={readOnly} lockIdentity={lockIdentity} />
+      <IdentityFields form={form} onChange={onChange} idField="modelId" idLabel="工艺变量代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card
-        title="数据字典职责"
-        description="这里只定义平台如何理解数据，不填写 PLC 地址、设备点位或采集频率。"
+        title="变量范围"
+        description="这里定义过程量和控制参数，不填写 PLC 地址、设备点位或采集频率。"
         actions={canApplyStarter ? <Button variant="ghost" onClick={applyStarter}>应用精密模压示例</Button> : undefined}
       >
-        <p className="text-sm leading-6 text-slate-600">同一数据字典可以复用于多台设备；每个来源的协议、地址、原始类型和换算规则在“现场接入”中配置。</p>
+        <p className="text-sm leading-6 text-slate-600">同一套工艺变量可以复用于多台设备；每个来源的协议、地址、原始类型和换算规则在“现场接入”中配置。</p>
       </Card>
-      <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="工艺变量" readOnly={readOnly} includeCategory />
+      <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="过程量" readOnly={readOnly} includeCategory />
       <ItemDefinitions form={form} onChange={onChange} field="controlParameters" title="控制参数结构" readOnly={readOnly} />
     </div>
   );
@@ -501,7 +501,7 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
 function ModelSelect({ value, models, disabled, onChange }) {
   return (
     <Select value={value} disabled={disabled} onChange={onChange}>
-      <option value="">请选择数据字典</option>
+      <option value="">请选择工艺变量</option>
       {models.map(model => <option key={`${model.modelId}:${model.version}`} value={modelValue(model.modelId, model.version)}>{model.name}（v{model.version}）</option>)}
     </Select>
   );
@@ -516,11 +516,11 @@ function ProcessSpecificationEditor({ form, onChange, readOnly, lockIdentity }) 
   const selectableModels = models.filter(item => item.status === "published" || modelValue(item.modelId, item.version) === form.dataModel);
   return (
     <div className="grid gap-5">
-      {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
+      {error && <Alert tone="danger">工艺变量读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="processSpecificationId" idLabel="配方版本编号" readOnly={readOnly} lockIdentity={lockIdentity} description={false} />
       <Card title="配方版本来源">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺变量"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="修订基准"><Input value={form.basedOnVersion ? `V${form.basedOnVersion}（受控修订创建）` : "首次创建"} disabled /></Field>
         </div>
       </Card>
@@ -568,11 +568,11 @@ function AnalysisPlanEditor({ form, onChange, readOnly, lockIdentity }) {
   const selectableModels = models.filter(item => item.status === "published" || modelValue(item.modelId, item.version) === form.dataModel);
   return (
     <div className="grid gap-5">
-      {error && <Alert tone="danger">工艺数据字典读取失败：{error}</Alert>}
+      {error && <Alert tone="danger">工艺变量读取失败：{error}</Alert>}
       <IdentityFields form={form} onChange={onChange} idField="planId" idLabel="方案代码" readOnly={readOnly} lockIdentity={lockIdentity} />
       <Card title="分析方式">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="工艺数据字典"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
+          <Field label="工艺变量"><ModelSelect value={form.dataModel} models={selectableModels} disabled={readOnly} onChange={event => updateAt(form, onChange, "dataModel", event.target.value)} /></Field>
           <Field label="分析范围"><Select value={form.analysisScope} disabled={readOnly} onChange={event => updateAt(form, onChange, "analysisScope", event.target.value)}><option value="production-execution">单次生产运行</option><option value="production-run">生产运行段</option><option value="analysis-window">自定义时间窗口</option></Select></Field>
           <Field label="曲线对齐方式"><Select value={form.alignmentMode} disabled={readOnly} onChange={event => updateAt(form, onChange, "alignmentMode", event.target.value)}><option value="stage-relative">按工艺阶段</option><option value="elapsed">按经过时间</option><option value="normalized">按归一化进度</option></Select></Field>
           <Field label="质量分组字段"><Input value={form.cohortDimension} disabled={readOnly} onChange={event => updateAt(form, onChange, "cohortDimension", event.target.value)} placeholder="例如 quality.outcome" /></Field>
