@@ -56,11 +56,10 @@ export const docs: Doc[] = files.map((file) => {
 });
 
 export const groups = [
-  { key: "start", zh: "项目入门", en: "Project introduction", slugs: ["", "getting-started", "status"] },
-  { key: "guide", zh: "集成与运维", en: "Integration and operations", slugs: ["pilot", "data-connection", "deployment", "faq"] },
-  { key: "concept", zh: "系统与算法", en: "System and algorithms", slugs: ["design", "optimization", "mechanism-knowledge"] },
-  { key: "trust", zh: "验证与生产", en: "Validation and production", slugs: ["rollout", "production-architecture"] },
-  { key: "reference", zh: "项目治理", en: "Project governance", slugs: ["project-plan", "brand", "open-source-dependencies", "glossary"] },
+  { key: "start", zh: "开始", en: "Start", slugs: ["", "getting-started", "status", "pilot"] },
+  { key: "system", zh: "系统", en: "System", slugs: ["design", "optimization", "mechanism-knowledge"] },
+  { key: "operations", zh: "部署与接入", en: "Deployment", slugs: ["data-connection", "deployment", "production-architecture"] },
+  { key: "reference", zh: "参考", en: "Reference", slugs: ["project-plan", "rollout", "faq", "glossary", "brand", "open-source-dependencies"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;

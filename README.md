@@ -27,152 +27,141 @@
 <details>
   <summary>目录</summary>
 
-- [项目概览](#项目概览)
-- [能力范围](#能力范围)
-- [领域流程](#领域流程)
-- [当前状态](#当前状态)
-- [系统边界](#系统边界)
-- [运行时架构](#运行时架构)
-- [仓库结构](#仓库结构)
-- [完整部署](#完整部署)
-- [开发验证](#开发验证)
-- [文档](#文档)
+- [关于项目](#关于项目)
+- [快速开始](#快速开始)
+- [使用](#使用)
 - [路线图](#路线图)
 - [参与贡献](#参与贡献)
 - [许可证](#许可证)
+- [联系方式](#联系方式)
+- [致谢](#致谢)
 
 </details>
 
-## 项目概览
+## 关于项目
 
-Ingot 是开源工艺研发与优化系统。它围绕质量目标、配方版本、实验记录、实际参数、过程轨迹、质量结果和工程判断组织研发工作，帮助工程师复核数据、比较运行、分析候选原因，并在明确约束下形成配方建议。
+Ingot 组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。
 
-当前已实现的生产证据流程提供三类工程能力：
+它服务配方成本较高、样本有限、质量目标和安全边界明确的研发工作。工程师在同一处核对实际条件、过程变化和质量结果，比较可比运行，并在约束内决定下一份配方。建议不会自动下发到设备。
 
-- **运行还原**：确认实际条件、过程变化、材料、工装和质量结果；
-- **优化观察**：自动关联实际配方、过程上下文和质量结果，排除不可信运行；
-- **下一份配方**：在目标、安全边界和历史覆盖范围内提出候选工艺设置及不确定性。
+仓库只声明代码、自动化测试和可复现的软件行为。适用性、安全性和收益由部署者用自己的数据评估。已实现范围见[当前状态](docs/status.md)。
 
-项目的固定设计目标是：
+### 技术栈
 
-> **组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。**
-
-Ingot 面向配方成本较高、样本有限、质量目标和安全边界明确的研发工作。当前能力及后续建设边界见[当前状态](docs/status.md)和[发展规划](docs/project-plan.md)。
-
-分析方法根据问题类型、数据覆盖和约束条件选择，可采用 DOE、响应面或受约束贝叶斯优化。每项建议均保留输入数据、适用条件、计算理由、不确定性和审核状态。
-
-## 能力范围
-
-Ingot 支持研发记录、质量分析、证据复核和受约束的配方优化。当前能力范围如下：
-
-| 典型任务 | 系统输出 |
+| 部分 | 技术 |
 |---|---|
-| 管理配方版本与实验记录 | 配方参数与边界、运行参数、过程轨迹、质量结果和审计 |
-| 超差运行分析 | 满足可比条件的运行、关键差异、候选原因和证据缺口 |
-| 日常配方优化 | 基于真实运行的下一份配方、预测区间、风险和证据范围 |
-| 新材料、新设备或越出历史覆盖 | 在既有生产与合规流程中收集额外真实运行；Ingot 只记录和解释其证据 |
+| 业务服务 | .NET 10 |
+| 工程工作台 | React 19、Vite |
+| 数据 | PostgreSQL 17、TimescaleDB |
+| 数值优化 | Python 3.12 |
+| 部署 | Docker Compose |
 
-## 领域流程
-
-```text
-工艺配置 → 现场接入 → 生产运行 → 质量管理 → 工艺追因
-    ↑                                              ↓
-    └──── 下一配方建议回到已发布配方版本，经工程师决定后进入下一轮运行 ────┘
-```
-
-| 阶段 | 主要职责 |
-|---|---|
-| 工艺配置 | 发布工艺变量、配方版本、过程分析、质量方案和工装。每个配方版本的上线检查核对本版的采集、分析和质量依赖 |
-| 现场接入 | 将设备点位和业务数据映射为统一工艺字段 |
-| 生产运行 | 记录实际条件、过程轨迹和生产上下文 |
-| 质量管理 | 关联检验结果并执行独立复核 |
-| 工艺追因 | 比较运行差异，形成候选原因、反证和证据缺口 |
-| 配方优化 | 在已发布配方版本上，依据真实运行、安全边界和已观察范围提出下一份配方。工程师采用为下一轮校正，或把显著变更做成修订草稿 |
-
-现场设备与企业系统连接器属于可选扩展，不是部署研发核心系统的前提。在当前推荐流程中，可信生产运行事实仍是分析和建议的前置条件；仅有配方参数不能生成建议。每次工艺运行本身就是一次实验，运行及其质量结果构成实验记录。
-
-## 当前状态
-
-主要生产证据软件流程已经实现：系统可以关联真实配方运行和质量结果，检查数据能否用于优化，并在已发布配方版本上生成需要工程师确认、不会自动下发的下一配方建议。采用后版本不变，下一轮同版本运行自动接上；显著变更用建议参数创建修订草稿。工艺配置管理工艺变量、配方版本、过程分析和质量方案，每个配方版本的上线检查列出这一版还缺的依赖。每次运行记录实际执行参数和过程数据，质量记录保存实验结果；符合准入条件的运行可形成优化观察。
-
-仓库只声明代码、自动化测试和可复现的软件行为，不内置任何特定场景的验证数据或结果。部署者负责使用自己的数据评估适用性、安全性和实际收益。
-
-数据或方法未通过准入时，系统停止相应建议并记录原因。方法按数据条件在响应面、高斯过程和受约束贝叶斯优化之间选择；知识冲突、过期或超出范围时降级或停止。
-
-完整的能力和生产边界见[当前状态](docs/status.md)。
-
-## 系统边界
-
-| 相邻系统或方法 | 与 Ingot 的关系 | 系统边界 |
-|---|---|---|
-| MES、ERP、SCADA、Historian | 可选地导入运行、设备和过程事实 | 不是部署前提；不替代生产执行、监控或实时控制 |
-| LIMS、QMS、ELN | 可选地导入检验结果、审核和研发上下文 | 不是部署前提；不替代完整样品、合规或文档管理 |
-| 响应面、贝叶斯优化、DOE | 基于真实运行推荐下一份配方 | 不固定一种算法作为所有问题的答案 |
-| AI Agent | 查询、组织和解释已授权事实 | 不直接生成数值设定、代替工程师批准配方或控制设备 |
-
-## 运行时架构
-
-![Ingot 运行时组件、代码归属、记录源与跨服务数据流](docs/architecture/system-architecture.svg)
-
-Platform API 是业务记录和证据装配的正式记录源，负责接收 Chat 消息并建立排队任务；独立 Platform Worker 通过 PostgreSQL 租约执行持久 Agent 运行。Optimizer 是无业务状态的数值服务；Agent 只能通过授权的只读分析工具查询结构化事实，并从授权站点内已复核知识片段中进行带引用的关键词与可选语义检索。Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
-
-## 仓库结构
+### 仓库结构
 
 | 路径 | 职责 |
 |---|---|
-| `src/edge` | 现场协议、采集生命周期、语义映射、离线缓冲与重放 |
-| `src/platform` | 业务 API、正式记录、证据装配、权限与后台任务 |
-| `src/agent` | 模型辅助的问题解析、只读工具调用、范围受控知识检索与证据说明 |
-| `src/shared` | 领域模型、跨模块契约和稳定标识 |
-| `optimizer` | DOE、代理模型、约束判断与序贯优化数值服务 |
-| `apps/platform` | React/Vite 工程工作台 |
-| `apps/website`、`apps/docs-site` | 公开官网与文档站 |
-| `tests/Ingot.Core.Tests` | 后端行为、模块边界和协议的 xUnit 测试 |
-| `deploy`、`scripts`、`tools` | 部署清单、架构门禁、验证工具与基准程序 |
+| `src/platform` | 业务 API、正式记录、证据装配与后台任务 |
+| `src/edge` | 现场采集、语义映射、离线缓冲与重放 |
+| `src/agent` | 只读分析、知识检索与证据说明 |
+| `src/shared` | 领域模型与跨模块契约 |
+| `optimizer` | 响应面、约束判断与序贯优化 |
+| `apps/platform` | 工程工作台 |
+| `apps/website`、`apps/docs-site` | 官网与文档站 |
+| `tests`、`deploy`、`scripts` | 测试、部署清单与架构门禁 |
 
-## 完整部署
+<p align="right"><a href="#readme-top">返回顶部</a></p>
 
-完整 Compose 栈需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2：
+## 快速开始
+
+### 环境要求
+
+试用完整栈需要 Git、Docker Engine 或 Docker Desktop，以及 Docker Compose v2。这条路径不要求本机预装 .NET、Node.js 或 Python。
+
+参与开发另需 .NET SDK 10、Node.js 22.22+ 和 uv 0.12.5。命令与约束见[贡献指南](CONTRIBUTING.md)。
+
+### 安装
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
 cd Ingot
 cp .env.example .env
+```
+
+启动前替换 `.env` 中所有 `change-this-` 占位值。数据库密码和管理员口令必须改为彼此不同的随机值。
+
+```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-启动前必须修改 `.env` 中的数据库密码和管理员配置。启动后访问 `http://localhost:3000`。详细状态检查、认证和排障见[快速开始](docs/getting-started.md)；真实试点按[配方优化试点指南](docs/pilot.md)执行；生产环境先阅读[生产架构](docs/production-architecture.md)和[部署运维](docs/deployment.md)。
+启动后打开 `http://localhost:3000`。健康检查、登录和排障见[快速开始](docs/getting-started.md)。
 
-## 开发验证
+<p align="right"><a href="#readme-top">返回顶部</a></p>
 
-源码开发需要 .NET SDK 10、Node.js 22.22+ 和 uv 0.12.5。完整 CI 门禁：
+## 使用
 
-```bash
-./scripts/verify.sh
+登录后从工艺配置发布配方版本。每次运行记录实际参数、过程轨迹和质量结果；符合准入条件的运行形成优化观察。系统在安全边界和已观察范围内给出下一份配方，工程师采用为下一轮校正，或把显著变更做成修订草稿。
+
+```text
+工艺配置 → 现场接入 → 生产运行 → 质量管理 → 工艺追因 → 配方优化
 ```
 
-常用命令和工程约束见[贡献指南](CONTRIBUTING.md)。
+现场设备和企业系统连接器是可选扩展。只有配方参数、没有可信运行事实时，系统不生成建议。
 
-## 文档
+| 相邻系统 | Ingot 的边界 |
+|---|---|
+| MES、ERP、SCADA、Historian | 可导入运行事实；不替代执行、监控或实时控制 |
+| LIMS、QMS、ELN | 可导入检验与研发上下文；不替代样品、合规或文档管理 |
+| 统计与优化方法 | 按数据条件选择；不把一种算法当作所有问题的答案 |
+| AI Agent | 查询并解释已授权事实；不直接生成数值设定或控制设备 |
 
-- [文档首页](docs/index.md)：按目标选择阅读路径
-- [快速开始](docs/getting-started.md)：启动本地完整栈
-- [当前状态](docs/status.md)：已实现能力、验证证据和生产边界
-- [配方优化试点指南](docs/pilot.md)：从真实运行到第一份下一配方建议
-- [系统设计](docs/design.md)：稳定业务边界和组件职责
-- [分析与优化](docs/optimization.md)：方法选择、准入和数值策略
-- [数据接入](docs/data-connection.md)：身份、映射和数据质量
-- [场景评估](docs/rollout.md)：部署者评估建议闭环的证据与结论边界
-- [发展规划](docs/project-plan.md)：长期方向和晋级闸门
+![Ingot 运行时组件与数据流](docs/architecture/system-architecture.svg)
+
+业务记录以 Platform API 为准。Optimizer 无业务状态。Agent 只能通过授权的只读工具查询事实。生产拓扑见[生产架构](docs/production-architecture.md)，第一份建议的操作顺序见[配方优化试点指南](docs/pilot.md)。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
 
 ## 路线图
 
-建议的采用、修改、拒绝和结果冻结已经接在已发布配方版本上。近期仍待完善运行证据的完整呈现、推荐准入说明、知识复用和部署可靠性。验收条件与详细边界见[发展规划](docs/project-plan.md)。
+- [x] 在已发布配方版本上记录建议的采用、修改、拒绝和结果冻结
+- [ ] 完整呈现运行证据：实际值、来源、缺失项和质量复核
+- [ ] 说明推荐准入，并把拒绝原因追溯到运行和质量记录
+- [ ] 用来源、范围和冲突检查约束后续建议
+- [ ] 使备份恢复、容量和告警可以独立验收
+
+验收条件见[发展规划](docs/project-plan.md)。未关闭的问题见 [Issues](https://github.com/liuweichaox/Ingot/issues)。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
 
 ## 参与贡献
 
-项目接受设备适配、统计方法、DOE、优化算法、测试和文档贡献。参与方式包括[提交问题](https://github.com/liuweichaox/Ingot/issues)、[参与讨论](https://github.com/liuweichaox/Ingot/discussions)，或按[贡献指南](CONTRIBUTING.md)发起 Pull Request。提交前应同时阅读[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
+欢迎设备适配、统计方法、优化算法、测试和文档贡献。
+
+1. 先阅读[贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
+2. 在 [Issues](https://github.com/liuweichaox/Ingot/issues) 或 [Discussions](https://github.com/liuweichaox/Ingot/discussions) 中确认没有重复问题；较大变更先说明场景和验证方式。
+3. 提交 Pull Request。漏洞通过[私密报告](https://github.com/liuweichaox/Ingot/security/advisories/new)提交，不要开公开 Issue。
+
+提交前运行 `./scripts/verify.sh`。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
 
 ## 许可证
 
-Ingot 使用 [Apache License 2.0](LICENSE)。
+本项目使用 [Apache License 2.0](LICENSE)。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
+
+## 联系方式
+
+- 官网：<https://ingotstack.com>
+- 文档：<https://docs.ingotstack.com/zh>
+- 问题：<https://github.com/liuweichaox/Ingot/issues>
+- 讨论：<https://github.com/liuweichaox/Ingot/discussions>
+- 安全：<https://github.com/liuweichaox/Ingot/security/advisories/new>
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
+
+## 致谢
+
+运行时依赖、许可证和引入要求见[开源依赖](docs/open-source-dependencies.md)。精确版本以 lockfile 和容器清单为准。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>

@@ -27,152 +27,141 @@
 <details>
   <summary>Table of contents</summary>
 
-- [Project overview](#project-overview)
-- [Capability scope](#capability-scope)
-- [Domain workflow](#domain-workflow)
-- [Current status](#current-status)
-- [System boundaries](#system-boundaries)
-- [Runtime architecture](#runtime-architecture)
-- [Repository structure](#repository-structure)
-- [Full deployment](#full-deployment)
-- [Development verification](#development-verification)
-- [Documentation](#documentation)
+- [About the project](#about-the-project)
+- [Getting started](#getting-started)
+- [Usage](#usage)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+- [Contact](#contact)
+- [Acknowledgments](#acknowledgments)
 
 </details>
 
-## Project overview
+## About the project
 
-Ingot is an Open-source Process R&D and Optimization System. It organizes R&D around quality objectives, recipe versions, experiment records, actual settings, process trajectories, quality outcomes, and engineering judgment, helping engineers review data, compare runs, analyze candidate causes, and develop recipe recommendations under explicit constraints.
+Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-The currently implemented production-evidence workflow provides three engineering capabilities:
+It serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. Engineers review actual conditions, process change, and quality outcomes in one place, compare eligible runs, and decide the next recipe inside those constraints. Recommendations are never dispatched to equipment.
 
-- **Run reconstruction**: establish actual conditions, process changes, material, tooling, and quality outcomes;
-- **Optimization observations**: automatically link actual recipes, process context, and quality outcomes while excluding untrustworthy runs;
-- **Next recipe**: propose a candidate process setting with uncertainty inside objectives, safety boundaries, and observed coverage.
+The repository claims only code, automated tests, and reproducible software behavior. Deployers evaluate applicability, safety, and realized benefit with their own data. See [Current status](docs/status.en.md) for what is implemented.
 
-The fixed design objective is:
+### Technology
 
-> **Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
-
-Ingot serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. See [Current status](docs/status.en.md) and the [Roadmap](docs/project-plan.en.md) for implemented capabilities and planned work.
-
-Methods are selected by question type, data coverage, and constraints. Available methods include DOE, response surfaces, and constrained Bayesian optimization. Every recommendation retains its input data, applicability conditions, computational rationale, uncertainty, and review status.
-
-## Capability scope
-
-Ingot supports R&D records, quality analysis, evidence review, and constrained recipe optimization. Current capabilities include:
-
-| Typical task | System output |
+| Part | Technology |
 |---|---|
-| Manage recipe versions and experiment records | Recipe parameters and bounds, run parameters, process trajectories, quality outcomes, and audit |
-| Nonconforming-run analysis | Eligible comparison runs, key differences, candidate causes, and evidence gaps |
-| Daily recipe optimization | The next recipe based on real runs, with prediction intervals, risk, and evidence scope |
-| New material, machine, or extrapolated setting | Collect additional real runs through existing production and compliance processes; Ingot only records and explains their evidence |
+| Business services | .NET 10 |
+| Engineering workbench | React 19, Vite |
+| Data | PostgreSQL 17, TimescaleDB |
+| Numerical optimization | Python 3.12 |
+| Deployment | Docker Compose |
 
-## Domain workflow
-
-```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis
-           ↑                                                                                 ↓
-           └── The next recipe returns to the published version and, after the engineer decides, starts the next run ──┘
-```
-
-| Stage | Primary responsibility |
-|---|---|
-| Process configuration | Publish process variables, recipe versions, process analysis, quality plans, and tooling. Each recipe version's launch check verifies that version's acquisition, analysis, and quality dependencies |
-| Field integration | Map equipment points and business data to consistent process fields |
-| Production runs | Record actual conditions, process trajectories, and production context |
-| Quality management | Link inspection results and perform independent review |
-| Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
-| Recipe optimization | On a published recipe version, propose the next recipe from real runs, safety boundaries, and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft |
-
-Field-equipment and enterprise-system connectors are optional extensions, not prerequisites for deploying the R&D core. Trustworthy production-run facts remain prerequisites for the current recommendation workflow; recipe settings alone cannot produce a recommendation. Each process run is an experiment; the run and its quality outcomes constitute the experiment record.
-
-## Current status
-
-The main production-evidence workflow is implemented: the system links real recipe runs to quality outcomes, checks whether they are usable for optimization, and generates engineer-reviewed next-recipe recommendations on the published recipe version. Recommendations are never dispatched automatically. Adoption keeps the version unchanged and the next run of that version links automatically; a significant change creates a revision draft from the recommended settings. Process configuration manages process variables, recipe versions, process analysis, and quality plans, and each recipe version's launch check lists the dependencies that version still lacks. Each run records actual execution parameters and process data, while quality records retain experiment outcomes; admitted runs can form optimization observations.
-
-The repository claims only implemented code, automated tests, and reproducible software behavior. It bundles no scenario-specific validation data or results. Deployers are responsible for evaluating applicability, safety, and realized benefit with their own data.
-
-When data or methods fail admission, the system stops the recommendation and records the reason. Methods are selected by data conditions among response surfaces, Gaussian processes, and constrained Bayesian optimization; conflicting, expired, or out-of-scope knowledge degrades or stops the recommendation.
-
-See [Current status](docs/status.en.md) for capability and production boundaries.
-
-## System boundaries
-
-| Adjacent system or method | Relationship to Ingot | System boundary |
-|---|---|---|
-| MES, ERP, SCADA, historian | Optional source of run, equipment, and process facts | Not required for deployment; does not replace execution, monitoring, or real-time control |
-| LIMS, QMS, ELN | Optional source of inspection results, review, and R&D context | Not required for deployment; does not replace complete sample, compliance, or document management |
-| Response surfaces, Bayesian optimization, DOE | Recommend the next recipe from real runs | Does not treat one algorithm as the answer to every process problem |
-| AI agent | Query, organize, and explain authorized facts | Does not generate numeric settings directly, replace engineer recipe approval, or control equipment |
-
-## Runtime architecture
-
-![Ingot runtime components, code ownership, systems of record, and cross-service data flows](docs/architecture/system-architecture.en.svg)
-
-Platform API is the system of record for business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through site-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
-
-## Repository structure
+### Repository layout
 
 | Path | Responsibility |
 |---|---|
-| `src/edge` | Field protocols, acquisition lifecycle, semantic mapping, offline buffering, and replay |
-| `src/platform` | Business API, systems of record, evidence assembly, authorization, and background work |
-| `src/agent` | Model-assisted question parsing, read-only tool calls, scope-controlled knowledge retrieval, and evidence explanation |
-| `src/shared` | Domain models, cross-module contracts, and stable identifiers |
-| `optimizer` | DOE, surrogate models, constraint evaluation, and sequential optimization service |
-| `apps/platform` | React/Vite engineering workbench |
+| `src/platform` | Business API, system of record, evidence assembly, and background work |
+| `src/edge` | Field acquisition, semantic mapping, offline buffering, and replay |
+| `src/agent` | Read-only analysis, knowledge retrieval, and evidence explanation |
+| `src/shared` | Domain models and cross-module contracts |
+| `optimizer` | Response surfaces, constraint checks, and sequential optimization |
+| `apps/platform` | Engineering workbench |
 | `apps/website`, `apps/docs-site` | Public website and documentation site |
-| `tests/Ingot.Core.Tests` | xUnit coverage for backend behavior, module boundaries, and protocols |
-| `deploy`, `scripts`, `tools` | Deployment manifests, architecture gates, validation utilities, and benchmarks |
+| `tests`, `deploy`, `scripts` | Tests, deployment manifests, and architecture gates |
 
-## Full deployment
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
-The complete Compose stack requires Git, Docker Engine or Docker Desktop, and Docker Compose v2:
+## Getting started
+
+### Prerequisites
+
+Trying the full stack requires Git, Docker Engine or Docker Desktop, and Docker Compose v2. That path does not require a local .NET, Node.js, or Python install.
+
+Source development also requires .NET SDK 10, Node.js 22.22+, and uv 0.12.5. See [Contributing](CONTRIBUTING.en.md) for commands and engineering contracts.
+
+### Installation
 
 ```bash
 git clone https://github.com/liuweichaox/Ingot.git
 cd Ingot
 cp .env.example .env
+```
+
+Before startup, replace every `change-this-` placeholder in `.env`. Database passwords and the administrator password must be distinct random values.
+
+```bash
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-Before startup, change the database passwords and administrator settings in `.env`. Open `http://localhost:3000` after startup. See [Getting started](docs/getting-started.en.md) for health checks, authentication, and troubleshooting; follow the [Recipe-optimization pilot guide](docs/pilot.en.md) for a real pilot; and read [Production architecture](docs/production-architecture.en.md) and [Deployment](docs/deployment.en.md) before production use.
+Open `http://localhost:3000` after startup. Health checks, sign-in, and troubleshooting are in [Getting started](docs/getting-started.en.md).
 
-## Development verification
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
-Source development requires .NET SDK 10, Node.js 22.22+, and uv 0.12.5. Run the complete CI gate with:
+## Usage
 
-```bash
-./scripts/verify.sh
+After sign-in, publish a recipe version from process configuration. Each run records actual settings, the process trajectory, and quality outcomes. Admitted runs become optimization observations. The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft.
+
+```text
+Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
 ```
 
-See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contracts.
+Field-equipment and enterprise-system connectors are optional. Recipe settings alone, without trustworthy run facts, do not produce a recommendation.
 
-## Documentation
+| Adjacent system | Boundary |
+|---|---|
+| MES, ERP, SCADA, historian | May supply run facts; does not replace execution, monitoring, or real-time control |
+| LIMS, QMS, ELN | May supply inspection and R&D context; does not replace sample, compliance, or document management |
+| Statistical and optimization methods | Selected by data conditions; no single algorithm is the answer to every problem |
+| AI agent | Queries and explains authorized facts; does not generate numeric settings directly or control equipment |
 
-- [Documentation home](docs/index.en.md): choose a path by objective
-- [Getting started](docs/getting-started.en.md): run the complete local stack
-- [Current status](docs/status.en.md): implemented capabilities, validation evidence, and production boundaries
-- [Recipe-optimization pilot guide](docs/pilot.en.md): move from real runs to the first next-recipe recommendation
-- [System design](docs/design.en.md): stable business boundaries and component responsibilities
-- [Analysis and optimization](docs/optimization.en.md): method selection, admission, and numerical strategy
-- [Data integration](docs/data-connection.en.md): identity, mapping, and data quality
-- [Scenario evaluation](docs/rollout.en.md): evidence and conclusion boundaries for deployer evaluation of the recommendation loop
-- [Roadmap](docs/project-plan.en.md): long-term direction and promotion gates
+![Ingot runtime components and data flow](docs/architecture/system-architecture.en.svg)
+
+Platform API is the system of record. Optimizer holds no business state. Agent reads facts only through authorized read-only tools. See [Production architecture](docs/production-architecture.en.md) for topology and the [Recipe-optimization pilot guide](docs/pilot.en.md) for the first recommendation.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Roadmap
 
-Adopting, modifying, rejecting, and freezing a recommendation already happens on the published recipe version. Near-term work still covers complete presentation of run evidence, recommendation-admission explanations, knowledge reuse, and deployment reliability. See the [Roadmap](docs/project-plan.en.md) for acceptance criteria and boundaries.
+- [x] Record adoption, modification, rejection, and outcome freeze on the published recipe version
+- [ ] Present run evidence completely: actual values, provenance, gaps, and quality review
+- [ ] Explain recommendation admission and trace rejection reasons to run and quality records
+- [ ] Constrain later recommendations with sourced, scoped, conflict-checked knowledge
+- [ ] Make backup and restore, capacity, and alerting independently acceptable
+
+Acceptance criteria are in the [Roadmap](docs/project-plan.en.md). Open work is tracked in [Issues](https://github.com/liuweichaox/Ingot/issues).
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Contributing
 
-The project accepts contributions to equipment adapters, statistical methods, DOE, optimization, tests, and documentation. Participation options include [opening an issue](https://github.com/liuweichaox/Ingot/issues), [joining a discussion](https://github.com/liuweichaox/Ingot/discussions), or following the [contributing guide](CONTRIBUTING.en.md) to submit a pull request. Review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) before submitting changes.
+Contributions are welcome for equipment adapters, statistical methods, optimization, tests, and documentation.
+
+1. Read [Contributing](CONTRIBUTING.en.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [Security Policy](SECURITY.md).
+2. Check [Issues](https://github.com/liuweichaox/Ingot/issues) or [Discussions](https://github.com/liuweichaox/Ingot/discussions) for duplicates. Describe the scenario and verification for a larger change first.
+3. Open a pull request. Report vulnerabilities through [private reporting](https://github.com/liuweichaox/Ingot/security/advisories/new), not a public issue.
+
+Run `./scripts/verify.sh` before submitting.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## License
 
 Ingot is licensed under the [Apache License 2.0](LICENSE).
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
+## Contact
+
+- Website: <https://ingotstack.com/en/>
+- Documentation: <https://docs.ingotstack.com/en>
+- Issues: <https://github.com/liuweichaox/Ingot/issues>
+- Discussions: <https://github.com/liuweichaox/Ingot/discussions>
+- Security: <https://github.com/liuweichaox/Ingot/security/advisories/new>
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
+## Acknowledgments
+
+Runtime dependencies, licenses, and introduction rules are in [Open-source dependencies](docs/open-source-dependencies.en.md). Exact versions come from lockfiles and container manifests.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
