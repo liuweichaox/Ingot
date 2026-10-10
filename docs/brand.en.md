@@ -74,6 +74,8 @@ Choose terms by object:
 
 “Smart process” is incomplete and can imply an autonomous process, so it is not a product category, menu, or capability name. Formal product descriptions prefer “Recipe optimization,” “next-recipe recommendation,” “engineer decision,” and “constrained optimization.” Current recipe runs and their quality outcomes can become optimization observations after admission. The system neither repackages production runs as another business record nor dispatches recipes automatically.
 
+“Process execution” is the platform’s canonical business object. Engineer-facing copy may use “run”; code, APIs, and cross-scenario documentation must not replace it with a device-specific cycle name.
+
 An evidence level answers “how strong is the current support?”, an observational conclusion answers “what relationship was observed?”, and an evidence-based conclusion answers “did the intervention support the hypothesis?” These concepts are not interchangeable. *Robust screening only* (`screening`) and *limited evidence* (`limited`) are degraded labels at levels one and two; they do not introduce additional conclusion categories.
 
 Use *root cause* only when the validating evidence is stated. *AI recipe optimization* may describe the interaction model but does not replace the product category. Algorithm names belong in technical explanations, not in the product value itself.

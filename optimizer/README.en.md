@@ -23,7 +23,7 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 
 The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
-The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate campaigns stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar.
+The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate inputs stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar. The HTTP contract's `campaign` is numerical input configuration, not a separate Platform business activity or run plan.
 
 ## Local validation
 
@@ -95,6 +95,6 @@ The .NET platform remains the only business system of record:
 2. Platform sends the complete frozen brief, valid observations, and constraints to this service.
 3. This service calculates the next parameter batch without retaining business state.
 4. Platform creates next-recipe recommendations with the input hash, model version, and prediction intervals.
-5. After an engineer decides, Platform links later real runs and freezes their quality outcomes; valid outcomes join the next observation round for the same site and recipe.
+5. After an engineer decides, Platform links later real runs of the same recipe version and freezes their quality outcomes. Adopting a correction does not automatically increment the version; a significant change is published through a revision draft. Valid outcomes join the next observation round within the applicable scope.
 
 PLC, instrument, vision, file, and API connectors only map source data into this contract; they do not change the optimizer's responsibility or authority.

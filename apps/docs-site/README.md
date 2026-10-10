@@ -5,6 +5,7 @@ Static bilingual documentation generated from paired Markdown files in `docs/`.
 `lib/docs.ts` and `scripts/prepare-content.mjs` contain the explicit public-document allowlist. Every public page requires Chinese and English versions with equivalent headings and claims. Product language follows `docs/brand.md`; technical pages may describe current strategy but cannot redefine the core value.
 
 ```bash
+cd apps/docs-site
 npm ci
 npm run build
 npm test

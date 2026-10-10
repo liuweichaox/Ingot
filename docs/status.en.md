@@ -56,7 +56,7 @@ Deployers are responsible for:
 
 ## Production-deployment boundary
 
-The default Docker Compose setup is for local development and a single-machine reference deployment; it does not complete production requirements. Production deployers still configure secrets, identity, and site isolation and complete backup, recovery, capacity, alerting, equipment interlock, human approval, stopping, and fallback drills.
+The default Docker Compose setup is for local development and a single-machine reference deployment; it does not complete production requirements. Deployers still configure secrets, identity, and site isolation and validate backup, recovery, capacity, and alerting against their availability targets. Field integration also requires validation of connector buffering, replay, and recovery; equipment interlocks, operating authorization, and stop/recovery procedures remain the responsibility of existing field-safety processes. Ingot currently dispatches no equipment actions; any future action capability is a separate safety-engineering project.
 
 See [Production architecture](production-architecture.en.md) for the target topology and [Deployment](deployment.en.md) for current operating steps.
 

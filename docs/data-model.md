@@ -31,9 +31,13 @@
 | Agent 对话与问题案例 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、案例评估和持久对话；不授予业务写权限。 |
 | 操作对象缓存 | `data_object_operation_keys`, `data_object_summaries` | 外部对象的操作幂等键和受限摘要缓存。 |
 
-## 3. 本轮发现与已修复
+训练数据集、工艺模型版本、模型评估和漂移记录目前是部署内共享的研发资产，读写按工艺工程师或平台管理员岗位授权；不能把它们视为已实施站点隔离的生产表。建议与机理声明通过 `site_code` 和 `process_specification_id` 归属；知识来源通过 `site_code` 归属，子记录从父记录继承范围。
 
-| 问题 | 风险 | 本轮处理 |
+建议所属配方版本保存在冻结生成条件的上下文中，关系表的归属键仍是站点 + 配方。工程师采用下一轮校正不会修改 `process_specification_versions`；显著变更通过独立修订草稿发布。
+
+## 3. 关键迁移与约束
+
+| 问题 | 风险 | 迁移处理 |
 | --- | --- | --- |
 | 日常决定、实际运行和质量结果曾放在同一 JSON 行中 | 不能表达“先决定、后运行”；结果写入会成为对决定行的更新 | 拆为 `decisions`、`decision_executions`、`decision_outcomes` 三张追加表；决定可无运行，结果必须已有运行关联。 |
 | 研发项目是第二套归属容器 | 同一配方的建议与知识被项目切碎，项目删除还可能抹去证据 | 迁移 `0026` 删除项目、假设、操作域、项目知识声明与项目审计；建议、机理与知识改为站点 + 配方归属，存在旧项目数据时拒绝迁移。 |

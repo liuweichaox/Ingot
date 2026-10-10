@@ -8,19 +8,19 @@ Limit the pilot to one product or process scope and one quality objective. Provi
 
 ## Operating Sequence
 
-1. In the recipe-recommendation brief, select the site and published recipe, then define product scope, quality objectives, adjustable parameters, and safety boundaries.
-2. Let completed real recipe runs in scope enter admission checks automatically.
-3. Generate one next-recipe recommendation after at least three valid runs cover two distinct actual recipes.
-4. Record engineer adoption, modification, or rejection, with the reason and final actual recipe.
-5. Link the later real production run to that decision; a rejection requires no invented execution.
-6. Freeze the quality outcome from source data after parameter readback and inspection facts are complete.
-7. Let new real runs and outcomes return independently as the next observations and recommendations.
+1. Open a published recipe version in process configuration. The page derives the site, product scope, quality objective, and adjustable parameters from that version, its process variables, published quality plans, and existing runs. Check the source configuration and displayed scope instead of entering a separate set of experiment variables.
+2. Select “检查数据” (Check data) to review admitted completed runs and exclusion reasons. The recipe needs adjustable parameters with units and bounds, a numeric quality characteristic covering the recipe, and published process analysis containing process curves.
+3. After at least three valid runs cover two distinct actual recipes, select “生成下一轮校正” (Generate next-run correction). These are minimum data requirements; failed coverage, constraint, or method checks still stop the recommendation with an explanation.
+4. Choose “采用为下一轮校正” (Adopt as next-run correction), “修改后作为下一轮校正” (Modify and adopt), or “拒绝” (Reject). Modification and rejection require a reason; direct adoption keeps the suggested parameters and may include a reason. Adoption or modification leaves the published recipe version unchanged. Use “作为显著变更” (Treat as significant change) to open a revision draft for a significant change.
+5. After adoption or modification, use that recipe version for a subsequent real run. The recipe page attempts to link the next completed same-version run that started after the decision; the server still validates the site and frozen context. Rejection requires no linked run.
+6. The page reads parameter readback and inspection facts from the linked run and requests outcome freezing. If this fails, repair the data and select “再次读取结果” (Read result again). Only runs passing outcome admission become later optimization observations.
+7. Complete the current decision and outcome before generating another correction. Recommendations are never dispatched automatically; field parameter changes follow existing operating procedures.
 
 ## Check Every Recommendation
 
 - Are input runs, quality outcomes, and context traceable?
 - Does the recommendation stay within declared safety boundaries and observed coverage?
-- Does the engineer decision include adoption, modification, or rejection and a reason?
+- Does the engineer decision record adoption, modification, or rejection, with a reason for modification or rejection?
 - Does an adoption or modification link to an actual execution?
 - Is the outcome frozen only after parameter readback and inspection facts are complete?
 

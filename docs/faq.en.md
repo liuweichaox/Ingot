@@ -52,7 +52,7 @@ Ingot's product position does not change with foundation-model capability. Langu
 
 ## Does adding MCP make an agent safe to drive production actions?
 
-No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. Site access, recommendation approval, call idempotency, device confirmation, and failure recovery remain under platform and field-system control. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
+No. Model Context Protocol (MCP) standardizes only how a model discovers and calls tools. The current Agent performs read-only analysis and has no equipment-execution permission. The platform enforces site access and engineer decisions; device confirmation, interlocks, and failure recovery are field-safety responsibilities. Any future equipment action must be a separate safety-engineering project. An agent may not approve its own proposal or bypass the platform to connect directly to equipment.
 
 ## When is Bayesian optimization appropriate?
 
@@ -60,15 +60,15 @@ Bayesian optimization applies when individual real recipe runs are costly and ea
 
 ## Can existing recipe runs be analyzed directly?
 
-Yes. That is the default path. An optimization task automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are required before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more real runs through the existing production workflow and have engineers assess whether the evidence is sufficient.
+Yes. That is the default path. Recommendation generation automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are minimum data requirements; quality, coverage, constraint, and method-admission checks must also pass before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more real runs through the existing production workflow and have engineers assess whether the evidence is sufficient.
 
 ## Can the system generate multiple recipe recommendations at once?
 
-Daily optimization returns one next recipe by default. Engineers decide whether to adopt it under field conditions and evaluate its effect using quality outcomes from subsequent real runs.
+The current platform returns one next-recipe recommendation per request. Engineers decide whether to adopt it under field conditions and evaluate its effect using quality outcomes from subsequent real runs.
 
 ## Are recipe recommendations written automatically to controls?
 
-No. A next-recipe recommendation does not automatically create an equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or process-specification workflow. Equipment interlocks and field safety remain independent of the model.
+No. A next-recipe recommendation does not automatically create an equipment-dispatch command. An engineer decides whether to adopt it through the existing production-preparation, MES, or recipe-version workflow. Equipment interlocks and field safety remain independent of the model.
 
 ## Does an optimization or language-model outage stop acquisition?
 
@@ -82,7 +82,7 @@ Validation data, protocols, and results are tied to a specific scenario, objecti
 
 Before results are reviewed, define the target, starting data, run budget, comparison methods, and pass criteria outside Ingot. Historical review and actual production runs can then evaluate recommendation stability, run count, and elapsed time after adoption. See [Scenario evaluation](rollout.en.md) for the complete method.
 
-The repository provides historical replay and method-comparison capabilities but bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
+The optimizer provides offline historical-replay and method-comparison utilities, not a separate Web evaluation workflow, and bundles no scenario data or effect conclusion. Users can compare random, space-filling, response-surface, and current optimization policies on their own recipe runs and choose their own acceptance threshold.
 
 ## Is the documentation now finalized?
 

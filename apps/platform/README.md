@@ -1,6 +1,6 @@
 # Ingot Platform Web
 
-React/Vite workbench for process engineers. It presents one evidence chain from real production data to engineering decisions; it does not define a separate product value or keep browser-local business truth.
+React/Vite workbench for Ingot, an independent process R&D and optimization system. It presents one evidence chain from real run data to engineering decisions; it does not define a separate product value or keep browser-local business truth. Field connectors are enabled as needed; the current recommendation workflow still requires qualified run and quality evidence.
 
 The visible domains are:
 
@@ -13,7 +13,7 @@ The visible domains are:
 - Recipe optimization;
 - System administration.
 
-The working path is:
+The current field-evidence workflow is:
 
 ```text
 connect field sources
@@ -29,6 +29,7 @@ connect field sources
 The UI uses business forms, shows missingness and provenance, and does not expose raw JSON editors as normal product workflows. Numerical recommendations require engineer review before execution.
 
 ```bash
+cd apps/platform
 npm ci
 npm run dev
 npm test

@@ -6,7 +6,7 @@
 
 | 目标 | 使用路径 | 完成标志 |
 |---|---|---|
-| 部署系统 | [启动完整栈](#启动完整栈) | Web、API、Optimizer 和数据库健康；无需外部系统账号或连接 |
+| 部署系统 | [启动完整栈](#启动完整栈) | Web、API、Worker、Optimizer 和数据库健康，迁移成功退出；无需外部系统账号或连接 |
 | 验证当前生产证据流程 | [配方优化试点指南](pilot.md) | 有效生产运行证据和第一份下一配方建议 |
 | 准备生产环境 | [生产架构](production-architecture.md) → [部署运维](deployment.md) | 站点独立完成安全、恢复、容量和观察验收 |
 | 参与开发 | [贡献指南](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.md) | 本地通过 `./scripts/verify.sh` |
@@ -80,4 +80,4 @@ docker compose -f docker-compose.app.yml logs --tail=200
 - 要接入一组真实或代表性配方运行：继续[配方优化试点指南](pilot.md)；
 - 要了解身份、点位和映射：阅读[数据接入](data-connection.md)；
 - 要判断哪些能力已经验证：阅读[当前状态](status.md)；
-- 要部署生产环境：先完成[生产架构](production-architecture.md)定义的站点验收。
+- 要长期部署：按[生产架构](production-architecture.md)选择基础研发、现场接入或高可用等级，完成相应验收。

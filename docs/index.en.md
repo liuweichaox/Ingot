@@ -24,7 +24,7 @@ The documentation can be read by task rather than in sequence.
 ```text
 Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
            ↑                                                                                         ↓
-           └──────── Validated recipe versions and mechanism knowledge return to production ─────────┘
+           └──────── Recommendations return to the published recipe version for the engineer to decide the next correction ─────────┘
 ```
 
 1. **Process configuration** tells the system which variables, units, quality rules, and safety boundaries matter.
@@ -61,7 +61,7 @@ See [Current status](status.en.md) for the complete boundary.
 ### Validation and production engineering
 
 - [Current status](status.en.md): what works today and what remains unproven
-- [Production architecture](production-architecture.en.md): what a production deployment must satisfy
+- [Production architecture](production-architecture.en.md): reliability targets by deployment scale and field-integration scope
 
 ### Project governance
 

@@ -1,17 +1,17 @@
 # Deployment
 
-> Status: **current operations guide**. Deployment keeps acquisition, business records, and engineering decisions reliable inside the factory. The public website and documentation site are outside the factory runtime.
+> Status: **current operations guide**. Deployment keeps an independent process R&D system's business records and engineering decisions reliable. Field connectors are optional; the public website and documentation site are deployed separately.
 
 This document defines service placement, configuration management, observability, failure recovery, backup, and upgrade requirements for long-running environments. See [Getting started](getting-started.en.md) for local development and validation procedures.
 
-This document describes the repository's current runnable form. See [Production architecture](production-architecture.en.md) for target requirements covering replicas, PITR, site production cells, and controlled action. A deployment that has not passed those admission gates must not claim the corresponding production level.
+This document describes the repository's current runnable form. See [Production architecture](production-architecture.en.md) for reliability requirements for basic R&D, field-connected, and highly available deployments. A deployment must pass the corresponding acceptance checks before claiming that level. Equipment action is a separate safety-engineering project, not a default deployment capability.
 
 ## Recommended topology
 
 ```text
-Field data sources                            Factory runtime
+Optional field data sources                   R&D system runtime
 controls / instruments / vision / inspection / MES
-          └─ Edge ConnectorHost ───→ Platform API
+          └─ Edge ConnectorHost (optional) ─→ Platform API
                                       ├─ Platform Worker (durable jobs)
                                       ├─ PostgreSQL / TimescaleDB
                                       ├─ attachments and process knowledge
@@ -57,7 +57,7 @@ Change at least:
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` passes the Edge token, site binding, and diagnostics address to the Platform API. A successfully ingested batch registers that Edge in the site-node list.
+`docker-compose.app.yml` passes the Edge token, site binding, and diagnostics address to the Platform API. The current Compose file requires site and Edge identity and the mandatory related tokens even without the connector profile; this does not require equipment or external business-system connections. Configure `INGOT_CONNECTOR_TOKEN` and a real diagnostics address when enabling the connector. A successfully ingested batch registers that Edge in the site-node list.
 
 Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 
@@ -117,7 +117,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` removes containers and networks but retains named volumes by default. Do not add `--volumes` without a backup and an explicit reset decision. After source changes, use `up -d --build`; after `.env`-only changes, use `up -d` to recreate affected containers.
 
-The first build downloads large SDK, PyTorch, and database images. The database image must provide TimescaleDB, `pg_trgm`, and `vector`; migrations create full-text/similarity and HNSW vector indexes. Startup is complete only after `platform-migrate` exits successfully and PostgreSQL, Platform API, Platform Worker, Optimizer, Web, and ConnectorHost are all `healthy`.
+The first build downloads large SDK, PyTorch, and database images. The database image must provide TimescaleDB, `pg_trgm`, and `vector`; migrations create full-text/similarity and HNSW vector indexes. Basic-stack startup is complete only after `platform-migrate` exits successfully and PostgreSQL, Platform API, Platform Worker, Optimizer, and Web are all `healthy`. Check ConnectorHost only when the `connector-host` profile is enabled.
 
 | Symptom | Check first | Common cause and response |
 |---|---|---|
@@ -177,7 +177,7 @@ Platform starts without Optimizer. An Optimizer outage pauses new numerical reco
 
 ## Observability
 
-Production monitoring includes:
+Monitor the capabilities actually enabled; Edge, equipment, and acquisition metrics apply to field-connected deployments:
 
 - Edge heartbeat, desired/applied configuration versions, and errors;
 - connection state, sample time, and backlog per equipment;
@@ -194,12 +194,12 @@ The repository provides an optional minimum monitoring profile with Prometheus, 
 
 ```bash
 docker compose -f docker-compose.app.yml \
-  --profile connector-host --profile monitoring up -d --build
+  --profile monitoring up -d --build
 ```
 
 Grafana, Prometheus, and Alertmanager bind only to local ports `3001`, `9090`, and `9093`. Before enabling the profile:
 
-- edit `deploy/observability/edge-targets.yml` with the real target, `SiteId`, and `EdgeId` for every independently operated Edge;
+- edit `deploy/observability/edge-targets.yml` with the real target, `SiteId`, and `EdgeId` for each connected Edge; use an empty target list without field connections, and add `--profile connector-host` only when a local connector is needed;
 - set a unique `INGOT_GRAFANA_ADMIN_PASSWORD`;
 - replace the default with a site-owned `INGOT_ALERTMANAGER_CONFIG_PATH` connected to a tested notification route;
 - select `INGOT_PROMETHEUS_RETENTION` from capacity and data-classification requirements, and monitor Prometheus storage itself.
@@ -221,6 +221,8 @@ Restore replaces the current PostgreSQL database and all four file volumes, so i
 ./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
 ```
 
+These scripts cover only the database and four active/archive inspection and knowledge volumes. They exclude the `ingot-platform-data-protection` key volume, Edge data directories, `.env`, certificates, and monitoring data. Securely back up Data Protection keys separately and restore keys matching the database before starting the recovered API and Worker; otherwise stored model-service API keys cannot be decrypted. A passing `check-backup.sh` does not establish that all disaster-recovery materials are available.
+
 The backup uses `pg_dump --format=custom`; it supports logical restore and migration validation but is not PITR. Sites with a smaller RPO must additionally configure PostgreSQL base backups, continuous WAL archiving, off-host retention, and regular point-in-time recovery exercises. Backup directories contain business records and attachments and require production-equivalent access control.
 
 Knowledge vectors and embedding jobs are included in PostgreSQL backups but remain rebuildable derived state. Restoring to a PostgreSQL instance without the `vector` extension fails migration or restore validation. The target must first provide Schema-compatible TimescaleDB, `pg_trgm`, and `vector` extensions.
@@ -230,6 +232,7 @@ Back up at least:
 - PostgreSQL data;
 - inspection attachments;
 - process-knowledge files;
+- the Platform Data Protection key volume and database-matched recovery instructions;
 - Edge local event databases until upload is confirmed;
 - the last successful Edge acquisition configuration;
 - required certificates, secret references, and recovery instructions.
@@ -245,7 +248,7 @@ A recovery exercise verifies more than service startup:
 ## Upgrade
 
 1. Read `CHANGELOG.md` and identify data-model or configuration changes.
-2. Back up the database, attachments, and Edge configuration cache.
+2. Back up the database, attachments, knowledge files, Data Protection keys, and enabled Edge data and configuration caches.
 3. Run migrations and replay in a test environment.
 4. Run `scripts/verify.sh`.
 5. Upgrade Platform and database dependencies.
@@ -267,7 +270,9 @@ A recovery exercise verifies more than service startup:
 
 ## Production acceptance
 
-Before go-live, exercise Platform outage, Edge restart, network loss, bad configuration publication, database recovery, unavailable Optimizer, and unavailable model service. Prove that acquisition and formal records degrade or recover as designed.
+Before a basic R&D deployment goes live, validate authorization, business-record and file/key recovery, Platform/Worker outages, and degradation of enabled dependencies, and record acceptable downtime and RPO/RTO. Field-connected deployments additionally exercise Edge restart, network loss, bad configuration publication, and backlog replay, proving that acquisition and formal records degrade or recover as designed.
+
+The following `verify-production-acceptance.sh` is the existing field-production acceptance gate. It requires database HA, PITR, Edge replay, capacity, and continuous-observation evidence. It is not a startup check for a single-team R&D deployment that permits maintenance downtime, and it does not authorize equipment action. Claims to this field-production level must satisfy all existing script requirements.
 
 The recipe-version launch check and the workbench show whether process variables, recipe versions, acquisition setup, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether the central service and edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
 

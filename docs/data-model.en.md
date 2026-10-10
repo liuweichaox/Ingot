@@ -29,9 +29,13 @@ Next-recipe recommendations and mechanism claims and conflicts belong to “site
 | Agent conversations and problem cases | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, case evaluation, and durable chat; no business-write permission. |
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
 
-## 3. Findings and Fixes
+Training datasets, process-model versions, model evaluations, and drift readings are currently shared R&D assets within a deployment. Process engineers and platform administrators receive role-based read/write access; these are not production tables with implemented site isolation. Recommendations and mechanism claims use `site_code` and `process_specification_id`; knowledge sources use `site_code`, and child records inherit their parent's scope.
 
-| Finding | Risk | Fix in this change |
+The recommendation's recipe version is retained in the frozen brief context; relational ownership remains site + recipe. Adopting a next-run correction does not modify `process_specification_versions`; a significant change is published through a separate revision draft.
+
+## 3. Key Migrations and Constraints
+
+| Finding | Risk | Migration |
 | --- | --- | --- |
 | Daily decision, execution, and outcome shared one JSON row | Cannot represent decide-first/run-later; outcome mutates decision row | Split into `decisions`, `decision_executions`, and `decision_outcomes`; decision may have no run, outcome requires a link. |
 | R&D projects were a second ownership container | Recommendations and knowledge for one recipe were split across projects, and deleting a project could erase evidence | Migration `0026` removes projects, hypotheses, operating regions, project knowledge claims, and project audit; recommendations, mechanism knowledge, and knowledge sources move to site + recipe ownership, and the migration refuses to run when old project data exists. |

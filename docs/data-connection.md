@@ -39,10 +39,12 @@
 
 - `SiteId`：数据所属的生产单元，是站点隔离、容量和故障域边界；
 - `EdgeId`：安装后稳定不变的现场节点身份，与 `SiteId` 和独立凭据绑定；
-- `ExecutionId`：由 Edge 生成，是 Platform 中真实过程执行及其现场事件的统一身份；
-- `ExecutionKey`：研发建议记录和真实执行的关联键。
+- `ExecutionId`：真实过程执行及其事件的统一身份，由 Edge 生成，或在历史导入映射中提供；
+- `ExecutionKey`：建议与观察契约中的运行关联字段；当前装配器直接使用 `ExecutionId` 的值。
 
-Platform 必须显式记录 `ExecutionKey` 与 `ExecutionId` 的关系。生产事件和类型化过程采样同时保存 `SiteId` 与 `EdgeId`，对象汇总以站点为边界，不能把不同工厂中同名设备合并。MES 工单、条码、仪器样本号或设备寄存器可以携带 `ExecutionKey` 作为外部参考，但不能替代 Edge 生成的 `ExecutionId`。检验记录通过同一关系关联到执行。
+当前没有独立的 `ExecutionKey`–`ExecutionId` 映射账本。生产事件和类型化过程采样同时保存 `SiteId` 与 `EdgeId`，对象汇总以站点为边界，不能把不同工厂中同名设备合并。MES 工单、条码和仪器样本号作为来源参考保存；接入方须将同一次执行的事件与检验稳定关联到同一 `ExecutionId`，不能用不同来源的局部编号直接替换它。
+
+事件的 `OccurredAt` 是来源发生时间，`RecordedAt` 是事件生成端的记录时间；Platform 返回的 `PlatformProductionEvent.IngestedAt` 是平台摄入时间。补传不得把发生时间改成到达时间。
 
 如果控制器只能保存数值，可维护短数字与 `ExecutionKey` 的确定性关系。禁止仅根据时间邻近在事后猜测执行和检验的对应关系。
 

@@ -6,7 +6,7 @@
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Deploy Ingot | [Start the complete stack](#start-the-complete-stack) | Web, API, Optimizer, and database are healthy; no external-system account or connection is required |
+| Deploy Ingot | [Start the complete stack](#start-the-complete-stack) | Web, API, Worker, Optimizer, and database are healthy, and migration exits successfully; no external-system account or connection is required |
 | Validate the current production-evidence workflow | [Recipe-optimization pilot guide](pilot.en.md) | Qualified production-run evidence and the first next-recipe recommendation |
 | Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
@@ -80,4 +80,4 @@ docker compose -f docker-compose.app.yml logs --tail=200
 - To connect a set of real or representative recipe runs, continue with the [Recipe-optimization pilot guide](pilot.en.md).
 - To understand identity, points, and mappings, read [Data integration](data-connection.en.md).
 - To see which capabilities are actually validated, read [Current status](status.en.md).
-- To deploy in production, complete the site acceptance defined by [Production architecture](production-architecture.en.md).
+- For long-running deployment, select basic R&D, field-connected, or high-availability requirements in [Production architecture](production-architecture.en.md) and complete the corresponding acceptance checks.

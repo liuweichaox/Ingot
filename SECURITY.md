@@ -23,7 +23,7 @@ Security fixes currently target the latest `main`. Supported release ranges will
 - 更换 `.env.example` 中的全部示例凭据；
 - 不向非必要网段暴露 PostgreSQL、Optimizer 或 Connector；
 - 为每个 Edge 使用独立、可轮换的上送令牌；
-- 备份数据库、检验附件和 Edge 待上送日志；
+- 备份数据库、检验附件、知识文件及归档、Platform Data Protection 密钥，以及已启用 Edge 的待上送日志；
 - 不在日志、Issue 或导出文件中保存密钥；
 - 在真实配方运行前保留工程师审核。
 
@@ -32,10 +32,10 @@ Even inside a factory network:
 - replace every sample secret;
 - do not expose PostgreSQL, Optimizer, or Connector beyond required networks;
 - use separate, rotatable Edge ingestion tokens;
-- back up database, attachments, and unshipped Edge logs;
+- back up the database, inspection attachments, knowledge files and archives, Platform Data Protection keys, and unshipped logs for enabled Edge instances;
 - keep secrets out of logs, Issues, and exports;
 - retain engineering review before a real recipe run.
 
 ## Scope
 
-Examples of security-sensitive issues include authentication bypass, cross-project data exposure, unsafe file handling, SSRF, secret leakage, forged Edge ingestion, recipe-recommendation tampering, and any path that could cause unreviewed equipment control.
+Examples of security-sensitive issues include authentication bypass, cross-site data exposure, unsafe file handling, SSRF, secret leakage, forged Edge ingestion, recipe-recommendation tampering, and any path that could cause unreviewed equipment control.

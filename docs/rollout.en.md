@@ -2,7 +2,7 @@
 
 > Document status: **deployer evaluation guide**. This document explains how to evaluate the recommendation loop in a real project; it does not define a second product workflow.
 
-Ingot has one formal record: a real production run forms evidence, the system produces a next-recipe recommendation, an engineer adopts, modifies, or rejects it with a reason, then links an actual run and freezes the quality outcome. Evaluation must not require users to create an additional plan, side path, or approval state.
+Ingot has one formal record: a real production run forms evidence, the system produces a next-recipe recommendation, an engineer adopts, modifies, or rejects it. Modification and rejection require a reason; adoption may include one. Adoption or modification then links an actual run and freezes its quality outcome; rejection requires no linked run. Evaluation must not require users to create an additional plan, side path, or approval state.
 
 ## Evaluation Questions
 

@@ -23,7 +23,8 @@ dotnet run --project tools/Ingot.ImportCli -- \
 要点：
 
 - 平台侧需在 `EventIngest:EdgeTokens` 为映射中的 `edgeId`（如 `IMPORT-01`）配置令牌，并在 `EventIngest:EdgeSites` 把它绑定到命令中的 `--site-id`；
-- `--seq-start` 缺省取启动时刻 unix 毫秒 ×1000，多次导入不同文件天然单调；**失败重跑用相同 `--seq-start`**，平台按 `eventId` 与 `(siteId, edgeId, seq)` 去重，重复行计入 `duplicates`，安全；
+- `--seq-start` 缺省取启动时刻 Unix 毫秒 ×1000；同一 Edge 的导入必须串行安排不重叠的序号区间，不能把这个默认值当作并发安全的序号分配器；
+- **当前 CLI 不支持跨进程幂等续传。** 每次转换都会重新生成 `EventId` 和 `RecordedAt`，因此只复用 `--seq-start` 不能重建同一信封：若前次已提交，会触发平台幂等冲突。失败后先核对已提交范围与响应丢失情况，仅导入确认未提交的记录；不要重跑整份文件或用新序号绕过去重。程序错误提示中的“相同序号安全续传”尚不符合此实现；
 - 历史时间戳受 `EventIngest:MaxPastDays`（默认约 10 年）窗口约束；
 - 缺失单元格不写入、不猜测（与生产事件规范一致）；
 - `--dry-run` 会校验完整文件但默认不输出转换后的真实事件；只有在受控终端排查时才显式添加 `--show-values`，该选项最多预览 3 行；

@@ -89,7 +89,7 @@ Process configuration → Field integration → Production runs → Quality mana
 | Process diagnosis | Compare run differences and form candidate causes, counterevidence, and evidence gaps |
 | Recipe optimization | On a published recipe version, propose the next recipe from real runs, safety boundaries, and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft |
 
-Trustworthy production-run facts are prerequisites for the current recommendation workflow. Each process run is an experiment; the run and its quality outcomes constitute the experiment record.
+Field-equipment and enterprise-system connectors are optional extensions, not prerequisites for deploying the R&D core. Trustworthy production-run facts remain prerequisites for the current recommendation workflow; recipe settings alone cannot produce a recommendation. Each process run is an experiment; the run and its quality outcomes constitute the experiment record.
 
 ## Current status
 
@@ -114,7 +114,7 @@ See [Current status](docs/status.en.md) for capability and production boundaries
 
 ![Ingot runtime components, code ownership, systems of record, and cross-service data flows](docs/architecture/system-architecture.en.svg)
 
-Platform API is the system of record for factory business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through site-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
+Platform API is the system of record for business records and evidence assembly. It admits Chat messages and creates queued work, while an independent Platform Worker executes durable Agent runs through PostgreSQL leases. Optimizer is a stateless numerical service. Agent queries structured facts only through authorized read-only analysis tools and retrieves reviewed knowledge fragments through site-scoped keyword plus optional semantic search with citations. Edge ConnectorHost has an independent identity, local store, and failure-recovery lifecycle. Code-project boundaries are not deployment boundaries; see [Production architecture](docs/production-architecture.en.md) for production topology and availability requirements.
 
 ## Repository structure
 
@@ -162,7 +162,7 @@ See [Contributing](CONTRIBUTING.en.md) for common commands and engineering contr
 - [System design](docs/design.en.md): stable business boundaries and component responsibilities
 - [Analysis and optimization](docs/optimization.en.md): method selection, admission, and numerical strategy
 - [Data integration](docs/data-connection.en.md): identity, mapping, and data quality
-- [Scenario evaluation](docs/rollout.en.md): historical replay, shadow, and online evaluation
+- [Scenario evaluation](docs/rollout.en.md): evidence and conclusion boundaries for deployer evaluation of the recommendation loop
 - [Roadmap](docs/project-plan.en.md): long-term direction and promotion gates
 
 ## Roadmap

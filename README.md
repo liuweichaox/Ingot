@@ -89,7 +89,7 @@ Ingot 支持研发记录、质量分析、证据复核和受约束的配方优�
 | 工艺追因 | 比较运行差异，形成候选原因、反证和证据缺口 |
 | 配方优化 | 在已发布配方版本上，依据真实运行、安全边界和已观察范围提出下一份配方。工程师采用为下一轮校正，或把显著变更做成修订草稿 |
 
-在当前推荐流程中，可信生产运行事实是分析和建议的前置条件。每次工艺运行本身就是一次实验，运行及其质量结果构成实验记录。
+现场设备与企业系统连接器属于可选扩展，不是部署研发核心系统的前提。在当前推荐流程中，可信生产运行事实仍是分析和建议的前置条件；仅有配方参数不能生成建议。每次工艺运行本身就是一次实验，运行及其质量结果构成实验记录。
 
 ## 当前状态
 
@@ -114,7 +114,7 @@ Ingot 支持研发记录、质量分析、证据复核和受约束的配方优�
 
 ![Ingot 运行时组件、代码归属、记录源与跨服务数据流](docs/architecture/system-architecture.svg)
 
-Platform API 是工厂业务记录和证据装配的正式记录源，负责接收 Chat 消息并建立排队任务；独立 Platform Worker 通过 PostgreSQL 租约执行持久 Agent 运行。Optimizer 是无业务状态的数值服务；Agent 只能通过授权的只读分析工具查询结构化事实，并从授权站点内已复核知识片段中进行带引用的关键词与可选语义检索。Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
+Platform API 是业务记录和证据装配的正式记录源，负责接收 Chat 消息并建立排队任务；独立 Platform Worker 通过 PostgreSQL 租约执行持久 Agent 运行。Optimizer 是无业务状态的数值服务；Agent 只能通过授权的只读分析工具查询结构化事实，并从授权站点内已复核知识片段中进行带引用的关键词与可选语义检索。Edge ConnectorHost 具有独立身份、本地存储和故障恢复生命周期。代码项目边界不等于部署边界，生产拓扑及高可用要求见[生产架构](docs/production-architecture.md)。
 
 ## 仓库结构
 
@@ -162,7 +162,7 @@ docker compose -f docker-compose.app.yml up -d --build
 - [系统设计](docs/design.md)：稳定业务边界和组件职责
 - [分析与优化](docs/optimization.md)：方法选择、准入和数值策略
 - [数据接入](docs/data-connection.md)：身份、映射和数据质量
-- [场景评估](docs/rollout.md)：历史回放、影子和在线评估
+- [场景评估](docs/rollout.md)：部署者评估建议闭环的证据与结论边界
 - [发展规划](docs/project-plan.md)：长期方向和晋级闸门
 
 ## 路线图

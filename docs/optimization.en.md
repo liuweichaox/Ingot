@@ -18,6 +18,8 @@ real recipe run + actual settings + process context + valid quality outcome
 
 A recommendation is not an equipment command. It is an append-only record containing its input snapshot, prediction, uncertainty, constraints, evidence scope, and rationale. Engineer decisions, actual-execution links, and outcomes are also appended separately and never overwritten.
 
+The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision; it does not create or publish a new version or download equipment settings. The next qualifying real run of that version supplies the execution link and frozen outcome. When the engineer considers a change significant, the suggested settings open a revision draft for that version and follow the configuration publication process. A recipe version cannot open another correction while one remains unfrozen.
+
 ## Admission and Stop Conditions
 
 The system creates a recommendation only after at least three valid runs cover two distinct actual recipes. Runs require trustworthy identity, actual settings, required context, and quality outcomes. Incomplete data, poor comparability, inadequate coverage, conflicting constraints, or unmet model conditions stop the recommendation and state the reason.

@@ -6,7 +6,7 @@
 
 - **Run**: The complete record of one real production execution that links actual conditions, process trajectory, production context, and quality outcomes through a single run identity.
 - **Recipe**: A set of process settings for a specific product and equipment; the object the "next recipe" recommendation proposes.
-- **Recipe version**: Versioned configuration that defines variables, units, quality rules, and safety boundaries.
+- **Recipe version**: Versioned configuration referencing process variables and retaining parameter settings, revision reasons, and evidence; variable definitions and units come from the referenced process data model. Adopting a next-run correction does not automatically increment the version; significant changes are published through a revision draft.
 - **Operating region**: The validated parameter range and safety boundaries that optimization recommendations must not exceed.
 - **Process trajectory**: The stage-by-stage characteristics of a run over time, used to locate where a deviation occurs.
 
@@ -30,6 +30,6 @@
 
 ## Deployment and responsibilities
 
-- **Site**: A business scope with isolation boundaries; data, permissions, and tokens are assigned by site.
+- **Site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. Shared training datasets and model assets within a deployment use role-based authorization; not every table is site-isolated.
 - **Edge ingestion token**: A separate, rotatable credential that a field connector uses to send events, configured independently per field.
 - **Engineering decision**: Recommendations are never dispatched automatically; engineers define objectives and boundaries and review, adopt, or reject each recommendation.

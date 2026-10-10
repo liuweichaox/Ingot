@@ -20,6 +20,7 @@ The home page must:
 - link current status and deployment acceptance, and require replacing all `.env` placeholders before starting Compose.
 
 ```bash
+cd apps/website
 npm ci
 npm run build
 npm test

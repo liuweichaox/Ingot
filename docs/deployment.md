@@ -1,17 +1,17 @@
 # 部署运维
 
-> 文档状态：**当前运维指南**。部署目标是让数据采集、业务记录和工程决策在厂内长期可靠运行；公开官网和文档站不属于工厂运行时。
+> 文档状态：**当前运维指南**。部署目标是让独立工艺研发系统的业务记录和工程决策长期可靠运行；现场连接器按需启用，公开官网和文档站单独部署。
 
 本文定义长期运行环境的服务部署、配置管理、可观测性、故障恢复、备份和升级要求。本地开发与验证步骤见[快速开始](getting-started.md)。
 
-本文描述仓库当前可运行形态。多副本、PITR、站点生产单元和受控行动的目标要求见[生产架构](production-architecture.md)；未通过其中准入门槛的部署不得宣称已经达到对应生产等级。
+本文描述仓库当前可运行形态。基础研发部署、现场接入和高可用部署的可靠性要求见[生产架构](production-architecture.md)；未通过对应验收的部署不得宣称已经达到相应等级。设备行动属于单独的安全工程项目，不是默认部署能力。
 
 ## 推荐拓扑
 
 ```text
-现场数据源                              工厂运行环境
+可选现场数据源                          研发系统运行环境
 控制系统 / 仪器 / 视觉 / 检验 / MES
-          └─ Edge ConnectorHost ───→ Platform API
+          └─ Edge ConnectorHost（可选）─→ Platform API
                                       ├─ Platform Worker（持久任务执行）
                                       ├─ PostgreSQL / TimescaleDB
                                       ├─ 附件与工艺知识文件
@@ -57,7 +57,7 @@ cp .env.example .env
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`：Platform 固定访问该 Edge 诊断 API 的可信地址；不得使用节点上报值动态改写
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` 把 Edge 令牌、站点绑定和诊断地址传给 Platform API。成功接收事件后，该 Edge 登记到现场节点列表。
+`docker-compose.app.yml` 把 Edge 令牌、站点绑定和诊断地址传给 Platform API。当前 Compose 即使不启用连接器，也要求填写站点、Edge 身份及相关必填令牌；这不表示必须连接设备或外部业务系统。`INGOT_CONNECTOR_TOKEN` 和真实诊断地址在启用连接器时配置。成功接收事件后，该 Edge 登记到现场节点列表。
 
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。开发环境使用开发身份，不能暴露到厂内网络或反向代理之后。
 
@@ -117,7 +117,7 @@ docker compose -f docker-compose.app.yml down
 
 `down` 停止并移除容器和网络，但默认保留命名数据卷；不要在没有备份和明确重置意图时添加 `--volumes`。修改源代码后使用 `up -d --build`；只修改 `.env` 时使用 `up -d` 重新创建受影响容器。
 
-首次构建会下载较大的 SDK、PyTorch 和数据库镜像。数据库镜像必须同时提供 TimescaleDB、`pg_trgm` 和 `vector` 扩展；迁移会创建全文/相似词与 HNSW 向量索引。必须等 `platform-migrate` 成功退出，且 PostgreSQL、Platform API、Platform Worker、Optimizer、Web 和 ConnectorHost 均为 `healthy` 后，才算启动完成。
+首次构建会下载较大的 SDK、PyTorch 和数据库镜像。数据库镜像必须同时提供 TimescaleDB、`pg_trgm` 和 `vector` 扩展；迁移会创建全文/相似词与 HNSW 向量索引。必须等 `platform-migrate` 成功退出，且 PostgreSQL、Platform API、Platform Worker、Optimizer 和 Web 均为 `healthy` 后，才算基础栈启动完成。ConnectorHost 仅在启用 `connector-host` profile 后才需要检查。
 
 | 现象 | 先检查 | 常见原因与处理 |
 |---|---|---|
@@ -180,7 +180,7 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 
 ## 可观测性
 
-生产运行至少监控：
+按实际启用的能力监控；Edge、设备与采集指标适用于已接入现场的部署：
 
 - Edge 最后心跳、配置期望/应用版本和错误；
 - 每个设备连接状态、采样时间和积压；
@@ -197,12 +197,12 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 
 ```bash
 docker compose -f docker-compose.app.yml \
-  --profile connector-host --profile monitoring up -d --build
+  --profile monitoring up -d --build
 ```
 
 Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 `9093` 端口。启用前必须：
 
-- 修改 `deploy/observability/edge-targets.yml`，为每个 Edge 填入真实目标、`SiteId` 和 `EdgeId`；
+- 修改 `deploy/observability/edge-targets.yml`，为每个已接入 Edge 填入真实目标、`SiteId` 和 `EdgeId`；未接入现场时使用空目标列表，不保留示例节点；需要本机连接器时再加 `--profile connector-host`；
 - 设置唯一的 `INGOT_GRAFANA_ADMIN_PASSWORD`；
 - 用现场拥有的 `INGOT_ALERTMANAGER_CONFIG_PATH` 替换默认配置，并接入经过实测的通知渠道；
 - 按容量和数据分级确定 `INGOT_PROMETHEUS_RETENTION`，同时监控 Prometheus 自身磁盘。
@@ -224,6 +224,8 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 ./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
 ```
 
+这两个脚本只覆盖数据库和检验/知识的活动、归档四个文件卷，不覆盖 `ingot-platform-data-protection` 密钥卷、Edge 数据目录、`.env`、证书或监控数据。必须另行安全备份 Data Protection 密钥，并在启动恢复后的 API 和 Worker 前恢复与数据库配套的密钥；否则数据库中的模型服务 API key 无法解密。仅通过 `check-backup.sh` 不代表整机灾难恢复材料齐备。
+
 备份格式使用 `pg_dump --format=custom`，适合逻辑恢复和迁移验证，但不是 PITR。需要更小 RPO 的现场还必须由部署方配置 PostgreSQL 基础备份、持续 WAL 归档、异机保留和定期时间点恢复演练。备份目录包含业务和附件数据，权限不得低于生产系统本身。
 
 知识向量和嵌入任务随 PostgreSQL 一起备份，但它们属于可重建派生状态。恢复到不包含 `vector` 扩展的 PostgreSQL 实例会使迁移或恢复校验失败；目标实例必须先提供与当前 Schema 兼容的 TimescaleDB、`pg_trgm` 和 `vector` 扩展。
@@ -233,6 +235,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 - PostgreSQL 数据卷；
 - 检验附件；
 - 工艺知识文件；
+- Platform Data Protection 密钥卷，以及与数据库配套的恢复说明；
 - Edge 本地事件数据库，直到确认全部上送；
 - Edge 最后成功采集配置缓存；
 - 生产所需的证书、密钥引用和恢复说明。
@@ -248,7 +251,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 ## 升级
 
 1. 阅读 `CHANGELOG.md` 并识别数据模型或配置变化；
-2. 备份数据库、附件和 Edge 配置缓存；
+2. 备份数据库、附件、知识文件、Data Protection 密钥和已启用的 Edge 数据与配置缓存；
 3. 在测试环境执行迁移和回放；
 4. 运行 `scripts/verify.sh`；
 5. 升级 Platform 和数据库依赖；
@@ -270,7 +273,9 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 ## 生产验收
 
-上线前至少完成一次：Platform 中断、Edge 重启、网络断开、错误配置发布、数据库恢复、Optimizer 不可用和模型服务不可用演练，并证明采集和正式业务记录按设计降级或恢复。
+基础研发部署上线前应验证身份权限、业务记录与文件/密钥恢复、Platform/Worker 中断及已启用依赖的降级，并记录可接受停机窗口和 RPO/RTO。接入现场后，还需完成 Edge 重启、网络断开、错误配置发布与积压补传演练，证明采集和正式业务记录按设计降级或恢复。
+
+以下 `verify-production-acceptance.sh` 是现有现场生产验收门禁，要求数据库 HA、PITR、Edge 补传、容量及连续观察证据。它不是允许维护停机的单团队研发部署启动检查；也不包含设备动作授权。声称达到该现场生产等级时必须满足脚本原有全部要求。
 
 配方版本的上线检查和工作台显示工艺变量、配方版本、采集配置、过程分析、质量方案和生产切换是否就绪。平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
 
