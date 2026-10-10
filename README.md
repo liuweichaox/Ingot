@@ -30,6 +30,7 @@
 - [关于项目](#关于项目)
 - [快速开始](#快速开始)
 - [使用](#使用)
+- [文档](#文档)
 - [路线图](#路线图)
 - [参与贡献](#参与贡献)
 - [许可证](#许可证)
@@ -47,6 +48,8 @@ Ingot 组织配方版本、实验记录与运行证据，支持质量分析、�
 仓库只声明代码、自动化测试和可复现的软件行为。适用性、安全性和收益由部署者用自己的数据评估。已实现范围见[当前状态](docs/status.md)。
 
 ### 技术栈
+
+核心工作流包括管理配方与实验上下文、核对运行和质量证据，以及记录工程师对下一份配方建议的采用、修改或拒绝。计划值、实际值与结果分别保留，避免把意图当作已发生的事实。
 
 | 部分 | 技术 |
 |---|---|
@@ -87,13 +90,15 @@ cd Ingot
 cp .env.example .env
 ```
 
-启动前替换 `.env` 中所有 `change-this-` 占位值。数据库密码和管理员口令必须改为彼此不同的随机值。
+启动前替换 `.env` 中所有 `change-this-` 占位值。数据库密码使用随机值。管理员口令可设置为另一随机值，也可保持空值，由首次迁移生成。PowerShell 用户将复制命令替换为 `Copy-Item .env.example .env`。
 
 ```bash
+docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
+docker compose -f docker-compose.app.yml ps -a
 ```
 
-启动后打开 `http://localhost:3000`。健康检查、登录和排障见[快速开始](docs/getting-started.md)。
+确认 `platform-migrate` 成功退出，数据库、API、Worker、Optimizer 和 Web 健康后，打开 `http://localhost:3000`。使用 `.env` 中的管理员账户登录；口令留空时，在 `docker compose -f docker-compose.app.yml logs platform-migrate` 中读取首次生成的口令。修改 `.env` 不会重置已有账户。完整步骤见[快速开始](docs/getting-started.md)。
 
 <p align="right"><a href="#readme-top">返回顶部</a></p>
 
@@ -117,6 +122,20 @@ docker compose -f docker-compose.app.yml up -d --build
 ![Ingot 运行时组件与数据流](docs/architecture/system-architecture.svg)
 
 业务记录以 Platform API 为准。Optimizer 无业务状态。Agent 只能通过授权的只读工具查询事实。生产拓扑见[生产架构](docs/production-architecture.md)，第一份建议的操作顺序见[配方优化试点指南](docs/pilot.md)。
+
+<p align="right"><a href="#readme-top">返回顶部</a></p>
+
+## 文档
+
+从[文档首页](docs/index.md)或[在线文档](https://docs.ingotstack.com/zh)选择阅读路径：
+
+- **首次使用**：[快速开始](docs/getting-started.md) → [配方优化试点指南](docs/pilot.md)。
+- **理解系统**：[系统设计](docs/design.md)、[数据模型](docs/data-model.md)与[分析与优化](docs/optimization.md)。
+- **接入与运维**：[数据接入](docs/data-connection.md)、[生产架构](docs/production-architecture.md)与[部署运维](docs/deployment.md)。
+- **判断适用范围**：[当前状态](docs/status.md)、[场景评估边界](docs/rollout.md)与[常见问题](docs/faq.md)。
+- **参与建设**：[贡献指南](CONTRIBUTING.md)与[开源依赖](docs/open-source-dependencies.md)。
+
+仓库 Markdown 是文档源文件，文档站发布同一份内容。英文入口见 [English documentation](docs/index.en.md)。
 
 <p align="right"><a href="#readme-top">返回顶部</a></p>
 
@@ -161,6 +180,8 @@ docker compose -f docker-compose.app.yml up -d --build
 <p align="right"><a href="#readme-top">返回顶部</a></p>
 
 ## 致谢
+
+README 结构参考 [Best-README-Template](https://github.com/othneildrew/Best-README-Template)。
 
 运行时依赖、许可证和引入要求见[开源依赖](docs/open-source-dependencies.md)。精确版本以 lockfile 和容器清单为准。
 

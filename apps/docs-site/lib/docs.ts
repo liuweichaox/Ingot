@@ -2,7 +2,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import GithubSlugger from "github-slugger";
+import publicSlugs from "./public-docs.json";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -18,24 +18,6 @@ export type Doc = { lang: Lang; slug: string; file: string; title: string; sourc
 const docsDir = path.resolve(process.cwd(), "../../docs");
 const repositoryDir = path.resolve(docsDir, "..");
 const repositoryUrl = "https://github.com/liuweichaox/Ingot";
-const publicSlugs = [
-  "index",
-  "getting-started",
-  "status",
-  "pilot",
-  "design",
-  "optimization",
-  "mechanism-knowledge",
-  "data-connection",
-  "production-architecture",
-  "project-plan",
-  "rollout",
-  "deployment",
-  "faq",
-  "brand",
-  "open-source-dependencies",
-  "glossary",
-] as const;
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
   slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));
 const files = readdirSync(docsDir)
@@ -56,10 +38,10 @@ export const docs: Doc[] = files.map((file) => {
 });
 
 export const groups = [
-  { key: "start", zh: "开始", en: "Start", slugs: ["", "getting-started", "status", "pilot"] },
-  { key: "system", zh: "系统", en: "System", slugs: ["design", "optimization", "mechanism-knowledge"] },
-  { key: "operations", zh: "部署与接入", en: "Deployment", slugs: ["data-connection", "deployment", "production-architecture"] },
-  { key: "reference", zh: "参考", en: "Reference", slugs: ["project-plan", "rollout", "faq", "glossary", "brand", "open-source-dependencies"] },
+  { key: "start", zh: "开始使用", en: "Getting started", slugs: ["", "getting-started", "status", "pilot"] },
+  { key: "guides", zh: "操作指南", en: "Guides", slugs: ["data-connection", "deployment", "rollout", "troubleshooting"] },
+  { key: "concepts", zh: "概念与架构", en: "Concepts & architecture", slugs: ["design", "optimization", "mechanism-knowledge", "production-architecture"] },
+  { key: "reference", zh: "参考资料", en: "Reference", slugs: ["data-model", "faq", "glossary", "project-plan", "brand", "open-source-dependencies", "documentation-guide"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;
@@ -108,11 +90,17 @@ export async function renderDoc(doc: Doc) {
       `${prefix}${rewriteDestination(doc, target, prefix.startsWith("!") ? "image" : "link")}${suffix}`);
   const html = await unified().use(remarkParse).use(remarkGfm).use(remarkRehype, { allowDangerousHtml: false })
     .use(rehypeSlug).use(rehypeAutolinkHeadings, { behavior: "wrap" }).use(rehypeHighlight).use(rehypeStringify).process(rewritten);
-  const slugger = new GithubSlugger();
-  const toc = [...rewritten.matchAll(/^(#{2,3})\s+(.+)$/gm)].map((match) => ({
-    depth: match[1].length,
-    title: match[2].replace(/[`*_]/g, ""),
-    id: slugger.slug(match[2].replace(/[`*_]/g, "")),
-  }));
-  return { html: String(html), toc };
+  // Read headings from the rendered tree so code fences, inline markup, and
+  // duplicate headings use exactly the same anchors as the article.
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(rewritten);
+  const headings: { depth: number; title: string; id: string }[] = [];
+  const renderedHeadings = [...String(html).matchAll(/<h([23]) id="([^"]+)"[^>]*>([\s\S]*?)<\/h[23]>/g)];
+  const textOf = (node: { value?: string; children?: unknown[] }): string =>
+    node.value || node.children?.map((child) => textOf(child as typeof node)).join("") || "";
+  for (const node of tree.children) {
+    if (node.type !== "heading" || (node.depth !== 2 && node.depth !== 3)) continue;
+    const rendered = renderedHeadings[headings.length];
+    if (rendered) headings.push({ depth: node.depth, title: textOf(node), id: rendered[2] });
+  }
+  return { html: String(html), toc: headings };
 }

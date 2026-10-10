@@ -61,6 +61,12 @@ cp .env.example .env
 
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。开发环境使用开发身份，不能暴露到厂内网络或反向代理之后。
 
+### 配置验收
+
+Edge 与诊断令牌至少为 24 个字符，彼此不同，且不能包含 `change-this-`、`replace-with-` 或 `verification-`。首次引导允许管理员种子密码留空；已有账户不会被覆盖。`config --quiet` 只检查 Compose 插值，生产配置校验在各服务启动时执行，两步均须通过。
+
+参考 Compose 将应用和数据库端口绑定到回环地址。远程使用前配置 TLS 入口，并将 `Cors:AllowedOrigins` 配置为实际 Web origin；内置 API 值为 `http://localhost:3000`。OIDC 还需配置允许 origin 与精确回调 URI。
+
 ### OIDC 身份提供方
 
 OIDC 模式使用 Authorization Code + PKCE，前端是不持有客户端密钥的公共客户端。至少配置：
@@ -100,7 +106,7 @@ https://platform.example.com/auth/logout-callback
 docker compose -f docker-compose.app.yml config --quiet
 ```
 
-构建并启动五个核心服务：
+构建并启动核心服务及一次性迁移器：
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build

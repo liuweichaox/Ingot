@@ -25,6 +25,10 @@ cp .env.example .env
 
 Change the database passwords and administrator settings in `.env`. Replace every `change-this-` placeholder. Production uses randomly generated, distinct passwords and tokens.
 
+The reference Compose requires `INGOT_SITE_ID`, `INGOT_EDGE_ID`, `INGOT_EDGE_TOKEN`, and `INGOT_CONNECTOR_LOCAL_TOKEN` for Platform bindings even when the optional connector is disabled. Keep the example local IDs for an initial evaluation, and replace both token placeholders with distinct random secrets of at least 24 characters. Configure `INGOT_CONNECTOR_TOKEN` only when enabling `connector-host`. These settings do not connect equipment.
+
+On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Keep `.env` local and exclude it from commits.
+
 Validate the configuration, then start:
 
 ```bash
@@ -32,7 +36,7 @@ docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-The first build downloads .NET, Node, Python, PyTorch, and TimescaleDB images. After the command finishes, inspect every container:
+The first build downloads build/runtime images, the TimescaleDB image, and Python numerical packages including PyTorch. After the command finishes, inspect every container:
 
 ```bash
 docker compose -f docker-compose.app.yml ps -a
@@ -74,6 +78,14 @@ docker compose -f docker-compose.app.yml logs --tail=200
 ```
 
 `unexpected EOF`, `short read`, or pull timeouts usually indicate an interrupted image download. Running `up -d --build` again reuses completed layers. Do not delete data volumes as a first troubleshooting step. See [Deployment](deployment.en.md#start-and-stop) for more diagnostics.
+
+## Verify the first session
+
+1. Sign in and open process configuration. Confirm that you can access process variables and recipe versions.
+2. Check `http://localhost:8002/health` for the Worker and retain the migration result and service status for troubleshooting.
+3. Continue with the pilot guide using your own authorized data. A healthy deployment does not create production runs, inspection results, or qualified optimization observations.
+
+All application ports in the reference Compose bind to `127.0.0.1`. Remote users need a configured ingress with TLS and authentication; changing a URL alone does not expose the service.
 
 ## Next steps
 

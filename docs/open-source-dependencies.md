@@ -33,3 +33,14 @@
 - 不再使用的依赖及时移除；
 - 许可证或维护状态变化必须在发布前处理；
 - 对外发布时使用实际生成的 SBOM 或依赖清单，而不是仅依赖本页摘要。
+
+## 版本来源
+
+复现发布时按对应提交读取依赖文件，不从本页的技术名称推断精确版本：
+
+- .NET：各项目的 `.csproj` 与 `Directory.Build.props`。
+- JavaScript：各应用的 `package.json` 和 `package-lock.json`，使用 `npm ci` 安装锁定依赖。
+- Python：`optimizer/pyproject.toml` 与 `optimizer/uv.lock`，使用贡献指南中的 `--locked` 命令。
+- 容器：各服务 Dockerfile、Compose 清单及部署实际使用的镜像标识。
+
+本页的典型许可证仅用于导航，不能替代每个版本、子组件和发布方式的许可检查。尤其应核对数据库扩展所用功能与构建产物的实际许可。依赖变更按[贡献指南](../CONTRIBUTING.md)验证，漏洞按[安全策略](../SECURITY.md)私密报告。

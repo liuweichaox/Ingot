@@ -251,6 +251,8 @@ html:lang(zh-CN) .hero h1 span { text-wrap: balance; }
 .workflow-record h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .workflow-record p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .evidence-link { display: inline-flex; gap: 8px; margin-top: 14px; color: var(--gold-bright); font-size: 12px; }
+.optimizer .evidence-link { color: #85571b; text-decoration: underline; text-underline-offset: 3px; }
+.optimizer .evidence-link:focus-visible { outline: 2px solid #85571b; outline-offset: 4px; }
 .status-links { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 13px; font-size: 12px; color: #775016; }
 .evidence-link:hover, .status-links a:hover { text-decoration: underline; }
 .story-steps button:focus-visible, .evidence-link:focus-visible, .status-links a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }

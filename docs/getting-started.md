@@ -25,6 +25,10 @@ cp .env.example .env
 
 修改 `.env` 中的数据库密码和管理员配置。至少替换所有 `change-this-` 占位值；生产环境必须使用随机生成且彼此不同的密码和令牌。
 
+参考 Compose 即使未启用可选连接器，也要求填写 `INGOT_SITE_ID`、`INGOT_EDGE_ID`、`INGOT_EDGE_TOKEN` 和 `INGOT_CONNECTOR_LOCAL_TOKEN`，用于 Platform 绑定。初次评估可保留示例本地 ID；两个令牌须替换为至少 24 个字符、彼此不同的随机密钥。仅启用 `connector-host` 时才配置 `INGOT_CONNECTOR_TOKEN`。这些配置不会自动连接设备。
+
+Windows PowerShell 可用 `Copy-Item .env.example .env` 替代 `cp`。`.env` 保留在本机，不提交到版本库。
+
 先校验配置，再启动：
 
 ```bash
@@ -32,7 +36,7 @@ docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
 ```
 
-首次构建会下载 .NET、Node、Python、PyTorch 和 TimescaleDB 镜像。命令结束后检查全部容器状态：
+首次构建会下载构建与运行镜像、TimescaleDB 镜像，以及包含 PyTorch 的 Python 数值依赖。命令结束后检查全部容器状态：
 
 ```bash
 docker compose -f docker-compose.app.yml ps -a
@@ -74,6 +78,14 @@ docker compose -f docker-compose.app.yml logs --tail=200
 ```
 
 若出现 `unexpected EOF`、`short read` 或拉取超时，通常是镜像下载中断；重新执行 `up -d --build` 会复用已完成层。不要为了排障直接删除数据卷。更多诊断见[部署运维](deployment.md#启动与停止)。
+
+## 验证首次使用
+
+1. 登录后打开工艺配置，确认能够访问工艺变量和配方版本。
+2. 检查 `http://localhost:8002/health` 的 Worker 状态，保留迁移结果与服务状态以便排障。
+3. 按试点指南使用自己有权处理的数据。部署健康不会自动生成生产运行、检验结果或符合准入条件的优化观察。
+
+参考 Compose 的应用端口均绑定 `127.0.0.1`。远程用户需配置带 TLS 和认证的入口；仅修改访问 URL 不会公开服务。
 
 ## 下一步
 

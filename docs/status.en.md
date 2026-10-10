@@ -60,6 +60,15 @@ The default Docker Compose setup is for local development and a single-machine r
 
 See [Production architecture](production-architecture.en.md) for the target topology and [Deployment](deployment.en.md) for current operating steps.
 
+## Inspect the supporting evidence
+
+- Domain and authorization behavior: `tests/Ingot.Core.Tests`, including Platform workflow, site authorization, optimizer-contract, and Edge acquisition tests.
+- Numerical contracts: the locked `optimizer` test suite; run it through `uv run --project optimizer --locked pytest` after installing service and development dependencies.
+- Public documentation and site output: the architecture, product-scope, product-language, and documentation-style checks, plus exported-site tests run by `./scripts/verify.sh`.
+- Operational acceptance: backup/restore, failure drills, observability checks, and `scripts/verify-production-acceptance.sh` produce evidence for the target deployment. A script being present is not a passing result.
+
+Always report the checked commit, command, result, and environment when making a verification claim. This page describes implemented scope; it does not record a fresh full-suite run for every reader.
+
 ## Status update rules
 
 1. Software capability follows merged code, database migrations, and automated tests.

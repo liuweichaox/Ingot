@@ -10,6 +10,8 @@ Ingot 接受代码、设备适配、算法、获授权的公开回放数据、�
 
 ## 开始之前
 
+可复现缺陷提交 Issue，使用问题进入 Discussions，安全问题按 [SECURITY.md](SECURITY.md) 私密报告。问题报告写明版本或提交号、环境、复现步骤、预期与实际行为，并提供已去除敏感信息的日志。
+
 1. 在 Issues 中确认没有重复问题；
 2. 较大功能先创建讨论 Issue，说明场景、输入、输出和验证方式；
 3. 安全漏洞使用[私有漏洞报告](SECURITY.md)，不要公开提交；
@@ -47,7 +49,7 @@ uv run --project optimizer --locked pytest
 ## 变更流程
 
 ```bash
-git checkout -b feature/short-description
+git checkout -b codex/short-description
 ```
 
 实现时：
@@ -75,7 +77,24 @@ git checkout -b feature/short-description
 
 如果本机缺少 Docker 或其他运行时，在 PR 中明确列出未执行的检查。
 
+## 验证与文档
+
+只安装本次工作涉及的前端应用即可，完整验证会检查三个应用。Windows 上可使用 PowerShell 执行 .NET、npm 和 uv 命令；Bash 门禁使用 WSL 或具备所需工具的 Bash 环境。不要在 Windows 与 WSL 之间共用 `node_modules`。
+
+迭代时运行与修改相关的测试与应用 lint，再执行完整门禁。变更架构、产品范围、公开术语或文档时，还要直接运行以下阻断检查：
+
+```bash
+./scripts/verify-architecture.sh
+./scripts/verify-product-scope.sh
+./scripts/verify-product-language.sh
+python3 scripts/verify-documentation-style.py
+```
+
+中文文档与对应 `.en.md` 保持标题层级和行为说明一致。文档源在 `docs/`，文档站从这些文件生成页面；新增文档同时更新首页、站点导航和链接。命令注明运行目录、前置条件、成功标志与失败处理。能力以可检验代码和测试为依据，规划明确标为规划。
+
 ## Pull Request
+
+保持单个 PR 聚焦一个可独立审查的结果。先说明问题与最终行为，再提供证据；尚未执行的检查和已知限制直接注明。
 
 PR 应包含：
 

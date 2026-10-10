@@ -12,24 +12,7 @@ await mkdir(brandDir, { recursive: true });
 for (const name of ["ingot-mark-dark.svg", "ingot-lockup-dark.svg", "ingot-lockup.svg"])
   await cp(path.join(root, "apps/website/public/brand", name), path.join(brandDir, name));
 
-const publicSlugs = [
-  "index",
-  "getting-started",
-  "status",
-  "pilot",
-  "design",
-  "optimization",
-  "mechanism-knowledge",
-  "data-connection",
-  "production-architecture",
-  "project-plan",
-  "rollout",
-  "deployment",
-  "faq",
-  "brand",
-  "open-source-dependencies",
-  "glossary",
-];
+const publicSlugs = JSON.parse(await readFile(path.join(root, "apps/docs-site/lib/public-docs.json"), "utf8"));
 const publicFiles = new Set(publicSlugs.flatMap((slug) =>
   slug === "index" ? ["index.md", "index.en.md"] : [`${slug}.md`, `${slug}.en.md`]));
 const files = (await readdir(docsDir)).filter((name) => publicFiles.has(name)).sort();
@@ -40,6 +23,6 @@ for (const file of files) {
   const base = file.replace(/\.en\.md$|\.md$/g, "");
   const slug = base === "index" ? "" : base;
   const title = source.match(/^#\s+(.+)$/m)?.[1]?.trim() || base;
-  index.push({ lang, slug, title, text: source.replace(/[`#>*_[\]()|-]/g, " ").replace(/\s+/g, " ").slice(0, 1200) });
+  index.push({ lang, slug, title, text: source.replace(/[`#>*_[\]()|-]/g, " ").replace(/\s+/g, " ") });
 }
 await writeFile(path.join(publicDir, "search-index.json"), JSON.stringify(index), "utf8");

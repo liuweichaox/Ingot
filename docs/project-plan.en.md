@@ -47,3 +47,11 @@ Ingot focuses on R&D records, analysis, and optimization rather than production 
 - [System design](design.en.md)
 - [Analysis and optimization](optimization.en.md)
 - [Production architecture](production-architecture.en.md)
+
+## Maintaining the roadmap
+
+The table prioritizes work themes; some already have implementations, so rows do not all represent unstarted work. [Current status](status.en.md) describes delivered behavior. Closing a theme requires corresponding tests, interface explanations, and deployment acceptance material.
+
+Propose work in an Issue with a specific user task, current evidence gap, affected modules, permission or migration impact, and reproducible completion criteria. Review implementation, bilingual documentation, and verification together; use acceptance criteria rather than calendar promises.
+
+Prioritize fact completeness and rejection explanations before additional algorithms or integrations. Plan changes cannot weaken site authorization, engineer decisions, provenance, or equipment safety boundaries.

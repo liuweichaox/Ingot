@@ -10,6 +10,8 @@ Unless a contributor explicitly states otherwise in writing, accepted contributi
 
 ## Before starting
 
+Report reproducible defects in Issues, usage questions in Discussions, and security findings privately under [SECURITY.md](SECURITY.md). A bug report should include the version or commit, environment, reproduction steps, expected and actual behavior, and sanitized logs.
+
 1. Search Issues for duplicates.
 2. For a substantial feature, open an Issue describing scenario, input, output, and validation.
 3. Report vulnerabilities privately under the [security policy](SECURITY.md).
@@ -47,7 +49,7 @@ uv run --project optimizer --locked pytest
 ## Change workflow
 
 ```bash
-git checkout -b feature/short-description
+git checkout -b codex/short-description
 ```
 
 During implementation:
@@ -75,7 +77,24 @@ Before submitting:
 
 State checks not run when Docker or another runtime is unavailable.
 
+## Verification and documentation
+
+Install only the frontend applications needed for your change; full verification checks all three. On Windows, use PowerShell for .NET, npm, and uv commands, and WSL or a Bash environment with the required tools for Bash gates. Do not share `node_modules` between Windows and WSL.
+
+During iteration, run relevant tests and application lint, then run the full gate. When changing architecture, product scope, public terminology, or documentation, also run these blocking checks directly:
+
+```bash
+./scripts/verify-architecture.sh
+./scripts/verify-product-scope.sh
+./scripts/verify-product-language.sh
+python3 scripts/verify-documentation-style.py
+```
+
+Keep Chinese documents and their `.en.md` counterparts aligned in heading structure and behavioral descriptions. Documentation sources live in `docs/`; the site generates pages from those files. When adding a document, update the index, site navigation, and links. Commands should state the working directory, prerequisites, success criteria, and failure handling. Describe capabilities using inspectable code and tests, and explicitly label planned work.
+
 ## Pull requests
+
+Keep each PR focused on an independently reviewable result. Lead with the problem and final behavior, then provide evidence. State checks that were not run and known limitations explicitly.
 
 Include:
 

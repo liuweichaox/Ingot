@@ -2,49 +2,61 @@
 
 Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
 
-Each page covers one subject. The [Brand guide](brand.en.md) governs wording, and [Current status](status.en.md) governs implemented capability.
+Choose a path from local installation to a first recommendation and ongoing operations. Documentation is maintained with repository code. [Current status](status.en.md) describes implemented capability; the [Roadmap](project-plan.en.md) describes planned work.
+
+The business reading order is process configuration → field integration → production runs → quality management → process diagnosis → recipe optimization. An engineer confirms the next recipe recommendation before it enters a subsequent run through existing field procedures.
+
+## First use
+
+1. Read [Current status](status.en.md) to understand capabilities, required data, and usage boundaries.
+2. Follow [Getting started](getting-started.en.md) to start the stack, check service health, and sign in.
+3. Follow the [Recipe-optimization pilot guide](pilot.en.md) to verify a published recipe, real runs, and reviewed quality results, then complete a recommendation, engineer decision, actual run, and outcome freeze.
+
+You can start the system without a field connector. The current recommendation flow still requires admitted real-run evidence; a successful installation does not establish data readiness.
 
 ## Read by task
 
-| Objective | Read |
-|---|---|
-| Run it locally | [Getting started](getting-started.en.md) |
-| See what works today | [Current status](status.en.md) |
-| Reach the first next recipe recommendation | [Recipe-optimization pilot guide](pilot.en.md) |
-| Understand the stable boundary | [System design](design.en.md) |
-| Connect field data | [Data integration](data-connection.en.md) |
-| Prepare production | [Production architecture](production-architecture.en.md), then [Deployment](deployment.en.md) |
-| Contribute | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) |
-
-The working order is process configuration → field integration → production runs → quality management → process diagnosis → recipe optimization. The next recipe recommendation returns to the published recipe version, and the engineer decides whether it starts the next run.
+- **Process and R&D engineers**: the [Pilot guide](pilot.en.md) explains the procedure; [Analysis and optimization](optimization.en.md) explains why recommendations are generated or stopped; the [Glossary](glossary.en.md) defines business objects.
+- **Integration engineers**: [Data integration](data-connection.en.md) covers identities, sources, and mappings; [System design](design.en.md) explains Edge and Platform responsibilities.
+- **Operators**: use [Production architecture](production-architecture.en.md) to choose the reliability scope, then [Deployment](deployment.en.md) to configure, back up, and upgrade; use [Troubleshooting](troubleshooting.en.md) for failures.
+- **Contributors**: prepare a development environment with [Contributing](../CONTRIBUTING.en.md); check module and record ownership against [System design](design.en.md) and the [Data model](data-model.en.md); follow the [Documentation guide](documentation-guide.en.md) for documentation changes.
 
 ## Documentation catalog
 
-### Start
+### Getting started
 
-- [Getting started](getting-started.en.md): run the local stack
-- [Current status](status.en.md): implemented capability and deployer responsibility
-- [Recipe-optimization pilot guide](pilot.en.md): from real runs to the first recommendation
+- [Getting started](getting-started.en.md): prerequisites, stack startup, health checks, and first login.
+- [Current status](status.en.md): implemented capability, verification scope, and deployer responsibilities.
+- [Recipe-optimization pilot guide](pilot.en.md): complete the first auditable recommendation and outcome chain.
 
-### System
+### How-to guides
 
-- [System design](design.en.md): business model and component responsibilities
-- [Analysis and optimization](optimization.en.md): admission, observed coverage, and numerical methods
-- [Mechanism knowledge design](mechanism-knowledge.en.md): how knowledge constrains a recommendation
+- [Data integration](data-connection.en.md): integration identities, points, mappings, and run admission.
+- [Deployment](deployment.en.md): configuration, model services, observability, backup, and upgrades.
+- [Troubleshooting](troubleshooting.en.md): diagnose startup, authorization, data, and recommendation problems by symptom.
+- [Scenario evaluation boundary](rollout.en.md): assess suitability and effects using your own evidence.
 
-### Deployment and integration
+### Concepts
 
-- [Data integration](data-connection.en.md): identity, points, mapping, and data admission
-- [Deployment](deployment.en.md): configuration, health, backup, and upgrade
-- [Production architecture](production-architecture.en.md): failure model and production admission
+- [System design](design.en.md): component responsibilities, business model, dependency direction, and architecture constraints.
+- [Analysis and optimization](optimization.en.md): admission, safety boundaries, coverage envelope, and method selection.
+- [Mechanism knowledge design](mechanism-knowledge.en.md): source review, applicability, constraints, and retrieval.
+- [Production architecture](production-architecture.en.md): deployment levels, failure model, and reliability acceptance.
 
 ### Reference
 
-- [Roadmap](project-plan.en.md): build priorities
-- [Scenario evaluation boundary](rollout.en.md): conclusion limits for a deployer's own evaluation
-- [Frequently asked questions](faq.en.md)
-- [Glossary](glossary.en.md)
-- [Brand guide](brand.en.md)
-- [Open-source dependencies](open-source-dependencies.en.md)
+- [Data model overview](data-model.en.md): table responsibilities, append-only records, migrations, and authorization boundaries.
+- [Glossary](glossary.en.md): consistent definitions of runs, recipes, evidence, and recommendations.
+- [FAQ](faq.en.md): suitability, data requirements, and system boundaries.
+- [Roadmap](project-plan.en.md): priorities and completion criteria.
+- [Brand guide](brand.en.md): positioning, visual assets, and public wording.
+- [Open-source dependencies](open-source-dependencies.en.md): components, licenses, and adoption requirements.
+- [Documentation guide](documentation-guide.en.md): page responsibilities, bilingual maintenance, and verification.
 
-中文文档从 [index.md](index.md) 开始。
+## Support and feedback
+
+For usage problems, include reproduction steps, version, service status, and redacted errors in [Issues](https://github.com/liuweichaox/Ingot/issues). Use [Discussions](https://github.com/liuweichaox/Ingot/discussions) for design discussions. Report vulnerabilities privately through the [Security policy](../SECURITY.md).
+
+Do not submit `.env`, credentials, real production data, or identifiable field materials. Documentation corrections can be submitted as a Pull Request with the corresponding Chinese page updated.
+
+[简体中文文档](index.md)

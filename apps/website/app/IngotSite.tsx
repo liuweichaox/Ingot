@@ -37,7 +37,7 @@ const copy = {
       ["01", "组织研发记录", "选定配方版本，定义质量目标、可调参数与边界。每次运行就是一次实验，实测值保存在运行与质量记录中。"],
       ["02", "核对运行与质量", "关联实际参数、过程轨迹与检验结果，检查完整性和适用条件。"],
       ["03", "分析工艺差异", "比较可比运行，整理关键差异、候选原因与证据缺口。"],
-      ["04", "审核配方建议", "基于合格运行证据提出下一轮校正。工程师审核后在同版本下验证，显著变更才创建修订草稿。"],
+      ["04", "审核配方建议", "基于通过准入的运行证据提出下一轮校正。工程师审核后在同版本下验证，显著变更才创建修订草稿。"],
     ],
     loopKicker: "ENGINEER IN THE LOOP",
     loopTitle: "系统组织事实与建议，工程师掌握研发决策。",
@@ -53,23 +53,26 @@ const copy = {
     optimizerKicker: "THE ENGINEERING TOOLBOX",
     optimizerTitle: "先确认数据是否可靠，再审核下一轮校正。",
     optimizerText: "推荐器先确认生产运行是否完整、可比且关联质量结果，再在声明的变量、安全边界和历史覆盖内形成候选建议。工程师负责审核建议；系统不自动修改生产参数。",
+    admissionText: "至少三条有效运行、两种不同实际配方只是最低门槛，还需通过质量、覆盖、约束和方法检查。数据不足时停止建议，并说明原因。",
+    admissionLink: "查看推荐准入与试点步骤",
+    troubleshootingLink: "启动与运行排障",
     methodA: "确认数据可用",
     methodAText: "核对数据是否完整、实际值与单位是否一致、时间和来源是否明确，并检查版本变化与适用范围。",
     methodB: "工艺追因",
     methodBText: "使用匹配比较、稳健统计、阶段轨迹和上下文分层缩小候选范围。",
     methodC: "固化机理依据",
-    methodCText: "将参数作用、已知边界和工程判断附着到具体配方版本，并引用对应运行、质量证据和已复核工艺资料片段。",
+    methodCText: "将参数作用、已知边界和工程判断按站点与配方归属管理；建议冻结本次使用的知识版本，并引用对应运行、质量证据和已复核工艺资料片段。",
     methodD: "审核下一轮校正",
-    methodDText: "小校正留在当前配方版本，下一轮同版本运行自动接续。显著变更使用建议参数创建修订草稿，保留来源与理由。",
+    methodDText: "小校正留在当前配方版本，决定后开始、已完成且符合条件的同版本运行用于关联。显著变更使用建议参数创建修订草稿，保留来源与理由。",
     engineFeatures: ["数据质量", "真实运行", "版本谱系", "片段级引用", "已复核知识", "工程决策"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "研发记录、分析与决策，各有明确职责。",
-    archText: "Web、API、数据库与优化服务构成自身运行栈，连接器是可选的数据来源。正式记录保存来源、版本与审核状态，分析和建议引用这些事实；工程师确认参数变化与适用范围。",
+    archText: "Web、API、Worker、数据库与优化服务构成自身运行栈，连接器是可选的数据来源。正式记录保存来源、版本与审核状态，分析和建议引用这些事实；工程师确认参数变化与适用范围。",
     layers: [
       ["研发记录", "配方 · 变量 · 边界", "组织目标、参数设定、可调范围和适用条件"],
       ["运行与质量", "参数 · 轨迹 · 检验", "关联运行上下文与质量结果，核对版本、完整性和审核状态"],
       ["分析与建议", "比较 · 追因 · 优化", "整理候选原因，形成受证据和安全边界约束的配方建议"],
-      ["工程决策", "审核 · 版本 · 知识", "保存采用、修改或拒绝的理由，并引用经过复核的工艺资料"],
+      ["工程决策", "审核 · 版本 · 知识", "保存采用、修改或拒绝的决定；修改和拒绝须说明理由，并引用经过复核的工艺资料"],
     ],
     visionKicker: "STABLE CORE, EVOLVING METHODS",
     visionTitle: "工艺能力持续升级，证据边界始终不变。",
@@ -87,13 +90,13 @@ const copy = {
     contribute: "参与贡献",
     reportIssue: "报告问题",
     statusLabel: "当前成熟度",
-    statusText: "每次工艺运行就是一次实验，配方版本保存参数设定，运行记录关联实际参数、过程数据和质量结果；符合准入条件的运行证据用于配方建议，实际运行、参数回读和检验记录用于一次性冻结最终结果。主要软件流程已有自动化测试，真实工厂收益验证尚未完成。默认 Compose 提供单机参考部署，部署方仍需完成站点安全、恢复、容量和运维验收。",
+    statusText: "每次工艺运行就是一次实验，配方版本保存参数设定，运行记录关联实际参数、过程数据和质量结果；符合准入条件的运行证据用于配方建议，实际运行、参数回读和检验记录用于一次性冻结最终结果。主要软件流程已有自动化测试；仓库不提供现场收益验证结果，适用性与收益由部署方用自己的证据评估。默认 Compose 提供单机参考部署，部署方仍需完成站点安全、恢复、容量和运维验收。",
     statusLink: "当前能力与限制",
     deploymentLink: "部署与生产验收",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "从一个真实工艺问题开始。",
     ctaText: "发布配方版本明确变量与边界，关联运行和质量记录，或从已有运行开始比较差异并审核下一轮校正。",
-    ctaPrimary: "建立第一个数据闭环",
+    ctaPrimary: "完成第一轮配方试点",
     ctaSecondary: "打开 GitHub",
     footer: "Ingot · 从工艺数据，到有依据的研发决策。",
   },
@@ -140,23 +143,26 @@ const copy = {
     optimizerKicker: "THE ENGINEERING TOOLBOX",
     optimizerTitle: "Confirm that data are trustworthy before reviewing the next correction.",
     optimizerText: "The recommender checks whether production runs are complete, comparable, and linked to quality outcomes before forming a candidate within declared variables, safety boundaries, and observed coverage. Engineers review recommendations; the system never changes production parameters automatically.",
+    admissionText: "At least three valid runs and two distinct actual recipes are minimum requirements. Quality, coverage, constraint, and method checks must also pass; insufficient evidence stops recommendations with an explanation.",
+    admissionLink: "Review admission and pilot steps",
+    troubleshootingLink: "Troubleshoot startup and operation",
     methodA: "Confirm data usability",
     methodAText: "Check completeness, actual values, units, time, and provenance, together with version changes and applicability.",
     methodB: "Process diagnosis",
     methodBText: "Use matching, robust statistics, stage trajectories, and context stratification to narrow candidates.",
     methodC: "Preserve mechanism notes",
-    methodCText: "Attach parameter effects, known boundaries, and engineering judgment to a specific recipe version with run, quality, and reviewed process-document references.",
+    methodCText: "Manage parameter effects, known boundaries, and engineering judgment by site and recipe. Recommendations freeze the knowledge versions used, with run, quality, and reviewed process-document references.",
     methodD: "Review the next correction",
-    methodDText: "Small corrections stay on the current recipe version; the next same-version run links automatically. Significant changes use proposed settings to create a revision draft with provenance and rationale.",
+    methodDText: "Small corrections stay on the current recipe version; a completed, eligible same-version run started after the decision is used for linkage. Significant changes use proposed settings to create a revision draft with provenance and rationale.",
     engineFeatures: ["Data quality", "Real runs", "Version lineage", "Fragment citations", "Reviewed knowledge", "Engineering decisions"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "Research records, analysis, and decisions have clear responsibilities.",
-    archText: "The Web app, API, database, and optimizer form the runtime stack; connectors are optional data sources. Formal records retain provenance, versions, and review status, and analysis and recommendations reference those facts. Engineers confirm parameter changes and applicability.",
+    archText: "The Web app, API, Worker, database, and optimizer form the runtime stack; connectors are optional data sources. Formal records retain provenance, versions, and review status, and analysis and recommendations reference those facts. Engineers confirm parameter changes and applicability.",
     layers: [
       ["RESEARCH RECORDS", "recipes · variables · boundaries", "Organize objectives, settings, adjustable scope, and applicability"],
       ["RUNS AND QUALITY", "settings · trajectories · inspections", "Link run context and quality outcomes; check versions, completeness, and review status"],
       ["ANALYSIS AND RECOMMENDATIONS", "comparison · diagnosis · optimization", "Organize candidate causes and recipe recommendations constrained by evidence and safety boundaries"],
-      ["ENGINEERING DECISIONS", "review · versions · knowledge", "Retain adoption, revision, or rejection rationale and reference reviewed process material"],
+      ["ENGINEERING DECISIONS", "review · versions · knowledge", "Retain adoption, modification, or rejection decisions; modification and rejection require reasons, with reviewed process-material references"],
     ],
     visionKicker: "STABLE CORE, EVOLVING METHODS",
     visionTitle: "Process capabilities evolve. Evidence boundaries remain fixed.",
@@ -174,13 +180,13 @@ const copy = {
     contribute: "Contribute",
     reportIssue: "Report an issue",
     statusLabel: "Current maturity",
-    statusText: "Each process run is an experiment. Recipe versions hold parameter settings, and run records link actual parameters, process data, and quality outcomes. Admitted run evidence feeds recipe recommendations. Actual runs, parameter readback, and inspection records freeze the final outcome once. Core software workflows have automated tests; real-factory benefit validation remains incomplete. Default Compose provides a single-host reference deployment; deployers still own site security, recovery, capacity, and operational acceptance.",
+    statusText: "Each process run is an experiment. Recipe versions hold parameter settings, and run records link actual parameters, process data, and quality outcomes. Admitted run evidence feeds recipe recommendations. Actual runs, parameter readback, and inspection records freeze the final outcome once. Core software workflows have automated tests. The repository provides no field-benefit validation results; deployers assess suitability and benefits with their own evidence. Default Compose provides a single-host reference deployment; deployers still own site security, recovery, capacity, and operational acceptance.",
     statusLink: "Current capabilities and limits",
     deploymentLink: "Deployment and production acceptance",
     ctaKicker: "START WITH ONE REAL DATA LOOP",
     ctaTitle: "Begin with a process question.",
     ctaText: "Publish a recipe version with variables and boundaries, link run and quality records, or start with existing runs to compare differences and review the next correction.",
-    ctaPrimary: "Build the first data loop",
+    ctaPrimary: "Complete the first recipe pilot",
     ctaSecondary: "Open GitHub",
     footer: "Ingot · From process data to evidence-based R&D decisions.",
   },
@@ -200,7 +206,7 @@ const workflows = {
       [["配方版本", "已发布参数 · 目标 · 可调范围"], ["运行记录", "使用的版本 · 实际参数 · 过程上下文"], ["实验事实", "由运行与质量记录承载，无独立实验录入"]],
       [["过程证据", "实际参数 · 阶段轨迹 · 时间与来源"], ["质量记录", "实测结果 · 检验依据 · 关联运行"], ["准入检查", "完整性 · 可比性 · 适用条件"]],
       [["运行比较", "核对版本、参数与生产上下文"], ["候选原因", "差异证据 · 不确定性 · 待验证项"], ["知识引用", "已复核工艺资料片段与适用范围"]],
-      [["下一轮校正", "候选设置 · 约束 · 工程师采用、修改或拒绝"], ["版本分支", "小校正保持版本，显著变更创建修订草稿"], ["实际结果", "同版本运行自动接续，按实际证据一次性冻结结果"]],
+      [["下一轮校正", "候选设置 · 约束 · 工程师采用、修改或拒绝"], ["版本分支", "小校正保持版本，显著变更创建修订草稿"], ["实际结果", "符合条件的同版本运行用于关联，按实际证据一次性冻结结果"]],
     ],
   },
   en: {
@@ -212,7 +218,7 @@ const workflows = {
       [["Recipe version", "Published settings · objectives · adjustable scope"], ["Run record", "Applied version · actual settings · process context"], ["Experiment facts", "Retained in run and quality records, without separate experiment entry"]],
       [["Process evidence", "Actual settings · stage trajectories · time and provenance"], ["Quality record", "Measured outcomes · inspection basis · linked run"], ["Admission checks", "Completeness · comparability · applicability"]],
       [["Run comparison", "Check versions, parameters, and production context"], ["Candidate causes", "Difference evidence · uncertainty · validation gaps"], ["Knowledge references", "Reviewed process-document fragments and applicability"]],
-      [["Next correction", "Candidate settings · constraints · engineer adoption, revision, or rejection"], ["Version branch", "Small corrections retain the version; significant changes create a revision draft"], ["Actual outcome", "Automatically link the next same-version run and freeze the outcome once from actual evidence"]],
+      [["Next correction", "Candidate settings · constraints · engineer adoption, revision, or rejection"], ["Version branch", "Small corrections retain the version; significant changes create a revision draft"], ["Actual outcome", "Link an eligible same-version run and freeze the outcome once from actual evidence"]],
     ],
   },
 } as const;
@@ -396,6 +402,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <div className="frame optimizer-layout">
           <Reveal className="optimizer-copy">
             <p className="eyebrow">{t.optimizerKicker}</p><h2>{t.optimizerTitle}</h2><p>{t.optimizerText}</p>
+            <p>{t.admissionText}</p><a className="evidence-link" href={`${t.docs}/pilot`}>{t.admissionLink} ↗</a>
             <div className="tech-line"><span>RUNS</span><span>STATISTICS</span><span>MODELS</span></div>
           </Reveal>
           <div className="model-map">
@@ -443,7 +450,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
               <a className="button quiet" href={`${github}/blob/main/CONTRIBUTING${initialLocale === "en" ? ".en" : ""}.md`}>{t.contribute}</a>
               <a className="button quiet" href={`${github}/issues`}>{t.reportIssue}</a>
             </div>
-            <div className="status-note"><strong>{t.statusLabel}</strong><p>{t.statusText}</p><div className="status-links"><a href={`${t.docs}/status`}>{t.statusLink} ↗</a><a href={`${t.docs}/deployment`}>{t.deploymentLink} ↗</a></div></div>
+            <div className="status-note"><strong>{t.statusLabel}</strong><p>{t.statusText}</p><div className="status-links"><a href={`${t.docs}/status`}>{t.statusLink} ↗</a><a href={`${t.docs}/deployment`}>{t.deploymentLink} ↗</a><a href={`${t.docs}/troubleshooting`}>{t.troubleshootingLink} ↗</a></div></div>
           </Reveal>
           <Reveal className="terminal" delay={140}><div className="terminal-bar"><i /><i /><i /><span>QUICKSTART</span></div><pre><code>{t.command}</code></pre></Reveal>
         </div>
@@ -453,7 +460,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <Reveal className="frame final-cta-inner">
           <p className="eyebrow">{t.ctaKicker}</p><h2>{t.ctaTitle}</h2><p>{t.ctaText}</p>
           <div className="button-row centered">
-            <a className="button primary" href={`${t.docs}/getting-started`}>{t.ctaPrimary} <span aria-hidden="true">→</span></a>
+            <a className="button primary" href={`${t.docs}/pilot`}>{t.ctaPrimary} <span aria-hidden="true">→</span></a>
             <a className="button quiet" href={github}>{t.ctaSecondary} <span aria-hidden="true">↗</span></a>
           </div>
         </Reveal>
@@ -463,7 +470,7 @@ export default function IngotSite({ initialLocale }: { initialLocale: Locale }) 
         <div className="frame footer-inner">
           <Image src="/brand/ingot-lockup.svg" alt="Ingot" width={120} height={45} />
           <p>{t.footer}</p>
-          <div><a href={t.docs}>Docs</a><a href={github}>GitHub</a><a href={`${github}/blob/main/LICENSE`}>Apache-2.0</a></div>
+          <div><a href={t.docs}>{t.docsLabel}</a><a href={github}>GitHub</a><a href={`${github}/blob/main/LICENSE`}>Apache-2.0</a></div>
         </div>
       </footer>
     </main>

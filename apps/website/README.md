@@ -8,13 +8,13 @@ The home page must:
 - describe recipe versions, experiment records, quality analysis, process diagnosis, and engineer-reviewed recipe recommendations;
 - lead with real data supporting process-engineer decisions;
 - explain that each run is an experiment and run/quality records retain measured facts;
-- describe corrections on the current recipe version, automatic linkage of the next same-version run, significant-change revision drafts, and outcomes frozen from actual evidence;
+- describe corrections on the current recipe version, linkage of an eligible completed same-version run started after the decision, significant-change revision drafts, and outcomes frozen from actual evidence;
 - preserve the boundary that production parameters are never changed automatically;
-- explain that process knowledge is attached to an applicable site and recipe scope together with its rationale and evidence references;
+- explain that mechanism claims belong to a site and recipe, while document sources belong to a site; recommendations freeze the knowledge versions they use;
 - preserve the engineer's authority and the boundary between association and validated cause;
 - distinguish implemented capability from historical replay, shadow evidence, and online evaluation;
 - remain independent of a specific equipment model, material, or process;
-- link documentation, source, quickstart, and contributing guidance;
+- link documentation, source, quickstart, pilot, troubleshooting, and contributing guidance;
 - use canonical assets from `public/brand` and remain statically exportable.
 - use explicitly labeled workflow illustrations rather than outdated product screenshots or fabricated outcome figures;
 - link current status and deployment acceptance, and require replacing all `.env` placeholders before starting Compose.

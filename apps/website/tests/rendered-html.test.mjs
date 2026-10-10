@@ -104,7 +104,7 @@ test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   }
   assert.match(source, /工艺能力持续升级，证据边界始终不变/);
   assert.match(source, /可在厂内自托管/);
-  assert.match(source, /真实工厂收益验证尚未完成/);
+  assert.match(source, /仓库不提供现场收益验证结果/);
   assert.match(source, /每次工艺运行就是一次实验/);
   assert.match(source, /具体场景评估由部署方用自己的数据完成/);
   assert.doesNotMatch(source, /公开验证协议与结果可以独立复现/);
@@ -128,7 +128,7 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
   }
   assert.match(source, /Process capabilities evolve/);
   assert.match(source, /self-hostable inside the plant/);
-  assert.match(source, /real-factory benefit validation remains incomplete/i);
+  assert.match(source, /repository provides no field-benefit validation results/i);
   assert.match(source, /Each process run is an experiment/i);
   assert.match(source, /scenario-specific evaluation belongs to the deployer(?:'|&#x27;)s own data/i);
   assert.doesNotMatch(source, /public validation protocols and results are independently reproducible/i);
@@ -145,4 +145,18 @@ test("public source uses brand assets instead of an inline logo and links projec
   assert.match(source, /docs\.ingotstack\.com/);
   assert.doesNotMatch(source, /function Mark|<svg/i);
   assert.doesNotMatch(source, retired);
+});
+
+// Guard the public-to-documentation path and the evidence boundary of recommendations.
+test("both locales link the pilot and troubleshooting with explicit admission boundaries", async () => {
+  for (const [pathname, locale] of [["/", "zh"], ["/en/", "en"]]) {
+    const source = await html(pathname);
+    const text = visibleText(source);
+    for (const slug of ["pilot", "troubleshooting"])
+      assert.ok(source.includes(`href="https://docs.ingotstack.com/${locale}/${slug}"`));
+    assert.match(text, locale === "zh" ? /至少三条有效运行、两种不同实际配方只是最低门槛/ : /three valid runs and two distinct actual recipes are minimum requirements/i);
+    assert.match(text, locale === "zh" ? /Web、API、Worker、数据库/ : /Web app, API, Worker, database/);
+    assert.doesNotMatch(text, /下一轮同版本运行自动接续|next same-version run links automatically/i);
+    assert.match(text, locale === "zh" ? /按站点与配方归属管理/ : /by site and recipe/);
+  }
 });

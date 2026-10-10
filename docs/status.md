@@ -60,6 +60,15 @@ Ingot 已实现基于生产运行证据的质量分析、工艺追因和配方�
 
 目标拓扑见[生产架构](production-architecture.md)，当前操作步骤见[部署运维](deployment.md)。
 
+## 查验支持证据
+
+- 领域与授权行为：`tests/Ingot.Core.Tests`，包括 Platform 工作流、站点授权、优化器契约与 Edge 采集测试。
+- 数值契约：锁定的 `optimizer` 测试套件；安装服务与开发依赖后，通过 `uv run --project optimizer --locked pytest` 执行。
+- 公开文档与站点产物：架构、产品范围、产品语言、文档风格检查，以及 `./scripts/verify.sh` 执行的站点导出测试。
+- 运维验收：备份恢复、故障演练、可观测性检查和 `scripts/verify-production-acceptance.sh` 为目标部署形成证据。存在脚本不等于验收通过。
+
+作出验证结论时，记录被检查的提交、命令、结果与环境。本页描述实现范围，不代表每位读者访问时都已重新运行全部测试。
+
 ## 状态更新规则
 
 1. 软件能力以合并代码、数据库迁移和自动化测试为准；

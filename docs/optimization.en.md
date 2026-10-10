@@ -24,6 +24,24 @@ The current product starts a next-run correction from a published recipe version
 
 The system creates a recommendation only after at least three valid runs cover two distinct actual recipes. Runs require trustworthy identity, actual settings, required context, and quality outcomes. Incomplete data, poor comparability, inadequate coverage, conflicting constraints, or unmet model conditions stop the recommendation and state the reason.
 
+## Handling Admission Failures
+
+The admitted count from “Check data” describes readiness; it does not guarantee that the next request will generate a recommendation. Generation resolves published conditions and run evidence again, checking complete fields, distinct actual settings, and the optimizer response.
+
+- **Execution incomplete or process data unavailable**: inspect the source run state, process signals, and published process analysis; do not substitute planned settings for actual values.
+- **Missing readback, process features, or inspection values**: repair provenance in the relevant run. Inspection values must be finite; `INCONCLUSIVE` is not a definite outcome.
+- **Insufficient context coverage or factor overlap**: check the frozen context policy against process configuration; do not add out-of-scope runs to meet a count.
+- **Only one actual recipe or fewer than three valid runs**: wait for new real runs; copying a run does not create another observation.
+- **Constraint, coverage, or optimizer snapshot mismatch**: retain the error and execution keys, then inspect configuration and service logs; do not widen ranges to bypass coverage.
+
+The readiness interface returns candidate, valid, and excluded counts, a truncation flag, and at most eight example exclusion reasons. When results are truncated or many runs are excluded, review source run records; examples are not the complete exclusion list.
+
+## Traceable Inputs and Outputs
+
+Inputs comprise published conditions, actual run settings, quality objective values, outcome-constraint values, process features, and applicable knowledge and models. Platform deduplicates by execution key and records the request seed and input hash. An identical input hash may return an existing recommendation; repeated requests are not independent experiments.
+
+The output is one recommendation with predictions, uncertainty, constraints, and coverage information. Platform checks the optimizer's observation and recommendation counts and independently recomputes the coverage envelope. Review input execution keys, objective and parameter units, bounds, and the knowledge and model versions used. Predictions do not replace later real inspection.
+
 ## Observed Coverage Envelope
 
 Safety boundaries state where the process is allowed to go, not where historical runs have been. Daily production runs cluster around the current recipe and move several settings together, so a surrogate fitted on that data reports small uncertainty inside the cluster while extrapolating freely into regions no run ever visited. A recommendation therefore stays inside the observed coverage of real runs as well as the safety boundaries, bounded by two independent gates:

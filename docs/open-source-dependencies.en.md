@@ -33,3 +33,14 @@ Every new runtime dependency must:
 - Remove dependencies that are no longer used.
 - Resolve license or maintenance-status changes before release.
 - Publish a generated SBOM or dependency inventory rather than treating this page as the release manifest.
+
+## Version sources
+
+To reproduce a release, read dependency files at the corresponding commit rather than inferring exact versions from component names on this page:
+
+- .NET: project `.csproj` files and `Directory.Build.props`.
+- JavaScript: each app's `package.json` and `package-lock.json`; use `npm ci` for locked installation.
+- Python: `optimizer/pyproject.toml` and `optimizer/uv.lock`; use the `--locked` commands in the contribution guide.
+- Containers: service Dockerfiles, Compose definitions, and the image identities actually deployed.
+
+Typical licenses here are navigation aids, not a substitute for checking each version, subcomponent, and distribution method. In particular, check the actual license of database-extension features and build artifacts. Validate dependency changes through [Contributing](../CONTRIBUTING.en.md) and report vulnerabilities privately through the [Security policy](../SECURITY.md).

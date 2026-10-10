@@ -21,6 +21,15 @@ A qualified data chain answers:
 
 Data enters process diagnosis and recipe optimization only when these facts can be linked reliably.
 
+## Before connecting a source
+
+1. Enable the optional connector profile using the deployment guide, assign stable site/node identities, and configure three distinct credentials.
+2. Explicitly allow device hosts in `Acquisition:Security:AllowedHttpHosts` or `AllowedNetworkHosts`. The default lists are empty; starting ConnectorHost alone authorizes no target. For Compose, supply indexed environment entries such as `Acquisition__Security__AllowedNetworkHosts__0=192.168.10.20` in a local override.
+3. Define a process data model, required fields, units, and run/inspection identity before mapping protocol points.
+4. Probe the target Edge, validate real values, publish, and verify the applied version and a complete run with linked inspection.
+
+Retain the configuration version, validation result, source references, and admission exclusions as the connection acceptance record. Credentials belong in approved secret references, not sample payloads or exported CSV.
+
 ## Data sources
 
 A production-run record may combine the following data sources:

@@ -33,3 +33,13 @@
 - **Site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. Shared training datasets and model assets within a deployment use role-based authorization; not every table is site-isolated.
 - **Edge ingestion token**: A separate, rotatable credential that a field connector uses to send events, configured independently per field.
 - **Engineering decision**: Recommendations are never dispatched automatically; engineers define objectives and boundaries and review, adopt, or reject each recommendation.
+
+## Common distinctions
+
+- **Setpoint and actual value**: a recipe retains intended settings; run readback retains what happened. Missing actual values cannot silently be replaced with setpoints.
+- **Safety boundaries and observed coverage**: the first describes permitted ranges; the second describes ranges supported by recorded runs. Recommendations must satisfy both. See [Analysis and optimization](optimization.en.md).
+- **Quality entry and review**: entry records measurements; an authorized role reviews whether they can become formal evidence under the quality plan. When independent review is required, the recorder cannot replace the reviewer.
+- **Recommendation and version publication**: adoption records an engineer decision without publishing a recipe version. Significant changes use revision drafts and publication.
+- **Software verification and field acceptance**: automated checks establish covered software contracts; recovery, capacity, safety, and benefit require corresponding evidence in the deployer's environment.
+
+See the [Pilot guide](pilot.en.md) for procedures and the [Data model overview](data-model.en.md) for entity-to-table responsibilities.

@@ -377,3 +377,9 @@ Every engineering change needs a migration, tests, a runbook, and a rollback poi
 - Do not treat the lack of legacy users as permission to omit migration, recovery, and rollback discipline after the first production release.
 
 See [Deployment](deployment.en.md) for operations, [System design](design.en.md) for stable business boundaries, and [Scenario evaluation](rollout.en.md) for scientific evaluation of a real scenario.
+
+## Using this baseline in deployment review
+
+First identify whether the claim covers basic R&D, field integration, or high availability, then check the associated failure and recovery responsibilities. Retain targets, measurements, evidence references, reviewers, and remaining limitations in controlled deployer acceptance materials. Citing this page alone does not establish a compliant deployment.
+
+[Deployment](deployment.en.md) owns configuration and procedures, [Troubleshooting](troubleshooting.en.md) owns symptom-driven diagnosis, and [Current status](status.en.md) owns delivered software scope. New architecture targets require dependencies and acceptance conditions with synchronized Chinese content; conditional extensions do not become default installation capabilities.

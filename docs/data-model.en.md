@@ -53,3 +53,13 @@ The recommendation's recipe version is retained in the frozen brief context; rel
 - A decision may precede an actual execution; an outcome freezes only after execution, parameter readback, and inspection facts are complete.
 - Cross-module reads pass through assemblers; optimizers do not directly read inspection or equipment tables.
 - Site + recipe is the authorization and relational boundary for recommendations and mechanism evidence; decisions referencing recommendations and conflicts referencing claims use composite FKs that include site and recipe rather than application checks alone.
+
+## 6. Using and changing the model
+
+This page indexes relational responsibilities; it is not an executable schema script. The schema evolves through the [migration directory](../src/platform/Ingot.Platform.Infrastructure/Migrations/sql). Migrator applies migrations during deployment; do not edit the baseline manually or skip failed migrations.
+
+Before adding a model, identify whether records belong to a site or deployment, which module owns the sole write path, whether records are append-only, and how retries remain idempotent. Check authorization and database constraints together for cross-module relationships; hiding a frontend button is not an authorization boundary.
+
+Validate successful writes, duplicate requests, cross-site rejection, and treatment of old data before migration. Back up the database, attachments, and keys before upgrades, then verify recovery and migration in isolation. See [Deployment](deployment.en.md) for recovery requirements.
+
+Related entry points: [System design](design.en.md), [Mechanism knowledge design](mechanism-knowledge.en.md), and [Contributing](../CONTRIBUTING.en.md).

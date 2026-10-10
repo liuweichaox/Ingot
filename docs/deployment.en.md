@@ -61,6 +61,12 @@ Change at least:
 
 Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 
+### Configuration acceptance
+
+Edge and diagnostics tokens must contain at least 24 characters, must differ, and must not contain `change-this-`, `replace-with-`, or `verification-`. A blank administrator seed password is supported for first bootstrap; an existing account is never overwritten. `config --quiet` checks Compose interpolation, while production validators run when each service starts: both checks are required.
+
+The reference Compose binds application and database ports to loopback. Before remote use, configure TLS ingress and the actual Web origin in `Cors:AllowedOrigins`; the bundled API value is `http://localhost:3000`. OIDC additionally requires its allowed origins and exact callback URIs.
+
 ### OIDC identity provider
 
 OIDC mode uses Authorization Code + PKCE. The frontend is a public client and never holds a client secret. Configure at least:
@@ -100,7 +106,7 @@ Validate required environment variables and Compose structure first:
 docker compose -f docker-compose.app.yml config --quiet
 ```
 
-Build and start the five core services:
+Build and start the core services and one-shot migrator:
 
 ```bash
 docker compose -f docker-compose.app.yml up -d --build

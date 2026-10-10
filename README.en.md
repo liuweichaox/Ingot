@@ -30,6 +30,7 @@
 - [About the project](#about-the-project)
 - [Getting started](#getting-started)
 - [Usage](#usage)
+- [Documentation](#documentation)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -47,6 +48,8 @@ It serves R&D work with costly recipes, limited samples, and explicit quality ob
 The repository claims only code, automated tests, and reproducible software behavior. Deployers evaluate applicability, safety, and realized benefit with their own data. See [Current status](docs/status.en.md) for what is implemented.
 
 ### Technology
+
+The core workflow manages recipe and experiment context, reviews run and quality evidence, and records engineer adoption, modification, or rejection of the next recipe recommendation. Planned values, actual values, and outcomes remain distinct so that an intention is not treated as an observed fact.
 
 | Part | Technology |
 |---|---|
@@ -87,13 +90,15 @@ cd Ingot
 cp .env.example .env
 ```
 
-Before startup, replace every `change-this-` placeholder in `.env`. Database passwords and the administrator password must be distinct random values.
+Before startup, replace every `change-this-` placeholder in `.env`. Use a random database password. Set a separate random administrator password, or leave it empty so the first migration generates one. In PowerShell, replace the copy command with `Copy-Item .env.example .env`.
 
 ```bash
+docker compose -f docker-compose.app.yml config --quiet
 docker compose -f docker-compose.app.yml up -d --build
+docker compose -f docker-compose.app.yml ps -a
 ```
 
-Open `http://localhost:3000` after startup. Health checks, sign-in, and troubleshooting are in [Getting started](docs/getting-started.en.md).
+After `platform-migrate` exits successfully and the database, API, Worker, Optimizer, and Web are healthy, open `http://localhost:3000`. Sign in with the administrator account in `.env`. If its password is empty, read the initially generated password with `docker compose -f docker-compose.app.yml logs platform-migrate`. Changing `.env` does not reset an existing account. See [Getting started](docs/getting-started.en.md) for complete instructions.
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
@@ -117,6 +122,20 @@ Field-equipment and enterprise-system connectors are optional. Recipe settings a
 ![Ingot runtime components and data flow](docs/architecture/system-architecture.en.svg)
 
 Platform API is the system of record. Optimizer holds no business state. Agent reads facts only through authorized read-only tools. See [Production architecture](docs/production-architecture.en.md) for topology and the [Recipe-optimization pilot guide](docs/pilot.en.md) for the first recommendation.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
+## Documentation
+
+Choose a reading path from the [documentation index](docs/index.en.md) or [online documentation](https://docs.ingotstack.com/en):
+
+- **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
+- **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
+- **Connect and operate**: [Data connection](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment and operations](docs/deployment.en.md).
+- **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundaries](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
+- **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
+
+Repository Markdown files are the documentation source; the documentation site publishes the same content. See [中文文档](docs/index.md) for Chinese.
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
@@ -161,6 +180,8 @@ Ingot is licensed under the [Apache License 2.0](LICENSE).
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Acknowledgments
+
+The README structure follows [Best-README-Template](https://github.com/othneildrew/Best-README-Template).
 
 Runtime dependencies, licenses, and introduction rules are in [Open-source dependencies](docs/open-source-dependencies.en.md). Exact versions come from lockfiles and container manifests.
 
