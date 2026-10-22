@@ -2,12 +2,12 @@
 export const productionResources = {
   context: {
     title: "生产切换", endpoint: "/api/v1/production-contexts", key: "contextId",
-    description: "为设备选择接下来生产的产品、配方版本和已装工装，保存后对新运行生效。",
-    drawerDescription: "按顺序确认设备、产品、配方版本和工装；保存后只影响新开始的生产运行。",
-    columns: [["siteId", "站点"], ["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "配方版本"], ["toolingInstallationId", "当前工装"], ["externalBatchRef", "生产批次"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
+    description: "为设备选择接下来生产的产品和配方版本；需要追溯工装时可一并关联，保存后对新运行生效。",
+    drawerDescription: "按顺序确认设备、产品和配方版本；工装追溯按场景补充，保存后只影响新开始的生产运行。",
+    columns: [["siteId", "站点"], ["equipmentId", "设备"], ["productCode", "产品"], ["processSpecificationId", "配方版本"], ["toolingInstallationId", "关联工装"], ["externalBatchRef", "生产批次"], ["validFrom", "生效时间"], ["validTo", "结束时间"]],
     template: { siteId: "", equipmentId: "", productFamilyCode: "", productCode: "", processSpecificationId: "", processSpecificationVersion: 1, toolingInstallationId: "", source: "manual", externalOrderRef: "", externalBatchRef: "", materialLotRef: "", materialSpecification: "", maintenanceStatus: "", calibrationStatus: "", calibrationRef: "", calibrationValidUntil: "" },
     createLabel: "配置下一批生产",
-    requiredFields: ["siteId", "equipmentId", "productFamilyCode", "productCode", "processSpecificationId", "toolingInstallationId"],
+    requiredFields: ["siteId", "equipmentId", "productFamilyCode", "productCode", "processSpecificationId"],
     prepare: value => ({
       ...value,
       validFrom: new Date().toISOString(),

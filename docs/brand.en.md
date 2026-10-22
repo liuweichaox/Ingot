@@ -4,9 +4,9 @@
 
 ## Core value
 
-> **Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.**
+> **Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.**
 
-Ingot serves process, quality, equipment, and R&D engineers across recipe versions, experiment records, run evidence, quality analysis, process diagnosis, and recipe optimization.
+Ingot serves process, quality, equipment, and R&D engineers across recipe versions, experiment records, run evidence, quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
 For product communication, prefer the more concrete action line:
 
@@ -19,7 +19,7 @@ The product summary covers R&D management, data and evidence, analysis, and opti
 - **Category**: Open-source Process R&D and Optimization System / 开源工艺研发与优化系统
 - **Primary users**: process, quality, equipment, and R&D engineers developing new products, materials, and processes
 - **Unit of work**: process-experiment definition, actual settings, trajectory, result, engineering judgment, and follow-up experiment
-- **Product responsibility**: organize recipe versions, records, and evidence; support quality analysis and process diagnosis; provide constrained next-recipe recommendations when data-admission conditions are met
+- **Product responsibility**: organize recipe versions, records, and evidence; support quality analysis and process analysis; provide constrained next-recipe recommendations when data-admission conditions are met. Process diagnosis is one capability within process analysis.
 - **Engineer responsibility**: define objectives, review data and constraints, confirm whether a recommendation enters normal production, and interpret field context
 - **System boundary**: engineers review conclusions and recipe recommendations; the system respects safety constraints, approval responsibilities, and equipment-control boundaries
 
@@ -31,7 +31,7 @@ Ingot works on reviewable process-run evidence rather than isolated data points 
 
 Public material may state that the system can:
 
-- manage recipe-version parameters through process configuration, retain experiment facts through run and quality records, and generate and review next-recipe recommendations by site and recipe;
+- manage process variables and recipe-version parameters through “Configuration and integration,” retain experiment facts through run and quality records, and generate and review next-recipe recommendations by factory/production site and recipe;
 - link actual production conditions, process trajectories, and inspection results;
 - expose missingness, provenance, versions, and uncertainty;
 - help engineers compare runs and narrow candidate causes;
@@ -44,7 +44,7 @@ Without evidence from real projects, public material must not claim that:
 - the system has automatically discovered a definitive root cause;
 - it has already reduced run cost or development time by a stated percentage;
 - a model recommendation is a field guarantee;
-- one successful setting proves a complete operating region;
+- one successful setting proves a complete process range;
 - results from one scenario transfer unconditionally to another.
 
 Observational data can support candidate causes, stable associations, confounded associations, or insufficient-evidence judgments. The system never automatically promotes those judgments to a root cause or an equipment-control command. Each run is an experiment, with run and quality records retaining experiment facts; next-recipe recommendations use admitted run evidence. The current Web app and API support recommendations and engineering decisions: adopting a correction retains the current published recipe version, while a significant change creates a revision draft. See [Current status](status.en.md) for capabilities, data requirements, and deployment boundaries.
@@ -54,15 +54,15 @@ Observational data can support candidate causes, stable associations, confounded
 | Use | Chinese | English |
 |---|---|---|
 | Product category | 开源工艺研发与优化系统 | Open-source Process R&D and Optimization System |
-| Core value | 组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化 | Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization |
+| Core value | 组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化 | Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization |
 | Short tagline | 从工艺数据，到有依据的研发决策。 | From process data to evidence-based R&D decisions. |
-| Business capabilities | 工艺追因、配方优化 | Process Diagnosis, Recipe Optimization |
+| Business capabilities | 工艺分析（包含工艺追因）、配方优化 | Process Analysis (including Process Diagnosis), Recipe Optimization |
 | Capability terms | 运行比较、工艺追因、配方建议、工程师决定、受约束优化 | run comparison, process diagnosis, recipe recommendation, engineer decision, constrained optimization |
 | Data unit | 实验记录；工艺运行证据 | experiment record; process-run evidence |
 | Observational conclusion | 候选原因、稳定关联、混杂关联、证据不足 | candidate cause, stable association, confounded association, insufficient evidence |
 | Evidence-based conclusion | 支持、否决、不确定、已验证原因 | supported, rejected, inconclusive, validated cause |
 | Evidence level | 证据不足、探索性证据、证据稳定、证据充分 | insufficient, exploratory, stable, sufficient |
-| Optimization result | 下一配方建议、候选工艺设置、已验证工艺操作域 | next-recipe recommendation, candidate process setting, validated operating region |
+| Optimization result | 下一配方建议、候选工艺设置、已验证工艺范围 | next-recipe recommendation, candidate process setting, validated process range |
 
 Choose terms by object:
 
@@ -70,7 +70,7 @@ Choose terms by object:
 - Use “Recipe optimization” for the workspace where engineers review real runs, next recipes, and engineer decisions.
 - Use “constrained optimization” or “sequential optimization” for numerical capabilities, together with objectives, safety boundaries, and method admission.
 - Call system outputs a “next-recipe recommendation” or “candidate process setting,” never an “optimal process” or “automatically dispatched parameter.”
-- Call a completed, supported outcome a “validated operating region”; one successful setting is not a process window.
+- Call a completed, supported outcome a “validated process range”; one successful setting is not a process window.
 
 “Smart process” is incomplete and can imply an autonomous process, so it is not a product category, menu, or capability name. Formal product descriptions prefer “Recipe optimization,” “next-recipe recommendation,” “engineer decision,” and “constrained optimization.” Current recipe runs and their quality outcomes can become optimization observations after admission. The system neither repackages production runs as another business record nor dispatches recipes automatically.
 

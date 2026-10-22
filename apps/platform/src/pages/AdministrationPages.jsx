@@ -348,7 +348,7 @@ export function ModelServiceConfigurationPage() {
             </Field>
             <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
               <input type="checkbox" className="mt-0.5 size-4 accent-blue-600" checked={form.enabled} onChange={event => update("enabled", event.target.checked)} />
-              <span><span className="block font-medium text-slate-900">启用模型服务</span><span className="mt-1 block text-xs leading-5 text-slate-500">关闭后分析助手保留历史记录，但不创建新的模型分析运行。</span></span>
+              <span><span className="block font-medium text-slate-900">启用模型服务</span><span className="mt-1 block text-xs leading-5 text-slate-500">关闭后证据调查保留历史记录，但不创建新的模型分析运行。</span></span>
             </label>
             {data?.hasApiKey && (
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
@@ -390,7 +390,7 @@ export function MetricsPage() {
   const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
   const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
   return (
-    <Page title="平台状态">
+    <Page title="系统状态">
       <RequestError
         error={error}
         onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}

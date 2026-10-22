@@ -1,44 +1,49 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Sans SC", "Microsoft YaHei", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SFMono-Regular", "Roboto Mono", Consolas, "Liberation Mono", monospace;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
   --color-ingot: #e8891a;
 
-  --color-coal-950: #07100e;
-  --color-coal-900: #0b1714;
-  --color-coal-800: #10201b;
-  --color-evidence-50: #fff8e9;
-  --color-evidence-100: #fcebc9;
-  --color-evidence-400: #f0bd70;
-  --color-evidence-500: #e8ad56;
-  --color-evidence-600: #ce8c2e;
-  --color-trajectory-50: #edf9f7;
-  --color-trajectory-100: #d5f2ee;
-  --color-trajectory-500: #36a99f;
-  --color-trajectory-600: #23857d;
-  --color-trajectory-700: #176b65;
+  --color-coal-950: #121917;
+  --color-coal-900: #19221f;
+  --color-coal-800: #24312d;
+  --color-evidence-50: #fff8ed;
+  --color-evidence-100: #f8ebd4;
+  --color-evidence-400: #d9a35a;
+  --color-evidence-500: #c98b35;
+  --color-evidence-600: #a96d1b;
+  --color-trajectory-50: #edf5f3;
+  --color-trajectory-100: #d9e9e5;
+  --color-trajectory-500: #347c79;
+  --color-trajectory-600: #286662;
+  --color-trajectory-700: #1e514e;
 
-  --color-slate-50: #f6f8f6;
-  --color-slate-100: #edf1ee;
-  --color-slate-200: #dce4df;
-  --color-slate-300: #c3cec8;
-  --color-slate-400: #82958e;
-  --color-slate-500: #63766f;
-  --color-slate-600: #4c5f58;
-  --color-slate-700: #344740;
-  --color-slate-800: #1c302a;
-  --color-slate-900: #10201b;
-  --color-slate-950: #07100e;
+  --color-slate-50: #f5f6f3;
+  --color-slate-100: #ecefeb;
+  --color-slate-200: #d9ded9;
+  --color-slate-300: #c3cbc4;
+  --color-slate-400: #829087;
+  --color-slate-500: #66746c;
+  --color-slate-600: #4d5d55;
+  --color-slate-700: #374840;
+  --color-slate-800: #27352f;
+  --color-slate-900: #1d2924;
+  --color-slate-950: #121917;
 
-  --color-blue-50: #edf9f7;
-  --color-blue-100: #d5f2ee;
-  --color-blue-200: #afe4de;
-  --color-blue-500: #36a99f;
-  --color-blue-600: #23857d;
-  --color-blue-700: #176b65;
-  --color-blue-800: #145752;
-  --color-blue-900: #114843;
+  --color-blue-50: #edf3f5;
+  --color-blue-100: #d9e8ed;
+  --color-blue-200: #bed6df;
+  --color-blue-500: #3d7184;
+  --color-blue-600: #2e6077;
+  --color-blue-700: #234c61;
+  --color-blue-800: #1d4052;
+  --color-blue-900: #183744;
 }
 
 @layer base {
@@ -48,15 +53,15 @@
 
   html {
     min-width: 320px;
-    background: #f4f6f3;
+    background: #f2f3f0;
   }
 
   body {
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background: #f4f6f3;
-    color: #10201b;
+    background: #f2f3f0;
+    color: #1d2924;
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -100,8 +105,8 @@
   }
 
   ::selection {
-    background: #d5f2ee;
-    color: #07100e;
+    background: #d9e9e5;
+    color: #121917;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -118,33 +123,27 @@
 
 @layer components {
   .app-canvas {
-    background-color: #f4f6f3;
-    background-image:
-      linear-gradient(rgba(16, 32, 27, 0.024) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(16, 32, 27, 0.024) 1px, transparent 1px);
-    background-size: 32px 32px;
+    background: #f2f3f0;
   }
 
   .product-panel {
-    border: 1px solid #dce4df;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 1px 2px rgba(7, 16, 14, 0.035), 0 14px 34px rgba(7, 16, 14, 0.035);
+    border: 1px solid #d9ded9;
+    background: #fff;
+    box-shadow: none;
   }
 
   .product-panel-dark {
-    border: 1px solid rgba(218, 235, 228, 0.12);
-    background:
-      radial-gradient(circle at 95% 0%, rgba(95, 212, 200, 0.08), transparent 18rem),
-      #0b1714;
-    color: #eef5f1;
-    box-shadow: 0 20px 55px rgba(7, 16, 14, 0.18);
+    border: 1px solid #2d3a35;
+    background: #19221f;
+    color: #edf2ee;
+    box-shadow: none;
   }
 
   .data-label {
     color: #63766f;
     font-size: 0.6875rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
@@ -155,7 +154,7 @@
   }
 
   .hairline-grid {
-    background-image: linear-gradient(90deg, rgba(220, 228, 223, 0.82) 1px, transparent 1px);
+    background-image: linear-gradient(90deg, rgba(217, 222, 217, 0.88) 1px, transparent 1px);
     background-size: 25% 100%;
   }
 }

@@ -53,7 +53,7 @@ const registryPages = {
   },
 };
 
-function RegistryPage({ definition, canWrite = true }) {
+function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
   const { data, loading, error, reload } = useApi(definition.endpoint);
   const rows = extractRows(data);
   const isProcessSpecification = definition.kind === "processSpecificationVersion";
@@ -309,16 +309,17 @@ function RegistryPage({ definition, canWrite = true }) {
   ];
   const businessReadOnly = hasBusinessEditor && mode === "maintain" && businessForm.status !== "draft";
   const editorReadOnly = !canWrite || (mode === "maintain" && (isInspectionDefinition || businessReadOnly));
+  const pageTitle = focus === "adjustments" ? "调整与验证" : definition.title;
 
   return (
     <Page
-      title={definition.title}
-      actions={canWrite ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
+      title={pageTitle}
+      actions={canWrite && focus !== "adjustments" ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
     >
       <RequestError error={error} onRetry={reload} />
       {!open && editorError && <Alert tone="danger">{editorError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
-        <Card title={`${definition.title}（${data?.total ?? rows.length}）`}>
+        <Card title={`${pageTitle}（${data?.total ?? rows.length}）`}>
           {rows.length ? <DataTable
             rows={rows}
             keyField={definition.key}
@@ -684,6 +685,7 @@ function InspectionDefinitionEditor({ form, onChange, readOnly, validation, lock
 
 export const ProcessDataModelsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processModels} canWrite={canWrite} />;
 export const ProcessSpecificationsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processSpecifications} canWrite={canWrite} />;
+export const RecipeAdjustmentsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.processSpecifications} canWrite={canWrite} focus="adjustments" />;
 export const ProcessAnalysisPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plans} canWrite={canWrite} />;
 export const InspectionDefinitionsPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.definitions} canWrite={canWrite} />;
 export const QualityPlansPage = ({ canWrite = true }) => <RegistryPage definition={registryPages.plansQuality} canWrite={canWrite} />;

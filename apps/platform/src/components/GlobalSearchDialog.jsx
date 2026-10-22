@@ -49,15 +49,17 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
 
   return (
     <Dialog open={open} onClose={onClose} initialFocus={inputRef} className="relative z-100">
-      <DialogBackdrop className="fixed inset-0 bg-slate-950/35 backdrop-blur-sm" />
+      <DialogBackdrop className="fixed inset-0 bg-coal-950/45" />
       <div className="fixed inset-0 overflow-y-auto p-4 pt-[12vh] sm:p-6 sm:pt-[14vh]">
-        <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="border-b border-slate-100 p-4 sm:p-5">
+        <DialogPanel className="mx-auto w-full max-w-2xl overflow-hidden rounded-md border border-slate-300 bg-white shadow-[0_20px_60px_rgba(7,16,14,.22)]">
+          <div className="border-b border-slate-200 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
-              <DialogTitle className="text-sm font-semibold text-slate-950">功能搜索</DialogTitle>
-              <button type="button" onClick={onClose} aria-label="关闭功能搜索" className="grid size-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"><XMarkIcon className="size-4" /></button>
+              <div>
+                <DialogTitle className="text-sm font-semibold text-slate-950">功能搜索</DialogTitle>
+                <p className="mt-1 text-xs text-slate-500">按业务对象、流程或配置项定位功能。</p>
+              </div>
+              <button type="button" onClick={onClose} aria-label="关闭功能搜索" className="grid size-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100"><XMarkIcon className="size-4" /></button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">查找现场接入、工艺配置、生产运行、质量管理、工艺追因和系统功能。</p>
             <Input
               ref={inputRef}
               role="combobox"
@@ -70,7 +72,7 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
               onChange={event => { setQuery(event.target.value); setActiveIndex(0); }}
               onKeyDown={handleKeyDown}
               placeholder="例如：采集配置、配方版本、运行对比、检验任务"
-              className="mt-4 h-11 rounded-xl bg-slate-50 px-4 focus:bg-white"
+              className="mt-4 h-11 rounded-md bg-slate-50 px-4 focus:bg-white"
             />
           </div>
           <div id={resultsId} role="listbox" aria-label="匹配的功能" className="max-h-[55vh] overflow-y-auto p-2">
@@ -86,9 +88,9 @@ export default function GlobalSearchDialog({ open, onClose, navigate, entries })
                 onMouseDown={event => event.preventDefault()}
                 onMouseMove={() => setActiveIndex(index)}
                 onClick={() => select(item.path)}
-                className={cx("flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left hover:bg-trajectory-50", index === selectedIndex && "bg-trajectory-50 ring-1 ring-inset ring-trajectory-500/30")}
+                className={cx("flex w-full items-start gap-3 border-l-2 border-transparent px-3 py-3 text-left hover:bg-slate-50", index === selectedIndex && "border-trajectory-600 bg-trajectory-50")}
               >
-                <span className="mt-0.5 shrink-0 whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">{item.section}</span>
+                <span className="mt-0.5 shrink-0 whitespace-nowrap border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">{item.section}</span>
                 <span className="min-w-0"><span className="block text-sm font-medium text-slate-900">{item.label}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{item.description}</span></span>
               </button>
             ))}

@@ -189,6 +189,26 @@ public sealed class ManufacturingContextValidatorTests
     }
 
     [Fact]
+    public void ProductionContext_AllowsMissingToolingWhenTheScenarioDoesNotNeedToolingTraceability()
+    {
+        var ok = ManufacturingContextValidator.TryValidate(
+            new ProductionContext
+            {
+                SiteId = "SITE-001",
+                EquipmentId = "PRESS-01",
+                ProductFamilyCode = "LENS-A",
+                ProductCode = "LENS-A-01",
+                ProcessSpecificationId = "RCP-A",
+                ProcessSpecificationVersion = "7"
+            },
+            out var normalized,
+            out var error);
+
+        Assert.True(ok, error);
+        Assert.Null(normalized!.ToolingInstallationId);
+    }
+
+    [Fact]
     public void ToolingInstallation_RequiresSiteId()
     {
         var ok = ManufacturingContextValidator.TryValidate(

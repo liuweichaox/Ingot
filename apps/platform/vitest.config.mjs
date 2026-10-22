@@ -9,6 +9,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./tests/vitest.setup.js"],
     include: ["tests/**/*.test.jsx"],
+    // Tests stub the browser fetch boundary; run files serially so one file's
+    // cleanup cannot race another file's in-flight request assertions.
+    fileParallelism: false,
     restoreMocks: true,
   },
 });

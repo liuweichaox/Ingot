@@ -1,5 +1,5 @@
-// 管理 Chat 运行创建、历史、流式状态和受控删除交互。
-import { ArrowPathIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, PaperAirplaneIcon, TrashIcon } from "@heroicons/react/24/outline";
+// 管理证据调查的运行创建、历史、流式状态和受控删除交互。
+import { ArrowPathIcon, MagnifyingGlassIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { deleteJson, getJson, postJson, streamSse } from "../api/http";
@@ -116,28 +116,28 @@ const reviewPositionLabels = {
 };
 
 const chatProgressLabels = {
-  "run.started": "正在理解问题",
+  "run.started": "已接收调查事项",
   "plan.created": "已确定查询范围",
-  "iteration.started": "正在准备数据查询",
-  "tool.started": "正在查询生产数据",
-  "tool.completed": "数据查询完成",
+  "iteration.started": "正在准备相关记录",
+  "tool.started": "正在读取生产数据",
+  "tool.completed": "已读取记录",
   "relatedRecords.checked": "正在核对数据来源",
-  "discussion.started": "正在从工艺、质量和复核视角交叉审查",
-  "discussion.message": "正在汇总各视角判断",
+  "discussion.started": "正在执行工艺、质量与复核交叉审查",
+  "discussion.message": "正在汇总交叉审查结果",
   "discussion.completed": "多视角研判完成",
-  "answer.delta": "正在整理回答",
-  "run.completed": "回答已生成",
-  "run.failed": "分析失败",
-  "run.cancelled": "分析已取消",
+  "answer.delta": "正在整理调查结论",
+  "run.completed": "调查已完成",
+  "run.failed": "调查失败",
+  "run.cancelled": "调查已取消",
 };
 
 const chatHistoryStatusLabels = {
-  queued: "等待分析",
-  running: "正在分析",
+  queued: "等待核对",
+  running: "正在核对",
   cancelling: "正在取消",
-  failed: "分析失败",
+  failed: "调查失败",
   cancelled: "已取消",
-  completed: "回答已完成",
+  completed: "调查已完成",
 };
 
 function chatProgressText(item) {
@@ -153,9 +153,10 @@ function ChatAnswer({ answer, onFollowUp }) {
   if (!answer) return null;
   if (typeof answer === "string") {
     return (
-      <div className="max-w-[90%] rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700">
+      <article className="border border-slate-300 border-l-2 border-l-trajectory-600 bg-white px-4 py-4 text-sm leading-7 text-slate-700">
+        <p className="data-label mb-2">调查说明</p>
         <p className="whitespace-pre-wrap">{answer}</p>
-      </div>
+      </article>
     );
   }
 
@@ -178,34 +179,38 @@ function ChatAnswer({ answer, onFollowUp }) {
     !combined;
   if (isConversationReply) {
     return (
-      <div className="max-w-[90%] rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-700">
+      <article className="border border-slate-300 border-l-2 border-l-trajectory-600 bg-white px-4 py-4 text-sm leading-7 text-slate-700">
+        <p className="data-label mb-2">调查说明</p>
         <p className="whitespace-pre-wrap">{answer.summary || "请继续说明你的问题。"}</p>
-        {(answer.followUpQuestions || []).length > 0 && <div className="mt-3 flex flex-wrap gap-2">{answer.followUpQuestions.map(item => (
-          <button key={item} type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-[13px] text-slate-700 hover:border-blue-300 hover:bg-blue-50" onClick={() => onFollowUp(item)}>{item}</button>
+        {(answer.followUpQuestions || []).length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{answer.followUpQuestions.map(item => (
+          <button key={item} type="button" className="border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>{item}</button>
         ))}</div>}
-      </div>
+      </article>
     );
   }
   return (
-    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
+    <article className="overflow-hidden border border-slate-300 bg-white">
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
         <div>
-          <p className="text-sm font-semibold text-slate-900">分析结论</p>
-          <p className="mt-0.5 text-[13px] text-slate-500">基于当前可访问记录生成，结论仍需工程验证</p>
+          <p className="data-label">调查结论</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">基于当前授权记录的核对结果</p>
         </div>
-        <Badge tone="blue">只读分析</Badge>
+        <Badge tone="info">只读核对</Badge>
       </header>
-      <div className="space-y-5 px-4 py-4 text-sm leading-7 text-slate-700 sm:px-5">
-        <p className="whitespace-pre-wrap font-medium text-slate-900">{answer.summary || "未形成摘要。"}</p>
+      <div className="space-y-6 px-4 py-5 text-sm leading-7 text-slate-700 sm:px-5">
+        <section className="border-l-2 border-trajectory-600 pl-4">
+          <p className="data-label mb-2">摘要</p>
+          <p className="whitespace-pre-wrap font-medium text-slate-950">{answer.summary || "未形成摘要。"}</p>
+        </section>
       {findings.length > 0 && (
-        <div>
-          <p className="text-[13px] font-semibold text-slate-500">关键发现</p>
-          <ol className="mt-2 space-y-2">
+        <section>
+          <p className="data-label">关键发现</p>
+          <ol className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
             {findings.map((item, index) => (
-              <li key={`${item.statement}-${index}`} className="flex gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-100 text-[13px] font-semibold text-blue-700">{index + 1}</span>
+              <li key={`${item.statement}-${index}`} className="flex gap-3 px-0 py-3">
+                <span className="data-value grid size-7 shrink-0 place-items-center border border-slate-300 bg-slate-50 text-[13px] font-semibold text-slate-700">{String(index + 1).padStart(2, "0")}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block">{item.statement}</span>
+                  <span className="block text-slate-900">{item.statement}</span>
                   <span className="mt-1 block text-[13px] text-slate-500">
                     {findingStrengthLabels[item.strength] || "证据陈述"} · {item.evidenceReferences?.length || 0} 条记录引用
                   </span>
@@ -213,37 +218,37 @@ function ChatAnswer({ answer, onFollowUp }) {
               </li>
             ))}
           </ol>
-        </div>
+        </section>
       )}
       {(answer.limitations || []).length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-          <p className="font-semibold">证据边界</p>
+        <section className="border-l-2 border-l-amber-500 bg-amber-50/70 px-4 py-3 text-amber-950">
+          <p className="data-label !text-amber-700">证据边界</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             {answer.limitations.map(item => <li key={item}>{item}</li>)}
           </ul>
-        </div>
+        </section>
       )}
       {combined && (
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <section className="border-y border-slate-200 bg-slate-50 px-4 py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="font-semibold text-slate-950">多视角研判</p>
-              <p className="mt-1 text-[13px] text-slate-500">工艺、质量和复核视角基于同一批记录交叉审查</p>
+              <p className="data-label">多视角研判</p>
+              <p className="mt-1 font-semibold text-slate-950">工艺、质量与复核基于同一批记录交叉审查</p>
             </div>
             <Badge tone={combined.status === "needs-review" ? "warning" : "neutral"}>{combined.status === "needs-review" ? "待工程复核" : "证据不足"}</Badge>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-700">{combined.summary}</p>
           {(combined.possibleCauses || []).length > 0 && (
             <div className="mt-4 grid gap-2">
-              <p className="text-[13px] font-semibold text-slate-500">可能原因</p>
+              <p className="data-label">可能原因</p>
               {combined.possibleCauses.map(cause => {
                 const reviews = (combined.reviews || []).filter(review => review.causeId === cause.causeId);
                 const latestReviews = Object.values(reviews.reduce((latest, review) => ({ ...latest, [review.authorRole]: review }), {}));
                 return (
-                  <article key={cause.causeId} className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><strong className="text-sm text-slate-900">{cause.statement}</strong></div>
+                  <article key={cause.causeId} className="border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-2"><Badge tone="info">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><strong className="text-sm text-slate-900">{cause.statement}</strong></div>
                     <p className="mt-1 text-sm leading-6 text-slate-600">{cause.reason}</p>
-                    {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="rounded-md bg-slate-100 px-2 py-1 text-[13px] text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
+                    {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
                   </article>
                 );
               })}
@@ -252,38 +257,38 @@ function ChatAnswer({ answer, onFollowUp }) {
           {(combined.reviewSteps || []).length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-[13px] font-medium text-slate-700">查看 {combined.reviewSteps.length} 条交叉审查记录</summary>
-              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="rounded-lg bg-white px-3 py-2 text-[13px] leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
+              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="border-l-2 border-slate-300 bg-white px-3 py-2 text-[13px] leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
             </details>
           )}
         </section>
       )}
       {(answer.relatedRecords || []).length > 0 && (
-        <div>
-          <p className="text-[13px] font-semibold text-slate-500">相关记录</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <section>
+          <p className="data-label">相关记录</p>
+          <div className="mt-3 flex flex-wrap gap-2">
             {answer.relatedRecords.map(item => item.url ? (
-              <Link key={`${item.kind}:${item.id}`} to={item.url} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100">
+              <Link key={`${item.kind}:${item.id}`} to={item.url} className="border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-trajectory-700 transition hover:border-trajectory-600 hover:bg-trajectory-50">
                 {item.label}
               </Link>
             ) : (
-              <span key={`${item.kind}:${item.id}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] font-medium text-slate-700">
+              <span key={`${item.kind}:${item.id}`} className="border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] font-medium text-slate-700">
                 {item.label}
               </span>
             ))}
           </div>
-        </div>
+        </section>
       )}
       {(answer.followUpQuestions || []).length > 0 && (
-        <div>
-          <p className="text-[13px] font-semibold text-slate-500">继续调查</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <section>
+          <p className="data-label">继续调查</p>
+          <div className="mt-3 flex flex-wrap gap-2">
             {answer.followUpQuestions.map(item => (
-              <button key={item} type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-left text-[13px] text-slate-700 hover:border-blue-300 hover:bg-blue-50" onClick={() => onFollowUp(item)}>
+              <button key={item} type="button" className="border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>
                 {item}
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
       </div>
     </article>
@@ -292,22 +297,56 @@ function ChatAnswer({ answer, onFollowUp }) {
 
 function ChatHistoryList({ items, loading, submitting, deletingConversationId, selectedConversationId, onOpen, onDelete }) {
   if (loading) {
-    return <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取</div>;
+    return <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取调查记录</div>;
   }
   if (!items.length) {
-    return <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一个生产、质量或工艺问题开始。</p>;
+    return <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一项生产、质量或工艺核对开始。</p>;
   }
   return items.map(item => (
-    <div key={item.conversationId} className={`group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center rounded-md ${selectedConversationId === item.conversationId ? "bg-blue-50" : "hover:bg-white"}`}>
+    <div key={item.conversationId} className={`group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center border-l-2 ${selectedConversationId === item.conversationId ? "border-trajectory-600 bg-white" : "border-transparent hover:border-slate-300 hover:bg-white/80"}`}>
       <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => onOpen(item.conversationId)} disabled={submitting} aria-current={selectedConversationId === item.conversationId ? "page" : undefined}>
         <p className="truncate text-sm font-medium text-slate-800">{item.title}</p>
-        <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.lastMessageStatus] || item.lastMessageStatus || "对话"} · {formatTime(item.lastMessageAt)}</p>
+        <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.lastMessageStatus] || item.lastMessageStatus || "调查"} · {formatTime(item.lastMessageAt)}</p>
       </button>
-      <button type="button" className="grid size-8 place-items-center rounded-md text-slate-400 opacity-100 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 lg:opacity-0 lg:group-hover:opacity-100" aria-label={`删除对话：${item.title}`} onClick={() => onDelete(item)} disabled={Boolean(deletingConversationId) || submitting}>
+      <button type="button" className="grid size-8 place-items-center text-slate-400 opacity-100 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 lg:opacity-0 lg:group-hover:opacity-100" aria-label={`删除调查：${item.title}`} onClick={() => onDelete(item)} disabled={Boolean(deletingConversationId) || submitting}>
         <TrashIcon className="size-4" />
       </button>
     </div>
   ));
+}
+
+function InvestigationStarter({ onSelect }) {
+  const starters = [
+    { id: "run", title: "核对一次生产运行", detail: "根据运行号、设备或产品核对实际设定、过程轨迹和质量结果。", prompt: "核对一次生产运行：" },
+    { id: "quality", title: "排查质量偏差", detail: "查看质量结果、可比运行和当前证据边界。", prompt: "核对质量偏差：" },
+    { id: "comparison", title: "比较同类运行", detail: "比较指定运行与可比基线之间的过程和结果差异。", prompt: "比较同类运行：" },
+  ];
+  return (
+    <section className="overflow-hidden border border-slate-300 bg-white">
+      <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="data-label">证据调查</p>
+          <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-slate-950">从一项可回查的工程问题开始</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">系统只读取当前授权范围内的生产、质量和工艺记录；每项结论都应回到来源记录和证据边界。</p>
+        </div>
+        <Badge tone="info">只读范围</Badge>
+      </header>
+      <div className="grid divide-y divide-slate-200 md:grid-cols-3 md:divide-x md:divide-y-0">
+        {starters.map((starter, index) => (
+          <button key={starter.id} type="button" className="group min-h-40 px-5 py-5 text-left transition hover:bg-trajectory-50/70 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-trajectory-600" onClick={() => onSelect(starter.prompt)}>
+            <span className="data-value text-sm text-trajectory-700">0{index + 1}</span>
+            <p className="mt-4 text-sm font-semibold text-slate-900">{starter.title}</p>
+            <p className="mt-2 text-[13px] leading-5 text-slate-500">{starter.detail}</p>
+            <span className="mt-4 block text-[13px] font-semibold text-trajectory-700">填写调查事项 →</span>
+          </button>
+        ))}
+      </div>
+      <dl className="grid divide-y divide-slate-200 border-t border-slate-200 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] px-5 py-3"><dt className="font-medium text-slate-500">调查范围</dt><dd className="text-slate-700">运行、质量结果、设备状态和工艺证据</dd></div>
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] px-5 py-3"><dt className="font-medium text-slate-500">输出形式</dt><dd className="text-slate-700">结论、记录引用、限制和下一步</dd></div>
+      </dl>
+    </section>
+  );
 }
 
 export function ChatPage() {
@@ -509,8 +548,8 @@ export function ChatPage() {
 
   async function deleteHistory(item) {
     if (!await confirm({
-      title: "删除对话",
-      description: `“${item.title}”的全部消息及分析过程将被永久删除。业务运行、质检和工艺配置记录不会受影响。`,
+      title: "删除调查",
+      description: `“${item.title}”的全部调查说明及分析过程将被永久删除。业务运行、质检和工艺配置记录不会受影响。`,
       confirmLabel: "确认删除",
       tone: "danger",
     })) return;
@@ -520,7 +559,7 @@ export function ChatPage() {
       await deleteJson(`/api/v1/chat/conversations/${encodeURIComponent(item.conversationId)}`);
       if (routeConversationId === item.conversationId) newConversation();
       await loadHistory();
-      notify("对话已删除。", "success");
+      notify("调查已删除。", "success");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -537,67 +576,69 @@ export function ChatPage() {
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
 
   return (
-    <div className="grid h-full min-h-0 bg-white lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <aside className="hidden min-h-0 border-r border-slate-200 bg-slate-50/80 lg:flex lg:flex-col">
-        <div className="border-b border-slate-200 p-3">
+    <div className="grid h-full min-h-0 bg-slate-100/60 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <aside className="hidden min-h-0 border-r border-slate-300 bg-slate-50 lg:flex lg:flex-col">
+        <div className="border-b border-slate-300 p-3">
           <Button className="w-full justify-center" variant="primary" onClick={newConversation} disabled={submitting}>
-            <ChatBubbleLeftRightIcon className="size-4" />新对话
+            <MagnifyingGlassIcon className="size-4" />新建调查
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <p className="px-2 py-2 text-[13px] font-semibold text-slate-500">最近对话</p>
+          <p className="data-label px-2 py-3">调查记录</p>
           <ChatHistoryList items={history} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
         </div>
       </aside>
 
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
-        <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-300 bg-white px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <div className="flex items-center gap-2"><ChatBubbleLeftRightIcon className="size-5 text-blue-600" /><h1 className="truncate font-semibold text-slate-950">{conversation?.title || "分析助手"}</h1></div>
-            <p className="mt-0.5 truncate text-[13px] text-slate-500">生产与工艺数据</p>
+            <p className="data-label">证据调查</p>
+            <h1 className="mt-1 truncate text-xl font-semibold tracking-[-0.025em] text-slate-950">{conversation?.title || "新建调查"}</h1>
+            <p className="mt-1 truncate text-[13px] text-slate-500">授权范围内的运行、检验和工艺记录</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
             {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
               {capabilities.modes.map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
             </Select>}
-            <Button className="lg:hidden" onClick={() => setHistoryOpen(true)}><ChatBubbleLeftRightIcon className="size-4" />对话记录</Button>
-            <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新对话</Button>
+            <Button className="lg:hidden" onClick={() => setHistoryOpen(true)}><MagnifyingGlassIcon className="size-4" />调查记录</Button>
+            <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新建调查</Button>
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/50">
-          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 py-6 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100/45">
+          <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6">
+            <section className="grid overflow-hidden border border-slate-300 bg-white text-[13px] sm:grid-cols-3" aria-label="调查边界">
+              <div className="border-b border-slate-200 px-4 py-3 sm:border-b-0 sm:border-r"><p className="data-label">记录范围</p><p className="mt-1 font-medium text-slate-700">已授权的生产与质量记录</p></div>
+              <div className="border-b border-slate-200 px-4 py-3 sm:border-b-0 sm:border-r"><p className="data-label">核对方式</p><p className="mt-1 font-medium text-slate-700">{chatModeLabels[mode] || "证据核对"}</p></div>
+              <div className="px-4 py-3"><p className="data-label">输出边界</p><p className="mt-1 font-medium text-slate-700">结论需工程验证</p></div>
+            </section>
             <div className="space-y-3">
-              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="分析服务未启用">当前部署未启用分析服务，请联系平台管理员检查模型服务配置。</Alert>}
-              {!capabilitiesLoading && serviceEnabled && deterministicModel && <Alert tone="info" title="当前分析范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
+              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="证据调查未配置模型服务">当前证据调查尚未配置可用的模型服务，请由平台管理员在“系统管理 → 模型服务”中配置。此状态不影响现场采集、运行记录、质量检验或数值优化服务。</Alert>}
+              {!capabilitiesLoading && serviceEnabled && deterministicModel && <Alert tone="info" title="当前核对范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
             {!messages.length ? (
-              <div className="w-full max-w-3xl self-start rounded-lg border border-slate-200 bg-white">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <h2 className="text-sm font-semibold text-slate-950">新建分析</h2>
-                </div>
-                <dl className="grid grid-cols-[6rem_minmax(0,1fr)] text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
-                  <dt className="border-b border-r border-slate-100 px-4 py-3 font-medium text-slate-500">分析范围</dt>
-                  <dd className="border-b border-slate-100 px-4 py-3 text-slate-700">生产运行、质量结果、设备状态和工艺证据</dd>
-                  <dt className="border-r border-slate-100 px-4 py-3 font-medium text-slate-500">输入方式</dt>
-                  <dd className="px-4 py-3 text-slate-700">在下方输入运行号、设备编号或需要核对的问题</dd>
-                </dl>
-              </div>
+              <InvestigationStarter onSelect={setQuestion} />
             ) : (
-              <div className="w-full space-y-7 self-start">
+              <div className="w-full space-y-5 self-start">
                 {messages.map(message => message.role === "user" ? (
-                  <div key={message.messageId} className="flex justify-end"><div className="max-w-[85%] rounded-lg rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white"><p className="whitespace-pre-wrap">{message.text}</p></div></div>
+                  <article key={message.messageId} className="border border-slate-300 border-l-2 border-l-slate-600 bg-white px-4 py-4">
+                    <p className="data-label mb-2">调查事项</p>
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-900">{message.text}</p>
+                  </article>
                 ) : (
                   <section key={message.messageId} className="space-y-4">
-                    {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <ol className="space-y-2" aria-label="分析进度">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 text-sm text-slate-600"><ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-blue-600" /><p className="whitespace-pre-wrap">{item.message}</p></li>)}</ol>}
+                    {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <section className="border border-slate-300 bg-white px-4 py-4" aria-label="调查进度">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div><p className="data-label">核对进度</p><p className="mt-1 text-sm font-semibold text-slate-900">正在建立可回查的调查记录</p></div><Badge tone="info">进行中</Badge></div>
+                      <ol className="mt-3 divide-y divide-slate-100">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 py-2.5 text-sm text-slate-600"><span className="data-value grid size-6 shrink-0 place-items-center border border-trajectory-500 text-xs font-semibold text-trajectory-700">{String(index + 1).padStart(2, "0")}</span><p className="whitespace-pre-wrap leading-6">{item.message}</p></li>)}</ol>
+                    </section>}
                     {message.runId === run?.runId && submitting && !message.answer && visibleProgress.length === 0 && (queueDelayRunId === message.runId
-                      ? <Alert tone="warning" title="分析任务仍在排队">后台 Worker 尚未领取此任务。请检查 Platform Worker 是否运行；任务会在 Worker 恢复后继续处理。</Alert>
-                      : <div className="inline-flex items-center gap-2 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在理解问题并核对记录</div>)}
+                      ? <Alert tone="warning" title="调查任务仍在排队">后台 Worker 尚未领取此任务。请检查 Platform Worker 是否运行；任务会在 Worker 恢复后继续处理。</Alert>
+                      : <section className="border-l-2 border-l-trajectory-600 bg-white px-4 py-3 text-sm text-slate-600"><p className="data-label mb-1">核对进度</p>已接收调查事项，正在建立查询范围并核对记录。</section>)}
                     <ChatAnswer answer={message.answer || message.text} onFollowUp={setQuestion} />
-                    {message.status === "failed" && <Alert tone="danger" title="分析失败">{message.error || "回答生成失败，请重试。"}</Alert>}
-                    {message.status === "cancelled" && <Alert title="分析已取消">{message.error || "本次回答已取消。"}</Alert>}
-                    {message.runId && <p className="text-center text-xs text-slate-400" title={message.runId}>调查记录 {message.runId}</p>}
+                    {message.status === "failed" && <Alert tone="danger" title="调查失败">{message.error || "未能形成调查结论，请重试。"}</Alert>}
+                    {message.status === "cancelled" && <Alert title="调查已取消">{message.error || "本次调查已取消。"}</Alert>}
+                    {message.runId && <p className="border-t border-slate-200 pt-2 text-right text-xs text-slate-400" title={message.runId}>调查编号 {message.runId}</p>}
                   </section>
                 ))}
               </div>
@@ -605,18 +646,21 @@ export function ChatPage() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
-          <form className="mx-auto flex max-w-4xl items-end gap-2 rounded-lg border border-slate-300 bg-white p-2 focus-within:border-blue-500 focus-within:ring-3 focus-within:ring-blue-500/15" onSubmit={start}>
-            <textarea aria-label="给分析助手发送消息" className="max-h-40 min-h-10 min-w-0 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="询问生产、质量或工艺问题…" onKeyDown={handleQuestionKeyDown} />
-            {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止"}</Button> : <Button className="size-10 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-5" /></Button>}
+        <footer className="border-t border-slate-300 bg-white px-3 py-3 sm:px-6">
+          <form className="mx-auto flex max-w-6xl items-end gap-3 border border-slate-300 bg-white p-2 transition focus-within:border-trajectory-600 focus-within:ring-2 focus-within:ring-trajectory-500/15" onSubmit={start}>
+            <div className="min-w-0 flex-1 px-2">
+              <label className="data-label" htmlFor="investigation-question">调查事项</label>
+              <textarea id="investigation-question" aria-label="提交调查说明" className="mt-1 max-h-40 min-h-10 min-w-0 w-full resize-none border-0 bg-transparent py-1 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="描述需要核对的事实、运行号、设备或质量偏差…" onKeyDown={handleQuestionKeyDown} />
+            </div>
+            {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止调查"}</Button> : <Button className="size-10 rounded-md px-0" variant="primary" type="submit" aria-label="开始调查" disabled={analysisBlocked || !question.trim()}><MagnifyingGlassIcon className="size-5" /></Button>}
           </form>
-          <p className="mx-auto mt-2 max-w-4xl text-center text-[13px] text-slate-500">回答基于平台记录，并标注证据范围。</p>
+          <p className="mx-auto mt-2 max-w-6xl text-[13px] text-slate-500">调查只基于平台记录，并标注范围、来源和证据边界；不会自动修改配方或控制设备。</p>
         </footer>
       </section>
       <Drawer
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-        title="对话记录"
+        title="调查记录"
         description={`当前账号共 ${history.length} 条`}
         size="md"
       >

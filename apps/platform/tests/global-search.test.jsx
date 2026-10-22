@@ -27,13 +27,27 @@ async function openSearch(roles = ["process.engineer"]) {
 }
 
 describe("功能搜索", () => {
-  it("参数配置统一使用配方版本入口，不展示重复的研发变量入口", () => {
-    for (const roles of [["quality.inspector"], ["process.engineer"], ["platform.admin"]]) {
-      const sections = sectionsForIdentity({ roles });
-      expect(sections.some(section => section.id === "research")).toBe(false);
-      expect(sections.flatMap(section => section.groups.flatMap(group => group.items))
-        .some(([path]) => path === "/configuration/process-specifications")).toBe(true);
-    }
+  it("按产品工作流组织导航，并保留管理员专属系统入口", () => {
+    const sections = sectionsForIdentity({ roles: ["process.engineer"] });
+    expect(sections.map(({ id, label, path }) => [id, label, path])).toEqual([
+      ["overview", "工作台", "/workbench"],
+      ["investigation", "证据调查", "/chat"],
+      ["evidence", "现场运行", "/process-executions"],
+      ["insight", "工艺洞察", "/comparisons"],
+      ["optimization", "配方优化", "/configuration/process-specifications"],
+      ["configuration", "配置与接入", "/configuration/process-data-models"],
+    ]);
+    expect(sections.find(section => section.id === "evidence")?.groups).toEqual([
+      { items: [["/process-executions", "生产运行"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "质量检验"], ["/quality-analysis", "质量偏差"]] },
+    ]);
+    expect(sections.find(section => section.id === "insight")?.groups).toEqual([
+      { items: [["/comparisons", "工艺分析"], ["/data-quality", "数据质量"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
+    ]);
+    expect(sections.find(section => section.id === "configuration")?.groups.map(group => [group.heading, group.items])).toEqual([
+      [undefined, [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析方案"], ["/configuration/inspection-definitions", "检测项目"], ["/configuration/quality-plans", "质量方案"], ["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]]],
+    ]);
+    expect(sections.some(section => section.id === "system")).toBe(false);
+    expect(sectionsForIdentity({ roles: ["platform.admin"] }).at(-1)?.id).toBe("system");
   });
 
   it("旧的研发项目地址不再进入产品页面", async () => {
@@ -70,7 +84,7 @@ describe("功能搜索", () => {
     expect(input).toHaveFocus();
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-data-models"));
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/chat"));
   });
 
   it("筛选后重置选项，空结果不会跳转，重新打开清除查询", async () => {
@@ -114,5 +128,39 @@ describe("功能搜索", () => {
     fireEvent.click(screen.getByRole("option"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/identity/users"));
+  });
+
+  it("按新的产品名称搜索证据调查和配方优化入口", async () => {
+    let input = await openSearch();
+    fireEvent.change(input, { target: { value: "证据调查" } });
+    expect(screen.getByRole("option")).toHaveTextContent("证据调查");
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/chat"));
+
+    fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
+    input = await screen.findByRole("combobox");
+    fireEvent.change(input, { target: { value: "配方优化" } });
+    const recipeOptions = screen.getAllByRole("option").map(option => option.textContent);
+    expect(recipeOptions.some(text => text.includes("配方版本"))).toBe(true);
+    expect(recipeOptions.some(text => text.includes("调整与验证"))).toBe(true);
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-specifications"));
+  });
+
+  it("保留工装建模前置配置和数据质量的可发现入口", async () => {
+    let input = await openSearch();
+    fireEvent.change(input, { target: { value: "工装结构" } });
+    const toolingTypeOption = screen.getAllByRole("option").find(option => option.textContent.includes("工装结构"));
+    expect(toolingTypeOption).toBeDefined();
+    fireEvent.click(toolingTypeOption);
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/tooling-types"));
+
+    fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
+    input = await screen.findByRole("combobox");
+    fireEvent.change(input, { target: { value: "数据质量" } });
+    const dataQualityOption = screen.getAllByRole("option").find(option => option.textContent.includes("数据质量"));
+    expect(dataQualityOption).toBeDefined();
+    fireEvent.click(dataQualityOption);
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/data-quality"));
   });
 });

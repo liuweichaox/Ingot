@@ -338,11 +338,15 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             context["product_code"] = resolved.Production.ProductCode;
             context["process_specification_id"] = resolved.Production.ProcessSpecificationId;
             context["process_specification_version"] = resolved.Production.ProcessSpecificationVersion;
-            context["tooling_installation_id"] = resolved.Installation.InstallationId.ToString("D");
-            context["tooling_assembly_id"] = resolved.Assembly.ToolingAssemblyId;
-            context["tooling_assembly_id"] = resolved.Assembly.ToolingAssemblyId;
-            context["assembly_revision_id"] = resolved.AssemblyRevision.AssemblyRevisionId.ToString("D");
-            context["assembly_revision"] = resolved.AssemblyRevision.Revision.ToString(CultureInfo.InvariantCulture);
+            if (resolved.Installation is { } installation &&
+                resolved.AssemblyRevision is { } assemblyRevision &&
+                resolved.Assembly is { } assembly)
+            {
+                context["tooling_installation_id"] = installation.InstallationId.ToString("D");
+                context["tooling_assembly_id"] = assembly.ToolingAssemblyId;
+                context["assembly_revision_id"] = assemblyRevision.AssemblyRevisionId.ToString("D");
+                context["assembly_revision"] = assemblyRevision.Revision.ToString(CultureInfo.InvariantCulture);
+            }
             context["context_captured_at"] = evt.OccurredAt.ToString("O", CultureInfo.InvariantCulture);
             context["context_capture_status"] = "resolved";
             AddContext(context, "external_order_ref", resolved.Production.ExternalOrderRef);

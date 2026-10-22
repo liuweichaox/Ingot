@@ -26,13 +26,13 @@ async function renderChat() {
     }));
   }));
   render(<MemoryRouter initialEntries={["/chat"]}><ChatPage /></MemoryRouter>);
-  const input = screen.getByRole("textbox", { name: "给分析助手发送消息" });
+  const input = screen.getByRole("textbox", { name: "提交调查说明" });
   await waitFor(() => expect(input).toBeEnabled());
   fireEvent.change(input, { target: { value: "核对运行记录" } });
   return { input, submitted };
 }
 
-describe("Chat 输入快捷键", () => {
+describe("证据调查输入快捷键", () => {
   it.each([
     ["组合输入中的 Enter", { isComposing: true }],
     ["仍使用 229 标记的输入法 Enter", { isComposing: false, keyCode: 229 }],

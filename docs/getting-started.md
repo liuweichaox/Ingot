@@ -8,7 +8,7 @@
 |---|---|---|
 | 部署系统 | [启动完整栈](#启动完整栈) | Web、API、Worker、Optimizer 和数据库健康，迁移成功退出；无需外部系统账号或连接 |
 | 验证当前生产证据流程 | [配方优化试点指南](pilot.md) | 有效生产运行证据和第一份下一配方建议 |
-| 准备生产环境 | [生产架构](production-architecture.md) → [部署运维](deployment.md) | 站点独立完成安全、恢复、容量和观察验收 |
+| 准备生产环境 | [生产架构](production-architecture.md) → [部署运维](deployment.md) | 工厂/生产现场独立完成安全、恢复、容量和观察验收 |
 | 参与开发 | [贡献指南](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.md) | 本地通过 `./scripts/verify.sh` |
 
 当前能力和验证成熟度统一见[当前状态](status.md)。
@@ -66,7 +66,7 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 
 后续修改 `.env` 不会重置已有账户。
 
-此部署启动 Ingot 自身的 Web、API、数据库、优化器和后台服务，无需外部业务系统账号或连接。设备及企业系统连接器按需配置和启用。登录后从工艺配置管理工艺变量和配方版本；每次工艺运行就是一次实验，运行和质量记录共同保存实验事实，具体能力与推荐所需数据见[当前状态](status.md)。
+此部署启动 Ingot 自身的 Web、API、数据库、优化器和后台服务，无需外部业务系统账号或连接。设备及企业系统连接器按需配置和启用。登录后从“配置与接入”管理工艺变量和配方版本；每次工艺运行就是一次实验，运行和质量记录共同保存实验事实，具体能力与推荐所需数据见[当前状态](status.md)。
 
 ## 常见启动问题
 
@@ -81,7 +81,7 @@ docker compose -f docker-compose.app.yml logs --tail=200
 
 ## 验证首次使用
 
-1. 登录后打开工艺配置，确认能够访问工艺变量和配方版本。
+1. 登录后打开“配置与接入”，确认能够访问工艺变量和配方版本。
 2. 检查 `http://localhost:8002/health` 的 Worker 状态，保留迁移结果与服务状态以便排障。
 3. 按试点指南使用自己有权处理的数据。部署健康不会自动生成生产运行、检验结果或符合准入条件的优化观察。
 

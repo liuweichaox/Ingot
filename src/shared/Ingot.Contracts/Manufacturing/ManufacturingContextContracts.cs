@@ -114,7 +114,8 @@ public sealed record ProductionContext
     public required string ProductCode { get; init; }
     public required string ProcessSpecificationId { get; init; }
     public required string ProcessSpecificationVersion { get; init; }
-    public Guid ToolingInstallationId { get; init; }
+    // Tooling is retained only when the scenario needs its configuration as run context.
+    public Guid? ToolingInstallationId { get; init; }
     public DateTimeOffset ValidFrom { get; init; }
     public DateTimeOffset? ValidTo { get; init; }
     public string Source { get; init; } = "manual";
@@ -144,7 +145,7 @@ public sealed record ReplaceProductionContextRequest
     public required string ProductCode { get; init; }
     public required string ProcessSpecificationId { get; init; }
     public required string ProcessSpecificationVersion { get; init; }
-    public Guid ToolingInstallationId { get; init; }
+    public Guid? ToolingInstallationId { get; init; }
     public DateTimeOffset ValidFrom { get; init; }
     public string Source { get; init; } = "manual";
     public string? CommandId { get; init; }
@@ -161,7 +162,7 @@ public sealed record ReplaceProductionContextRequest
 public sealed record ResolvedProductionContext
 {
     public required ProductionContext Production { get; init; }
-    public required ToolingInstallation Installation { get; init; }
-    public required ToolingAssemblyRevision AssemblyRevision { get; init; }
-    public required ToolingAssembly Assembly { get; init; }
+    public ToolingInstallation? Installation { get; init; }
+    public ToolingAssemblyRevision? AssemblyRevision { get; init; }
+    public ToolingAssembly? Assembly { get; init; }
 }

@@ -9,12 +9,12 @@ const origin = "https://ingotstack.com";
 export const metadata: Metadata = {
   metadataBase: new URL(origin),
   title: "Ingot — Open-source Process R&D and Optimization System",
-  description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
+  description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.",
   applicationName: "Ingot",
   keywords: [
     "Ingot", "process diagnosis", "recipe optimization", "process optimization", "process engineer decisions",
     "production runs", "next recipe", "recipe version",
-    "version lineage", "process data", "mechanism notes", "engineering decisions",
+    "version lineage", "process data", "reviewed process materials", "Ingot Chat", "engineering decisions",
   ],
   alternates: {
     canonical: "/en/",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Ingot — From process data to evidence-based R&D decisions.",
-    description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
+    description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.",
     url: `${origin}/en/`,
     locale: "en_US",
     alternateLocale: ["zh_CN"],
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Ingot — Open-source Process R&D and Optimization System",
-    description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.",
+    description: "Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.",
     images: ["/og.png"],
   },
 };

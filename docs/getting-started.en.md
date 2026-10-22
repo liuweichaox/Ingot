@@ -8,7 +8,7 @@
 |---|---|---|
 | Deploy Ingot | [Start the complete stack](#start-the-complete-stack) | Web, API, Worker, Optimizer, and database are healthy, and migration exits successfully; no external-system account or connection is required |
 | Validate the current production-evidence workflow | [Recipe-optimization pilot guide](pilot.en.md) | Qualified production-run evidence and the first next-recipe recommendation |
-| Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The site independently passes security, recovery, capacity, and observation acceptance |
+| Prepare production | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) | The factory/production site independently passes security, recovery, capacity, and observation acceptance |
 | Contribute code | [Contributing](https://github.com/liuweichaox/Ingot/blob/main/CONTRIBUTING.en.md) | `./scripts/verify.sh` passes locally |
 
 See [Current status](status.en.md) for capability and validation maturity.
@@ -66,7 +66,7 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 
 Changing `.env` later does not reset an existing account.
 
-This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage process variables and recipe versions through process configuration. Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
+This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage process variables and recipe versions through “Configuration and integration.” Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
 
 ## Common startup problems
 
@@ -81,7 +81,7 @@ docker compose -f docker-compose.app.yml logs --tail=200
 
 ## Verify the first session
 
-1. Sign in and open process configuration. Confirm that you can access process variables and recipe versions.
+1. Sign in and open “Configuration and integration.” Confirm that you can access process variables and recipe versions.
 2. Check `http://localhost:8002/health` for the Worker and retain the migration result and service status for troubleshooting.
 3. Continue with the pilot guide using your own authorized data. A healthy deployment does not create production runs, inspection results, or qualified optimization observations.
 

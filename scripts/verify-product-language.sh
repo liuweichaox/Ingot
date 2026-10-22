@@ -70,31 +70,33 @@ check_entry_order() {
 }
 
 check_entry_order docs/design.md \
-  '1. **工作台**' \
-  '2. **工艺配置**' \
-  '3. **现场接入**' \
-  '4. **生产运行**' \
-  '5. **质量管理**' \
-  '6. **工艺追因**'
+  '**工作台**' \
+  '**证据调查**' \
+  '**现场运行**' \
+  '**工艺洞察**' \
+  '**配方优化**' \
+  '**配置与接入**' \
+  '**系统管理**'
 
 check_entry_order docs/design.en.md \
-  '1. **Workbench**' \
-  '2. **Process configuration**' \
-  '3. **Field integration**' \
-  '4. **Production runs**' \
-  '5. **Quality management**' \
-  '6. **Process diagnosis**'
+  '**Workbench**' \
+  '**Evidence Investigation**' \
+  '**Field operations**' \
+  '**Process insight**' \
+  '**Recipe optimization**' \
+  '**Configuration and integration**' \
+  '**System administration**'
 
-canonical_nav_zh='工艺配置 → 现场接入 → 生产运行 → 质量管理 → 工艺追因'
-canonical_nav_en='Process configuration → Field integration → Production runs → Quality management → Process diagnosis'
+canonical_nav_zh='配置与接入 → 现场运行 → 质量检验 → 工艺分析 → 配方优化'
+canonical_nav_en='Configuration and integration → Field operations → Quality inspection → Process analysis → Recipe optimization'
 if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
    ! grep -Fq "$canonical_nav_en" docs/design.en.md; then
   echo "System design navigation summaries must match the canonical product order." >&2
   exit 1
 fi
 
-canonical_zh='组织配方版本、实验记录与运行证据，支持质量分析、工艺追因和配方优化。'
-canonical_en='Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.'
+canonical_zh='组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化。'
+canonical_en='Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.'
 canonical_category_zh='开源工艺研发与优化系统'
 canonical_category_en_pattern='Open-source Process R(&|&amp;)D and Optimization System'
 

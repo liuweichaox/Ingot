@@ -6,15 +6,15 @@ This document defines component responsibilities, dependency direction, systems 
 
 ## Design objective
 
-Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
-Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional extensions and must not become required dependencies of core R&D workflows. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
+Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional data sources. When a scenario has a reliable source, production evidence should preferably be acquired, semantically mapped, buffered, and replayed through a connector. Connectors must not become required dependencies of core R&D workflows, and Ingot does not replace MES, QMS, LIMS, scheduling, or equipment control. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
 
 The architecture must therefore:
 
 1. **Establish trustworthy facts first**: every analysis traces to experiment or run records with provenance, units, time, and version.
 2. **Support engineering judgment next**: show differences, evidence, counterevidence, confounding, and uncertainty rather than only a score.
-3. **Support independent R&D records**: R&D does not depend on production systems being online or field connectors being available; production runs are one optional evidence source.
+3. **Support independent R&D records**: R&D does not depend on production systems being online or field connectors being available; reliable field sources should be acquired automatically when available, while other sources retain provenance and review boundaries.
 4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
 5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
@@ -23,29 +23,32 @@ The system is designed to run self-hosted for one team and used by R&D and proce
 ## Product model
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
+Configuration and integration → Field operations → Quality inspection → Process analysis → Recipe optimization
 ```
 
 This is the currently implemented production-evidence workflow: it organizes run data into trustworthy facts for analysis and recommendations. Next-recipe recommendations depend on completed production runs, inspection outcomes, and adequate coverage. Each run is an experiment: run records retain actual parameters and process trajectories, while quality records retain experiment outcomes. See [Current status](status.en.md).
 
-The current Web information architecture balances the decision chain with frequent role-based tasks through six business entries:
+In the rest of this document, “site” means the factory or independent production site shown to users; APIs, the database, and deployment configuration continue to use `SiteId` as the technical identifier.
 
-1. **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
-2. **Process configuration**: process variables, recipe versions, process analysis, quality configuration, and tooling configuration. Each recipe version has a “Launch check” that lists the dependencies that version still lacks;
-3. **Field integration**: edge nodes, communication drivers, and mappings from multiple source fields to process variables;
-4. **Production runs**: production changeover, tooling installation, and run records. Run records provide a “Needs attention” filter that lists completed runs whose quality failed, whose outcome is inconclusive, or whose process data is unavailable;
-5. **Quality management**: inspection tasks, independent review, and quality records. Deviation analysis shows which results fall outside the quality range for a product or recipe version, with direct access for daily quality work;
-6. **Process diagnosis**: data quality, run comparison, and the analysis assistant. Run comparison explains why comparable runs differ. Diagnosis uses run and quality records that already exist. The next-run correction is completed on the published recipe version. AI is an analysis method rather than a standalone business domain.
+The current Web information architecture balances the decision chain with frequent role-based tasks through business groups rather than making every page a first-level entry:
+
+- **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
+- **Evidence Investigation**: a separate entry for verifying authorized structured facts and reviewed materials;
+- **Field operations**: production runs, production changeover, quality inspection, quality deviations, and tooling installation when a scenario needs tooling traceability;
+- **Process insight**: process analysis, process materials, and mechanism knowledge;
+- **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome materialization;
+- **Configuration and integration**: process variables, analysis plans, inspection definitions, quality plans, acquisition setup, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
+- **System administration**: users and permissions, system status, logs, raw events, model services, and assistant evaluation for administrators.
 
 Raw events reported by edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
 
-A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published process analysis references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range. When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has four fixed trace sources: equipment and run identity come from the edge node and acquisition setup; product, recipe, and material lot come from production changeover; installed tooling comes from tooling installation; and process-field coverage is determined by the acquisition mappings.
+A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published analysis plan references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range. When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has fixed trace sources for equipment and run identity, product and recipe, material lot, process fields, and quality outcomes; tooling is linked when the scenario needs tooling traceability.
 
-After the workbench, the primary business entries follow “Process configuration → Field integration → Production runs → Quality management → Process diagnosis,” which matches the business dependency order: a new scenario defines and publishes process semantics before mapping real sources to those semantics. The next-run correction, the engineer decision, and outcome materialization are completed on the published recipe version. A small correction does not create a version; a significant change creates a revision draft. See [Current status](status.en.md).
+The menu order reflects the daily use path rather than first-time deployment order: review field operations and quality first, then process insight and recipe optimization; Evidence Investigation verifies authorized formal records and reviewed materials; Configuration and integration prepares process semantics, quality rules, and automatic acquisition for that path. A new scenario still defines and publishes process semantics before mapping real sources to those semantics; reliable field sources should preferably be acquired automatically. The next adjustment, the engineer decision, and outcome materialization are completed on the published recipe version. A small adjustment does not create a version; a significant change creates a revision draft. See [Current status](status.en.md).
 
 Recipe versions are the common source of experiment parameter settings. Parameter codes, names, data types, units, bounds, and steps come from the referenced process variables; recipe versions retain settings, revision reasons, and evidence. No separate form may redefine parameters. All parameters are analysis variables; optimization changes still respect data types, change-allowed flags, and safety bounds.
 
-System administration has a separate entry for users, role permissions, platform status, runtime logs, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
+System administration has a separate entry for users, role permissions, system status, runtime logs, raw events, model services, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 
@@ -216,7 +219,7 @@ This section defines mandatory constraints for next-recipe recommendations, mech
 
 ### Ownership and records
 
-The system has no “R&D project” container. The only business scope for next-recipe recommendations and mechanism knowledge is “site + recipe”; process-knowledge sources belong to a site.
+The business scope for next-recipe recommendations and mechanism knowledge is “factory/production site + recipe”; process-knowledge sources belong to a factory/production site. The system expresses this scope internally with `SiteId` and the recipe identifier.
 
 | Record | Ownership key | Only write path | Mutability |
 | --- | --- | --- | --- |
@@ -235,7 +238,7 @@ The system has no “R&D project” container. The only business scope for next-
 4. **Pending points share the brief**: only accepted or modified decisions with the same site, recipe, and `BriefHash` and without a frozen outcome are sent to Optimizer as pending points.
 5. **One-way decision chain**: recommendation → decision → execution link → outcome is append-only and never moves backward. Expired recommendations accept no new decisions; rejection is terminal; a linked run must belong to the recommendation's site, start after the decision, and fall inside the brief scope.
 6. **Mechanism knowledge stays in scope**: claim variables must come from that recipe's process variables; applicability may use only site, recipe, product, and equipment dimensions; evidence may come only from same-site knowledge sources or fragments, or frozen recommendation outcomes for the same site and recipe; conflicts are recorded only inside one scope.
-7. **Knowledge search is site-scoped**: the assistant must resolve one authorized site before searching process knowledge or return insufficient evidence; conversations do not accept page context, so the question itself names the site and object.
+7. **Knowledge search is site-scoped**: the assistant must resolve one authorized site before searching process knowledge or return insufficient evidence; the question must identify the site and object.
 
 ### Dependency direction
 
@@ -244,10 +247,6 @@ The system has no “R&D project” container. The only business scope for next-
 - `Platform.Infrastructure`: PostgreSQL stores, `ResearchObservationAssembler`, and the optimizer client; the assembler is the only path for inspection, run, and configuration evidence to enter recommendations;
 - `Platform.Api`: `RecipeRecommendationsController` handles only transport, identity resolution, and site authorization; rule conflicts return 409 and optimizer unavailability returns 503;
 - Web: the published recipe version submits the brief directly and keeps no recommendation state in the browser. Adopting a small correction does not create a version; a significant change uses that version's revision draft.
-
-### Removed concepts
-
-R&D projects, project members, research hypotheses, operating regions, project knowledge claims, project audit, and conversation page context have been removed. Migration `0026_remove_research_projects` drops their tables and refuses to run when any project-owned recommendation, mechanism, or knowledge data exists rather than guessing a new owner. `/research-projects` exists neither as a page address nor as an API, and the gates reject reintroducing these concepts.
 
 ## Consistency and replay
 

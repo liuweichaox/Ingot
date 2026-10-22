@@ -1,4 +1,4 @@
-
+// 负责生产上下文的 PostgreSQL 持久化与解析；工装关联属于可选的场景追溯边界。
 using System.Text.Json;
 using Ingot.Contracts.Manufacturing;
 using Ingot.Platform.Application.Manufacturing;
@@ -478,7 +478,8 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         command.Parameters.AddWithValue("id", value.ContextId);
         command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
-        command.Parameters.AddWithValue("installation", value.ToolingInstallationId);
+        command.Parameters.Add("installation", NpgsqlDbType.Uuid).Value =
+            (object?)value.ToolingInstallationId ?? DBNull.Value;
         command.Parameters.AddWithValue("valid_from", value.ValidFrom.UtcDateTime);
         command.Parameters.AddWithValue("valid_to", (object?)value.ValidTo?.UtcDateTime ?? DBNull.Value);
         command.Parameters.AddWithValue("source", value.Source);
@@ -569,12 +570,16 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
             """
             SELECT pc.payload::text, ti.payload::text, ar.payload::text, a.payload::text
             FROM production_contexts pc
-            JOIN tooling_installations ti ON ti.installation_id = pc.tooling_installation_id
-            JOIN tooling_assembly_revisions ar ON ar.assembly_revision_id = ti.assembly_revision_id
-            JOIN tooling_assemblies a ON a.tooling_assembly_id = ar.tooling_assembly_id
+            LEFT JOIN tooling_installations ti
+              ON ti.installation_id = pc.tooling_installation_id
+             AND ti.site_id = pc.site_id
+             AND ti.equipment_id = pc.equipment_id
+             AND ti.installed_at <= @at AND (ti.removed_at IS NULL OR ti.removed_at > @at)
+            LEFT JOIN tooling_assembly_revisions ar ON ar.assembly_revision_id = ti.assembly_revision_id
+            LEFT JOIN tooling_assemblies a ON a.tooling_assembly_id = ar.tooling_assembly_id
             WHERE pc.site_id = @site AND pc.equipment_id = @equipment
               AND pc.valid_from <= @at AND (pc.valid_to IS NULL OR pc.valid_to > @at)
-              AND ti.installed_at <= @at AND (ti.removed_at IS NULL OR ti.removed_at > @at)
+              AND (pc.tooling_installation_id IS NULL OR ti.installation_id IS NOT NULL)
             ORDER BY pc.valid_from DESC
             LIMIT 1;
             """);
@@ -587,9 +592,9 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         return new ResolvedProductionContext
         {
             Production = Deserialize<ProductionContext>(reader.GetString(0)),
-            Installation = Deserialize<ToolingInstallation>(reader.GetString(1)),
-            AssemblyRevision = Deserialize<ToolingAssemblyRevision>(reader.GetString(2)),
-            Assembly = Deserialize<ToolingAssembly>(reader.GetString(3))
+            Installation = reader.IsDBNull(1) ? null : Deserialize<ToolingInstallation>(reader.GetString(1)),
+            AssemblyRevision = reader.IsDBNull(2) ? null : Deserialize<ToolingAssemblyRevision>(reader.GetString(2)),
+            Assembly = reader.IsDBNull(3) ? null : Deserialize<ToolingAssembly>(reader.GetString(3))
         };
     }
 
@@ -1018,13 +1023,15 @@ public sealed class PostgresManufacturingContextStore : IManufacturingContextSto
         ProductionContext value,
         CancellationToken ct)
     {
+        if (!value.ToolingInstallationId.HasValue)
+            return;
         await using var command = new NpgsqlCommand(
             """
             SELECT 1 FROM tooling_installations
             WHERE installation_id = @id AND site_id = @site AND equipment_id = @equipment
               AND installed_at <= @at AND (removed_at IS NULL OR removed_at > @at);
             """, connection, transaction);
-        command.Parameters.AddWithValue("id", value.ToolingInstallationId);
+        command.Parameters.AddWithValue("id", value.ToolingInstallationId.Value);
         command.Parameters.AddWithValue("site", value.SiteId);
         command.Parameters.AddWithValue("equipment", value.EquipmentId);
         command.Parameters.AddWithValue("at", value.ValidFrom.UtcDateTime);

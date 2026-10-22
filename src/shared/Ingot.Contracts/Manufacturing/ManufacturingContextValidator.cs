@@ -1,4 +1,4 @@
-
+// 验证生产切换请求的字段、来源和时间边界；提供工装时校验引用，未提供时保持核心上下文可用。
 using System.Text.RegularExpressions;
 
 namespace Ingot.Contracts.Manufacturing;
@@ -243,7 +243,7 @@ public static partial class ManufacturingContextValidator
             return false;
         }
         if (value.ToolingInstallationId == Guid.Empty)
-            return Fail("ToolingInstallationId 不能为空。", out error);
+            return Fail("提供 ToolingInstallationId 时不能使用空值。", out error);
         if (value.ValidTo.HasValue && value.ValidTo <= value.ValidFrom)
             return Fail("ValidTo 必须晚于 ValidFrom。", out error);
         if (!TrySource(value.Source, out var source, out error))

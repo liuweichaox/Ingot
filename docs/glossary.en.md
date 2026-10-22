@@ -7,7 +7,7 @@
 - **Run**: The complete record of one real production execution that links actual conditions, process trajectory, production context, and quality outcomes through a single run identity.
 - **Recipe**: A set of process settings for a specific product and equipment; the object the "next recipe" recommendation proposes.
 - **Recipe version**: Versioned configuration referencing process variables and retaining parameter settings, revision reasons, and evidence; variable definitions and units come from the referenced process data model. Adopting a next-run correction does not automatically increment the version; significant changes are published through a revision draft.
-- **Operating region**: The validated parameter range and safety boundaries that optimization recommendations must not exceed.
+- **Validated process range**: A process-parameter range supported by real runs and quality outcomes; recommendations must stay within it and the explicit safety boundaries.
 - **Process trajectory**: The stage-by-stage characteristics of a run over time, used to locate where a deviation occurs.
 
 ## Evidence and admission
@@ -30,8 +30,8 @@
 
 ## Deployment and responsibilities
 
-- **Site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. Shared training datasets and model assets within a deployment use role-based authorization; not every table is site-isolated.
-- **Edge ingestion token**: A separate, rotatable credential that a field connector uses to send events, configured independently per field.
+- **Factory / production site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. The system identifies it internally with `SiteId`; one factory may have multiple Edges, while each Edge belongs to one factory. Shared training datasets and model assets within a deployment use role-based authorization; `SiteId` does not mean every table is isolated.
+- **Edge ingestion token**: A separate, rotatable credential that a field connector uses to send events, configured independently per factory.
 - **Engineering decision**: Recommendations are never dispatched automatically; engineers define objectives and boundaries and review, adopt, or reject each recommendation.
 
 ## Common distinctions

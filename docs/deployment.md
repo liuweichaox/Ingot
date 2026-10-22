@@ -26,7 +26,7 @@ Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker �
 
 ### Edge 划分原则
 
-每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。`SiteId` 是生产单元边界；Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个站点写入数据。
+每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。`SiteId` 表示一个工厂或独立生产现场，是数据、权限和故障隔离边界；一个工厂可以有多个 Edge，单个 Edge 只归属一个工厂。Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个工厂写入数据。
 
 生产读路径同样按 `SiteId` 失败关闭。OIDC 颁发者必须为非管理员身份签发一个或多个 `ingot:site` 声明；本地账户由平台管理员在用户管理中分配站点。`platform.admin` 可进行跨站点管理查询，但按运行号读取详情、分析和曲线仍要求显式给出 `siteId`，避免把同名运行误归到其他生产单元。
 
@@ -49,15 +49,15 @@ cp .env.example .env
 至少修改：
 
 - `INGOT_POSTGRES_PASSWORD`
-- `INGOT_SITE_ID`：当前部署所属生产单元；投产后不得随意修改
-- `INGOT_EDGE_ID`：安装后保持不变，每台 Edge 唯一
+- `INGOT_SITE_ID`：当前部署所属工厂或生产现场；投产后不得随意修改
+- `INGOT_EDGE_ID`：安装后保持不变，每个采集器实例唯一
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`
 - `INGOT_CONNECTOR_LOCAL_TOKEN`
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`：Platform 固定访问该 Edge 诊断 API 的可信地址；不得使用节点上报值动态改写
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` 把 Edge 令牌、站点绑定和诊断地址传给 Platform API。当前 Compose 即使不启用连接器，也要求填写站点、Edge 身份及相关必填令牌；这不表示必须连接设备或外部业务系统。`INGOT_CONNECTOR_TOKEN` 和真实诊断地址在启用连接器时配置。成功接收事件后，该 Edge 登记到现场节点列表。
+`docker-compose.app.yml` 把 Edge 令牌、工厂绑定和诊断地址传给 Platform API。当前 Compose 即使不启用连接器，也要求填写工厂、Edge 身份及相关必填令牌；这不表示必须连接设备或外部业务系统。`INGOT_CONNECTOR_TOKEN` 和真实诊断地址在启用连接器时配置。成功接收事件后，该 Edge 登记到现场节点列表。
 
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。开发环境使用开发身份，不能暴露到厂内网络或反向代理之后。
 

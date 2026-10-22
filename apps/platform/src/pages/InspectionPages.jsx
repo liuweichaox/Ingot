@@ -560,7 +560,7 @@ export function QualityAnalysisPage() {
   }
 
   return (
-    <Page title="偏差分析" description="按产品和配方版本查看哪些结果超出质量范围。过程曲线的差异在运行对比里看。">
+    <Page title="质量偏差" description="按产品和配方版本查看哪些结果超出质量范围。过程曲线的差异在运行对比里看。">
       <Card title="分析范围">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
           <Field label="产品系列"><Input value={filters.productFamilyCode} onChange={event => setFilters({ ...filters, productFamilyCode: event.target.value })} /></Field>

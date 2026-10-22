@@ -4,6 +4,8 @@
 
 This document defines deployment topology, failure models, data semantics, and admission requirements. It is not an installation guide. Ingot is designed as a process R&D and optimization system that one team can host itself. Field connectors are optional. A single-host deployment must state the acceptable outage, data-loss window, and recovery procedure. Sustained production acquisition or high availability also requires verification of the corresponding field failures, site isolation, capacity, and recovery objectives.
 
+In this document, “site” is a technical shorthand for a factory or independent production site. The user interface says “factory/production site,” while APIs and deployment configuration use `SiteId`.
+
 ## Scope and objective
 
 Reliability requirements stack by scope of use. Not every deployment is an equipment-control system:
@@ -81,7 +83,7 @@ flowchart LR
         Sources --> Edge
     end
 
-    subgraph Cell["Site production cell"]
+    subgraph Cell["Factory / production-site cell"]
         LB["Ingress load balancer"]
         Api["Platform API × N\nstateless"]
         Worker["Platform Worker × N\nAgent runs · knowledge indexes · other leased jobs"]
@@ -110,17 +112,17 @@ flowchart LR
 
 This diagram is the high-availability target after field integration. It is not the base-deployment checklist. Default Compose starts one API, one Worker, one database, Optimizer, and the Web app, and Migrator runs a one-time migration. Edge starts from the optional `connector-host` profile. Ingress load balancing, database HA, and TLS termination are provided by the deployer. The dashed orange independent time-series plane is built only after capacity, recovery-time, or cost gates show that the current store is insufficient. Attachments and process knowledge still use persistent file volumes. Object storage is a conditional replacement path, not a base-deployment prerequisite or a second formal business state.
 
-Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, the analysis assistant keeps the same authorization and review filters and falls back to keyword search. It does not create another knowledge system of record.
+Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, Evidence Investigation keeps the same authorization and review filters and falls back to keyword search. It does not create another knowledge system of record.
 
-### Site production cell
+### Factory / production-site cell
 
-When failures must be isolated across plants, one plant or one campus that can share an outage is an independent production cell. The following is an extension design. It does not mean a cross-site control plane exists today:
+When failures must be isolated across plants, one plant or one campus that can share an outage is an independent production cell. The system identifies that cell with `SiteId`; one cell may have multiple Edges. The following is an extension design. It does not mean a cross-factory control plane exists today:
 
 - it has its own ingress, Platform, database, file storage, monitoring, and backups;
 - Edge is split further by OT security zone, power, network switch, maintenance window, and acceptable acquisition outage;
-- raw high-frequency data stays at the site by default and does not create a single ingestion bottleneck through a global center;
-- a cross-site control plane synchronizes only permitted configuration packages, versions, health summaries, and de-identified aggregates;
-- every cross-site operation carries `SiteId` explicitly and must not depend on a default site.
+- raw high-frequency data stays at the factory by default and does not create a single ingestion bottleneck through a global center;
+- a cross-factory control plane synchronizes only permitted configuration packages, versions, health summaries, and de-identified aggregates;
+- every cross-factory operation carries `SiteId` explicitly and must not depend on a default factory.
 
 Multiple sites are not built by making one larger database first. They are built by copying an accepted production cell and bounding each cell's failure radius.
 

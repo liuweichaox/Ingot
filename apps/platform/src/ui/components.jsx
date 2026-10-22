@@ -30,12 +30,11 @@ export function cx(...values) {
 
 export function Page({ title, description, actions, className, loading, error, onRetry, errorTitle, children }) {
   return (
-    <div className={cx("space-y-6", className)}>
-      <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-end sm:justify-between">
+    <div className={cx("space-y-5", className)}>
+      <div className="flex flex-col gap-3 border-b border-slate-300 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <p className="data-label mb-2 text-trajectory-700">Engineering workspace</p>
-          <h1 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-[2rem]">{title}</h1>
-          {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
+          <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.8rem]">{title}</h1>
+          {description && <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>
@@ -57,11 +56,11 @@ export function LoadingCard() {
 
 export function Card({ title, description, actions, className, children }) {
   return (
-    <section className={cx("product-panel min-w-0 overflow-hidden rounded-xl", className)}>
+    <section className={cx("product-panel min-w-0 overflow-hidden rounded-md", className)}>
       {(title || actions) && (
-        <header className="flex flex-col gap-2 border-b border-slate-200/80 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <header className="flex flex-col gap-2 border-b border-slate-200 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {title && <h2 className="text-sm font-semibold tracking-[-0.01em] text-slate-900">{title}</h2>}
+          {title && <h2 className="text-base font-semibold leading-6 tracking-[-0.01em] text-slate-900">{title}</h2>}
             {description && <p className="mt-1 text-[13px] leading-5 text-slate-500">{description}</p>}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
@@ -73,8 +72,8 @@ export function Card({ title, description, actions, className, children }) {
 }
 
 const buttonStyles = {
-  primary: "border border-evidence-500 bg-evidence-500 text-coal-950 shadow-sm hover:border-evidence-400 hover:bg-evidence-400 focus-visible:outline-evidence-600",
-  secondary: "border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-blue-600",
+  primary: "border border-evidence-500 bg-evidence-500 text-coal-950 hover:border-evidence-400 hover:bg-evidence-400 focus-visible:outline-evidence-600",
+  secondary: "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-blue-600",
   danger: "bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600",
   ghost: "text-slate-600 hover:bg-slate-100 focus-visible:outline-blue-600",
 };
@@ -84,7 +83,7 @@ export function Button({ variant = "secondary", className, type = "button", chil
     <button
       type={type}
       className={cx(
-        "inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3.5 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50",
         buttonStyles[variant],
         className,
       )}
@@ -99,8 +98,7 @@ export function LinkButton({ className, children, ...props }) {
   return (
     <Link
       className={cx(
-        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2",
-        "bg-blue-600 text-white hover:bg-blue-700 focus-visible:outline-blue-600",
+        "inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-evidence-500 bg-evidence-500 px-3 py-2 text-sm font-semibold text-coal-950 transition hover:border-evidence-400 hover:bg-evidence-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-evidence-600",
         className,
       )}
       {...props}
@@ -119,7 +117,7 @@ export function Badge({ tone = "neutral", children }) {
     info: "bg-trajectory-50 text-trajectory-700 ring-trajectory-600/20",
   };
   return (
-    <span className={cx("inline-flex whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset", tones[tone])}>
+    <span className={cx("inline-flex whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-semibold ring-1 ring-inset", tones[tone])}>
       {children}
     </span>
   );
@@ -269,7 +267,7 @@ export function EvidenceLevel({ value, label, size = "default", className }) {
 export function ConclusionBoundary({ title = "结论边界", children, className }) {
   return (
     <aside
-      className={cx("flex min-w-0 items-start gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-[13px] leading-5 text-slate-600", className)}
+      className={cx("flex min-w-0 items-start gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-[13px] leading-5 text-slate-600", className)}
       aria-label={title}
     >
       <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden="true" />
@@ -283,7 +281,7 @@ export function ConclusionBoundary({ title = "结论边界", children, className
 
 export function WorkflowGuide({ title = "按步骤完成", description, steps, compact = false }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-md border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
         <p className="text-sm font-semibold text-slate-900">{title}</p>
         {description && <p className="mt-0.5 text-[13px] leading-5 text-slate-500">{description}</p>}
@@ -347,7 +345,7 @@ export function ToastHost() {
   return (
     <div
       key={notice.id}
-      className={cx("fixed inset-x-4 bottom-4 z-200 flex max-h-[calc(100dvh-2rem)] items-start gap-3 overflow-y-auto rounded-xl border px-4 py-3 text-sm font-medium shadow-xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm", tone)}
+      className={cx("fixed inset-x-4 bottom-4 z-200 flex max-h-[calc(100dvh-2rem)] items-start gap-3 overflow-y-auto rounded-md border px-4 py-3 text-sm font-medium shadow-xl sm:bottom-5 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm", tone)}
       role="status"
       aria-atomic="true"
     >
@@ -379,7 +377,7 @@ export function Input({ className, ...props }) {
   return (
     <input
       className={cx(
-        "h-9 min-w-0 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "h-9 min-w-0 w-full rounded-sm border border-slate-300 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -397,7 +395,7 @@ export function DateTimeField({ value, onChange, disabled = false, required = fa
   const [date = "", time = ""] = localValue.split("T");
   const emit = (nextDate, nextTime) => onChange?.(nextDate ? `${nextDate}T${nextTime || "00:00"}` : "");
   return (
-    <div className={cx("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,.72fr)] overflow-hidden rounded-md border border-slate-300 bg-white shadow-[0_1px_2px_rgba(7,16,14,.025)] transition focus-within:border-trajectory-500 focus-within:ring-2 focus-within:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50", className)}>
+    <div className={cx("grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,.72fr)] overflow-hidden rounded-sm border border-slate-300 bg-white transition focus-within:border-trajectory-500 focus-within:ring-2 focus-within:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50", className)}>
       <div className="flex min-w-0 items-center border-r border-slate-200 px-2.5">
         <CalendarDaysIcon className="mr-2 size-4 shrink-0 text-slate-400" aria-hidden="true" />
         <input
@@ -430,7 +428,7 @@ export function Select({ className, children, ...props }) {
   return (
     <select
       className={cx(
-        "h-9 min-w-0 w-full rounded-md border border-slate-300 bg-white px-2.5 pr-8 py-1.5 text-[13px] text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none",
+        "h-9 min-w-0 w-full rounded-sm border border-slate-300 bg-white px-2.5 pr-8 py-1.5 text-[13px] text-slate-900 outline-none transition focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600",
         className,
       )}
       {...props}
@@ -444,7 +442,7 @@ export function Textarea({ className, ...props }) {
   return (
     <textarea
       className={cx(
-        "min-h-20 min-w-0 w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-2 text-[13px] leading-5 text-slate-900 shadow-[0_1px_2px_rgba(7,16,14,.025)] outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 disabled:shadow-none read-only:bg-slate-50 read-only:text-slate-600",
+        "min-h-20 min-w-0 w-full resize-y rounded-sm border border-slate-300 bg-white px-2.5 py-2 text-[13px] leading-5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-trajectory-500 focus-visible:ring-2 focus-visible:ring-trajectory-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-600 read-only:bg-slate-50 read-only:text-slate-600",
         className,
       )}
       {...props}
@@ -454,7 +452,7 @@ export function Textarea({ className, ...props }) {
 
 export function EmptyState({ title = "暂无数据", description = "数据到达后会自动显示在这里。", actions, details }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-slate-300 bg-slate-50/75 p-8 text-center">
+    <div className="grid min-h-40 place-items-center rounded-md border border-dashed border-slate-300 bg-slate-50/75 p-8 text-center">
       <div className="max-w-xl">
         <p className="font-semibold text-slate-800">{title}</p>
         <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
@@ -528,7 +526,7 @@ export function DataTable({ columns, rows, keyField = "id", getRowKey, onRowClic
 
   if (!safeRows.length) return <EmptyState />;
   return (
-    <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={safeColumns.length >= 4 ? 0 : undefined}>
+    <div className="relative overflow-x-auto rounded-md border border-slate-200 bg-white scrollbar-thin" role="region" aria-label="可横向滚动的数据表" tabIndex={safeColumns.length >= 4 ? 0 : undefined}>
       {safeColumns.length >= 4 && <p className="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-600 sm:hidden">左右滑动查看全部字段</p>}
       <table className={cx("w-full divide-y divide-slate-200 text-left text-sm tabular-nums", minimumWidth)}>
         <thead className="bg-slate-50/95 text-xs tracking-[0.02em] text-slate-600">
@@ -649,7 +647,7 @@ export function Drawer({ open, onClose, title, description, children, footer, si
 
 export function Metric({ label, value, hint, className, valueClassName }) {
   return (
-    <div className={cx("product-panel min-w-0 rounded-xl p-5", className)}>
+    <div className={cx("min-w-0 border-l-2 border-trajectory-600 bg-white px-4 py-3.5", className)}>
       <p className="data-label">{label}</p>
       <p className={cx("data-value mt-2 min-w-0 break-words text-[1.75rem] font-semibold leading-tight text-slate-950", valueClassName)}>
         {value ?? "—"}
@@ -666,7 +664,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = "确认
       <div className="fixed inset-0 grid place-items-center overflow-y-auto p-4">
         <DialogPanel
           transition
-          className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition data-closed:scale-95 data-closed:opacity-0"
+          className="w-full max-w-md rounded-md border border-slate-200 bg-white p-5 shadow-2xl transition data-closed:scale-95 data-closed:opacity-0"
         >
           <DialogTitle className="text-lg font-semibold text-slate-950">{title}</DialogTitle>
           {description && <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}

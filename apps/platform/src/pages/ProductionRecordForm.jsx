@@ -31,6 +31,8 @@ export function parseProductionEditor(resource, editor, base) {
         maxCount: Number(role.maxCount),
         sortOrder: Number(role.sortOrder),
       }));
+    } else if (key === "toolingInstallationId") {
+      value[key] = editor[key] || null;
     } else if (typeof initial === "number") {
       value[key] = Number(editor[key]);
     } else {
@@ -64,7 +66,7 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
     },
     toolingInstallationId: {
       endpoint: `/api/v1/tooling-installations?activeOnly=true${editor.siteId ? `&siteId=${encodeURIComponent(editor.siteId)}` : ""}`,
-      label: "当前已装工装",
+      label: "关联工装（可选）",
       filter: row => !editor.equipmentId || row.equipmentId === editor.equipmentId,
       optionValue: row => row.installationId,
       optionLabel: row => `${row.equipmentId} 当前工装${row.installedAt ? ` · ${formatTime(row.installedAt)}装入` : ""}`,
@@ -96,7 +98,7 @@ function ProductionReferenceField({ fieldKey, value, required, editor, onChange 
   const options = [...new Map(sourceRows.map(row => [setting.optionValue(row), row])).values()];
   const hasValue = options.some(row => setting.optionValue(row) === value);
   return (
-    <Field label={setting.label} error={error || ""}>
+    <Field label={required ? setting.label : `${setting.label}（可选）`} error={error || ""}>
       <Select required={required} value={value || ""} onChange={event => onChange(fieldKey, event.target.value)}>
         <option value="">{required ? "请选择" : "不关联"}</option>
         {value && !hasValue && <option value={value}>{value}（历史值）</option>}
@@ -143,7 +145,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
           steps={[
             { title: "选择站点和生产设备", description: "确定接下来要切换的现场设备。", state: hasMachine ? "done" : "current" },
             { title: "确认产品与配方版本", description: "填写产品身份并选择已发布配方版本。", state: hasProduct && hasProcessSpecification ? "done" : hasMachine ? "current" : "upcoming" },
-            { title: "确认工装并生效", description: "选择当前已装工装后保存。", state: hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation ? "current" : "upcoming" },
+            { title: "补充现场信息并生效", description: "工装追溯按需关联，保存后生效。", state: hasMachine && hasProduct && hasProcessSpecification ? "current" : "upcoming" },
           ]}
         />
         <Card title="1. 选择站点和生产设备" description="只显示已经通过现场节点上报过数据的设备。">
@@ -181,7 +183,7 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
         </Card>
         <Card title="3. 补充现场信息" description="多个设备填写相同生产批次或工件编号后，可以跨设备追溯；这些字段会固化到后续运行。">
           <div className="grid gap-4 sm:grid-cols-2">
-            <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} required onChange={onChange} />
+            <ProductionReferenceField fieldKey="toolingInstallationId" value={editor.toolingInstallationId} editor={editor} onChange={onChange} />
             <Field label="外部工单" hint="来自 MES、ERP 或现场工单，可选">
               <Input value={editor.externalOrderRef || ""} onChange={event => onChange("externalOrderRef", event.target.value)} />
             </Field>
@@ -204,9 +206,9 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
             <Field label="校准有效期"><DateTimeField value={editor.calibrationValidUntil || ""} onChange={value => onChange("calibrationValidUntil", value)} /></Field>
           </div>
         </Card>
-        {hasMachine && hasProduct && hasProcessSpecification && hasToolingInstallation && (
+        {hasMachine && hasProduct && hasProcessSpecification && (
           <Alert tone="success" title="可以生效">
-            保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和配方版本 {editor.processSpecificationId} v{editor.processSpecificationVersion}。
+            保存后，设备 {editor.equipmentId} 新开始的运行将使用产品 {editor.productCode} 和配方版本 {editor.processSpecificationId} v{editor.processSpecificationVersion}{hasToolingInstallation ? "，并保留所选工装追溯。" : "。"}
           </Alert>
         )}
       </div>

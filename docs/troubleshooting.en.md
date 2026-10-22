@@ -19,7 +19,7 @@ Record the failure time, URL, steps, response status, and service name. Logs may
 
 **Symptom**: `config --quiet` or startup reports an unset variable.
 
-**Action**: check required values against the current `.env.example`, especially the database password, site identity, Edge identity, and associated tokens. The default Compose API needs these bindings even without a field connector. Replace placeholders and validate again:
+**Action**: check required values against the current `.env.example`, especially the database password, factory/production-site identity, Edge identity, and associated tokens. The default Compose API needs these bindings even without a field connector. Replace placeholders and validate again:
 
 ```bash
 docker compose -f docker-compose.app.yml config --quiet
@@ -51,10 +51,10 @@ docker compose -f docker-compose.app.yml logs --tail=200 platform-api
 
 - First login uses the administrator identity configured at installation. Bootstrap runs only when the user table is empty; editing `.env` does not reset existing accounts.
 - For 401, check the session, authentication mode, and OIDC issuer/audience. See [Deployment](deployment.en.md) for callbacks and allowed origins.
-- For 403, check role and site authorization. Non-administrators need the corresponding site scope; some run-detail queries also require an explicit `siteId`.
-- Do not enable development identity or weaken site filtering to repair production authorization.
+- For 403, check role and factory/production-site authorization. Non-administrators need the corresponding scope; some run-detail queries also require an explicit `siteId`.
+- Do not enable development identity or weaken factory-level filtering to repair production authorization.
 
-**Success condition**: the identity can perform authorized site and role operations while unauthorized access remains rejected.
+**Success condition**: the identity can perform authorized factory/production-site and role operations while unauthorized access remains rejected.
 
 ## Acquisition does not produce a complete run
 
@@ -81,7 +81,7 @@ If a correction is not yet frozen, complete its decision and outcome first. Repa
 
 **Symptom**: natural-language answers fail or semantic retrieval does not return expected fragments.
 
-Check Worker status, model-service configuration, and protocol. Knowledge retrieval additionally requires reviewed sources and fragments within the authorized site and applicability scope. Semantic embeddings are disabled by default; see [Deployment](deployment.en.md) for configuration and provider interface requirements.
+Check Worker status, model-service configuration, and protocol. Knowledge retrieval additionally requires reviewed sources and fragments within the authorized factory/production site and applicability scope. Semantic embeddings are disabled by default; see [Deployment](deployment.en.md) for configuration and provider interface requirements.
 
 Embedding failures fall back to keyword retrieval. If no fragment passes authorization, review, and scope gates, insufficient evidence is the correct result. Run and quality facts remain managed through their original business paths during model-service outages.
 

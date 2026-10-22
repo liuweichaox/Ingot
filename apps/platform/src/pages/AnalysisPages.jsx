@@ -256,7 +256,7 @@ export function ExecutionComparisonPage() {
     phaseLabel: item.phaseName || item.phaseCode || "全运行",
   }));
   return (
-    <Page title="运行对比" description="比较同类运行的设定和过程曲线，解释这些运行为什么不一样。">
+    <Page title="工艺分析" description="比较同类运行的设定和过程曲线，结合数据质量检查实际差异。">
       <RequestError error={error} onRetry={() => { setError(""); setCatalogRetryKey(value => value + 1); }} />
       <Card title="对比条件">
         <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>

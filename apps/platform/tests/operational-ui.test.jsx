@@ -182,7 +182,7 @@ describe("生产界面状态反馈", () => {
     })));
   });
 
-  it("生产切换必须绑定当前已装工装", () => {
+  it("生产切换可以不关联工装，并在需要追溯时接受有效工装记录", () => {
     const editor = {
       ...productionResources.context.template,
       siteId: "SITE-001",
@@ -191,7 +191,7 @@ describe("生产界面状态反馈", () => {
       productCode: "LENS-A",
       processSpecificationId: "spec-lens-a",
     };
-    expect(isProductionEditorValid(productionResources.context, editor)).toBe(false);
+    expect(isProductionEditorValid(productionResources.context, editor)).toBe(true);
     expect(isProductionEditorValid(productionResources.context, { ...editor, toolingInstallationId: "install-01" })).toBe(true);
     expect(isProductionEditorValid(productionResources.context, { ...editor, siteId: "", toolingInstallationId: "install-01" })).toBe(false);
     expect(productionResources.context.lifecycle.url({ contextId: "context-01", siteId: "SITE/01" }))

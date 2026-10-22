@@ -6,19 +6,19 @@
 
 > **From process data to evidence-based R&D decisions.**
 
-Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
 The currently implemented recommendation loop still uses production-run evidence:
 
 ```text
-site + published recipe → real production-run evidence → next-recipe recommendation
+factory/production site + published recipe → real production-run evidence → next-recipe recommendation
             → engineer adoption / modification / rejection and reason
             → actual-execution link → frozen quality outcome → next observation
 ```
 
-Each recommendation freezes its site, recipe, quality objectives, and adjustable parameters with bounds. It does not retain a second run-plan, approval, execution, or outcome state machine. Engineers always decide whether to adopt a recommendation; the system never dispatches a recipe to equipment automatically.
+Each recommendation freezes its factory/production site, recipe, quality objectives, and adjustable parameters with bounds. It does not retain a second run-plan, approval, execution, or outcome state machine. Engineers always decide whether to adopt a recommendation; the system never dispatches a recipe to equipment automatically.
 
-Experiment settings reuse process configuration: process variables define parameters, and recipe versions retain all parameter settings. R&D work references these configurations instead of establishing parallel variable definitions. Each run is an experiment; actual parameters, process trajectories, and quality outcomes reuse run and quality records.
+Experiment settings reuse the process variables and recipe versions in “Configuration and integration”: process variables define parameters, and recipe versions retain all parameter settings. R&D work references these configurations instead of establishing parallel variable definitions. Each run is an experiment; actual parameters, process trajectories, and quality outcomes reuse run and quality records.
 
 Current recommendations require admitted runs, actual settings, and quality outcomes. Engineers record a next-run correction on the published recipe version, or turn a significant change into a revision draft. The server explains why a suggestion stops when data is insufficient.
 
@@ -54,4 +54,4 @@ The table prioritizes work themes; some already have implementations, so rows do
 
 Propose work in an Issue with a specific user task, current evidence gap, affected modules, permission or migration impact, and reproducible completion criteria. Review implementation, bilingual documentation, and verification together; use acceptance criteria rather than calendar promises.
 
-Prioritize fact completeness and rejection explanations before additional algorithms or integrations. Plan changes cannot weaken site authorization, engineer decisions, provenance, or equipment safety boundaries.
+Prioritize fact completeness and rejection explanations before additional algorithms or integrations. Plan changes cannot weaken factory-level authorization, engineer decisions, provenance, or equipment safety boundaries.

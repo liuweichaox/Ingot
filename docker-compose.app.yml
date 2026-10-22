@@ -314,6 +314,8 @@ services:
       Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
       Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
       Acquisition__StartupHealthTimeoutMs: "30000"
+      # The demo PLC is an explicitly allow-listed private network target.
+      Acquisition__Security__AllowedNetworkHosts__0: ${INGOT_DEMO_PLC_HOST:-optical-lens-plc}
     depends_on:
       platform-api:
         condition: service_healthy
@@ -323,6 +325,28 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    restart: unless-stopped
+
+  optical-lens-plc:
+    profiles:
+      - optical-lens-demo
+    build:
+      context: tools/optical-lens-plc
+      dockerfile: Dockerfile
+    container_name: ingot-optical-lens-plc
+    ports:
+      - "127.0.0.1:1502:1502"
+      - "127.0.0.1:9100:9100"
+    environment:
+      PLC_MODBUS_PORT: 1502
+      PLC_HEALTH_PORT: 9100
+      PLC_IDLE_SECONDS: ${INGOT_DEMO_PLC_IDLE_SECONDS:-10}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
     restart: unless-stopped
 
 volumes:

@@ -41,15 +41,15 @@
 
 ## About the project
 
-Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
-It serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. Engineers review actual conditions, process change, and quality outcomes in one place, compare eligible runs, and decide the next recipe inside those constraints. Recommendations are never dispatched to equipment.
+It serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. Where field integration is configured, connectors automatically collect and semantically map run evidence; this is the preferred path for production evidence. Manually entered and existing external-system records can still be retained and linked. Engineers review actual conditions, process change, and quality outcomes in one place, compare eligible runs, and decide the next recipe inside those constraints. Recommendations are never dispatched to equipment.
 
 The repository claims only code, automated tests, and reproducible software behavior. Deployers evaluate applicability, safety, and realized benefit with their own data. See [Current status](docs/status.en.md) for what is implemented.
 
 ### Technology
 
-The core workflow manages recipe and experiment context, reviews run and quality evidence, and records engineer adoption, modification, or rejection of the next recipe recommendation. Planned values, actual values, and outcomes remain distinct so that an intention is not treated as an observed fact.
+The core workflow starts with automatically collected run evidence when field integration is configured, then moves through quality inspection and process analysis or comparison to a next-recipe recommendation bounded by admission, safety, and observed coverage. An engineer adopts, modifies, or rejects it; a later real run and its inspection outcome then freeze the result from actual evidence. Planned values, actual values, and outcomes remain distinct so that an intention is not treated as an observed fact.
 
 | Part | Technology |
 |---|---|
@@ -104,20 +104,28 @@ After `platform-migrate` exits successfully and the database, API, Worker, Optim
 
 ## Usage
 
-After sign-in, publish a recipe version from process configuration. Each run records actual settings, the process trajectory, and quality outcomes. Admitted runs become optimization observations. The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft.
+After sign-in, publish a recipe version that defines variables and boundaries. Where field integration is configured, connectors automatically collect and semantically map actual settings, process trajectories, and run context; this is the preferred path for production evidence. Manually entered records or existing records from adjacent systems can also be linked, but a run becomes an optimization observation only when trustworthy run facts and quality outcomes together pass admission. The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft; a later real run, parameter readback, and inspection record freeze the outcome once.
 
 ```text
-Process configuration → Field integration → Production runs → Quality management → Process diagnosis → Recipe optimization
+Workbench
+Evidence Investigation (separate investigation entry)
+Field Operations → Production Runs / Changeover / Quality Inspection / Quality Deviations / Optional Tooling
+Process Insight → Process Analysis / Process Materials / Mechanism Knowledge
+Recipe Optimization → Recipe Versions / Adjustment & Validation
+Configuration & Integration → Process, quality, acquisition, Edge, and optional tooling setup
+System Administration → Users, status, logs, raw events, and model services
 ```
 
-Field-equipment and enterprise-system connectors are optional. Recipe settings alone, without trustworthy run facts, do not produce a recommendation.
+This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site; the system identifies it internally with `SiteId`. One factory may have multiple Edge collectors, while each Edge belongs to one factory. Evidence Investigation verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
+
+Field-equipment and enterprise-system connectors are optional source adapters. Once field integration is configured, automated collection and semantic mapping are the preferred route for production evidence. Recipe settings alone, without trustworthy run facts, do not produce a recommendation.
 
 | Adjacent system | Boundary |
 |---|---|
-| MES, ERP, SCADA, historian | May supply run facts; does not replace execution, monitoring, or real-time control |
-| LIMS, QMS, ELN | May supply inspection and R&D context; does not replace sample, compliance, or document management |
+| MES, ERP, SCADA, historian | May supply run facts; does not replace MES scheduling, production execution, real-time monitoring, or real-time control |
+| LIMS, QMS, ELN | May supply inspection and R&D context; does not replace laboratory, quality, sample, compliance, or document management |
 | Statistical and optimization methods | Selected by data conditions; no single algorithm is the answer to every problem |
-| AI agent | Queries and explains authorized facts; does not generate numeric settings directly or control equipment |
+| Evidence Investigation | Verifies authorized facts and reviewed process materials with source citations; does not generate numeric settings directly or control equipment |
 
 ![Ingot runtime components and data flow](docs/architecture/system-architecture.en.svg)
 
@@ -132,6 +140,7 @@ Choose a reading path from the [documentation index](docs/index.en.md) or [onlin
 - **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
 - **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
 - **Connect and operate**: [Data connection](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment and operations](docs/deployment.en.md).
+- **Connector demo**: [Optical lens PLC acquisition demo](docs/optical-lens-demo.en.md) starts an independent Modbus TCP simulator and verifies 19 process values, 20 recipe parameters, and a 300-second batch path.
 - **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundaries](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
 - **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
 

@@ -26,7 +26,7 @@ The bundled Compose file is a single-API reference topology, not an HA claim. Ag
 
 ### Edge partitioning
 
-Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` is the production-cell boundary. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another site.
+Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` represents a factory or independent production site and is the data, authorization, and failure-isolation boundary; one factory may have multiple Edges, while each Edge belongs to one factory. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another factory.
 
 Production reads also fail closed on `SiteId`. The OIDC issuer must emit one or more `ingot:site` claims for non-administrator identities; platform administrators assign sites to local accounts in user management. A `platform.admin` may run cross-site administrative lists, but execution detail, analysis, and curve reads still require an explicit `siteId` to avoid resolving a same-named execution in another production cell.
 
@@ -49,15 +49,15 @@ cp .env.example .env
 Change at least:
 
 - `INGOT_POSTGRES_PASSWORD`
-- `INGOT_SITE_ID`: owning production cell; do not change casually after production admission
-- `INGOT_EDGE_ID`: stable after installation and unique per Edge
+- `INGOT_SITE_ID`: owning factory or production site; do not change casually after production admission
+- `INGOT_EDGE_ID`: stable after installation and unique per collector instance
 - `INGOT_EDGE_TOKEN`
 - `INGOT_CONNECTOR_TOKEN`
 - `INGOT_CONNECTOR_LOCAL_TOKEN`
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` passes the Edge token, site binding, and diagnostics address to the Platform API. The current Compose file requires site and Edge identity and the mandatory related tokens even without the connector profile; this does not require equipment or external business-system connections. Configure `INGOT_CONNECTOR_TOKEN` and a real diagnostics address when enabling the connector. A successfully ingested batch registers that Edge in the site-node list.
+`docker-compose.app.yml` passes the Edge token, factory binding, and diagnostics address to the Platform API. The current Compose file requires factory and Edge identity and the mandatory related tokens even without the connector profile; this does not require equipment or external business-system connections. Configure `INGOT_CONNECTOR_TOKEN` and a real diagnostics address when enabling the connector. A successfully ingested batch registers that Edge in the factory-node list.
 
 Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 

@@ -1,10 +1,10 @@
 # Ingot documentation
 
-Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process diagnosis, and recipe optimization.
+Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
 Choose a path from local installation to a first recommendation and ongoing operations. Documentation is maintained with repository code. [Current status](status.en.md) describes implemented capability; the [Roadmap](project-plan.en.md) describes planned work.
 
-The business reading order is process configuration → field integration → production runs → quality management → process diagnosis → recipe optimization. An engineer confirms the next recipe recommendation before it enters a subsequent run through existing field procedures.
+The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Evidence Investigation is a cross-module verification and investigation entry rather than a production step. Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
 
 ## First use
 
@@ -12,7 +12,7 @@ The business reading order is process configuration → field integration → pr
 2. Follow [Getting started](getting-started.en.md) to start the stack, check service health, and sign in.
 3. Follow the [Recipe-optimization pilot guide](pilot.en.md) to verify a published recipe, real runs, and reviewed quality results, then complete a recommendation, engineer decision, actual run, and outcome freeze.
 
-You can start the system without a field connector. The current recommendation flow still requires admitted real-run evidence; a successful installation does not establish data readiness.
+You can start the system without a field connector. When a reliable field source exists, prefer automated acquisition, semantic mapping, buffering, and replay. The current recommendation flow still requires admitted real-run evidence; a successful installation does not establish data readiness.
 
 ## Read by task
 
@@ -32,6 +32,7 @@ You can start the system without a field connector. The current recommendation f
 ### How-to guides
 
 - [Data integration](data-connection.en.md): integration identities, points, mappings, and run admission.
+- [Optical lens PLC acquisition demo](optical-lens-demo.en.md): verify the field connector, process data, and 300-second batch boundary with an independent simulator.
 - [Deployment](deployment.en.md): configuration, model services, observability, backup, and upgrades.
 - [Troubleshooting](troubleshooting.en.md): diagnose startup, authorization, data, and recommendation problems by symptom.
 - [Scenario evaluation boundary](rollout.en.md): assess suitability and effects using your own evidence.
