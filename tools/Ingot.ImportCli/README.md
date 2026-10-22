@@ -5,6 +5,9 @@
 ## 用法
 
 ```bash
+# 查看全部参数
+dotnet run --project tools/Ingot.ImportCli -- --help
+
 # 1. 先本地校验（不联网）：校验完整文件，默认不打印真实值
 dotnet run --project tools/Ingot.ImportCli -- \
   --file .ingot-import/history.csv \
@@ -12,7 +15,7 @@ dotnet run --project tools/Ingot.ImportCli -- \
   --site-id SITE-FACTORY-001 \
   --dry-run
 
-# 2. 正式导入
+# 2. 正式导入（--batch 可选，1–500，默认 500）
 dotnet run --project tools/Ingot.ImportCli -- \
   --file .ingot-import/history.csv \
   --mapping .ingot-import/mapping.json \
@@ -24,17 +27,25 @@ dotnet run --project tools/Ingot.ImportCli -- \
 
 - 平台侧需在 `EventIngest:EdgeTokens` 为映射中的 `edgeId`（如 `IMPORT-01`）配置令牌，并在 `EventIngest:EdgeSites` 把它绑定到命令中的 `--site-id`；
 - `--seq-start` 缺省取启动时刻 Unix 毫秒 ×1000；同一 Edge 的导入必须串行安排不重叠的序号区间，不能把这个默认值当作并发安全的序号分配器；
-- **当前 CLI 不支持跨进程幂等续传。** 每次转换都会重新生成 `EventId` 和 `RecordedAt`，因此只复用 `--seq-start` 不能重建同一信封：若前次已提交，会触发平台幂等冲突。失败后先核对已提交范围与响应丢失情况，仅导入确认未提交的记录；不要重跑整份文件或用新序号绕过去重。程序错误提示中的“相同序号安全续传”尚不符合此实现；
+- **当前 CLI 不支持跨进程幂等续传。** 每次转换都会重新生成 `EventId` 和 `RecordedAt`，因此只复用 `--seq-start` 不能重建同一信封；若前次已提交，会触发平台幂等冲突。
+  - 失败后先核对已提交范围与响应丢失情况，仅导入确认未提交的记录；
+  - 不要重跑整份文件，或用新序号绕过去重；
+  - 程序错误提示仍声称“用相同序号可安全续传”，这一提示尚不符合当前实现，请按上述规则处理；
 - 历史时间戳受 `EventIngest:MaxPastDays`（默认约 10 年）窗口约束；
 - 缺失单元格不写入、不猜测（与生产事件规范一致）；
 - `--dry-run` 会校验完整文件但默认不输出转换后的真实事件；只有在受控终端排查时才显式添加 `--show-values`，该选项最多预览 3 行；
 - 映射和契约错误只报告行号、字段及期望格式，不回显出错的生产值；
 - 事件来源默认使用不含原始文件名的 `historical-data`。确需区分导入批次时使用不泄露项目事实的 `--source-tag <opaque-tag>`；
-- 映射文件字段见 `sample-mapping.json`：每个字段取列（`column`）或常量（`value`）；时间戳可指定 `format` 与 `utcOffset`；`values` 数据项类型为 `number|integer|boolean|string`。
+- 映射文件字段见 [sample-mapping.json](sample-mapping.json)：每个字段取列（`column`）或常量（`value`）；时间戳可指定 `format` 与 `utcOffset`；`values` 数据项类型为 `number|integer|boolean|string`。
 
 ## 周期边界
 
-若 CSV 只有过程采样、没有周期开始/结束事件，可分两次导入：先用一份按周期聚合的 CSV（每周期一行，`eventType` 取 `process.execution.started`/`process.execution.completed` 两列拆分或分成两个文件），再导入采样行；同一 `executionId` 会自动关联。
+若 CSV 只有过程采样、没有周期开始/结束事件，可分两次导入：
+
+1. 导入周期聚合 CSV：每周期一行，`eventType` 取 `process.execution.started` 或 `process.execution.completed`；可用两列区分，也可拆成两个文件。
+2. 导入采样行。
+
+两次导入共用同一 `executionId`，平台会自动关联。
 
 ## 数据与仓库边界
 

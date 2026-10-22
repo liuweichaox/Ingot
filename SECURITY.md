@@ -36,6 +36,8 @@ Even inside a factory network:
 - keep secrets out of logs, Issues, and exports;
 - retain engineering review before a real recipe run.
 
-## Scope
+## Scope / 范围
+
+安全敏感问题包括：身份认证绕过、跨站点数据泄露、不安全文件处理、SSRF、密钥泄露、伪造 Edge 上送、篡改配方建议，以及任何可能导致未经审核的设备控制的路径。
 
 Examples of security-sensitive issues include authentication bypass, cross-site data exposure, unsafe file handling, SSRF, secret leakage, forged Edge ingestion, recipe-recommendation tampering, and any path that could cause unreviewed equipment control.

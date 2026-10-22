@@ -20,7 +20,7 @@ Historical data cannot establish a root cause by itself; it can only identify as
 
 ## Why does the system record conditions, runs, and inspections together?
 
-Conditions, runs, and inspections jointly describe execution conditions, execution behavior, and final outcomes. In the code they correspond to Manufacturing, Process Executions, and Inspections. Missing any one of these records can cause runs made under different conditions to be compared incorrectly.
+Conditions, runs, and inspections jointly describe execution conditions, execution behavior, and final outcomes. In the code they correspond to the `Manufacturing`, `ProcessExecutions`, and `Inspections` modules. Missing any one of these records can cause runs made under different conditions to be compared incorrectly.
 
 ## Why are planned settings insufficient?
 
@@ -42,9 +42,9 @@ Model complexity does not establish reliability. With limited samples or confoun
 
 A large language model (LLM) parses questions, selects authorized read-only tools, and explains calculated results. Deterministic business tools still query structured facts such as runs, inspections, and configuration. Unstructured knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed fragments inside the authorized factory/production site, with fragment citations retained. Numeric process settings come from deterministic calculations. The language model does not replace statistical analysis, constraint checks, or evidence-based validation and may not generate facts without sources.
 
-## Does RAG Replace Production-Data Queries?
+## Does retrieval-augmented generation (RAG) replace production-data queries?
 
-No. RAG retrieves only reviewed unstructured process knowledge; it cannot replace authorized queries for current runs, inspections, configuration, or optimization records. When semantic retrieval is disabled or fails, the system falls back to keywords. If no fragment passes authorization, review, and applicability gates, the assistant must disclose insufficient evidence instead of filling the gap from model memory.
+No. Retrieval-augmented generation (RAG) retrieves only reviewed unstructured process knowledge; it cannot replace authorized queries for current runs, inspections, configuration, or optimization records. When semantic retrieval is disabled or fails, the system falls back to keywords. If no fragment passes authorization, review, and applicability gates, the assistant must disclose insufficient evidence instead of filling the gap from model memory.
 
 ## As foundation models and agents become more capable, what does Ingot become?
 
@@ -60,7 +60,9 @@ Bayesian optimization applies when individual real recipe runs are costly and ea
 
 ## Can existing recipe runs be analyzed directly?
 
-Yes. That is the default path. Recommendation generation automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are minimum data requirements; quality, coverage, constraint, and method-admission checks must also pass before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification. If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more real runs through the existing production workflow and have engineers assess whether the evidence is sufficient.
+Yes. That is the default path. Recommendation generation automatically reads completed real recipe runs in scope and links actual parameters, process context, and quality outcomes. At least three valid runs and two distinct actual recipes are minimum data requirements; quality, coverage, constraint, and method-admission checks must also pass before a next-recipe recommendation is generated. Normal production runs require no engineer reclassification.
+
+If only one recipe exists, required quality outcomes are missing, causal proof is needed, or a recommendation would exceed observed coverage, collect more real runs through the existing production workflow and have engineers assess whether the evidence is sufficient.
 
 ## Can the system generate multiple recipe recommendations at once?
 

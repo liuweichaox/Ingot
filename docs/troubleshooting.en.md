@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This page is for local installation and deployment operators. Identify the failing service before changing configuration or data. See [Getting started](getting-started.en.md) for installation and [Deployment](deployment.en.md) for recovery and upgrades.
+This page is for operators who install and deploy Ingot locally. Identify the failing service before changing configuration or data. See [Getting started](getting-started.en.md) for installation and [Deployment](deployment.en.md) for recovery and upgrades.
 
 ## Collect diagnostics
 
@@ -13,7 +13,7 @@ docker compose -f docker-compose.app.yml ps -a
 docker compose -f docker-compose.app.yml logs --tail=200 platform-migrate platform-api platform-worker optimizer platform-web
 ```
 
-Record the failure time, URL, steps, response status, and service name. Logs may contain business content or a first administrator password; remove credentials, tokens, user and field identities before sharing. Do not publish full `docker compose config` output or `.env`.
+Record the failure time, URL, steps, response status, and service name. Logs may contain business content or a first administrator password; remove credentials, tokens, user and site identifiers before sharing. Do not publish full `docker compose config` output or `.env`.
 
 ## Compose configuration fails validation
 
@@ -34,10 +34,10 @@ docker compose -f docker-compose.app.yml config --quiet
 1. Identify the service with `ps -a`. Check `postgres`, then `platform-migrate`; migration must exit successfully before API and Worker can start normally.
 2. Inspect recent logs of the failing service, for example:
 
-```bash
-docker compose -f docker-compose.app.yml logs --tail=200 platform-migrate
-docker compose -f docker-compose.app.yml logs --tail=200 platform-api
-```
+    ```bash
+    docker compose -f docker-compose.app.yml logs --tail=200 platform-migrate
+    docker compose -f docker-compose.app.yml logs --tail=200 platform-api
+    ```
 
 3. For image-download `unexpected EOF`, `short read`, or timeouts, check Docker network and image access, then retry `up -d --build`.
 4. For database authentication failures, compare configuration with the identity used to initialize the existing volume. Changing environment variables does not change an existing database user's password.

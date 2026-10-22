@@ -19,7 +19,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 | Recipe versions and parameters | Web/API implemented | Parameter definitions reference the process variables; recipe versions retain multiple parameter settings |
 | Runs and experiment outcomes | Web/API implemented | Each run is an experiment linking actual parameters, process data, and quality outcomes; admitted runs form optimization observations |
 | Recipe recommendations and engineer decisions | Web/API implemented | A correction lives on the published recipe version. Adoption leaves that version unchanged and the next run of the same version attaches automatically. A significant change creates a revision draft from the suggested settings |
-| Software path | Implemented with automated tests | Main functions run as designed; unmet conditions stop a recommendation and explain why |
+| Software path | Implemented with automated tests | Tested paths behave as contracted; unmet conditions stop a recommendation and explain why |
 | Production operation | Single-machine reference deployment available | Deployers still complete factory/production-site security, recovery, capacity, and operations configuration |
 
 ## Implemented software capabilities
@@ -28,14 +28,15 @@ The repository currently covers:
 
 - recipe-version and process-variable management; run and quality records constitute experiment facts;
 - connecting field sources, standardizing fields and units, and resuming delivery after a network outage;
-- linking equipment, product, specification, material, process curves, and quality outcomes to one run, with tooling also linked when a scenario needs its traceability;
+- linking equipment, product, recipe version, material, process curves, and quality outcomes to one run, with tooling also linked when a scenario needs its traceability;
 - checking completeness, actual execution values, units, sources, and versions before analysis;
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;
 - automatically combining admitted real recipe runs with quality outcomes into optimization observations;
-- generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch, then append-only freezing the engineer's adoption, modification, or rejection, reason, actual recipe, and linked run;
+- generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch, then appending the engineer's adoption, modification, or rejection, its reason, actual recipe, and linked run;
 - selecting response-surface or Gaussian-process methods according to the data and degrading when evidence is insufficient;
 - preserving evidence, constraints, model versions, engineer decisions, and one-time frozen final outcomes from actual execution, parameter readback, and inspection records for every recommendation;
-- providing a permissioned Ingot Chat, in which authorized tools query structured production facts and reviewed process documents use factory/production-site-scoped keyword plus optional semantic retrieval with fragment-level citations, together with backup, restore, monitoring, and basic failure-drill tooling.
+- providing a permissioned Ingot Chat, in which authorized tools query structured production facts and reviewed process documents use factory/production-site-scoped keyword plus optional semantic retrieval with fragment-level citations;
+- providing backup, restore, monitoring, and basic failure-drill tooling.
 
 “Implemented” means repository code, database contracts, and tests exist. It does not mean the software fits every process or has produced a particular business benefit. The repository also does not claim a completed retrieval-quality benchmark or proof that document retrieval shortens field-analysis cycles.
 
@@ -52,7 +53,6 @@ Deployers are responsible for:
 - comparing applicable baselines on their own data and choosing acceptance thresholds;
 - reviewing, adopting, or rejecting recipe recommendations;
 - evaluating actual quality, cost, cycle-time, and production-safety effects.
-
 
 ## Production-deployment boundary
 

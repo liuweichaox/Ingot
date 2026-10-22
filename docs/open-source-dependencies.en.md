@@ -14,11 +14,11 @@ Dependency selection is based on the engineering problem, license compatibility,
 | Data import | ClosedXML, PdfPig, MatFileHandler | MIT / Apache-2.0 |
 | Data, time-series, and knowledge-retrieval storage | PostgreSQL, TimescaleDB, pgvector (with PostgreSQL's `pg_trgm` extension) | PostgreSQL / Apache-2.0 |
 
-## Introduction requirements
+## Adoption requirements
 
 Every new runtime dependency must:
 
-- directly improve data trust, engineering judgment, recipe-decision quality, or system reliability;
+- directly improve data trust, engineering judgment, recommendation-loop efficiency, or system reliability;
 - have a project-compatible open-source license;
 - use a pinned version or controlled range;
 - enter build, vulnerability, license, and supply-chain audits;

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This demo uses an independent Modbus TCP PLC simulator to verify the full “field connector → platform events → process samples” path. The data is deterministic simulation data. It does not represent a real equipment window and must not be used for production control.
+This demo uses an independent Modbus TCP PLC simulator to verify the full “field connector → platform events → process samples” path. The data is deterministic simulation data. It does not represent a real equipment process window and must not be used for production control.
 
 ## Start
 

@@ -22,7 +22,7 @@
 
 Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker 负责持久 Chat/Agent 运行、知识提取与嵌入索引、分析回填、运行证据固化和保留任务。两者共享 PostgreSQL 任务租约，但不共享进程内队列。`Edge.Application`、`Edge.Infrastructure`、`Platform.Infrastructure` 和 Agent 是代码层类库，不是独立 Compose 服务。
 
-仓库自带的 Compose 是单 API 实例参考拓扑，不宣称高可用。Agent 运行已经与业务证据一起进入 PostgreSQL，因此不再阻止外部编排器在共享数据库和负载均衡器之后扩展 API；正式多副本部署仍需自行提供入口负载均衡、数据库高可用和容量验收。
+仓库自带的 Compose 是单 API 实例参考拓扑，不宣称高可用。Agent 运行与业务证据一起存入 PostgreSQL，API 因此可以在共享数据库和负载均衡器之后扩展；正式多副本部署仍需自行提供入口负载均衡、数据库高可用和容量验收。
 
 ### Edge 划分原则
 
@@ -57,7 +57,7 @@ cp .env.example .env
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`：Platform 固定访问该 Edge 诊断 API 的可信地址；不得使用节点上报值动态改写
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` 把 Edge 令牌、工厂绑定和诊断地址传给 Platform API。当前 Compose 即使不启用连接器，也要求填写工厂、Edge 身份及相关必填令牌；这不表示必须连接设备或外部业务系统。`INGOT_CONNECTOR_TOKEN` 和真实诊断地址在启用连接器时配置。成功接收事件后，该 Edge 登记到现场节点列表。
+`docker-compose.app.yml` 把 Edge 令牌、工厂绑定和诊断地址传给 Platform API。当前 Compose 即使不启用连接器，也要求填写工厂、Edge 身份及相关必填令牌；这不表示必须连接设备或外部业务系统。`INGOT_CONNECTOR_TOKEN` 和真实诊断地址在启用连接器时配置。Edge 成功上送事件后才会出现在现场节点列表中。
 
 生产环境必须使用 `INGOT_AUTH_MODE=Local` 或 `INGOT_AUTH_MODE=Oidc`。开发环境使用开发身份，不能暴露到厂内网络或反向代理之后。
 
@@ -92,7 +92,11 @@ https://platform.example.com/auth/logout-callback
 
 ### 模型服务
 
-启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
+启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。
+
+API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。
+
+生产部署必须持久化并保护 `DataProtection:KeysPath`，否则数据库中的 API key 无法在容器重建后解密。
 
 文档检索始终提供 PostgreSQL 关键词路径。语义检索默认关闭；只有配置的模型服务支持 OpenAI-compatible `/embeddings` 且允许向该服务发送已复核文档片段时，才设置 `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true`。可调整 `INGOT_KNOWLEDGE_EMBEDDING_MODEL`、`INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`、`INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`、`INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY` 和 `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`。Worker 会为已复核片段异步建索引并回填历史缺口；查询嵌入或服务失败时自动退回关键词检索，不放宽站点、适用范围和审核过滤。
 
@@ -230,7 +234,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 ./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
 ```
 
-这两个脚本只覆盖数据库和检验/知识的活动、归档四个文件卷，不覆盖 `ingot-platform-data-protection` 密钥卷、Edge 数据目录、`.env`、证书或监控数据。必须另行安全备份 Data Protection 密钥，并在启动恢复后的 API 和 Worker 前恢复与数据库配套的密钥；否则数据库中的模型服务 API key 无法解密。仅通过 `check-backup.sh` 不代表整机灾难恢复材料齐备。
+这两个脚本只覆盖数据库，以及检验附件和工艺知识的活动卷与归档卷（共四个文件卷）；不覆盖 `ingot-platform-data-protection` 密钥卷、Edge 数据目录、`.env`、证书或监控数据。必须另行安全备份 Data Protection 密钥，并在启动恢复后的 API 和 Worker 前恢复与数据库配套的密钥；否则数据库中的模型服务 API key 无法解密。仅通过 `check-backup.sh` 不代表整机灾难恢复材料齐备。
 
 备份格式使用 `pg_dump --format=custom`，适合逻辑恢复和迁移验证，但不是 PITR。需要更小 RPO 的现场还必须由部署方配置 PostgreSQL 基础备份、持续 WAL 归档、异机保留和定期时间点恢复演练。备份目录包含业务和附件数据，权限不得低于生产系统本身。
 
@@ -279,13 +283,13 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 ## 生产验收
 
-基础研发部署上线前应验证身份权限、业务记录与文件/密钥恢复、Platform/Worker 中断及已启用依赖的降级，并记录可接受停机窗口和 RPO/RTO。接入现场后，还需完成 Edge 重启、网络断开、错误配置发布与积压补传演练，证明采集和正式业务记录按设计降级或恢复。
+基础研发部署上线前应验证：身份权限；业务记录、文件与密钥恢复；Platform/Worker 中断；已启用依赖的降级。同时记录可接受停机窗口和 RPO/RTO。接入现场后，还需完成 Edge 重启、网络断开、错误配置发布与积压补传演练，证明采集和正式业务记录按设计降级或恢复。
 
-以下 `verify-production-acceptance.sh` 是现有现场生产验收门禁，要求数据库 HA、PITR、Edge 补传、容量及连续观察证据。它不是允许维护停机的单团队研发部署启动检查；也不包含设备动作授权。声称达到该现场生产等级时必须满足脚本原有全部要求。
+`scripts/verify-production-acceptance.sh` 是现有现场生产验收门禁，要求数据库 HA、PITR、Edge 补传、容量及连续观察证据。它不是允许维护停机的单团队研发部署启动检查，也不包含设备动作授权。声称达到该现场生产等级时必须满足脚本原有全部要求。
 
-配方版本的上线检查和工作台显示工艺变量、配方版本、采集配置、过程分析、质量方案和生产切换是否就绪。平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
+配方版本的上线检查会核对工艺变量、配方版本、采集配置、过程分析、质量方案和生产切换是否就绪；平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
 
-`.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期是部署声明。声明本身不是验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
+`.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期都是部署目标，本身不构成验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
 
 ```bash
 set -a; . ./.env; set +a

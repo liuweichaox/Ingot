@@ -18,7 +18,9 @@ real recipe run + actual settings + process context + valid quality outcome
 
 A recommendation is not an equipment command. It is an append-only record containing its input snapshot, prediction, uncertainty, constraints, evidence scope, and rationale. Engineer decisions, actual-execution links, and outcomes are also appended separately and never overwritten.
 
-The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision; it does not create or publish a new version or download equipment settings. The next qualifying real run of that version supplies the execution link and frozen outcome. When the engineer considers a change significant, the suggested settings open a revision draft for that version and follow the configuration publication process. A recipe version cannot open another correction while one remains unfrozen.
+The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision; it does not create or publish a new version or download equipment settings. The next qualifying real run of that version supplies the execution link and frozen outcome.
+
+When the engineer considers a change significant, the suggested settings open a revision draft for that version and follow the configuration publication process. A recipe version cannot open another correction while one remains unfrozen.
 
 ## Admission and Stop Conditions
 
@@ -44,16 +46,18 @@ The output is one recommendation with predictions, uncertainty, constraints, and
 
 ## Observed Coverage Envelope
 
-Safety boundaries state where the process is allowed to go, not where historical runs have been. Daily production runs cluster around the current recipe and move several settings together, so a surrogate fitted on that data reports small uncertainty inside the cluster while extrapolating freely into regions no run ever visited. A recommendation therefore stays inside the observed coverage of real runs as well as the safety boundaries, bounded by two independent gates:
+Safety boundaries state where the process is allowed to go, not where historical runs have been. Daily production runs cluster around the current recipe and move several settings together, so a surrogate fitted on that data reports small uncertainty inside the cluster while extrapolating freely into regions no run ever visited.
+
+A recommendation therefore stays inside the observed coverage of real runs as well as the safety boundaries, bounded by two independent gates:
 
 - **Range gate**: every variable stays between its observed minimum and maximum across historical runs, widened by a margin. The margin is the larger of 10% of the observed spread and 2% of the declared range, so a variable that never moved keeps a small local step rather than being frozen or released across its full range.
 - **Leverage gate**: a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. This is the hat-matrix extrapolation criterion from response surface work. It admits interpolation inside sparse data while rejecting points off the directions production actually varied, which a per-variable range cannot express.
 
 Candidates are generated inside the envelope rather than sampled across the declared range and filtered, because the envelope is often a thin slice of that range when parameters are strongly correlated. When the envelope holds too few candidates, the system stops and reports that production runs have not covered enough of the parameter space.
 
-Recommendations use `reach-specification` only and always stay inside the observed coverage envelope.
+Recommendations use `reach-specification` only: they aim for the predicted outcome to reach the specification and do not pursue more extreme values beyond it, and they always stay inside the observed coverage envelope.
 
-The optimization service returns the envelope it applied and Platform recomputes the same envelope from the same runs. Platform stops the recommendation when the two disagree or when any suggestion falls outside it. The gate does not apply to offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
+The optimization service returns the envelope it applied and Platform recomputes the same envelope from the same runs. Platform stops the recommendation when the two disagree or when any suggestion falls outside it. The coverage envelope does not constrain offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
 
 ## Numerical Methods
 

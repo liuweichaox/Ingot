@@ -1,4 +1,4 @@
-# Ubuntu Docker 公网部署
+# Ingot 官网与文档站公网部署（Ubuntu + Docker）
 
 > 文档状态：当前官网与文档站部署指南。该拓扑只承载公开内容，不属于工厂运行时。
 
@@ -71,6 +71,8 @@ SITE_DOMAIN=example.com DOCS_DOMAIN=docs.example.com ./deploy/deploy.sh all
 
 ## 4. 运维
 
+所有命令均针对 `deploy/compose.yml`（Compose 项目 `ingot-public`），与工厂运行栈 `docker-compose.app.yml` 无关。
+
 ```bash
 ./deploy/deploy.sh status
 ./deploy/deploy.sh logs
@@ -87,11 +89,11 @@ git pull --ff-only
 ./deploy/deploy.sh backup
 ```
 
-不要使用 `docker compose down -v` 或手动删除 `ingot-caddy-data`、`ingot-caddy-config` 卷。官网和文档没有运行期业务数据库，站点内容来自 Git 仓库并在镜像构建时固化。
+不要在本目录执行 `docker compose down -v`，也不要手动删除 `ingot-caddy-data`、`ingot-caddy-config` 卷；停止服务请使用 `./deploy/deploy.sh stop`。官网和文档没有运行期业务数据库，站点内容来自 Git 仓库并在镜像构建时固化。
 
-## 故障排查
+## 5. 故障排查
 
 - 证书失败：确认 DNS 已指向本机，云防火墙和 UFW 已开放 TCP 80/443，并检查 `./deploy/deploy.sh logs gateway`。如果日志包含 `lookup ... on 127.0.0.53:53: connection refused`，说明容器继承了不可用的 systemd-resolved stub；重新部署会使用 compose 中的显式 DNS，也可用 `GATEWAY_DNS_1=223.5.5.5 GATEWAY_DNS_2=119.29.29.29 ./deploy/deploy.sh all` 指定解析器。
 - 页面未更新：确认拉取了最新提交，再执行同一目标的部署命令重新构建镜像。
-- 查看实际目标：`cat deploy/runtime/target`。
-- Caddy 配置位于 `deploy/runtime/Caddyfile`，由脚本生成，不应手工编辑。
+- 查看实际目标：`cat deploy/runtime/target`（首次部署后生成）。
+- Caddy 配置位于 `deploy/runtime/Caddyfile`（首次部署后生成），由脚本生成，不应手工编辑。

@@ -20,9 +20,9 @@ controls / instruments / vision / inspection / MES
                                       └─ Platform Web (independent React frontend)
 ```
 
-Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat and Agent runs, knowledge extraction and embedding indexes, analysis backfills, recipe-outcome materialization, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
+Platform API handles requests, Chat message transactions, and business transactions. Platform Worker handles durable Chat and Agent runs, knowledge extraction and embedding indexes, analysis backfills, run-evidence freezing, and retention jobs. They coordinate through PostgreSQL job leases rather than process-local queues. `Edge.Application`, `Edge.Infrastructure`, `Platform.Infrastructure`, and Agent are code libraries, not independent Compose services.
 
-The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs now share PostgreSQL with business evidence, so they no longer prevent an external orchestrator from scaling API replicas behind a load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
+The bundled Compose file is a single-API reference topology, not an HA claim. Agent runs share PostgreSQL with business evidence, so the API can scale behind a shared database and load balancer. A production multi-replica deployment must still provide ingress load balancing, PostgreSQL HA, and capacity acceptance.
 
 ### Edge partitioning
 
@@ -57,13 +57,13 @@ Change at least:
 - `INGOT_EDGE_DIAGNOSTICS_BASE_URL`: the trusted, deployment-pinned Edge diagnostics API URL; reported node metadata cannot override it
 - `INGOT_ADMIN_PASSWORD`
 
-`docker-compose.app.yml` passes the Edge token, factory binding, and diagnostics address to the Platform API. The current Compose file requires factory and Edge identity and the mandatory related tokens even without the connector profile; this does not require equipment or external business-system connections. Configure `INGOT_CONNECTOR_TOKEN` and a real diagnostics address when enabling the connector. A successfully ingested batch registers that Edge in the factory-node list.
+`docker-compose.app.yml` passes the Edge token, factory binding, and diagnostics address to the Platform API. The current Compose file requires factory and Edge identity and the mandatory related tokens even without the connector profile; this does not require equipment or external business-system connections. Configure `INGOT_CONNECTOR_TOKEN` and a real diagnostics address when enabling the connector. An Edge appears in the factory-node list only after it successfully uploads events.
 
 Production must use `INGOT_AUTH_MODE=Local` or `INGOT_AUTH_MODE=Oidc`. Development uses a development identity and must not be exposed to a plant network or reverse proxy.
 
 ### Configuration acceptance
 
-Edge and diagnostics tokens must contain at least 24 characters, must differ, and must not contain `change-this-`, `replace-with-`, or `verification-`. A blank administrator seed password is supported for first bootstrap; an existing account is never overwritten. `config --quiet` checks Compose interpolation, while production validators run when each service starts: both checks are required.
+Edge and diagnostics tokens must contain at least 24 characters, must differ, and must not contain `change-this-`, `replace-with-`, or `verification-`. A blank administrator seed password is supported for first bootstrap; an existing account is never overwritten. `config --quiet` checks Compose interpolation, while production validators run when each service starts. Both checks are required.
 
 The reference Compose binds application and database ports to loopback. Before remote use, configure TLS ingress and the actual Web origin in `Cors:AllowedOrigins`; the bundled API value is `http://localhost:3000`. OIDC additionally requires its allowed origins and exact callback URIs.
 
@@ -92,7 +92,11 @@ Never commit `.env` or real equipment credentials. Inject device passwords and c
 
 ### Model service
 
-When enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, Chat model IDs, and API key once under System Administration > Model Services. Chat, model-assisted mechanism drafts, and optional knowledge embeddings reuse the same protected endpoint and key. Knowledge embeddings do not create a second provider credential, but `INGOT_KNOWLEDGE_EMBEDDING_MODEL` selects the embedding model independently. Switching compatible services does not require an Ingot source-code change. The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. Platform probes only the model list during startup; a feature sends only the permission-controlled context required for its model call. Before enabling an external service, confirm that these materials may be sent to its service region. Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
+When enabled, the model service provides an OpenAI-compatible interface. A platform administrator configures the provider label, `Responses` or `ChatCompletions` protocol, API root, Chat model IDs, and API key once under System Administration > Model Services. Chat, model-assisted mechanism drafts, and optional knowledge embeddings reuse the same protected endpoint and key. Knowledge embeddings do not create a second provider credential, but `INGOT_KNOWLEDGE_EMBEDDING_MODEL` selects the embedding model independently. Switching compatible services does not require an Ingot source-code change.
+
+The API key is write-only, encrypted by the server before it is stored in the database, and represented to browsers and read APIs only by its configured state and last-four-character hint. Platform probes only the model list during startup; a feature sends only the permission-controlled context required for its model call. Before enabling an external service, confirm that these materials may be sent to its service region.
+
+Production deployments must persist and protect `DataProtection:KeysPath`, or stored API keys cannot be decrypted after a container replacement.
 
 Document retrieval always provides a PostgreSQL keyword path. Semantic retrieval is disabled by default. Set `INGOT_KNOWLEDGE_EMBEDDING_ENABLED=true` only when the configured model service supports an OpenAI-compatible `/embeddings` endpoint and reviewed document fragments may be sent to that service. Operators can also tune `INGOT_KNOWLEDGE_EMBEDDING_MODEL`, `INGOT_KNOWLEDGE_EMBEDDING_REQUEST_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_MAX_ATTEMPTS`, `INGOT_KNOWLEDGE_EMBEDDING_LEASE_TIMEOUT`, `INGOT_KNOWLEDGE_EMBEDDING_INITIAL_RETRY_DELAY`, and `INGOT_KNOWLEDGE_EMBEDDING_MAX_RETRY_DELAY`. The Worker builds indexes asynchronously for reviewed fragments and backfills historical gaps. A query-embedding or service failure falls back to keywords without relaxing site, applicability, or review filters.
 
@@ -210,7 +214,7 @@ Grafana, Prometheus, and Alertmanager bind only to local ports `3001`, `9090`, a
 - replace the default with a site-owned `INGOT_ALERTMANAGER_CONFIG_PATH` connected to a tested notification route;
 - select `INGOT_PROMETHEUS_RETENTION` from capacity and data-classification requirements, and monitor Prometheus storage itself.
 
-The checked-in Alertmanager receiver deliberately sends no external notification and cannot prove that alert delivery works. This profile closes the gap between exported metrics and an actual collector/dashboard, but it remains a single-host reference topology and does not make Compose highly available.
+The checked-in Alertmanager receiver deliberately sends no external notification and cannot prove that alert delivery works. This profile adds a metrics collector and dashboard for the exported metrics, but it remains a single-host reference topology and does not make Compose highly available.
 
 ## Data and backup
 
@@ -227,7 +231,7 @@ Restore replaces the current PostgreSQL database and all four file volumes, so i
 ./scripts/restore-app.sh --confirm-replace-all-data deploy/backups/app-YYYYMMDDTHHMMSSZ
 ```
 
-These scripts cover only the database and four active/archive inspection and knowledge volumes. They exclude the `ingot-platform-data-protection` key volume, Edge data directories, `.env`, certificates, and monitoring data. Securely back up Data Protection keys separately and restore keys matching the database before starting the recovered API and Worker; otherwise stored model-service API keys cannot be decrypted. A passing `check-backup.sh` does not establish that all disaster-recovery materials are available.
+These scripts cover only the database plus the active and archive volumes for inspection attachments and process knowledge (four file volumes in total). They exclude the `ingot-platform-data-protection` key volume, Edge data directories, `.env`, certificates, and monitoring data. Securely back up Data Protection keys separately and restore keys matching the database before starting the recovered API and Worker; otherwise stored model-service API keys cannot be decrypted. A passing `check-backup.sh` does not establish that all disaster-recovery materials are available.
 
 The backup uses `pg_dump --format=custom`; it supports logical restore and migration validation but is not PITR. Sites with a smaller RPO must additionally configure PostgreSQL base backups, continuous WAL archiving, off-host retention, and regular point-in-time recovery exercises. Backup directories contain business records and attachments and require production-equivalent access control.
 
@@ -276,13 +280,13 @@ A recovery exercise verifies more than service startup:
 
 ## Production acceptance
 
-Before a basic R&D deployment goes live, validate authorization, business-record and file/key recovery, Platform/Worker outages, and degradation of enabled dependencies, and record acceptable downtime and RPO/RTO. Field-connected deployments additionally exercise Edge restart, network loss, bad configuration publication, and backlog replay, proving that acquisition and formal records degrade or recover as designed.
+Before a basic R&D deployment goes live, validate authorization; business-record, file, and key recovery; Platform/Worker outages; and degradation of enabled dependencies. Record acceptable downtime and RPO/RTO. Field-connected deployments additionally exercise Edge restart, network loss, bad configuration publication, and backlog replay, proving that acquisition and formal records degrade or recover as designed.
 
-The following `verify-production-acceptance.sh` is the existing field-production acceptance gate. It requires database HA, PITR, Edge replay, capacity, and continuous-observation evidence. It is not a startup check for a single-team R&D deployment that permits maintenance downtime, and it does not authorize equipment action. Claims to this field-production level must satisfy all existing script requirements.
+`scripts/verify-production-acceptance.sh` is the existing field-production acceptance gate. It requires database HA, PITR, Edge replay, capacity, and continuous-observation evidence. It is not a startup check for a single-team R&D deployment that permits maintenance downtime, and it does not authorize equipment action. Claims to this field-production level must satisfy all existing script requirements.
 
-The recipe-version launch check and the workbench show whether process variables, recipe versions, acquisition setup, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether the central service and edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
+The recipe-version launch check verifies whether process variables, recipe versions, acquisition setup, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether Platform API and Edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
 
-The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment declarations, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
+The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment targets, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
 
 ```bash
 set -a; . ./.env; set +a

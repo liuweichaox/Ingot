@@ -2,7 +2,7 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution preserves the run-efficiency, evidence, and safety claim boundaries.
+Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution must respect the evidence and safety claim boundaries and must not overstate run efficiency.
 
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -10,7 +10,7 @@ Unless a contributor explicitly states otherwise in writing, accepted contributi
 
 ## Before starting
 
-Report reproducible defects in Issues, usage questions in Discussions, and security findings privately under [SECURITY.md](SECURITY.md). A bug report should include the version or commit, environment, reproduction steps, expected and actual behavior, and sanitized logs.
+Report reproducible defects as Issues; ask usage questions in Discussions; report security findings privately under [SECURITY.md](SECURITY.md). A bug report should include the version or commit, environment, reproduction steps, expected and actual behavior, and sanitized logs.
 
 1. Search Issues for duplicates.
 2. For a substantial feature, open an Issue describing scenario, input, output, and validation.
@@ -23,8 +23,10 @@ Requirements:
 
 - .NET SDK 10;
 - Node.js 22.22+;
-- uv 0.12.5 (uv manages the Python 3.11+ environment);
+- uv 0.12.5 (using Python 3.12);
 - Docker and Docker Compose.
+
+Run these commands from the repository root:
 
 ```bash
 dotnet restore Ingot.sln
@@ -65,8 +67,8 @@ Code and comment style:
 - follow the root `.editorconfig`: use four spaces for C# and Python, two spaces for JavaScript, JSX, JSON, YAML, and shell, plus UTF-8, LF, and a final newline;
 - keep comment language consistent within each file: default new C# business and contract code to Chinese explanations, retain English docstrings in the Optimizer Python module, and preserve protocol names, configuration keys, and code identifiers verbatim;
 - use comments for business constraints, design rationale, failure boundaries, or non-obvious invariants; do not narrate each line or retain dead commented-out code;
-- use XML documentation when a public C# type or member needs explanation and docstrings for public Python modules or functions; punctuate complete sentences consistently.
-- every public C# interface must have a type-level `summary`, and public Optimizer types and entry-point functions must have docstrings; submission checks reject missing documentation.
+- use XML documentation when a public C# type or member needs explanation and docstrings for public Python modules or functions;
+- every public C# interface must have a type-level `summary`, and public Optimizer types and entry-point functions must have docstrings; submission checks reject missing documentation;
 - every source, test, script, and build file whose format supports comments must include at least one responsibility, constraint, or failure-boundary explanation; pure data formats such as JSON and historical migrations protected by committed checksums are exempt. New migrations must still document their purpose in their first commit.
 
 Before submitting:
@@ -90,7 +92,7 @@ During iteration, run relevant tests and application lint, then run the full gat
 python3 scripts/verify-documentation-style.py
 ```
 
-Keep Chinese documents and their `.en.md` counterparts aligned in heading structure and behavioral descriptions. Documentation sources live in `docs/`; the site generates pages from those files. When adding a document, update the index, site navigation, and links. Commands should state the working directory, prerequisites, success criteria, and failure handling. Describe capabilities using inspectable code and tests, and explicitly label planned work.
+Keep Chinese documents and their `.en.md` counterparts aligned in heading structure and behavioral descriptions. Documentation sources live in `docs/`; the site generates pages from those files. When adding a page, update `apps/docs-site/lib/public-docs.json` and the navigation so both languages remain reachable. Commands should state the working directory, prerequisites, success criteria, and failure handling. Describe capabilities using inspectable code and tests, and explicitly label planned work.
 
 ## Pull requests
 

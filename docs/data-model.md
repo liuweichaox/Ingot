@@ -14,7 +14,7 @@
   -> 实际运行关联 -> 源数据结果 -> 新一轮观察
 ```
 
-下一配方建议、机理声明与冲突按“工厂/生产现场 + 配方”归属，工艺知识来源按工厂/生产现场归属；数据库和 API 使用 `SiteId` 表达工厂边界。系统只对真实发生的运行取证；建议、决定、运行关联和结果都是独立的追加记录。约束全文见[系统设计](design.md)的“配方建议架构约束”。
+下一配方建议、机理声明与冲突按“工厂/生产现场 + 配方”归属，工艺知识来源按工厂/生产现场归属。系统只对真实发生的运行取证；建议、决定、运行关联和结果都是独立的追加记录。约束全文见[系统设计](design.md)的“配方建议架构约束”。
 
 ## 2. 全表职责
 
@@ -28,7 +28,7 @@
 | 检验事实 | `inspection_definitions`, `inspection_plans`, `inspection_scopes`, `inspection_records`, `inspection_attachments`, `inspection_reviews`, `inspection_audit_log` | 检验主数据、原始测量、附件、复核和审计；优化只经装配器读取有效记录。 |
 | 工装与生产上下文 | `tooling_types`, `tooling_component_types`, `tooling_components`, `tooling_assemblies`, `tooling_assembly_revisions`, `tooling_installations`, `tooling_usage_counters`, `production_contexts`, `operation_context_snapshots` | 工装谱系、安装/计数与某次生产运行的上下文快照；生产上下文按场景需要关联工装。 |
 | 模型与数据集 | `training_dataset_versions`, `process_model_versions`, `model_evaluations`, `model_drift_readings`, `model_service_configurations`, `dataset_quality_validation_reports` | 训练数据、工艺模型、效果/漂移、外部模型服务配置和数据质量报告。 |
-| 日常下一配方 | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | 按工厂/生产现场 + 配方归属的冻结建议（含生成条件与 `BriefHash`）、采用知识、工程师决定、后续实际运行关联（实际运行键全局唯一）和源数据结果；后三者只追加，不能覆盖。 |
+| 日常下一配方 | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | 按工厂/生产现场 + 配方归属的冻结建议（含生成条件与 `BriefHash`）、采用知识、工程师决定、后续实际运行关联（实际运行键全局唯一）和源数据结果；决定、运行关联和结果三张表只追加，不能覆盖。 |
 | 机理知识 | `knowledge_sources`, `knowledge_source_context`, `knowledge_fragments`, `knowledge_fragment_values`, `knowledge_extraction_jobs`, `knowledge_fragment_embeddings`, `knowledge_embedding_jobs`, `mechanism_claims`, `mechanism_claim_versions`, `mechanism_claim_applicability`, `mechanism_claim_constraints`, `mechanism_claim_evidence`, `mechanism_claim_reviews`, `mechanism_claim_lifecycle_decisions`, `mechanism_claim_variables`, `mechanism_claim_conflicts`, `mechanism_claim_forbidden_combinations`, `mechanism_claim_forbidden_combination_factors`, `mechanism_model_versions`, `mechanism_fusion_definitions`, `research_asset_audit` | 按工厂/生产现场归属的来源与抽取片段、可重建检索索引与任务，按工厂/生产现场 + 配方归属的可复核机理声明与约束/冲突，以及模型、融合定义和知识资产审计。嵌入不改变审核状态，也不是正式业务证据。 |
 | Agent 对话与问题案例 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、案例评估和持久对话；不授予业务写权限。 |
 | 操作对象缓存 | `data_object_operation_keys`, `data_object_summaries` | 外部对象的操作幂等键和受限摘要缓存。 |
@@ -43,7 +43,7 @@
 | --- | --- | --- |
 | 日常决定、实际运行和质量结果曾放在同一 JSON 行中 | 不能表达“先决定、后运行”；结果写入会成为对决定行的更新 | 拆为 `decisions`、`decision_executions`、`decision_outcomes` 三张追加表；决定可无运行，结果必须已有运行关联。 |
 
-## 4. 尚未自动改写的债务
+## 4. 待解决的技术债
 
 1. `event_ingest_keys` 会按保留期清理，而 `production_events` 没有永久事件唯一约束。因此当前合同是“保留窗口内幂等”，不是无限期重放幂等。若现场需要长期审计，应增加永久轻量 tombstone 或 `(site_id, edge_id, seq)` 水位线。
 2. 旧版数据库如仍有已退役表，应通过版本化迁移清理或归档；正式代码和产品接口不再读取它们。

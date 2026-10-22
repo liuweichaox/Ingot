@@ -18,7 +18,7 @@ The architecture must therefore:
 4. **Select methods by the problem**: statistics, response surfaces, machine learning, Bayesian optimization, and physical models are replaceable tools.
 5. **Keep engineers in control**: engineers define objectives and safety boundaries and confirm the next recipe; the system never dispatches it automatically.
 
-The system is designed to run self-hosted for one team and used by R&D and process engineers; production, quality, and equipment teams may collaborate.
+The system is designed to be self-hosted by one team and used by R&D and process engineers; production, quality, and equipment teams may collaborate.
 
 ## Product model
 
@@ -36,19 +36,21 @@ The current Web information architecture balances the decision chain with freque
 - **Ingot Chat**: a separate entry for verifying authorized structured facts and reviewed materials;
 - **Field operations**: production runs, production changeover, quality inspection, quality deviations, and tooling installation when a scenario needs tooling traceability;
 - **Process insight**: process analysis, process materials, and mechanism knowledge;
-- **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome materialization;
+- **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome freezing;
 - **Configuration and integration**: process variables, analysis plans, inspection definitions, quality plans, acquisition setup, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
 - **System administration**: users and permissions, system status, logs, raw events, model services, and assistant evaluation for administrators.
 
-Raw events reported by edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
+Raw events reported by Edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
 
-A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published analysis plan references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range. When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has fixed trace sources for equipment and run identity, product and recipe, material lot, process fields, and quality outcomes; tooling is linked when the scenario needs tooling traceability.
+A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published analysis plan references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range.
 
-The menu order reflects the daily use path rather than first-time deployment order: review field operations and quality first, then process insight and recipe optimization; Ingot Chat verifies authorized formal records and reviewed materials; Configuration and integration prepares process semantics, quality rules, and automatic acquisition for that path. A new scenario still defines and publishes process semantics before mapping real sources to those semantics; reliable field sources should preferably be acquired automatically. The next adjustment, the engineer decision, and outcome materialization are completed on the published recipe version. A small adjustment does not create a version; a significant change creates a revision draft. See [Current status](status.en.md).
+When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has fixed trace sources for equipment and run identity, product and recipe, material lot, process fields, and quality outcomes; tooling is linked when the scenario needs tooling traceability.
+
+The menu order reflects the daily use path rather than first-time deployment order: review field operations and quality first, then process insight and recipe optimization. A new scenario still defines and publishes process semantics before mapping real sources to those semantics. The next adjustment, the engineer decision, and outcome freezing are completed on the published recipe version: a small adjustment does not create a version, while a significant change creates a revision draft. See [Current status](status.en.md).
 
 Recipe versions are the common source of experiment parameter settings. Parameter codes, names, data types, units, bounds, and steps come from the referenced process variables; recipe versions retain settings, revision reasons, and evidence. No separate form may redefine parameters. All parameters are analysis variables; optimization changes still respect data types, change-allowed flags, and safety bounds.
 
-System administration has a separate entry for users, role permissions, system status, runtime logs, raw events, model services, and assistant evaluation, so it does not compete with business tasks. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
+System administration is a separate entry and does not compete with business tasks for navigation priority. Secondary navigation places frequent daily tasks before setup and maintenance actions. Before the first production release, use canonical current URLs; removed erroneous pages may redirect to existing business entries so already-open links cannot continue exposing the wrong workflow. After production release, URLs and data contracts follow controlled version-migration discipline.
 
 Menus may change, but these business facts must not be hidden, duplicated into parallel records, or buried inside algorithm state.
 
@@ -74,12 +76,16 @@ flowchart LR
     Api <--> Optimizer["Optimizer\nrecipe recommendation · diagnosis · optional validation design"]
     Api <--> DB[("PostgreSQL 17\nTimescaleDB extension")]
     Api <--> Files[("persistent file volumes\nattachments · process knowledge · archives")]
-    Worker["Platform Worker\nChat runs · projection · recompute · maintenance · result materialization · knowledge jobs"] <--> DB
+    Worker["Platform Worker\nChat runs · projection · recompute · maintenance · outcome freezing · knowledge jobs"] <--> DB
     Worker -.-> Files
     Migrator["Platform Migrator\none-shot migration and first-user bootstrap"] --> DB
 ```
 
-Code-project boundaries are not deployment boundaries. Current long-running units are Platform API, Platform Worker, independent Edge ConnectorHost instances, PostgreSQL/TimescaleDB, Optimizer, and Web; Migrator is a one-shot job completed before API and Worker start. Chat admission and queries run with Platform API, while Platform Worker executes durable deterministic-analysis and optional model-Agent jobs; Agent remains a code library rather than an independent service. Inspection attachments and process knowledge use persistent file volumes while metadata and formal state remain in PostgreSQL. A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
+Code-project boundaries are not deployment boundaries. Current long-running units are Platform API, Platform Worker, independent Edge ConnectorHost instances, PostgreSQL/TimescaleDB, Optimizer, and Web; Migrator is a one-shot job completed before API and Worker start.
+
+Chat admission and queries run with Platform API, while Platform Worker executes durable deterministic-analysis and optional model-Agent jobs; Agent remains a code library rather than an independent service. Inspection attachments and process knowledge use persistent file volumes while metadata and formal state remain in PostgreSQL.
+
+A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
 
 This document fixes stable business boundaries. [Production architecture](production-architecture.en.md) defines the target topology for replicas, failure domains, data lifecycle, disaster recovery, and controlled action; [Deployment](deployment.en.md) defines current operating procedures. The target design must not be presented as a capability already delivered by the current Compose topology.
 
@@ -99,7 +105,7 @@ Discrete run identity must remain traceable across ConnectorHost restarts. If th
 
 ### Platform
 
-- Store industrial objects, equipment, manufacturing context, runs, process executions, inspections, optimization tasks, recipe recommendations, engineer decisions, evidence, and knowledge.
+- Store industrial objects, equipment, manufacturing context, process executions (runs), inspections, optimization tasks, recipe recommendations, engineer decisions, evidence, and knowledge.
 - Maintain versioned configuration, provenance, units, permissions, audit, and business state machines.
 - Assemble the conditions, trajectory, and result of a real run into an immutable analytical observation.
 - Execute data-quality, matching, comparison, feature, and reviewable statistical calculations.
@@ -108,11 +114,15 @@ Discrete run identity must remain traceable across ConnectorHost restarts. If th
 
 Platform is the formal business system of record. Next-recipe recommendations, engineer decisions, execution links, and quality outcomes are independent append-only records; they do not reuse a run-plan or equipment-command state machine and cannot exist only in Optimizer, Agent, or a browser.
 
-Chat uses `ChatConversation` and ordered `ChatMessage` records as its formal user-facing conversation model. URLs, history lists, refresh recovery, idempotent sends, and deletion are scoped to a Conversation. A user message and its pending assistant message are created in one transaction, while `ClientMessageId` prevents network retries from duplicating messages. `AgentRun` is only the execution detail behind an assistant message and retains plans, tool calls, model usage, and stream events; it no longer defines conversation identity.
+Chat uses `ChatConversation` and ordered `ChatMessage` records as its formal user-facing conversation model. URLs, history lists, refresh recovery, idempotent sends, and deletion are scoped to a Conversation. A user message and its pending assistant message are created in one transaction, while `ClientMessageId` prevents network retries from duplicating messages. `AgentRun` is only the execution detail behind an assistant message and retains plans, tool calls, model usage, and stream events; it does not define conversation identity.
 
 The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. After the message transaction commits, API only creates a queued run; an independent Platform Worker claims, renews, and executes it through a database lease. Restarting API does not lose an accepted answer task, and a later Worker instance can reclaim an expired lease after interruption. A continuing conversation assembles only bounded summaries, findings, and limitations from recent completed answers instead of feeding unbounded charts, proposals, or old record references back to the model; an old answer also cannot replace a production-data query required by the current question.
 
-Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, acquisition configuration, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points. New business controllers handle transport and authorization, then delegate business operations through Application use cases. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still injects Infrastructure services directly into API; `ARCH-001` below constrains this gap, which must not expand into new business-write paths. Migrator bootstraps the first local user under a transactional lock, and Worker owns periodic maintenance. Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence becomes optimization observations only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
+Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, acquisition configuration, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points.
+
+New business controllers handle transport and authorization, then delegate business operations through Application use cases. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still injects Infrastructure services directly into API; `ARCH-001` below constrains this gap, which must not expand into new business-write paths. Migrator bootstraps the first local user under a transactional lock, and Worker owns periodic maintenance.
+
+Concurrency idempotency and atomic writes remain enforced by database transactions and constraints rather than being lifted into in-memory rules. Process-research rules cannot read the inspection module directly; inspection, process-run, and configuration evidence becomes optimization observations only through explicitly registered assembly adapters (currently `ResearchObservationAssembler`).
 
 ### Architecture debt register
 
@@ -211,7 +221,9 @@ actual recipe + process context + valid quality outcome
        engineer confirmation through the existing production flow
 ```
 
-A production run requires no engineer reclassification. The next-version proposal is opened from the published recipe already in view. Site, product, equipment, adjustable parameters, and the numeric quality objective come from that version, its process variables, the quality plan that covers it, and the runs already completed on it. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale. Before persistence, recommended parameters snap to the process-variable step and are checked against observed coverage; the rationale shown to engineers is in Chinese. Engineers then append adoption, modification, or rejection and its reason. Adopting a next-run correction agrees to run those settings on the current published version. It publishes no new version and does not download setpoints to equipment. The next completed run of the same recipe version that starts after the decision attaches automatically, and parameter readback plus inspection results freeze the outcome. When an engineer treats the change as significant, the suggested settings open that version's revision draft. The published version stays as it is until the draft is published. A recipe version does not open a second correction while one is still unfrozen. Rejection, expiry, or a frozen outcome is what allows another correction from the newer runs.
+A production run requires no engineer reclassification. The next-version proposal is opened from the published recipe already in view. Site, product, equipment, adjustable parameters, and the numeric quality objective come from that version, its process variables, the quality plan that covers it, and the runs already completed on it. Once at least three valid runs covering two distinct actual recipes pass admission, the system may create one independent append-only recommendation. It retains the input snapshot, prediction, uncertainty, evidence scope, and rationale. Before persistence, recommended parameters snap to the process-variable step and are checked against observed coverage; the rationale shown to engineers is in Chinese.
+
+Engineers then append adoption, modification, or rejection and its reason. Adopting a next-run correction agrees to run those settings on the current published version. It publishes no new version and does not download setpoints to equipment. The next completed run of the same recipe version that starts after the decision attaches automatically, and parameter readback plus inspection results freeze the outcome. When an engineer treats the change as significant, the suggested settings open that version's revision draft. The published version stays as it is until the draft is published. A recipe version does not open a second correction while one is still unfrozen. Rejection, expiry, or a frozen outcome is what allows another correction from the newer runs.
 
 ## Recipe recommendation architecture constraints
 
@@ -283,7 +295,7 @@ Capabilities open progressively by risk:
 - **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
 - **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
 
-The current Agent exposes authorized read-only analysis tools, does not connect to devices, and has no business-write permissions. Proposal, commitment, and execution above describe risk levels for conditional extensions, rather than existing tools. Any future equipment action requires a separate safety-engineering project: Platform would retain authorization records, a controlled integration or Edge gateway would execute the action, and actual confirmation and outcomes would return to the formal record. See the [Roadmap](project-plan.en.md) for scope and prerequisites.
+The current Agent exposes authorized read-only analysis tools, does not connect to devices, and has no business-write permissions. Proposal, commitment, and execution above describe risk levels for conditional extensions, not a list of existing tools. Any future equipment action requires a separate safety-engineering project: Platform would retain authorization records, a controlled integration or Edge gateway would execute the action, and actual confirmation and outcomes would return to the formal record. See the [Roadmap](project-plan.en.md) for scope and prerequisites.
 
 ## Evolvable strategies
 

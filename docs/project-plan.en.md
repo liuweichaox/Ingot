@@ -28,7 +28,7 @@ Current recommendations require admitted runs, actual settings, and quality outc
 | --- | --- | --- |
 | P0 | Run-evidence completeness | Reuse all recipe-version parameters and quality configuration; clearly show actual values, provenance, missing data, and quality-review status. |
 | P1 | Recommendation admission explanations | Show why runs qualify as optimization observations; insufficient samples and out-of-scope inputs have explicit rejection reasons traceable to run and quality records. |
-| P2 | Decision and outcome interface | The published recipe version connects recommendation, decision, and outcome APIs. Engineers can adopt a suggestion as a next-run correction or create a revision draft for a significant change, then view the frozen outcome. |
+| P2 | Decision and outcome interface | The published recipe version provides recommendation, decision, and outcome views. Engineers can adopt a suggestion as a next-run correction or create a revision draft for a significant change, then view the frozen outcome. |
 | P3 | Knowledge reuse | Sourced, scoped, conflict-checked knowledge can explain or constrain later recommendations. |
 | P4 | Deployment resilience | Local installation, backup/restore, capacity, and alerting can be accepted independently; connector failures do not block querying or reviewing existing runs and quality outcomes. |
 
@@ -42,16 +42,16 @@ The repository bundles no scenario-effect data or benefit conclusion. Deployers 
 
 Ingot focuses on R&D records, analysis, and optimization rather than production execution, enterprise resource planning, full quality-compliance or laboratory management, equipment interlocks, production scheduling, a general data lake, or unattended control. Any future equipment action must be a separate safety-engineering project governed by interlocks, permissions, stopping, and recovery policy; it cannot alter the engineer-confirmed recommendation loop.
 
+## Maintaining the roadmap
+
+The table lists themes in priority order; some are already implemented. [Current status](status.en.md) describes delivered behavior. Closing a theme requires corresponding tests, interface explanations, and deployment acceptance material.
+
+Propose work in an Issue with a specific user task, current evidence gap, affected modules, permission or migration impact, and reproducible completion criteria. Review implementation, bilingual documentation, and verification together; use acceptance criteria rather than calendar promises.
+
+Prioritize fact completeness and rejection explanations before additional algorithms or integrations. Plan changes cannot weaken factory-level authorization, engineer decisions, provenance, or equipment safety boundaries.
+
 ## Related Documents
 
 - [System design](design.en.md)
 - [Analysis and optimization](optimization.en.md)
 - [Production architecture](production-architecture.en.md)
-
-## Maintaining the roadmap
-
-The table prioritizes work themes; some already have implementations, so rows do not all represent unstarted work. [Current status](status.en.md) describes delivered behavior. Closing a theme requires corresponding tests, interface explanations, and deployment acceptance material.
-
-Propose work in an Issue with a specific user task, current evidence gap, affected modules, permission or migration impact, and reproducible completion criteria. Review implementation, bilingual documentation, and verification together; use acceptance criteria rather than calendar promises.
-
-Prioritize fact completeness and rejection explanations before additional algorithms or integrations. Plan changes cannot weaken factory-level authorization, engineer decisions, provenance, or equipment safety boundaries.

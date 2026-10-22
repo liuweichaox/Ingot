@@ -7,3 +7,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Ingot docs-site rules
+
+- Content comes from paired `docs/<slug>.md` and `docs/<slug>.en.md` files; edit those sources, not generated pages.
+- Register every public slug in `lib/public-docs.json` and assign it to one group in `lib/docs.ts`.
+- Never edit `out/` or `public/search-index.json` by hand.
+- Run `npm test` before publishing; it builds the export and checks routes, links, the public catalogue, brand assets, and product boundaries.
+- Public wording follows `docs/brand.en.md` and `docs/documentation-guide.en.md`.

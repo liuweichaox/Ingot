@@ -28,9 +28,9 @@ Each recommendation freezes the knowledge versions, source hashes, and applicabi
 
 When ingesting a source, retain its original location, license or usage authorization, factory/production site, and process scope. Extraction only establishes that text was obtained. Reviewers still check units, conditions, citation locations, and content hashes against the original. Source and fragment review do not replace evidence review for a mechanism claim.
 
-A claim should state variables and units, applicability dimensions, evidence level, expected signature, and falsification conditions, with supporting or refuting evidence links. Status and version retain review conclusions. Retrieval rank is not a reason to raise confidence, and engineering experience should not automatically be labeled validated.
+A claim should state variables and units, applicability dimensions, evidence level, expected signature (the predicted direction or shape of the effect), and falsification conditions, with supporting or refuting evidence links. Status and version retain review conclusions. Retrieval rank is not a reason to raise confidence, and engineering experience should not automatically be labeled validated.
 
-When claims disagree, link both claim identifiers and versions and record the conflict kind and rationale. Resolution retains the responsible reviewer, time, and conclusion. Check differences in scope or measurement separately from a contradiction in the mechanism. New evidence requires a traceable update; deleting a version used by an old recommendation must not hide the difference.
+When claims disagree, link both claim identifiers and versions and record the conflict kind and rationale. Resolution retains the responsible reviewer, time, and conclusion. Check scope or measurement differences separately from a genuine mechanistic contradiction. New evidence requires a traceable update; deleting a version used by an old recommendation must not hide the difference.
 
 ## Knowledge Retrieval
 
@@ -40,7 +40,7 @@ The semantic index is rebuildable derived state. It does not change review statu
 
 ## Current Boundary
 
-Index maintenance handles retrieval availability and rebuilding; source maintenance retains originals and hashes; review determines applicability; authorization and scope filtering determine visibility. Vector matches, keyword matches, and reindexing grant no access rights. When a citation cannot reach a valid source, inspect its source record and review state before inspecting the index or embedding service.
+Index maintenance keeps extracted content retrievable and rebuilds indexes; source maintenance retains originals and hashes; review determines applicability; authorization and scope filtering determine visibility. Vector matches, keyword matches, and reindexing grant no access rights. When a citation cannot reach a valid source, inspect its source record and review state before inspecting the index or embedding service.
 
 The current path supports sources, fragments, claims, applicability, hard constraints, conflicts, versions, recommendation-use traceability, and scope-controlled hybrid retrieval for Ingot Chat. Real-run decisions and quality outcomes progressively support or weaken knowledge. A retrieval match does not establish a claim, and the repository does not claim proof of a particular mechanism or field benefit.
 

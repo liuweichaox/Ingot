@@ -10,7 +10,7 @@ In this document, “site” is a technical shorthand for a factory or independe
 
 Reliability requirements stack by scope of use. Not every deployment is an equipment-control system:
 
-1. **Base R&D deployment**: run the Web app, API, Worker, PostgreSQL/TimescaleDB, and Optimizer, and protect configuration, run and quality records, engineer decisions, and knowledge. External business systems do not need to be online. Current recipe recommendations still require admitted real runs and quality evidence. That does not mean a separate hand-maintained record path exists apart from run evidence.
+1. **Base R&D deployment**: run the Web app, API, Worker, PostgreSQL/TimescaleDB, and Optimizer, and protect configuration, run and quality records, engineer decisions, and knowledge. External business systems do not need to be online. Current recipe recommendations still require admitted real runs and quality evidence; no separate hand-maintained record path exists apart from run evidence.
 2. **Production-field integration**: deploy Edge when needed, and additionally accept durable acquisition, outage replay, site authorization, data integrity, and the field safety boundary. The platform does not change equipment state directly.
 3. **High availability**: when the business cannot accept a single-node outage, or requires a smaller RPO/RTO, deploy and drill multiple replicas, database HA, continuous WAL/PITR, and independent monitoring.
 
@@ -110,13 +110,15 @@ flowchart LR
     class Series future
 ```
 
-This diagram is the high-availability target after field integration. It is not the base-deployment checklist. Default Compose starts one API, one Worker, one database, Optimizer, and the Web app, and Migrator runs a one-time migration. Edge starts from the optional `connector-host` profile. Ingress load balancing, database HA, and TLS termination are provided by the deployer. The dashed orange independent time-series plane is built only after capacity, recovery-time, or cost gates show that the current store is insufficient. Attachments and process knowledge still use persistent file volumes. Object storage is a conditional replacement path, not a base-deployment prerequisite or a second formal business state.
+This diagram is the high-availability target after field integration. It is not the base-deployment checklist. Default Compose starts one API, one Worker, one database, Optimizer, and the Web app, and Migrator runs a one-time migration. Edge starts from the optional `connector-host` profile. Ingress load balancing, database HA, and TLS termination are provided by the deployer.
+
+The dashed orange independent time-series plane is built only after capacity, recovery-time, or cost gates show that the current store is insufficient. Attachments and process knowledge still use persistent file volumes. Object storage is a conditional replacement path, not a base-deployment prerequisite or a second formal business state.
 
 Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, Ingot Chat keeps the same authorization and review filters and falls back to keyword search. It does not create another knowledge system of record.
 
 ### Factory / production-site cell
 
-When failures must be isolated across plants, one plant or one campus that can share an outage is an independent production cell. The system identifies that cell with `SiteId`; one cell may have multiple Edges. The following is an extension design. It does not mean a cross-factory control plane exists today:
+When failures must be isolated across plants, an independent production cell is one plant or one campus that can share an outage. The system identifies that cell with `SiteId`; one cell may have multiple Edges. The following is an extension design. It does not mean a cross-factory control plane exists today:
 
 - it has its own ingress, Platform, database, file storage, monitoring, and backups;
 - Edge is split further by OT security zone, power, network switch, maintenance window, and acceptable acquisition outage;
@@ -166,7 +168,7 @@ Business time uses `OccurredAt`. Platform receive time uses `IngestedAt`. `Recor
 
 ### Data ownership and isolation matrix
 
-Table ownership is fixed by the keys and access rules below, not by directory guesswork. Every new table must belong to one class. When a table holds more than one class, the stricter isolation class wins.
+Table ownership is fixed by the keys and access rules below, not by directory naming alone. Every new table must belong to one class. When a table holds more than one class, the stricter isolation class wins.
 
 | Ownership class | Authoritative key | Current table family | Access and evolution rule |
 |---|---|---|---|
@@ -179,7 +181,9 @@ Table ownership is fixed by the keys and access rules below, not by directory gu
 | Deployment-level R&D assets and evaluation | Dataset, model, or case identity and version; authorized by role | `training_dataset_versions`, `model_evaluations`, `model_drift_readings`, `case_level_evaluations` | There is no separate `SiteId` isolation contract today; do not treat these tables as cross-team or cross-tenant isolation; references to production facts still follow source permissions |
 | Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `problem_cases` | Agent records do not grant new data permissions; replay rechecks the user and site scope |
 
-Current database gates already require `site_id NOT NULL` on canonical ingestion and projection tables, and on Edge registration, inspection records, quality scopes, and inspection attachments. An Edge registration cannot move across sites. Inspection attachments are deduplicated by site and content hash, and reads recheck role and site. Other run-derived tables keep `ExecutionId` ownership so a drift-prone site column is not stored twice. The corresponding API must resolve ExecutionId from site scope first. If that join later becomes an isolation-audit or performance bottleneck, a redundant `SiteId` constrained by a foreign key or trigger may be added. The application must not copy it without a consistency constraint.
+Current database gates already require `site_id NOT NULL` on canonical ingestion and projection tables, and on Edge registration, inspection records, quality scopes, and inspection attachments. An Edge registration cannot move across sites. Inspection attachments are deduplicated by site and content hash, and reads recheck role and site.
+
+Other run-derived tables keep `ExecutionId` ownership so a drift-prone site column is not stored twice. The corresponding API must resolve ExecutionId from site scope first. If that join later becomes an isolation-audit or performance bottleneck, a redundant `SiteId` constrained by a foreign key or trigger may be added. The application must not copy it without a consistency constraint.
 
 ### Out-of-order, gaps, and late data
 
@@ -233,7 +237,7 @@ Optimizer and model services hold no business state. Their failure affects only 
 
 The current product provides records, analysis, recommendations, and engineer decisions. It has no action ledger, signed dispatch, Safety Executor, or equipment-write loop. Adopting a recommendation is not approval of an equipment action, and it does not send parameters to equipment.
 
-If equipment action is chartered separately later, action identity, independent approval, parameter freeze, time limits, signatures, idempotent receipts, actual-value readback, stop, and recovery must be designed again. Agent does not connect to equipment and does not hold equipment credentials. Optimizer does not approve or execute. Field hardware interlocks stay independently effective. Each equipment class and action needs its own safety validation. Analysis capability, or the deployment acceptance in this document, is not admission for equipment action.
+If equipment action is chartered separately later, action identity, independent approval, parameter freeze, time limits, signatures, idempotent receipts, actual-value readback, stop, and recovery must be designed separately. Agent does not connect to equipment and does not hold equipment credentials. Optimizer does not approve or execute. Field hardware interlocks stay independently effective. Each equipment class and action needs its own safety validation. Analysis capability, or the deployment acceptance in this document, is not admission for equipment action.
 
 That direction is not a completion condition for the current deployment. Implementation priority is in the [Roadmap](project-plan.en.md).
 
@@ -300,7 +304,7 @@ Accept the behavior below for the components that are enabled and for the declar
 
 ## Security and observability
 
-Edge currently uses a Bearer token bound to the site and node. Transport across hosts must be terminated with TLS by the deployer. Mutual TLS may be an additional control. The repository does not provide certificate issuance or revocation. Model API keys are currently encrypted with Data Protection and stored in the database; recovery needs the matching keys. Other equipment credentials should be injected under the deployment instructions. Do not claim that every setting stores only a secret reference. Equipment networks, the database, Optimizer, metrics, and administration entry points restrict network access separately.
+Edge currently uses a Bearer token bound to the site and node. Transport across hosts must be terminated with TLS by the deployer. Mutual TLS may be an additional control. The repository does not provide certificate issuance or revocation. Model API keys are currently encrypted with Data Protection and stored in the database; recovery needs the matching keys. Other equipment credentials should be injected following the deployment's secret-management instructions. Not every setting is stored only as a secret reference. Equipment networks, the database, Optimizer, metrics, and administration entry points restrict network access separately.
 
 Define the following SLIs for the components that are enabled. Replica and WAL metrics apply only to the matching topology. This list does not mean the reference monitoring already covers every item:
 
@@ -327,7 +331,7 @@ Before launch, every site fills in and versions:
 - maximum outage duration and available Edge disk;
 - RPO, RTO, acceptable freshness, and maintenance windows.
 
-Capacity acceptance runs at no less than twice the production peak, and includes ingestion, common queries, aggregation, backup, and one node failure at the same time. Average throughput cannot replace tail latency, backlog age, and recovery time.
+Capacity acceptance runs at no less than twice the production peak, covering ingestion, common queries, aggregation, backup, and one node failure simultaneously. Average throughput cannot replace tail latency, backlog age, and recovery time.
 
 ### Hard admission gates
 
@@ -357,7 +361,7 @@ Equipment action is outside this acceptance. If it is chartered later, its safet
 | Data plane | Edge outbox, idempotent ingestion, deterministic-rejection quarantine, derived processing, background leases, and part of dead letter exist | Lateness watermarks, a complete recompute and replay operations surface, hot/warm/cold lifecycle, and fair quotas |
 | Equipment action | Analysis tools are read-only, Optimizer does not approve or execute, and an engineer decision does not write to equipment | Action ledger, signed dispatch, safety executor, and the equipment-execution loop are not implemented, and they are not on the default roadmap |
 
-"Implemented" means code, tests, or deployment assets exist in the repository. It does not mean a site has passed capacity, recovery, HA, security, or sustained-observation acceptance. This page does not define a second P0–P3 product priority. Build order follows the [Roadmap](project-plan.en.md).
+"Implemented" means code, tests, or deployment assets exist in the repository. It does not mean a site has passed capacity, recovery, HA, security, or sustained-observation acceptance. This page does not define its own product priorities; build order follows the [Roadmap](project-plan.en.md).
 
 ### Triggers for later engineering
 

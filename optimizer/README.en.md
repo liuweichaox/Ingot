@@ -2,46 +2,49 @@
 
 > Status: current numerical-service development guide.
 
-This directory implements surrogate modeling and sequential recipe optimization within Ingot's method toolbox. It receives a complete frozen brief and valid observations from Platform, then returns candidate recipe parameters for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential runs, not the only answer to every process question and not a replacement product value.
+This directory implements surrogate modeling and sequential recipe optimization for Ingot. It receives a complete frozen brief and valid observations from Platform, then returns candidate recipe parameters for **engineer review**. It stores no business state and never controls equipment. GP/BO is a current method for expensive small-data sequential runs; it is not the only answer to every process question and does not redefine the product's core value.
 
 See the [system design](../docs/design.en.md) for boundaries and [analysis and optimization methods](../docs/optimization.en.md) for method-selection principles.
 
 ## Current capabilities
 
 - Continuous controls, hard parameter bounds, and measured outcome-safety constraints
-- Explicit `context` stratification for discrete factors such as material, equipment, tooling, and formulation; category codes are never disguised as continuous controls
+- Explicit `context` stratification for discrete factors such as material, equipment, tooling, and recipe; category codes are never disguised as continuous controls
 - Less-than, greater-than, target, and range objectives
 - Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
-- Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and acquisition samples inside 0-1
+- Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and the acquisition function inside 0-1
 - GP outcome-safety filtering followed by visible-evidence admission for response surfaces, GP probability, and mechanism features
 - Decision intent is `reach-specification` only: seek the specification inside the observed coverage envelope
 - Safe derived features declared by the frozen brief, with no hidden behavior selected by industry, equipment, or variable names
 - Safe-baseline local cold start, pending recipe points, and idempotent batches
-- Historical pool replay that can select only real, unconsumed parameter settings (`POST /v1/historical-replay`)
+- Historical pool replay that can select only real parameter settings from completed runs (`POST /v1/historical-replay`)
 - Stateless `POST /v1/suggestions` HTTP contract
+- Stateless `POST /v1/diagnosis` contract, plus `/health` and `/ready` probes
 - Synthetic digital-twin replay for validating algorithm contracts
 
-The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default. Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available. Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
+The NumPy/SciPy GP remains a cold-start and regression baseline. Online suggestions, historical replay, and synthetic replay all use one engine-selection entry point: fewer than three valid observations use the sequential cold start and may apply NumPy GP priors; three or more use BoTorch. For specification seeking, a regularized linear response surface is the default.
+
+Once minimum capacity is available, paired leave-one-out predictions compare normalized target-ranking error for the linear and quadratic surfaces. Quadratic is admitted only when its improvement exceeds one standard error across three consecutive expanding histories; inconclusive evidence keeps linear. GP posterior specification probability takes over only after nonlinear evidence is established and at least six visible observations per raw control are available.
+
+Declared mechanism features must also pass capacity and paired predictive evidence; otherwise they are removed from the surrogate. Admission reads revealed observations and candidate controls only, never candidate outcomes or dataset names. The GP always supplies prediction intervals and outcome-safety probabilities. Every caller relies on the selected engine's `suggest` path to enforce measured outcome-safety constraints and must not instantiate a concrete engine directly.
 
 The numerical optimizer directly searches continuous controls only. Comparing multiple discrete levels requires separate inputs stratified by categorical context or an applicable full/fractional factorial design. Adjacent identifiers never make different materials, machines, or tooling artificially similar. The HTTP contract's `campaign` is numerical input configuration, not a separate Platform business activity or run plan.
 
 ## Local validation
 
-Python environments are managed exclusively with `uv 0.12.5`; do not create a
-project venv or install project dependencies with pip:
+Python environments are managed exclusively with `uv 0.12.5`; do not create a project venv or install project dependencies with pip. Run these commands in `optimizer/`:
 
 ```bash
-cd optimizer
-uv sync --extra service --extra viz --group dev --locked
+uv sync --extra service --group dev --locked
 uv run --locked pytest
 uv run --locked uvicorn service:app --port 8110
 ```
 
-If a compatible Python is not installed, let `uv` install and select Python 3.12:
+If Python 3.11+ is not installed, let `uv` install 3.12 (the version used by the container and CI):
 
 ```bash
 uv python install 3.12
-uv sync --python 3.12 --extra service --extra viz --group dev --locked
+uv sync --python 3.12 --extra service --group dev --locked
 ```
 
 `uv.lock` is authoritative. After changing `pyproject.toml`, run `uv lock` and
@@ -75,7 +78,7 @@ derived feature. Composition problems may also use `weighted_mean` and
 be non-negative and have a positive total. Arbitrary Python expressions, unknown inputs, forward
 references, and legacy hidden `process_profile` switches are rejected.
 
-The .NET platform stores the returned batch as next-recipe recommendations with their input hash, model version, predictions, engineer decision, and later real-run outcome. No recommendation is sent directly to a PLC.
+The .NET platform stores the returned batch as next-recipe recommendations with their input hash, model version, and predictions; engineer decisions and later real-run outcomes are recorded separately. No recommendation is sent directly to a PLC.
 
 ## Historical validation
 

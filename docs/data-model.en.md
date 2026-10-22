@@ -6,13 +6,15 @@ In this document, “site” is the database and historical API term for a facto
 
 ## 1. Business Boundaries
 
+The system's data trail must remain separate:
+
 ```text
 Production event / actual execution / inspection facts
   -> optimization observation -> next-recipe recommendation -> engineer decision
   -> execution link -> source outcome -> next observation round
 ```
 
-Next-recipe recommendations, mechanism claims, and conflicts belong to “factory/production site + recipe”; process-knowledge sources belong to a factory/production site, represented internally by `SiteId`. The system takes evidence only from actual executions; recommendations, decisions, execution links, and outcomes are separate append-only records. See “Recipe recommendation architecture constraints” in [System design](design.en.md).
+Next-recipe recommendations, mechanism claims, and conflicts belong to “factory/production site + recipe”; process-knowledge sources belong to a factory/production site. The system takes evidence only from actual executions; recommendations, decisions, execution links, and outcomes are separate append-only records. See “Recipe recommendation architecture constraints” in [System design](design.en.md).
 
 ## 2. Relation Inventory
 
@@ -26,7 +28,7 @@ Next-recipe recommendations, mechanism claims, and conflicts belong to “factor
 | Inspection facts | `inspection_definitions`, `inspection_plans`, `inspection_scopes`, `inspection_records`, `inspection_attachments`, `inspection_reviews`, `inspection_audit_log` | Inspection master data, measurements, attachments, reviews, and audit. |
 | Tooling and production context | `tooling_types`, `tooling_component_types`, `tooling_components`, `tooling_assemblies`, `tooling_assembly_revisions`, `tooling_installations`, `tooling_usage_counters`, `production_contexts`, `operation_context_snapshots` | Tooling lineage, installation/counters, and execution context snapshots; production contexts link tooling only when the scenario needs it. |
 | Models and datasets | `training_dataset_versions`, `process_model_versions`, `model_evaluations`, `model_drift_readings`, `model_service_configurations`, `dataset_quality_validation_reports` | Dataset/model versions, evaluation and drift, model-service configuration, and data-quality reports. |
-| Daily next recipe | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | Factory/production-site + recipe scoped frozen recommendation (including the brief and `BriefHash`), knowledge use, engineer decision, later execution link (actual execution key is globally unique), and source outcome. The final three are append-only. |
+| Daily next recipe | `research_recipe_recommendations`, `recipe_recommendation_knowledge_usage`, `research_recipe_recommendation_decisions`, `research_recipe_recommendation_decision_executions`, `research_recipe_recommendation_decision_outcomes` | Factory/production-site + recipe scoped frozen recommendation (including the brief and `BriefHash`), knowledge use, engineer decision, later execution link (actual execution key is globally unique), and source outcome. The decision, execution-link, and outcome relations are append-only. |
 | Mechanism knowledge | `knowledge_sources`, `knowledge_source_context`, `knowledge_fragments`, `knowledge_fragment_values`, `knowledge_extraction_jobs`, `knowledge_fragment_embeddings`, `knowledge_embedding_jobs`, `mechanism_claims`, `mechanism_claim_versions`, `mechanism_claim_applicability`, `mechanism_claim_constraints`, `mechanism_claim_evidence`, `mechanism_claim_reviews`, `mechanism_claim_lifecycle_decisions`, `mechanism_claim_variables`, `mechanism_claim_conflicts`, `mechanism_claim_forbidden_combinations`, `mechanism_claim_forbidden_combination_factors`, `mechanism_model_versions`, `mechanism_fusion_definitions`, `research_asset_audit` | Factory/production-site scoped sources, extracted fragments, and rebuildable retrieval indexes and jobs; factory/production-site + recipe scoped reviewable claims and constraints/conflicts; plus models, fusion definitions, and knowledge-asset audit. Embeddings do not change review status and are not formal business evidence. |
 | Agent conversations and problem cases | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, case evaluation, and durable chat; no business-write permission. |
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
@@ -37,11 +39,11 @@ The recommendation's recipe version is retained in the frozen brief context; rel
 
 ## 3. Key Migrations and Constraints
 
-| Finding | Risk | Migration |
+| Problem | Risk | Migration |
 | --- | --- | --- |
 | Daily decision, execution, and outcome shared one JSON row | Cannot represent decide-first/run-later; outcome mutates decision row | Split into `decisions`, `decision_executions`, and `decision_outcomes`; decision may have no run, outcome requires a link. |
 
-## 4. Deferred Debt
+## 4. Unresolved Debt
 
 1. `event_ingest_keys` is pruned while `production_events` lacks permanent event uniqueness. The current contract is retention-window idempotency, not indefinite replay idempotency. Long-term audit needs a durable tombstone or `(site_id, edge_id, seq)` watermark.
 2. Older databases may still contain retired relations. Versioned migrations must clean up or archive them; formal code and product interfaces no longer read them.

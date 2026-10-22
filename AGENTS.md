@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API, `agent/` contains model-assisted investigation and evidence logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. User-facing applications live under `apps/`: `platform` is the React/Vite product UI, while `website` and `docs-site` are Next.js applications. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`.
+Ingot is a .NET 10 monorepo with three web applications. Backend code lives under `src/`: `edge/` contains shop-floor services, `platform/` contains the central API, `agent/` contains model-assisted investigation and evidence logic, and `shared/` holds domain models and contracts. The xUnit suite is centralized in `tests/Ingot.Core.Tests`, mirroring those areas. User-facing applications live under `apps/`: `platform` is the React/Vite product UI, while `website` and `docs-site` are Next.js applications. Deployment files are in `deploy/`, verification utilities in `scripts/`, benchmarks in `tools/`, documentation in `docs/`, and the canonical brand assets are in `apps/website/public/brand/`. Public documentation pages are the paired `docs/<slug>.md` and `docs/<slug>.en.md` files; register a new page in `apps/docs-site/lib/public-docs.json` and assign it to a group in `apps/docs-site/lib/docs.ts`, or the page will not be published.
 
 ## Build, Test, and Development Commands
 
@@ -15,26 +15,27 @@ Use .NET SDK 10, Node.js 22.22+, uv 0.12.5, Docker, and Docker Compose.
 - `npm --prefix apps/platform run dev` starts the React product UI on port 3000.
 - `uv sync --project optimizer --extra service --group dev --locked` creates the locked Python environment; use `uv run --project optimizer --locked ...` for all optimizer commands.
 - `docker compose -f docker-compose.app.yml up -d --build` launches the application stack.
-- `./scripts/verify.sh` runs the full CI gate: builds, tests, ESLint, audits, architecture checks, Compose validation, and `git diff --check`.
+- `./scripts/verify.sh` runs the full CI gate: architecture, code-comment, product-scope, product-language, and documentation-style checks; builds; xUnit and Optimizer tests; frontend lint and audits; observability and deployment Compose validation; and `git diff --check`.
 
 ## Mandatory Boundary Checks
 
 The following checks are blocking repository contracts, not optional lint rules:
 
 - `./scripts/verify-architecture.sh` enforces dependency direction, composition-root isolation, and read-only Agent analysis tools.
+- `./scripts/verify-code-comments.sh` blocks source, test, script, and build files that lack a responsibility or failure-boundary comment.
 - `./scripts/verify-product-scope.sh` rejects retired desktop/code-generation surfaces and legacy multi-agent product terminology.
 - `./scripts/verify-product-language.sh` protects the canonical product value, claim boundaries, scenario-neutral language, and evidence-gated roadmap wording.
 - `python3 scripts/verify-documentation-style.py` checks bilingual heading parity and rejects promotional or unsupported public wording; it also runs through `verify-product-language.sh`.
 
-Run all three directly when changing architecture, product scope, public terminology, or documentation; `./scripts/verify.sh` also includes them.
+Run these checks directly when changing architecture, product scope, public terminology, or documentation; `./scripts/verify.sh` also includes them.
 
 ## Coding Style & Naming Conventions
 
-Follow existing files: four-space indentation in C#, two spaces in JavaScript/TypeScript/Vue, and UTF-8 text. C# uses file-scoped namespaces, nullable reference types, `PascalCase` for public symbols, and `camelCase` for locals and parameters. Frontend components use `PascalCase` filenames; variables and functions use `camelCase`. Run each app's `npm run lint` before submitting. Keep domain and agent abstractions independent of databases, model providers, and equipment protocols.
+Follow existing files: four-space indentation in C# and Python, two spaces in JavaScript/TypeScript/JSON/YAML, and UTF-8 text. C# uses file-scoped namespaces, nullable reference types, `PascalCase` for public symbols, and `camelCase` for locals and parameters. Frontend components use `PascalCase` filenames; variables and functions use `camelCase`. Run each app's `npm run lint` before submitting. Keep domain and agent abstractions independent of databases, model providers, and equipment protocols.
 
 ## Testing Guidelines
 
-Name C# test classes `*Tests.cs` and JavaScript tests `*.test.mjs`. Add success, rejection, and authorization-boundary coverage for new behavior; reproduce bugs with a failing test first. Run the focused suite while iterating and `./scripts/verify.sh` before opening a PR.
+Name C# test classes `*Tests.cs`, node:test files `*.test.mjs`, and Vitest files `*.test.jsx`. Add success, rejection, and authorization-boundary coverage for new behavior; reproduce bugs with a failing test first. Run the focused suite while iterating and `./scripts/verify.sh` before opening a PR.
 
 ## Commit & Pull Request Guidelines
 

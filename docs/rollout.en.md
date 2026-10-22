@@ -2,7 +2,9 @@
 
 > Document status: **deployer evaluation guide**. This document explains how to evaluate the recommendation loop in a real project; it does not define a second product workflow.
 
-Ingot has one formal record: a real production run forms evidence, the system produces a next-recipe recommendation, an engineer adopts, modifies, or rejects it. Modification and rejection require a reason; adoption may include one. Adoption or modification then links an actual run and freezes its quality outcome; rejection requires no linked run. Evaluation must not require users to create an additional plan, side path, or approval state.
+Ingot has one formal record: a real production run forms evidence, the system produces a next-recipe recommendation, an engineer adopts, modifies, or rejects it. Modification and rejection require a reason; adoption may include one. Adoption or modification then links an actual run and freezes its quality outcome; rejection requires no linked run.
+
+Evaluation must not require users to create an additional plan, side path, or approval state.
 
 ## Evaluation Questions
 
@@ -15,11 +17,11 @@ Deployers may evaluate, inside their own controlled environment:
 
 Frozen historical records may be used offline to check algorithm determinism, constraint compliance, and future-information isolation. They are not an engineer-facing workflow to create, approve, or execute, and they do not replace new real production outcomes.
 
-## Fix the Evaluation Protocol
+## Set the Evaluation Protocol
 
-Before comparing results, record the product and process scope, recipe version, quality specification, time window, inclusion and exclusion rules, cost accounting, and comparison baseline in the controlled environment. A baseline may be existing operation in the same scope or an applicable simple method. Explain its selection and do not change the protocol because an individual result is unfavorable.
+Before comparing results, record the product and process scope, recipe version, quality specification, time window, inclusion and exclusion rules, cost accounting, and comparison baseline in the controlled environment. A baseline may be the current operating method in the same scope or an applicable simple method. Explain its selection and do not change the protocol because an individual result is unfavorable.
 
-Separate workflow usability from method effectiveness. Check evidence completeness, decision traceability, and constraint compliance before comparing runs-to-specification, quality outcomes, or cost. Explain incomplete, excluded, and rejected records separately rather than selecting only successful adopted recommendations. When scope, specification, or method changes, record the change and reassess comparability.
+Separate workflow usability from method effectiveness. Check evidence completeness, decision traceability, and constraint compliance before comparing the number of runs needed to reach specification, quality outcomes, or cost. Explain incomplete, excluded, and rejected records separately rather than selecting only successful adopted recommendations. When scope, specification, or method changes, record the change and reassess comparability.
 
 ## Prevent Future-Information Leakage
 

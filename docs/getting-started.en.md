@@ -23,9 +23,9 @@ cd Ingot
 cp .env.example .env
 ```
 
-Change the database passwords and administrator settings in `.env`. Replace every `change-this-` placeholder. Production uses randomly generated, distinct passwords and tokens.
+Change the database password and administrator settings in `.env`. Replace every `change-this-` placeholder. Production uses randomly generated, distinct passwords and tokens.
 
-The reference Compose requires `INGOT_SITE_ID`, `INGOT_EDGE_ID`, `INGOT_EDGE_TOKEN`, and `INGOT_CONNECTOR_LOCAL_TOKEN` for Platform bindings even when the optional connector is disabled. Keep the example local IDs for an initial evaluation, and replace both token placeholders with distinct random secrets of at least 24 characters. Configure `INGOT_CONNECTOR_TOKEN` only when enabling `connector-host`. These settings do not connect equipment.
+Even with the optional connector disabled, the Compose file requires `INGOT_SITE_ID`, `INGOT_EDGE_ID`, `INGOT_EDGE_TOKEN`, and `INGOT_CONNECTOR_LOCAL_TOKEN` to bind factory and Edge identities. Keep the example local IDs for an initial evaluation, and replace both token placeholders with distinct random secrets of at least 24 characters. Configure `INGOT_CONNECTOR_TOKEN` only when enabling `connector-host`. These settings do not connect equipment.
 
 On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Keep `.env` local and exclude it from commits.
 
@@ -66,7 +66,9 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 
 Changing `.env` later does not reset an existing account.
 
-This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections. Device and enterprise-system connectors are configured and enabled as needed. After sign-in, users manage process variables and recipe versions through “Configuration and integration.” Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
+This deployment starts Ingot's own Web, API, database, optimizer, and background services without external business-system accounts or connections; device and enterprise-system connectors are configured and enabled as needed.
+
+After sign-in, users manage process variables and recipe versions through “Configuration and integration.” Each process run is an experiment; run and quality records jointly retain experiment facts. See [Current status](status.en.md) for capability boundaries and recommendation-data requirements.
 
 ## Common startup problems
 
@@ -83,7 +85,9 @@ docker compose -f docker-compose.app.yml logs --tail=200
 
 1. Sign in and open “Configuration and integration.” Confirm that you can access process variables and recipe versions.
 2. Check `http://localhost:8002/health` for the Worker and retain the migration result and service status for troubleshooting.
-3. Continue with the pilot guide using your own authorized data. A healthy deployment does not create production runs, inspection results, or qualified optimization observations.
+3. Continue with the pilot guide using your own authorized data.
+
+A healthy deployment does not create production runs, inspection results, or qualified optimization observations.
 
 All application ports in the reference Compose bind to `127.0.0.1`. Remote users need a configured ingress with TLS and authentication; changing a URL alone does not expose the service.
 

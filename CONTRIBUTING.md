@@ -2,7 +2,7 @@
 
 [English](CONTRIBUTING.en.md)
 
-Ingot 接受代码、设备适配、算法、获授权的公开回放数据、测试、文档和工艺知识贡献。所有贡献均须保留运行效率、证据和安全声明边界。
+Ingot 接受代码、设备适配、算法、获授权的公开回放数据、测试、文档和工艺知识贡献。所有贡献都必须保留证据与安全声明的边界，不得夸大运行效率。
 
 提交贡献即表示贡献者同意遵守[行为准则](CODE_OF_CONDUCT.md)。
 
@@ -10,11 +10,11 @@ Ingot 接受代码、设备适配、算法、获授权的公开回放数据、�
 
 ## 开始之前
 
-可复现缺陷提交 Issue，使用问题进入 Discussions，安全问题按 [SECURITY.md](SECURITY.md) 私密报告。问题报告写明版本或提交号、环境、复现步骤、预期与实际行为，并提供已去除敏感信息的日志。
+可复现的缺陷提交 Issue；使用问题进入 Discussions；安全问题按 [SECURITY.md](SECURITY.md) 私密报告。问题报告写明版本或提交号、环境、复现步骤、预期与实际行为，并提供已去除敏感信息的日志。
 
 1. 在 Issues 中确认没有重复问题；
 2. 较大功能先创建讨论 Issue，说明场景、输入、输出和验证方式；
-3. 安全漏洞使用[私有漏洞报告](SECURITY.md)，不要公开提交；
+3. 安全漏洞使用[安全策略](SECURITY.md)，不要公开提交；
 4. 不上传工厂凭据、设备地址、客户数据或未授权运行数据。
 
 ## 开发环境
@@ -23,8 +23,10 @@ Ingot 接受代码、设备适配、算法、获授权的公开回放数据、�
 
 - .NET SDK 10；
 - Node.js 22.22+；
-- uv 0.12.5（由 uv 管理 Python 3.11+ 环境）；
+- uv 0.12.5（使用 Python 3.12）；
 - Docker 与 Docker Compose。
+
+以下命令在仓库根目录执行：
 
 ```bash
 dotnet restore Ingot.sln
@@ -65,8 +67,8 @@ git checkout -b codex/short-description
 - 遵循仓库根目录 `.editorconfig`：C# 与 Python 使用 4 空格，JavaScript、JSX、JSON、YAML 与 Shell 使用 2 空格；统一 UTF-8、LF 和文件末尾换行；
 - 同一文件内保持注释语言一致；新增的 C# 业务与契约代码默认使用中文说明，Optimizer Python 模块沿用英文 Docstring，协议名、配置键和代码标识保持原文；
 - 注释说明业务约束、设计原因、失败边界或不明显的不变量，不逐行复述代码，也不保留已失效的注释代码；
-- C# 公共类型或成员需要说明时使用 XML 文档注释，Python 公共模块或函数需要说明时使用 Docstring；完整句子使用一致的标点。
-- 所有公共 C# 接口必须有类型级 `summary`，Optimizer 的公共类型与入口函数必须有 Docstring；提交检查会拒绝缺失项。
+- C# 公共类型或成员需要说明时使用 XML 文档注释，Python 公共模块或函数需要说明时使用 Docstring；
+- 所有公共 C# 接口必须有类型级 `summary`，Optimizer 的公共类型与入口函数必须有 Docstring；提交检查会拒绝缺失项；
 - 每个支持注释的源码、测试、脚本和构建文件至少包含一处职责、约束或失败边界说明；JSON 等不支持注释的纯数据格式，以及受已提交校验和保护的历史迁移除外。新增迁移仍须在首次提交时写明用途。
 
 提交前运行：
@@ -90,7 +92,7 @@ git checkout -b codex/short-description
 python3 scripts/verify-documentation-style.py
 ```
 
-中文文档与对应 `.en.md` 保持标题层级和行为说明一致。文档源在 `docs/`，文档站从这些文件生成页面；新增文档同时更新首页、站点导航和链接。命令注明运行目录、前置条件、成功标志与失败处理。能力以可检验代码和测试为依据，规划明确标为规划。
+中文文档与对应 `.en.md` 保持标题层级和行为说明一致。文档源在 `docs/`，文档站从这些文件生成页面；新增页面时更新 `apps/docs-site/lib/public-docs.json` 与导航，确保中英文都能访问。命令注明运行目录、前置条件、成功标志与失败处理。能力以可检验代码和测试为依据，规划明确标为规划。
 
 ## Pull Request
 

@@ -4,22 +4,26 @@ Ingot is an Open-source Process R&D and Optimization System. Organize recipe ver
 
 Choose a path from local installation to a first recommendation and ongoing operations. Documentation is maintained with repository code. [Current status](status.en.md) describes implemented capability; the [Roadmap](project-plan.en.md) describes planned work.
 
-The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Ingot Chat is a cross-module verification and investigation entry rather than a production step. Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
+The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Ingot Chat is a cross-module verification and investigation entry rather than a production step.
+
+Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
 
 ## First use
 
 1. Read [Current status](status.en.md) to understand capabilities, required data, and usage boundaries.
 2. Follow [Getting started](getting-started.en.md) to start the stack, check service health, and sign in.
-3. Follow the [Recipe-optimization pilot guide](pilot.en.md) to verify a published recipe, real runs, and reviewed quality results, then complete a recommendation, engineer decision, actual run, and outcome freeze.
+3. Follow the [Recipe-optimization pilot guide](pilot.en.md) to verify a published recipe, real runs, and reviewed quality results, then complete a recommendation, engineer decision, actual run, and outcome frozen from that run.
 
 You can start the system without a field connector. When a reliable field source exists, prefer automated acquisition, semantic mapping, buffering, and replay. The current recommendation flow still requires admitted real-run evidence; a successful installation does not establish data readiness.
 
 ## Read by task
 
-- **Process and R&D engineers**: the [Pilot guide](pilot.en.md) explains the procedure; [Analysis and optimization](optimization.en.md) explains why recommendations are generated or stopped; the [Glossary](glossary.en.md) defines business objects.
-- **Integration engineers**: [Data integration](data-connection.en.md) covers identities, sources, and mappings; [System design](design.en.md) explains Edge and Platform responsibilities.
-- **Operators**: use [Production architecture](production-architecture.en.md) to choose the reliability scope, then [Deployment](deployment.en.md) to configure, back up, and upgrade; use [Troubleshooting](troubleshooting.en.md) for failures.
-- **Contributors**: prepare a development environment with [Contributing](../CONTRIBUTING.en.md); check module and record ownership against [System design](design.en.md) and the [Data model](data-model.en.md); follow the [Documentation guide](documentation-guide.en.md) for documentation changes.
+| Role | Reading path |
+|---|---|
+| Process and R&D engineers | [Pilot guide](pilot.en.md) → [Analysis and optimization](optimization.en.md) → [Glossary](glossary.en.md) |
+| Integration engineers | [Data integration](data-connection.en.md) → [System design](design.en.md) |
+| Operators | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) → [Troubleshooting](troubleshooting.en.md) |
+| Contributors | [Contributing](../CONTRIBUTING.en.md) → [System design](design.en.md), [Data model](data-model.en.md) → [Documentation guide](documentation-guide.en.md) |
 
 ## Documentation catalog
 

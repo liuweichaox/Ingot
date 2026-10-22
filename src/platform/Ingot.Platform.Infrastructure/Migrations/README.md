@@ -4,7 +4,7 @@ PostgreSQL schema 和 TimescaleDB hypertable 拓扑全部由版本化 SQL 迁移
 
 ## 规则
 
-1. 脚本位于 `Migrations/sql/NNNN_name.sql`，编译为嵌入资源，按文件名升序执行。
+1. 脚本位于 `src/platform/Ingot.Platform.Infrastructure/Migrations/sql/NNNN_name.sql`，编译为嵌入资源，按文件名升序执行。
 2. `0001_baseline.sql` 是新装的起始基线，当前 schema 由基线与后续全部编号迁移共同构成；投入使用后的任何变更必须新增编号脚本。
 3. **已应用的脚本不可修改**——runner 校验 checksum，漂移即拒绝启动。
 4. 每个脚本在单个事务中执行；`schema_version` 表记录版本、名称、checksum、时间。
@@ -19,8 +19,8 @@ PostgreSQL schema 和 TimescaleDB hypertable 拓扑全部由版本化 SQL 迁移
 
 ## 安装边界
 
-空数据库新装会依序执行基线和全部后续迁移；已经使用当前版本化迁移链的数据库会校验已应用脚本并执行尚未应用的迁移。基线压缩前的开发数据库不属于支持范围，系统不提供其旧 schema 的自动识别、重命名或转换路径。不要把正常升级理解为删除数据库；需要重新初始化开发库时先确认数据可丢弃，并保留所需备份。
+空数据库新装会依序执行基线和全部后续迁移；已经使用当前版本化迁移链的数据库会校验已应用脚本并执行尚未应用的迁移。基线压缩前的开发数据库不属于支持范围，系统不提供其旧 schema 的自动识别、重命名或转换路径。
 
-## 验证记录
+不要把正常升级理解为删除数据库；需要重新初始化开发库时先确认数据可丢弃，并保留所需备份。
 
-2026-08-19：将开发期 37 步演进链压缩为当前 schema 基线，并在 TimescaleDB 2.28.3 / PostgreSQL 17.10 空库执行成功；导出结构与压缩前最终结构一致（仅约束名规范化）。
+> 2026-08-19：将开发期 37 步演进链压缩为当前 schema 基线，并在 TimescaleDB 2.28.3（镜像 `timescale/timescaledb:2.28.3-pg17`，PostgreSQL 17.x）空库执行成功；导出结构与压缩前最终结构一致（仅约束名规范化）。

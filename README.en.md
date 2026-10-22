@@ -43,13 +43,13 @@
 
 Ingot is an Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
-It serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. Where field integration is configured, connectors automatically collect and semantically map run evidence; this is the preferred path for production evidence. Manually entered and existing external-system records can still be retained and linked. Engineers review actual conditions, process change, and quality outcomes in one place, compare eligible runs, and decide the next recipe inside those constraints. Recommendations are never dispatched to equipment.
+It serves R&D work with costly recipes, limited samples, and explicit quality objectives and safety boundaries. Engineers review actual conditions, process change, and quality outcomes in one place, compare eligible runs, and decide the next recipe inside those constraints. Recommendations are never dispatched to equipment.
+
+The core chain is: run evidence → quality inspection → process analysis → next-recipe recommendation → engineer decision → outcome frozen from the later real run.
 
 The repository claims only code, automated tests, and reproducible software behavior. Deployers evaluate applicability, safety, and realized benefit with their own data. See [Current status](docs/status.en.md) for what is implemented.
 
 ### Technology
-
-The core workflow starts with automatically collected run evidence when field integration is configured, then moves through quality inspection and process analysis or comparison to a next-recipe recommendation bounded by admission, safety, and observed coverage. An engineer adopts, modifies, or rejects it; a later real run and its inspection outcome then freeze the result from actual evidence. Planned values, actual values, and outcomes remain distinct so that an intention is not treated as an observed fact.
 
 | Part | Technology |
 |---|---|
@@ -104,7 +104,9 @@ After `platform-migrate` exits successfully and the database, API, Worker, Optim
 
 ## Usage
 
-After sign-in, publish a recipe version that defines variables and boundaries. Where field integration is configured, connectors automatically collect and semantically map actual settings, process trajectories, and run context; this is the preferred path for production evidence. Manually entered records or existing records from adjacent systems can also be linked, but a run becomes an optimization observation only when trustworthy run facts and quality outcomes together pass admission. The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft; a later real run, parameter readback, and inspection record freeze the outcome once.
+After sign-in, publish a recipe version that defines variables and boundaries. Where field integration is configured, connectors automatically collect and semantically map actual settings, process trajectories, and run context; this is the preferred path for production evidence. Manually entered records or existing records from adjacent systems can also be linked. A run becomes an optimization observation only when trustworthy run facts and quality outcomes together pass admission.
+
+The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft; a later real run, parameter readback, and inspection record freeze the outcome once.
 
 ```text
 Workbench
@@ -116,9 +118,9 @@ Configuration & Integration → Process, quality, acquisition, Edge, and optiona
 System Administration → Users, status, logs, raw events, and model services
 ```
 
-This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site; the system identifies it internally with `SiteId`. One factory may have multiple Edge collectors, while each Edge belongs to one factory. Ingot Chat verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
+This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. Ingot Chat verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
 
-Field-equipment and enterprise-system connectors are optional source adapters. Once field integration is configured, automated collection and semantic mapping are the preferred route for production evidence. Recipe settings alone, without trustworthy run facts, do not produce a recommendation.
+Field-equipment and enterprise-system connectors are optional source adapters. Without trustworthy run facts, the system does not produce a recommendation.
 
 | Adjacent system | Boundary |
 |---|---|
@@ -139,9 +141,9 @@ Choose a reading path from the [documentation index](docs/index.en.md) or [onlin
 
 - **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
 - **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
-- **Connect and operate**: [Data connection](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment and operations](docs/deployment.en.md).
+- **Connect and operate**: [Data integration](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment](docs/deployment.en.md).
 - **Connector demo**: [Optical lens PLC acquisition demo](docs/optical-lens-demo.en.md) starts an independent Modbus TCP simulator and verifies 19 process values, 20 recipe parameters, and a 300-second batch path.
-- **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundaries](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
+- **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundary](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
 - **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
 
 Repository Markdown files are the documentation source; the documentation site publishes the same content. See [中文文档](docs/index.md) for Chinese.

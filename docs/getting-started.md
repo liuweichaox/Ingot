@@ -25,7 +25,7 @@ cp .env.example .env
 
 修改 `.env` 中的数据库密码和管理员配置。至少替换所有 `change-this-` 占位值；生产环境必须使用随机生成且彼此不同的密码和令牌。
 
-参考 Compose 即使未启用可选连接器，也要求填写 `INGOT_SITE_ID`、`INGOT_EDGE_ID`、`INGOT_EDGE_TOKEN` 和 `INGOT_CONNECTOR_LOCAL_TOKEN`，用于 Platform 绑定。初次评估可保留示例本地 ID；两个令牌须替换为至少 24 个字符、彼此不同的随机密钥。仅启用 `connector-host` 时才配置 `INGOT_CONNECTOR_TOKEN`。这些配置不会自动连接设备。
+即使不启用可选连接器，Compose 也要求填写 `INGOT_SITE_ID`、`INGOT_EDGE_ID`、`INGOT_EDGE_TOKEN` 和 `INGOT_CONNECTOR_LOCAL_TOKEN`，供 Platform 绑定工厂与采集器身份。初次评估可保留示例本地 ID；两个令牌须替换为至少 24 个字符、彼此不同的随机密钥。只有启用 `connector-host` 时才需要配置 `INGOT_CONNECTOR_TOKEN`。这些配置不会自动连接设备。
 
 Windows PowerShell 可用 `Copy-Item .env.example .env` 替代 `cp`。`.env` 保留在本机，不提交到版本库。
 
@@ -66,7 +66,9 @@ docker compose -f docker-compose.app.yml logs platform-migrate
 
 后续修改 `.env` 不会重置已有账户。
 
-此部署启动 Ingot 自身的 Web、API、数据库、优化器和后台服务，无需外部业务系统账号或连接。设备及企业系统连接器按需配置和启用。登录后从“配置与接入”管理工艺变量和配方版本；每次工艺运行就是一次实验，运行和质量记录共同保存实验事实，具体能力与推荐所需数据见[当前状态](status.md)。
+此部署启动 Ingot 自身的 Web、API、数据库、优化器和后台服务，无需外部业务系统账号或连接；设备及企业系统连接器按需配置启用。
+
+登录后从“配置与接入”管理工艺变量和配方版本。每次工艺运行就是一次实验，运行和质量记录共同保存实验事实。具体能力与推荐所需数据见[当前状态](status.md)。
 
 ## 常见启动问题
 
@@ -83,7 +85,9 @@ docker compose -f docker-compose.app.yml logs --tail=200
 
 1. 登录后打开“配置与接入”，确认能够访问工艺变量和配方版本。
 2. 检查 `http://localhost:8002/health` 的 Worker 状态，保留迁移结果与服务状态以便排障。
-3. 按试点指南使用自己有权处理的数据。部署健康不会自动生成生产运行、检验结果或符合准入条件的优化观察。
+3. 按试点指南使用自己有权处理的数据。
+
+部署健康不会自动生成生产运行、检验结果或符合准入条件的优化观察。
 
 参考 Compose 的应用端口均绑定 `127.0.0.1`。远程用户需配置带 TLS 和认证的入口；仅修改访问 URL 不会公开服务。
 
