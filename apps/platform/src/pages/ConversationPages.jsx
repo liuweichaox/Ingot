@@ -1,4 +1,4 @@
-// 管理证据调查的运行创建、历史、流式状态和受控删除交互。
+// 管理 Ingot Chat 的运行创建、历史、流式状态和受控删除交互。
 import { ArrowPathIcon, MagnifyingGlassIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -325,7 +325,7 @@ function InvestigationStarter({ onSelect }) {
     <section className="overflow-hidden border border-slate-300 bg-white">
       <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="data-label">证据调查</p>
+          <p className="data-label">Ingot Chat</p>
           <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-slate-950">从一项可回查的工程问题开始</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">系统只读取当前授权范围内的生产、质量和工艺记录；每项结论都应回到来源记录和证据边界。</p>
         </div>
@@ -592,7 +592,7 @@ export function ChatPage() {
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-300 bg-white px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <p className="data-label">证据调查</p>
+            <p className="data-label">Ingot Chat</p>
             <h1 className="mt-1 truncate text-xl font-semibold tracking-[-0.025em] text-slate-950">{conversation?.title || "新建调查"}</h1>
             <p className="mt-1 truncate text-[13px] text-slate-500">授权范围内的运行、检验和工艺记录</p>
           </div>
@@ -613,7 +613,7 @@ export function ChatPage() {
               <div className="px-4 py-3"><p className="data-label">输出边界</p><p className="mt-1 font-medium text-slate-700">结论需工程验证</p></div>
             </section>
             <div className="space-y-3">
-              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="证据调查未配置模型服务">当前证据调查尚未配置可用的模型服务，请由平台管理员在“系统管理 → 模型服务”中配置。此状态不影响现场采集、运行记录、质量检验或数值优化服务。</Alert>}
+              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="Ingot Chat 未配置模型服务">当前 Ingot Chat 尚未配置可用的模型服务，请由平台管理员在“系统管理 → 模型服务”中配置。此状态不影响现场采集、运行记录、质量检验或数值优化服务。</Alert>}
               {!capabilitiesLoading && serviceEnabled && deterministicModel && <Alert tone="info" title="当前核对范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>

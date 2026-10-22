@@ -112,7 +112,7 @@ flowchart LR
 
 This diagram is the high-availability target after field integration. It is not the base-deployment checklist. Default Compose starts one API, one Worker, one database, Optimizer, and the Web app, and Migrator runs a one-time migration. Edge starts from the optional `connector-host` profile. Ingress load balancing, database HA, and TLS termination are provided by the deployer. The dashed orange independent time-series plane is built only after capacity, recovery-time, or cost gates show that the current store is insufficient. Attachments and process knowledge still use persistent file volumes. Object storage is a conditional replacement path, not a base-deployment prerequisite or a second formal business state.
 
-Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, Evidence Investigation keeps the same authorization and review filters and falls back to keyword search. It does not create another knowledge system of record.
+Knowledge sources, review status, and citation metadata are formal records. Full-text, similarity, and vector indexes are rebuildable derived state. When the vector service is unavailable, Ingot Chat keeps the same authorization and review filters and falls back to keyword search. It does not create another knowledge system of record.
 
 ### Factory / production-site cell
 

@@ -4,7 +4,7 @@ Ingot is an Open-source Process R&D and Optimization System. Organize recipe ver
 
 Choose a path from local installation to a first recommendation and ongoing operations. Documentation is maintained with repository code. [Current status](status.en.md) describes implemented capability; the [Roadmap](project-plan.en.md) describes planned work.
 
-The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Evidence Investigation is a cross-module verification and investigation entry rather than a production step. Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
+The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Ingot Chat is a cross-module verification and investigation entry rather than a production step. Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
 
 ## First use
 

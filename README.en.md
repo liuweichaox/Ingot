@@ -108,7 +108,7 @@ After sign-in, publish a recipe version that defines variables and boundaries. W
 
 ```text
 Workbench
-Evidence Investigation (separate investigation entry)
+Ingot Chat (separate investigation entry)
 Field Operations → Production Runs / Changeover / Quality Inspection / Quality Deviations / Optional Tooling
 Process Insight → Process Analysis / Process Materials / Mechanism Knowledge
 Recipe Optimization → Recipe Versions / Adjustment & Validation
@@ -116,7 +116,7 @@ Configuration & Integration → Process, quality, acquisition, Edge, and optiona
 System Administration → Users, status, logs, raw events, and model services
 ```
 
-This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site; the system identifies it internally with `SiteId`. One factory may have multiple Edge collectors, while each Edge belongs to one factory. Evidence Investigation verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
+This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site; the system identifies it internally with `SiteId`. One factory may have multiple Edge collectors, while each Edge belongs to one factory. Ingot Chat verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
 
 Field-equipment and enterprise-system connectors are optional source adapters. Once field integration is configured, automated collection and semantic mapping are the preferred route for production evidence. Recipe settings alone, without trustworthy run facts, do not produce a recommendation.
 
@@ -125,7 +125,7 @@ Field-equipment and enterprise-system connectors are optional source adapters. O
 | MES, ERP, SCADA, historian | May supply run facts; does not replace MES scheduling, production execution, real-time monitoring, or real-time control |
 | LIMS, QMS, ELN | May supply inspection and R&D context; does not replace laboratory, quality, sample, compliance, or document management |
 | Statistical and optimization methods | Selected by data conditions; no single algorithm is the answer to every problem |
-| Evidence Investigation | Verifies authorized facts and reviewed process materials with source citations; does not generate numeric settings directly or control equipment |
+| Ingot Chat | Verifies authorized facts and reviewed process materials with source citations; does not generate numeric settings directly or control equipment |
 
 ![Ingot runtime components and data flow](docs/architecture/system-architecture.en.svg)
 

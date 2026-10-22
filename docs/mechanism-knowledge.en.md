@@ -34,7 +34,7 @@ When claims disagree, link both claim identifiers and versions and record the co
 
 ## Knowledge Retrieval
 
-Document knowledge reaches Evidence Investigation through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard factory/production-site and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
+Document knowledge reaches Ingot Chat through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard factory/production-site and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
 
 The semantic index is rebuildable derived state. It does not change review status or become formal business evidence. Embeddings are disabled by default. When enabled, they reuse the protected model-service configuration and require an OpenAI-compatible `/embeddings` endpoint. If that service is unavailable or a query embedding fails, the system falls back to PostgreSQL keyword retrieval without relaxing authorization or review gates.
 
@@ -42,7 +42,7 @@ The semantic index is rebuildable derived state. It does not change review statu
 
 Index maintenance handles retrieval availability and rebuilding; source maintenance retains originals and hashes; review determines applicability; authorization and scope filtering determine visibility. Vector matches, keyword matches, and reindexing grant no access rights. When a citation cannot reach a valid source, inspect its source record and review state before inspecting the index or embedding service.
 
-The current path supports sources, fragments, claims, applicability, hard constraints, conflicts, versions, recommendation-use traceability, and scope-controlled hybrid retrieval for Evidence Investigation. Real-run decisions and quality outcomes progressively support or weaken knowledge. A retrieval match does not establish a claim, and the repository does not claim proof of a particular mechanism or field benefit.
+The current path supports sources, fragments, claims, applicability, hard constraints, conflicts, versions, recommendation-use traceability, and scope-controlled hybrid retrieval for Ingot Chat. Real-run decisions and quality outcomes progressively support or weaken knowledge. A retrieval match does not establish a claim, and the repository does not claim proof of a particular mechanism or field benefit.
 
 ## Related Documents
 

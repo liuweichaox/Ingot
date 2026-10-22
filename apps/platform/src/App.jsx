@@ -4,6 +4,7 @@ import {
   AdjustmentsHorizontalIcon,
   Bars3Icon,
   BoltIcon,
+  ChatBubbleLeftRightIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   ChevronDownIcon,
@@ -60,8 +61,8 @@ const sections = [
     ],
   },
   {
-    id: "investigation", label: "证据调查", icon: MagnifyingGlassCircleIcon, path: "/chat", utility: true, groups: [
-      { items: [["/chat", "证据调查"]] },
+    id: "investigation", label: "Ingot Chat", icon: ChatBubbleLeftRightIcon, path: "/chat", utility: true, groups: [
+      { items: [["/chat", "Ingot Chat"]] },
     ],
   },
   {
@@ -101,7 +102,7 @@ const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
   "/workbench": ["工作台", "集中查看待办、生产状态与质量风险"],
-  "/chat": ["证据调查", "在授权记录范围内组织调查结论、证据与边界"],
+  "/chat": ["Ingot Chat", "在授权记录范围内组织调查结论、证据与边界"],
   "/process-executions": ["运行记录", "查看每次运行的设定、材料、过程曲线和质量结果"],
   "/events": ["原始事件", "查询现场节点上报的原始记录，用于审计和排查接入"],
   "/production/changeover": ["生产切换", "让设备、产品和配方版本对接下来的运行生效；需要追溯时可关联工装"],
@@ -353,10 +354,8 @@ export default function App({ identity, logout }) {
       <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-coal-800 bg-coal-950 text-white transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
         <div className={cx("flex h-16 shrink-0 items-center border-b border-white/8", sidebarCollapsed ? "justify-center px-3" : "justify-between px-4")}>
           <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate("/workbench")} aria-label="打开 Ingot 首页">
-            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-evidence-500 ring-1 ring-evidence-400">
-              <img src="/ingot-mark.svg" alt="" className="size-7" />
-            </span>
-            {!sidebarCollapsed && <span className="grid min-w-0"><strong className="text-base leading-5 text-white">Ingot</strong><small className="truncate text-xs text-slate-400">工艺研发与优化</small></span>}
+            <img src="/ingot-mark.svg" alt="" className="size-9 shrink-0" />
+            {!sidebarCollapsed && <strong className="text-base leading-5 text-white">Ingot</strong>}
           </button>
           {!sidebarCollapsed && <button type="button" className="grid size-9 place-items-center rounded-sm text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(true)} aria-label="收起侧边栏"><ChevronDoubleLeftIcon className="size-4.5" /></button>}
         </div>
@@ -423,7 +422,7 @@ export default function App({ identity, logout }) {
         <DialogBackdrop className="fixed inset-0 bg-coal-950/55 backdrop-blur-sm" />
         <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-coal-950 text-white shadow-2xl">
           <div className="flex h-16 items-center justify-between border-b border-white/8 px-4">
-            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><span className="grid size-8 place-items-center rounded-md bg-evidence-500"><img src="/ingot-mark.svg" alt="" className="size-6" /></span><span><strong className="block">Ingot</strong><small className="text-xs text-slate-400">工艺研发与优化</small></span></button>
+            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8 shrink-0" /><strong className="block">Ingot</strong></button>
             <button className="grid size-9 place-items-center rounded-sm text-slate-400 hover:bg-white/8 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
               <XMarkIcon className="size-5" />
             </button>

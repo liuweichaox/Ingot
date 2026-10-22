@@ -71,7 +71,7 @@ check_entry_order() {
 
 check_entry_order docs/design.md \
   '**工作台**' \
-  '**证据调查**' \
+  '**Ingot Chat**' \
   '**现场运行**' \
   '**工艺洞察**' \
   '**配方优化**' \
@@ -80,7 +80,7 @@ check_entry_order docs/design.md \
 
 check_entry_order docs/design.en.md \
   '**Workbench**' \
-  '**Evidence Investigation**' \
+  '**Ingot Chat**' \
   '**Field operations**' \
   '**Process insight**' \
   '**Recipe optimization**' \

@@ -32,7 +32,7 @@ async function renderChat() {
   return { input, submitted };
 }
 
-describe("证据调查输入快捷键", () => {
+describe("Ingot Chat 输入快捷键", () => {
   it.each([
     ["组合输入中的 Enter", { isComposing: true }],
     ["仍使用 229 标记的输入法 Enter", { isComposing: false, keyCode: 229 }],
