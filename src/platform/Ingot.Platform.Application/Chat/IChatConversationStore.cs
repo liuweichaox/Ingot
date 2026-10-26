@@ -38,6 +38,12 @@ public interface IChatConversationStore
         string text,
         CancellationToken ct = default);
 
+    Task UpdatePageContextAsync(
+        string conversationId,
+        string userId,
+        PageContextRef pageContext,
+        CancellationToken ct = default);
+
     Task BindRunAsync(
         string assistantMessageId,
         string runId,

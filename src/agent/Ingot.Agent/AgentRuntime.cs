@@ -12,7 +12,7 @@ namespace Ingot.Agent;
 public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
 {
     private const string ChatPromptVersion = "ingot-chat-v1";
-    private const string ChatToolsetVersion = "production-records-readonly-v2";
+    private const string ChatToolsetVersion = "system-context-readonly-v1";
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
     private readonly object _admissionGate = new();
     private readonly Dictionary<string, int> _activeByUser = new(StringComparer.OrdinalIgnoreCase);
@@ -70,6 +70,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         if (string.Equals(request.Mode, "combined", StringComparison.Ordinal) &&
             (!settings.EnableCombinedAnalysis || IsDeterministic(settings)))
             throw new InvalidOperationException("多视角研判尚未启用。");
+        request = request with { Mode = ResolveMode(request.Question, request.Mode, settings) };
 
         var tools = ToolsForEntryPoint(entryPoint);
         if (tools.Count == 0)
@@ -90,9 +91,6 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 throw new InvalidOperationException("当前对话仍在分析，请等待完成或先停止分析。");
             if (priorRuns.Any(run => !CanReuseCapturedScope(run.AccessScope, accessScope)))
                 throw new UnauthorizedAccessException("当前身份已无权继续访问该对话的历史数据范围。");
-            if (priorRuns.Any(run => !SamePageContext(run.PageContext, request.PageContext)))
-                throw new InvalidOperationException("不能在不同页面上下文中继续同一对话。");
-
             request = request with
             {
                 ConversationHistory = priorRuns
@@ -135,6 +133,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             Status = AgentRunStatuses.Queued,
             ModelProvider = model.Provider,
             Model = model.ModelFor(modelRole),
+            ModelServiceRevision = settings.ModelServiceRevision,
             PromptVersion = ChatPromptVersion,
             ToolsetVersion = ChatToolsetVersion,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -175,7 +174,12 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         if (!settings.Enabled)
             return false;
         var leaseDuration = TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds + 60, 90, 960));
-        var claim = await durableStore.ClaimNextAsync(leaseOwner, leaseDuration, ct).ConfigureAwait(false);
+        var claim = await durableStore.ClaimNextAsync(
+            leaseOwner,
+            leaseDuration,
+            settings.RetryInitialDelaySeconds,
+            settings.RetryMaxDelaySeconds,
+            ct).ConfigureAwait(false);
         if (claim is null)
             return false;
         var claimed = claim.Run;
@@ -201,6 +205,39 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 }
                 return true;
             }
+            if (claimed.AttemptCount > settings.MaxAttempts)
+            {
+                var exhausted = claimed with
+                {
+                    Status = AgentRunStatuses.Failed,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    Error = $"AI 助手任务在 {settings.MaxAttempts} 次恢复尝试后仍未完成，请重新提交问题。"
+                };
+                if (await durableStore.UpdateLeasedAsync(exhausted, lease, CancellationToken.None).ConfigureAwait(false))
+                {
+                    await NotifyTerminalAsync(exhausted).ConfigureAwait(false);
+                    await EmitAsync(exhausted.RunId, AgentStreamEventTypes.RunFailed,
+                        new { error = exhausted.Error }, CancellationToken.None, lease).ConfigureAwait(false);
+                }
+                return true;
+            }
+            if (!string.IsNullOrWhiteSpace(claimed.ModelServiceRevision) &&
+                !string.Equals(claimed.ModelServiceRevision, settings.ModelServiceRevision, StringComparison.Ordinal))
+            {
+                var changedConfiguration = claimed with
+                {
+                    Status = AgentRunStatuses.Failed,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    Error = "模型服务配置在任务排队期间发生变化，请重新提交问题。"
+                };
+                if (await durableStore.UpdateLeasedAsync(changedConfiguration, lease, CancellationToken.None).ConfigureAwait(false))
+                {
+                    await NotifyTerminalAsync(changedConfiguration).ConfigureAwait(false);
+                    await EmitAsync(changedConfiguration.RunId, AgentStreamEventTypes.RunFailed,
+                        new { error = changedConfiguration.Error }, CancellationToken.None, lease).ConfigureAwait(false);
+                }
+                return true;
+            }
             ReserveRun(claimed.UserId, settings);
             reserved = true;
             if (claimed.AccessScope is null ||
@@ -211,22 +248,25 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             if (accessScope is null)
                 throw new UnauthorizedAccessException("任务所属用户已无权执行此 Chat 分析。");
             var tools = ToolsForEntryPoint(claimed.EntryPoint);
-            var modelRole = claimed.Mode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
+            var effectiveMode = ResolveMode(claimed.Question, claimed.Mode, settings);
+            var modelRole = effectiveMode == "combined" ? ModelRole.Reasoning : ModelRole.Fast;
             var model = _models.GetClient(claimed.EntryPoint, modelRole, settings.Provider);
             var request = new CreateChatRunRequest
             {
                 Question = claimed.Question,
                 ConversationId = claimed.ConversationId,
                 PageContext = claimed.PageContext,
-                Mode = claimed.Mode,
+                Mode = effectiveMode,
                 TriggerMessageId = claimed.TriggerMessageId,
                 ResponseMessageId = claimed.ResponseMessageId,
                 ConversationHistory = await BuildConversationHistoryAsync(claimed, ct).ConfigureAwait(false)
             };
             var run = claimed with
             {
+                Mode = effectiveMode,
                 ModelProvider = model.Provider,
-                Model = model.ModelFor(modelRole)
+                Model = model.ModelFor(modelRole),
+                ModelServiceRevision = settings.ModelServiceRevision
             };
             using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             runCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(settings.MaxRunSeconds, 1, 900)));
@@ -255,12 +295,12 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         }
         catch (AgentLeaseLostException)
         {
-            _logger.LogWarning("持久 Agent 运行在提交时失去租约: {RunId}", claimed.RunId);
+            _logger.LogWarning("持久 AI 助手任务在提交时失去租约: {RunId}", claimed.RunId);
             return true;
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "持久 Agent 运行初始化失败: {RunId}", claimed.RunId);
+            _logger.LogError(exception, "持久 AI 助手任务初始化失败: {RunId}", claimed.RunId);
             var failed = claimed with
             {
                 Status = AgentRunStatuses.Failed,
@@ -353,9 +393,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             FastModel = settings.FastModel,
             ReasoningModel = settings.ReasoningModel,
             IsDeterministic = IsDeterministic(settings),
-            Modes = settings.Enabled
-                ? settings.EnableCombinedAnalysis && !IsDeterministic(settings) ? ["quick", "combined"] : ["quick"]
-                : [],
+            Modes = settings.Enabled ? ["auto"] : [],
             Roles = settings.Enabled && settings.EnableCombinedAnalysis && !IsDeterministic(settings) ? AnalysisPerspectives.All : [],
             Tools = tools.Values.Select(static tool => new AgentToolCapability
             {
@@ -554,12 +592,6 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             .ConfigureAwait(false);
     }
 
-    private static bool SamePageContext(PageContextRef? left, PageContextRef? right)
-        => left is null && right is null ||
-           left is not null && right is not null &&
-           string.Equals(left.Kind, right.Kind, StringComparison.Ordinal) &&
-           string.Equals(left.Id, right.Id, StringComparison.Ordinal);
-
     private static bool CanReuseCapturedScope(
         AgentRunAccessScopeSnapshot? captured,
         AgentAccessScope current)
@@ -621,7 +653,9 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 var guidance = conversationResult.Value with
                 {
                     SummaryStrength = AnalysisClaimStrengths.Observation,
+                    AnswerKind = AnalysisAnswerKinds.Conversation,
                     Findings = [],
+                    Limitations = [],
                     RelatedRecords = [],
                     Charts = [],
                     Proposals = [],
@@ -792,6 +826,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 answer = new AnalysisAnswer
                 {
                     Summary = string.Join(" ", insufficientResults.Select(static result => result.Summary)),
+                    AnswerKind = AnalysisAnswerKinds.InsufficientData,
                     Limitations = limitations.Length > 0
                         ? limitations
                         : ["当前数据不足，无法得出确定性结论。"],
@@ -811,6 +846,15 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     .ToArray();
                 answer = answerResult.Value with
                 {
+                    AnswerKind = investigation is not null
+                        || answerResult.Value.Charts.Count > 0
+                        || answerResult.Value.Proposals.Count > 0
+                        || answerResult.Value.Findings.Any(static item =>
+                            item.Strength is AnalysisClaimStrengths.Association
+                                or AnalysisClaimStrengths.Hypothesis
+                                or AnalysisClaimStrengths.Causal)
+                        ? AnalysisAnswerKinds.Analysis
+                        : AnalysisAnswerKinds.DataLookup,
                     RelatedRecords = relatedRecords,
                     CombinedAnalysis = investigation,
                     Limitations = limitations
@@ -860,19 +904,38 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Agent 运行失败: {RunId}", run.RunId);
-            run = run with
+            if (IsRetryableFailure(ex) && run.AttemptCount < settings.MaxAttempts)
             {
-                Status = AgentRunStatuses.Failed,
-                CompletedAt = DateTimeOffset.UtcNow,
-                Error = ex.Message,
-                Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
-            };
-            await PersistAsync(run, lease).ConfigureAwait(false);
-            await NotifyTerminalAsync(run).ConfigureAwait(false);
-            await EmitAsync(run.RunId, AgentStreamEventTypes.RunFailed,
-                    new { error = ex.Message }, CancellationToken.None, lease)
-                .ConfigureAwait(false);
+                var retrying = run with
+                {
+                    Status = AgentRunStatuses.Queued,
+                    CompletedAt = null,
+                    Answer = null,
+                    Error = $"模型服务暂时不可用，将在稍后第 {run.AttemptCount + 1} 次尝试。"
+                };
+                _logger.LogWarning(ex, "AI 助手任务将稍后重试: {RunId} attempt={Attempt}", run.RunId, run.AttemptCount);
+                await PersistAsync(retrying, lease).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.RunRetrying,
+                        new { attempt = run.AttemptCount, error = retrying.Error }, CancellationToken.None, lease)
+                    .ConfigureAwait(false);
+                run = retrying;
+            }
+            else
+            {
+                _logger.LogError(ex, "AI 助手任务失败: {RunId}", run.RunId);
+                run = run with
+                {
+                    Status = AgentRunStatuses.Failed,
+                    CompletedAt = DateTimeOffset.UtcNow,
+                    Error = ex.Message,
+                    Usage = BuildUsage(modelCalls, run.ToolInvocations.Count, settings.ModelPricing)
+                };
+                await PersistAsync(run, lease).ConfigureAwait(false);
+                await NotifyTerminalAsync(run).ConfigureAwait(false);
+                await EmitAsync(run.RunId, AgentStreamEventTypes.RunFailed,
+                        new { error = ex.Message }, CancellationToken.None, lease)
+                    .ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -936,7 +999,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             return;
         var persisted = await _store.GetAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
         if (persisted?.Status == AgentRunStatuses.Cancelling)
-            throw new OperationCanceledException("Agent 运行已请求取消。");
+            throw new OperationCanceledException("AI 助手任务已请求取消。");
         throw new AgentLeaseLostException(run.RunId);
     }
 
@@ -959,7 +1022,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         await _store.AppendEventAsync(runId, type, data, ct).ConfigureAwait(false);
     }
 
-    private sealed class AgentLeaseLostException(string runId) : Exception($"Agent 运行租约已失效: {runId}");
+    private sealed class AgentLeaseLostException(string runId) : Exception($"AI 助手任务租约已失效: {runId}");
 
     private static bool SameCall(AnalysisToolCall left, AnalysisToolCall right)
         => string.Equals(left.Tool, right.Tool, StringComparison.Ordinal) &&
@@ -997,10 +1060,10 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         lock (_admissionGate)
         {
             if (_activeCount >= settings.MaxConcurrentRuns)
-                throw new InvalidOperationException("当前 Agent 运行已达到系统并发上限，请稍后重试。");
+                throw new InvalidOperationException("当前 AI 助手任务已达到系统并发上限，请稍后重试。");
             var userCount = _activeByUser.GetValueOrDefault(userId);
             if (userCount >= settings.MaxConcurrentRunsPerUser)
-                throw new InvalidOperationException("当前用户的 Agent 运行已达到并发上限，请等待现有运行结束。");
+                throw new InvalidOperationException("当前用户的 AI 助手任务已达到并发上限，请等待现有任务结束。");
             _activeCount++;
             _activeByUser[userId] = userCount + 1;
         }
@@ -1085,6 +1148,18 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         string.Equals(settings.Provider, "Deterministic", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(settings.FastModel, "deterministic-v1", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsRetryableFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is TimeoutException)
+                return true;
+            if (current is HttpRequestException http)
+                return http.StatusCode is null || (int)http.StatusCode is 408 or 425 or 429 or >= 500;
+        }
+        return false;
+    }
+
     private EntryPointSettings GetSettings()
     {
         var model = _modelSettings.Current;
@@ -1093,14 +1168,33 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             model.Provider,
             model.FastModel,
             model.ReasoningModel,
+            model.Revision,
             Math.Clamp(_chatOptions.MaxToolCalls, 1, 8),
             Math.Clamp(_chatOptions.MaxRunSeconds, 1, 900),
             Math.Clamp(_chatOptions.MaxConcurrentRuns, 1, 128),
             Math.Clamp(_chatOptions.MaxConcurrentRunsPerUser, 1, 32),
+            Math.Clamp(_chatOptions.MaxAttempts, 1, 8),
+            Math.Clamp(_chatOptions.InitialRetryDelaySeconds, 0, 300),
+            Math.Clamp(Math.Max(_chatOptions.MaxRetryDelaySeconds, _chatOptions.InitialRetryDelaySeconds), 0, 3600),
             _chatOptions.EnableCombinedAnalysis,
             Math.Clamp(_chatOptions.MaxDiscussionRounds, 1, 5),
             Math.Clamp(_chatOptions.MaxDiscussionTurns, 3, 15),
             _chatOptions.ModelPricing);
+    }
+
+    private static string ResolveMode(string question, string requestedMode, EntryPointSettings settings)
+    {
+        if (string.Equals(requestedMode, "combined", StringComparison.Ordinal) &&
+            settings.EnableCombinedAnalysis && !IsDeterministic(settings))
+            return "combined";
+        if (!string.Equals(requestedMode, "auto", StringComparison.Ordinal) ||
+            !settings.EnableCombinedAnalysis || IsDeterministic(settings))
+            return "quick";
+
+        return new[] { "比较", "对比", "差异", "原因", "为什么", "偏差", "趋势", "综合", "深入" }
+            .Any(term => question.Contains(term, StringComparison.OrdinalIgnoreCase))
+            ? "combined"
+            : "quick";
     }
 
     private static void ValidateEntryPoint(string entryPoint)
@@ -1114,10 +1208,14 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
         string Provider,
         string FastModel,
         string ReasoningModel,
+        string ModelServiceRevision,
         int MaxToolCalls,
         int MaxRunSeconds,
         int MaxConcurrentRuns,
         int MaxConcurrentRunsPerUser,
+        int MaxAttempts,
+        double RetryInitialDelaySeconds,
+        double RetryMaxDelaySeconds,
         bool EnableCombinedAnalysis,
         int MaxDiscussionRounds,
         int MaxDiscussionTurns,

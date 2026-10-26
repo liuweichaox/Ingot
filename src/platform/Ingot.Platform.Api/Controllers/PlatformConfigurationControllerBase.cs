@@ -38,4 +38,12 @@ public abstract class PlatformConfigurationControllerBase(
             ? null
             : AuthorizationDenied();
     }
+
+    protected IActionResult? DeniedKnowledgeRead()
+    {
+        var identity = userResolver.ResolveIdentity(User);
+        if (identity is null)
+            return AuthenticationRequired("需要平台统一认证。");
+        return identity.HasAnyRole(PlatformRoles.QualityRead) ? null : AuthorizationDenied();
+    }
 }

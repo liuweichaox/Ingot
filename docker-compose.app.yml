@@ -102,6 +102,9 @@ services:
       - Chat__EnableCombinedAnalysis=${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
       - Chat__MaxToolCalls=${INGOT_CHAT_MAX_TOOL_CALLS:-8}
       - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}
+      - Chat__MaxAttempts=${INGOT_CHAT_MAX_ATTEMPTS:-3}
+      - Chat__InitialRetryDelaySeconds=${INGOT_CHAT_INITIAL_RETRY_DELAY_SECONDS:-5}
+      - Chat__MaxRetryDelaySeconds=${INGOT_CHAT_MAX_RETRY_DELAY_SECONDS:-300}
       - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}
@@ -151,6 +154,9 @@ services:
       - Chat__EnableCombinedAnalysis=${INGOT_CHAT_ENABLE_COMBINED_ANALYSIS:-false}
       - Chat__MaxToolCalls=${INGOT_CHAT_MAX_TOOL_CALLS:-8}
       - Chat__MaxRunSeconds=${INGOT_CHAT_MAX_RUN_SECONDS:-60}
+      - Chat__MaxAttempts=${INGOT_CHAT_MAX_ATTEMPTS:-3}
+      - Chat__InitialRetryDelaySeconds=${INGOT_CHAT_INITIAL_RETRY_DELAY_SECONDS:-5}
+      - Chat__MaxRetryDelaySeconds=${INGOT_CHAT_MAX_RETRY_DELAY_SECONDS:-300}
       - Chat__MaxDiscussionRounds=${INGOT_CHAT_MAX_DISCUSSION_ROUNDS:-3}
       - Chat__MaxDiscussionTurns=${INGOT_CHAT_MAX_DISCUSSION_TURNS:-9}
       - ChatDataAccess__Users__operator__AllowAll=${INGOT_CHAT_OPERATOR_ALLOW_ALL:-true}

@@ -28,13 +28,12 @@ export function cx(...values) {
   return values.filter(Boolean).join(" ");
 }
 
-export function Page({ title, description, actions, className, loading, error, onRetry, errorTitle, children }) {
+export function Page({ title, actions, className, loading, error, onRetry, errorTitle, children }) {
   return (
-    <div className={cx("space-y-5", className)}>
+    <div className={cx("w-full min-w-0 space-y-5", className)}>
       <div className="flex flex-col gap-3 border-b border-slate-300 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.8rem]">{title}</h1>
-          {description && <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </div>

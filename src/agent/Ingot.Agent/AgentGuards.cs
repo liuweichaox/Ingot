@@ -756,25 +756,25 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
                 string.IsNullOrWhiteSpace(proposal.Title) || proposal.Title.Length > 200 ||
                 string.IsNullOrWhiteSpace(proposal.Rationale) || proposal.Rationale.Length > 2000)
             {
-                error = "Agent 提议的类型、标题或依据无效。";
+                error = "AI 助手提议的类型、标题或依据无效。";
                 return false;
             }
             if (!string.Equals(proposal.Persistence, "preview-only", StringComparison.Ordinal) ||
                 !proposal.RequiresHumanConfirmation)
             {
-                error = "Agent 提议只能作为等待人工确认的预览，不能直接持久化。";
+                error = "AI 助手提议只能作为等待人工确认的预览，不能直接保存。";
                 return false;
             }
             if (proposal.EvidenceReferences.Count == 0 || proposal.EvidenceReferences.Any(reference =>
                     !availableEvidence.Contains((reference.Kind, reference.Id))))
             {
-                error = "Agent 提议必须引用本次只读工具返回的正式记录。";
+                error = "AI 助手提议必须引用本次只读查询返回的正式记录。";
                 return false;
             }
             if (proposal.DraftFields.Count > 32 || proposal.DraftFields.Any(static pair =>
                     string.IsNullOrWhiteSpace(pair.Key) || pair.Key.Length > 64 || pair.Value.Length > 4000))
             {
-                error = "Agent 提议草稿字段无效或超过边界。";
+                error = "AI 助手提议草稿字段无效或超过边界。";
                 return false;
             }
         }

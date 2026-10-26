@@ -4,7 +4,7 @@ React/Vite workbench for Ingot, an Open-source Process R&D and Optimization Syst
 
 The visible domains are:
 
-- Workbench, plus the separate Ingot Chat entry;
+- Workbench, plus the built-in AI assistant entry;
 - Field Operations;
 - Process Insight;
 - Recipe Optimization;

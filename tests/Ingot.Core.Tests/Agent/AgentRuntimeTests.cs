@@ -32,6 +32,7 @@ public sealed class AgentRuntimeTests
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
         Assert.Equal(RunPurposes.ReadOnlyAnalysis, completed.Purpose);
         Assert.NotNull(completed.Answer);
+        Assert.Equal(AnalysisAnswerKinds.DataLookup, completed.Answer!.AnswerKind);
         Assert.Equal("check_data_quality", Assert.Single(completed.ToolInvocations).Tool);
         var toolResult = Assert.Single(completed.ToolResults);
         Assert.Equal("check_data_quality", toolResult.Tool);
@@ -55,6 +56,7 @@ public sealed class AgentRuntimeTests
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
         Assert.NotNull(completed.Answer);
+        Assert.Equal(AnalysisAnswerKinds.InsufficientData, completed.Answer!.AnswerKind);
         Assert.Empty(completed.Answer!.Findings);
         Assert.NotEmpty(completed.Answer.Limitations);
         Assert.Equal(1, completed.Usage.ModelCalls);
@@ -75,10 +77,30 @@ public sealed class AgentRuntimeTests
 
         Assert.Equal(AgentRunStatuses.Completed, completed.Status);
         Assert.Empty(completed.ToolInvocations);
+        Assert.Equal(AnalysisAnswerKinds.Conversation, completed.Answer!.AnswerKind);
         Assert.Contains("继续这段对话", completed.Answer!.Summary, StringComparison.Ordinal);
+        Assert.Empty(completed.Answer!.Limitations);
         Assert.Equal(2, completed.Usage.ModelCalls);
         var events = await store.ReadEventsAsync(created.RunId, 0, 100);
         Assert.Contains(events, item => item.Type == AgentStreamEventTypes.RunCompleted);
+    }
+
+    [Fact]
+    public async Task DeterministicProviderLeavesGeneralQuestionAsConversation()
+    {
+        var runtime = CreateRuntime(new MemoryRunStore(), [new QualityTool()]);
+        var created = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest { Question = "这个系统是干什么的？" },
+            SiteScope);
+        var completed = await WaitForTerminalAsync(runtime, created.RunId);
+
+        Assert.Equal(AgentRunStatuses.Completed, completed.Status);
+        Assert.Empty(completed.ToolInvocations);
+        Assert.Equal(AnalysisAnswerKinds.Conversation, completed.Answer!.AnswerKind);
+        Assert.Empty(completed.Answer!.Findings);
+        Assert.Empty(completed.Answer!.Limitations);
     }
 
     [Fact]
@@ -125,12 +147,48 @@ public sealed class AgentRuntimeTests
     }
 
     [Fact]
+    public async Task ChatRun_ContinuationAllowsPageContextToChangePerTurn()
+    {
+        var store = new MemoryRunStore();
+        var model = new NoQueryModelClient();
+        var runtime = CreateRuntime(store, [new QualityTool()], model: model);
+        var first = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest
+            {
+                Question = "查看站点",
+                PageContext = new PageContextRef { Kind = "site", Id = "SITE-001" }
+            },
+            SiteScope);
+        var firstCompleted = await WaitForTerminalAsync(runtime, first.RunId);
+
+        var second = await runtime.StartAsync(
+            ProductEntryPoints.Chat,
+            "analyst",
+            new CreateChatRunRequest
+            {
+                Question = "查看这次运行",
+                ConversationId = firstCompleted.ConversationId,
+                PageContext = new PageContextRef { Kind = "execution", Id = "EXEC-002" }
+            },
+            SiteScope);
+        var secondCompleted = await WaitForTerminalAsync(runtime, second.RunId);
+
+        Assert.Equal(AgentRunStatuses.Completed, secondCompleted.Status);
+        Assert.Equal("execution", secondCompleted.PageContext!.Kind);
+        Assert.Equal("EXEC-002", secondCompleted.PageContext.Id);
+        Assert.Equal("execution", model.LastRequest!.PageContext!.Kind);
+        Assert.Equal("EXEC-002", model.LastRequest.PageContext.Id);
+    }
+
+    [Fact]
     public async Task ChatRun_DeterministicProviderDoesNotAdvertiseProfessionalCombinedAnalysis()
     {
         var runtime = CreateRuntime(new MemoryRunStore(), [new QualityTool()]);
         var capabilities = runtime.GetCapabilities(ProductEntryPoints.Chat);
 
-        Assert.Equal(["quick"], capabilities.Modes);
+        Assert.Equal(["auto"], capabilities.Modes);
         Assert.False(capabilities.CombinedAnalysisEnabled);
         Assert.True(capabilities.IsDeterministic);
         Assert.Empty(capabilities.Roles);
@@ -484,7 +542,8 @@ public sealed class AgentRuntimeTests
             {
                 Value = new AnalysisAnswer
                 {
-                    Summary = "你好，我可以继续这段对话。"
+                    Summary = "你好，我可以继续这段对话。",
+                    Limitations = ["回答只基于平台记录"]
                 },
                 Usage = Usage("conversation.compose")
             });

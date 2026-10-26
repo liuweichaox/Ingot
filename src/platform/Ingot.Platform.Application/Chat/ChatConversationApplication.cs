@@ -76,7 +76,11 @@ public sealed class ChatConversationApplication(
             ?? throw new KeyNotFoundException("对话不存在。");
         if (!string.Equals(conversation.Status, ChatConversationStatuses.Active, StringComparison.Ordinal))
             throw new InvalidOperationException("已归档的对话不能继续发送消息。");
-        var normalized = ValidateMessage(request.Text, request.ClientMessageId, request.Mode, conversation.PageContext)
+        var normalized = ValidateMessage(
+                request.Text,
+                request.ClientMessageId,
+                request.Mode,
+                request.PageContext ?? conversation.PageContext)
             with { ConversationId = normalizedConversationId };
         var reservation = await conversations.AppendTurnAsync(
             normalizedConversationId,
@@ -84,6 +88,15 @@ public sealed class ChatConversationApplication(
             NormalizeClientMessageId(request.ClientMessageId),
             normalized.Question,
             ct).ConfigureAwait(false);
+        if (request.PageContext is not null)
+        {
+            await conversations.UpdatePageContextAsync(
+                    normalizedConversationId,
+                    userId,
+                    request.PageContext,
+                    ct)
+                .ConfigureAwait(false);
+        }
         return await StartRunAsync(userId, normalized, reservation, accessScope, ct).ConfigureAwait(false);
     }
 
@@ -161,7 +174,7 @@ public sealed class ChatConversationApplication(
                 new CreateChatRunRequest
                 {
                     Question = text ?? string.Empty,
-                    Mode = mode ?? "quick",
+                    Mode = mode ?? "auto",
                     PageContext = pageContext
                 },
                 out var normalized,

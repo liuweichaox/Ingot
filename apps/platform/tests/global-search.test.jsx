@@ -31,7 +31,7 @@ describe("功能搜索", () => {
     const sections = sectionsForIdentity({ roles: ["process.engineer"] });
     expect(sections.map(({ id, label, path }) => [id, label, path])).toEqual([
       ["overview", "工作台", "/workbench"],
-      ["investigation", "Ingot Chat", "/chat"],
+      ["investigation", "AI 助手", "/chat"],
       ["evidence", "现场运行", "/process-executions"],
       ["insight", "工艺洞察", "/comparisons"],
       ["optimization", "配方优化", "/configuration/process-specifications"],
@@ -130,17 +130,17 @@ describe("功能搜索", () => {
     await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/identity/users"));
   });
 
-  it("按产品名称和旧称搜索 Ingot Chat 与配方优化入口", async () => {
+  it("按产品名称和证据核对搜索 AI 助手与配方优化入口", async () => {
     let input = await openSearch();
-    fireEvent.change(input, { target: { value: "Ingot Chat" } });
-    expect(screen.getByRole("option")).toHaveTextContent("Ingot Chat");
+    fireEvent.change(input, { target: { value: "AI 助手" } });
+    expect(screen.getByRole("option")).toHaveTextContent("AI 助手");
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/chat"));
 
     fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
     input = await screen.findByRole("combobox");
-    fireEvent.change(input, { target: { value: "证据调查" } });
-    expect(screen.getByRole("option")).toHaveTextContent("Ingot Chat");
+    fireEvent.change(input, { target: { value: "证据核对" } });
+    expect(screen.getByRole("option")).toHaveTextContent("AI 助手");
     fireEvent.change(input, { target: { value: "配方优化" } });
     const recipeOptions = screen.getAllByRole("option").map(option => option.textContent);
     expect(recipeOptions.some(text => text.includes("配方版本"))).toBe(true);

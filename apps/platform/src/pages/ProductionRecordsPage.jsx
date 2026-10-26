@@ -204,7 +204,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
   ];
 
   return (
-    <Page className="mx-auto max-w-7xl" title={resource.title} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
+    <Page title={resource.title} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
       <RequestError error={error} onRetry={reload} />
       {!open && actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (

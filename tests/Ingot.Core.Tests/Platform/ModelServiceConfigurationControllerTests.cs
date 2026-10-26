@@ -1,6 +1,7 @@
 // 验证模型服务配置的管理员边界、只写密钥和拒绝路径。
 using System.Security.Claims;
 using System.Text.Json;
+using Ingot.Agent;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Application.ModelServices;
@@ -75,6 +76,24 @@ public sealed class ModelServiceConfigurationControllerTests
         Assert.Equal("••••cdef", view.ApiKeyHint);
     }
 
+    [Fact]
+    public async Task Test_UsesTypedApiKeyWithoutSavingIt()
+    {
+        var store = new MemoryStore(new ModelServiceConfigurationView { HasApiKey = true });
+        var tester = new StubConnectionTester();
+        var controller = Controller(
+            store,
+            PlatformRoles.PlatformAdministrator,
+            new ModelServiceConnectionSettings { ApiKey = "old-secret", Revision = "current" },
+            tester);
+
+        var result = await controller.Test(Command() with { ApiKey = "new-secret" }, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("new-secret", tester.LastSettings?.ApiKey);
+        Assert.Null(store.LastCommand);
+    }
+
     private static SaveModelServiceConfigurationCommand Command() => new()
     {
         Enabled = true,
@@ -86,10 +105,16 @@ public sealed class ModelServiceConfigurationControllerTests
         ApiKey = "secret-abcdef"
     };
 
-    private static ModelServiceConfigurationController Controller(MemoryStore store, string role)
+    private static ModelServiceConfigurationController Controller(
+        MemoryStore store,
+        string role,
+        ModelServiceConnectionSettings? currentSettings = null,
+        StubConnectionTester? tester = null)
         => new(
             new PlatformUserResolver(new ProductionEnvironment()),
             new ModelServiceConfigurationApplication(store),
+            new MemoryConfigurationProvider(currentSettings ?? new ModelServiceConnectionSettings()),
+            tester ?? new StubConnectionTester(),
             NullLogger<ModelServiceConfigurationController>.Instance)
         {
             ControllerContext = new ControllerContext
@@ -129,6 +154,24 @@ public sealed class ModelServiceConfigurationControllerTests
                 ApiKeyHint = string.IsNullOrWhiteSpace(command.ApiKey) ? null : "••••cdef",
                 Source = "platform"
             });
+        }
+    }
+
+    private sealed class MemoryConfigurationProvider(ModelServiceConnectionSettings current) : IModelServiceConfigurationProvider
+    {
+        public ModelServiceConnectionSettings Current { get; } = current;
+    }
+
+    private sealed class StubConnectionTester : IModelServiceConnectionTester
+    {
+        public ModelServiceConnectionSettings? LastSettings { get; private set; }
+
+        public Task<ModelServiceConnectionTestResult> TestAsync(
+            ModelServiceConnectionSettings settings,
+            CancellationToken ct = default)
+        {
+            LastSettings = settings;
+            return Task.FromResult(new ModelServiceConnectionTestResult(true, "连接测试通过。"));
         }
     }
 

@@ -1,11 +1,13 @@
-// 管理 Ingot Chat 的运行创建、历史、流式状态和受控删除交互。
-import { ArrowPathIcon, MagnifyingGlassIcon, TrashIcon } from "@heroicons/react/24/outline";
+// 管理系统内 AI 助手的会话、历史、流式状态和受控删除交互。
+import { ArrowPathIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { deleteJson, getJson, postJson, streamSse } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
 import { useSseReconnect } from "../hooks/useSseStream";
-import { Alert, Badge, Button, Card, DataTable, Drawer, Field, Input, Pagination, Page, Select, notify, useConfirmDialog } from "../ui/components";
+import { Alert, Badge, Button, Card, DataTable, Drawer, Field, Input, Pagination, Page, notify, useConfirmDialog } from "../ui/components";
 import { eventTypeLabel, formatTime, LoadingCard } from "./shared";
 
 export function EventsPage() {
@@ -93,16 +95,6 @@ function makeEventQuery(filters, page, pageSize) {
   return query.toString();
 }
 
-const chatModeLabels = {
-  quick: "证据核对",
-  combined: "多视角研判",
-};
-
-const chatModeDescriptions = {
-  quick: "查询平台记录并明确证据范围，不把观察性差异表述为根因。",
-  combined: "由工艺、质量与复核视角交叉审查后形成结论。",
-};
-
 const perspectiveLabels = {
   process: "工艺视角",
   quality: "质量视角",
@@ -116,28 +108,29 @@ const reviewPositionLabels = {
 };
 
 const chatProgressLabels = {
-  "run.started": "已接收调查事项",
-  "plan.created": "已确定查询范围",
-  "iteration.started": "正在准备相关记录",
-  "tool.started": "正在读取生产数据",
-  "tool.completed": "已读取记录",
-  "relatedRecords.checked": "正在核对数据来源",
-  "discussion.started": "正在执行工艺、质量与复核交叉审查",
-  "discussion.message": "正在汇总交叉审查结果",
-  "discussion.completed": "多视角研判完成",
-  "answer.delta": "正在整理调查结论",
-  "run.completed": "调查已完成",
-  "run.failed": "调查失败",
-  "run.cancelled": "调查已取消",
+  "run.started": "已收到消息",
+  "plan.created": "已确定处理方式",
+  "iteration.started": "正在准备回答",
+  "tool.started": "正在读取相关信息",
+  "tool.completed": "已读取相关信息",
+  "relatedRecords.checked": "正在核对相关内容",
+  "discussion.started": "正在进行多视角分析",
+  "discussion.message": "正在整理分析结果",
+  "discussion.completed": "多视角分析完成",
+  "answer.delta": "正在组织回答",
+  "run.retrying": "模型服务暂时不可用，稍后重试",
+  "run.completed": "回答已完成",
+  "run.failed": "对话处理失败",
+  "run.cancelled": "对话已取消",
 };
 
 const chatHistoryStatusLabels = {
-  queued: "等待核对",
-  running: "正在核对",
+  queued: "等待处理",
+  running: "处理中",
   cancelling: "正在取消",
-  failed: "调查失败",
+  failed: "处理失败",
   cancelled: "已取消",
-  completed: "调查已完成",
+  completed: "已完成",
 };
 
 function chatProgressText(item) {
@@ -149,14 +142,152 @@ function chatProgressText(item) {
   return chatProgressLabels[item?.type] || "";
 }
 
-function ChatAnswer({ answer, onFollowUp }) {
+async function streamChatRun(streamUrl, { signal, onEvent, maxReconnects = 5 }) {
+  let lastEventId = 0;
+  let reconnects = 0;
+  let terminalReceived = false;
+  while (!signal.aborted && !terminalReceived) {
+    try {
+      lastEventId = await streamSse(streamUrl, {
+        signal,
+        lastEventId,
+        onEvent: event => {
+          if (Number.isFinite(event?.id)) lastEventId = Math.max(lastEventId, event.id);
+          onEvent(event);
+          terminalReceived = ["run.completed", "run.failed", "run.cancelled"].includes(event?.data?.type);
+        },
+      });
+      if (terminalReceived) return;
+      reconnects += 1;
+    } catch (streamError) {
+      if (streamError.name === "AbortError" || signal.aborted) return;
+      reconnects += 1;
+      if (reconnects > maxReconnects) throw streamError;
+    }
+    if (reconnects > maxReconnects) throw new Error("对话连接中断，已达到自动重连次数上限。");
+    await new Promise((resolve, reject) => {
+      const timer = window.setTimeout(resolve, Math.min(1000 * reconnects, 5000));
+      signal.addEventListener("abort", () => {
+        window.clearTimeout(timer);
+        reject(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
+      }, { once: true });
+    });
+  }
+}
+
+function AssistantAvatar({ small = false }) {
+  return (
+    <span className={`grid shrink-0 place-items-center rounded-xl bg-coal-950 text-evidence-400 shadow-sm ${small ? "size-7" : "size-9"}`} aria-hidden="true">
+      <SparklesIcon className={small ? "size-3.5" : "size-4.5"} />
+    </span>
+  );
+}
+
+export function MarkdownContent({ content, className = "" }) {
+  if (typeof content !== "string" || !content.trim()) return null;
+  return (
+    <div className={`chat-markdown min-w-0 space-y-3 break-words ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ children }) => <h1 className="mt-5 text-xl font-semibold tracking-tight text-slate-950 first:mt-0">{children}</h1>,
+          h2: ({ children }) => <h2 className="mt-5 text-lg font-semibold text-slate-950 first:mt-0">{children}</h2>,
+          h3: ({ children }) => <h3 className="mt-4 text-base font-semibold text-slate-950 first:mt-0">{children}</h3>,
+          p: ({ children }) => <p className="leading-7">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="pl-1 leading-7">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold text-slate-950">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          blockquote: ({ children }) => <blockquote className="border-l-2 border-slate-300 pl-4 text-slate-600">{children}</blockquote>,
+          hr: () => <hr className="border-slate-200" />,
+          a: ({ href, children }) => <a className="font-medium text-trajectory-700 underline decoration-trajectory-300 underline-offset-2 hover:text-trajectory-900" href={href} target="_blank" rel="noreferrer">{children}</a>,
+          pre: ({ children }) => <pre className="overflow-x-auto rounded-lg bg-coal-950 px-4 py-3 text-xs leading-6 text-slate-100">{children}</pre>,
+          code: ({ className: codeClassName, children }) => <code className={`font-mono text-[0.9em] ${codeClassName || ""}`}>{children}</code>,
+          table: ({ children }) => <div className="overflow-x-auto"><table className="min-w-full border-collapse text-left text-[13px]">{children}</table></div>,
+          thead: ({ children }) => <thead className="border-b border-slate-300 bg-slate-50">{children}</thead>,
+          th: ({ children }) => <th className="px-3 py-2 font-semibold text-slate-800">{children}</th>,
+          td: ({ children }) => <td className="border-b border-slate-200 px-3 py-2 align-top">{children}</td>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+function referenceKey(reference) {
+  return `${reference?.kind || ""}:${reference?.id || ""}`;
+}
+
+function uniqueReferences(references) {
+  const seen = new Set();
+  return references.filter(reference => {
+    if (!reference?.kind || !reference?.id || seen.has(referenceKey(reference))) return false;
+    seen.add(referenceKey(reference));
+    return true;
+  });
+}
+
+function ReferenceTarget({ reference, children, className = "" }) {
+  if (!reference?.url) return <span className={className}>{children}</span>;
+  if (/^https?:\/\//i.test(reference.url)) {
+    return <a className={className} href={reference.url} target="_blank" rel="noreferrer">{children}</a>;
+  }
+  return <Link className={className} to={reference.url}>{children}</Link>;
+}
+
+function CitationMarkers({ references, sourceNumbers }) {
+  const markers = uniqueReferences(references || [])
+    .map(reference => ({ reference, number: sourceNumbers.get(referenceKey(reference)) }))
+    .filter(item => item.number);
+  if (!markers.length) return null;
+  return (
+    <span className="ml-1 inline-flex items-baseline gap-0.5 align-super text-[11px] leading-none">
+      {markers.map(({ reference, number }) => (
+        <sup key={number}>
+          <ReferenceTarget
+            reference={reference}
+            className="rounded bg-slate-100 px-1 py-0.5 font-medium text-slate-500 no-underline hover:bg-trajectory-50 hover:text-trajectory-700"
+          >[{number}]</ReferenceTarget>
+        </sup>
+      ))}
+    </span>
+  );
+}
+
+function SourceReferences({ references }) {
+  if (!references.length) return null;
+  return (
+    <section>
+      <p className="data-label">来源</p>
+      <ol className="mt-3 grid gap-2">
+        {references.map((reference, index) => (
+          <li key={referenceKey(reference)} className="flex min-w-0 items-start gap-2 text-[13px] leading-5 text-slate-600">
+            <span className="mt-0.5 shrink-0 font-semibold text-slate-400">[{index + 1}]</span>
+            <ReferenceTarget
+              reference={reference}
+              className="min-w-0 truncate text-trajectory-700 underline decoration-trajectory-200 underline-offset-2 hover:text-trajectory-900"
+            >
+              {reference.label}
+            </ReferenceTarget>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+export function ChatAnswer({ answer, onFollowUp }) {
   if (!answer) return null;
   if (typeof answer === "string") {
     return (
-      <article className="border border-slate-300 border-l-2 border-l-trajectory-600 bg-white px-4 py-4 text-sm leading-7 text-slate-700">
-        <p className="data-label mb-2">调查说明</p>
-        <p className="whitespace-pre-wrap">{answer}</p>
-      </article>
+      <div className="flex items-start gap-3">
+        <AssistantAvatar />
+        <article className="max-w-3xl rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+          <MarkdownContent content={answer} />
+        </article>
+      </div>
     );
   }
 
@@ -171,37 +302,41 @@ function ChatAnswer({ answer, onFollowUp }) {
     hypothesis: "待验证假设",
   };
   const combined = answer.combinedAnalysis;
-  const isConversationReply = findings.length === 0 &&
-    (answer.relatedRecords || []).length === 0 &&
-    (answer.charts || []).length === 0 &&
-    (answer.proposals || []).length === 0 &&
-    (answer.limitations || []).length === 0 &&
-    !combined;
+  const limitations = (answer.limitations || []).filter(item => !isGenericChatLimitation(item));
+  const inferredAnswerKind = combined
+    ? "analysis"
+    : findings.length > 0 || (answer.relatedRecords || []).length > 0 || (answer.charts || []).length > 0 || (answer.proposals || []).length > 0 || limitations.length > 0
+      ? "data_lookup"
+      : "conversation";
+  const answerKind = answer.answerKind || inferredAnswerKind;
+  const isConversationReply = answerKind === "conversation";
+  const sourceRecords = uniqueReferences([
+    ...(answer.relatedRecords || []),
+    ...findings.flatMap(item => item.evidenceReferences || []),
+    ...(combined?.relatedRecords || []),
+    ...(combined?.possibleCauses || []).flatMap(item => item.relatedRecords || []),
+    ...(combined?.reviews || []).flatMap(item => item.relatedRecords || []),
+  ]);
+  const sourceNumbers = new Map(sourceRecords.map((reference, index) => [referenceKey(reference), index + 1]));
   if (isConversationReply) {
     return (
-      <article className="border border-slate-300 border-l-2 border-l-trajectory-600 bg-white px-4 py-4 text-sm leading-7 text-slate-700">
-        <p className="data-label mb-2">调查说明</p>
-        <p className="whitespace-pre-wrap">{answer.summary || "请继续说明你的问题。"}</p>
-        {(answer.followUpQuestions || []).length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{answer.followUpQuestions.map(item => (
-          <button key={item} type="button" className="border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>{item}</button>
-        ))}</div>}
-      </article>
+      <div className="flex items-start gap-3">
+        <AssistantAvatar />
+        <article className="max-w-3xl rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+          <MarkdownContent content={answer.summary || "请继续说明你的问题。"} />
+          {(answer.followUpQuestions || []).length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{answer.followUpQuestions.map(item => (
+            <button key={item} type="button" className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>{item}</button>
+          ))}</div>}
+        </article>
+      </div>
     );
   }
   return (
-    <article className="overflow-hidden border border-slate-300 bg-white">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
-        <div>
-          <p className="data-label">调查结论</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">基于当前授权记录的核对结果</p>
-        </div>
-        <Badge tone="info">只读核对</Badge>
-      </header>
-      <div className="space-y-6 px-4 py-5 text-sm leading-7 text-slate-700 sm:px-5">
-        <section className="border-l-2 border-trajectory-600 pl-4">
-          <p className="data-label mb-2">摘要</p>
-          <p className="whitespace-pre-wrap font-medium text-slate-950">{answer.summary || "未形成摘要。"}</p>
-        </section>
+    <div className="flex items-start gap-3">
+      <AssistantAvatar />
+      <article className="max-w-4xl flex-1 overflow-hidden rounded-2xl rounded-tl-sm bg-white px-5 py-4 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+        <div className="space-y-6">
+          <MarkdownContent content={answer.summary || "未形成摘要。"} className="font-medium text-slate-950" />
       {findings.length > 0 && (
         <section>
           <p className="data-label">关键发现</p>
@@ -209,22 +344,22 @@ function ChatAnswer({ answer, onFollowUp }) {
             {findings.map((item, index) => (
               <li key={`${item.statement}-${index}`} className="flex gap-3 px-0 py-3">
                 <span className="data-value grid size-7 shrink-0 place-items-center border border-slate-300 bg-slate-50 text-[13px] font-semibold text-slate-700">{String(index + 1).padStart(2, "0")}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-slate-900">{item.statement}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-slate-900"><MarkdownContent content={item.statement} className="space-y-0" /><CitationMarkers references={item.evidenceReferences} sourceNumbers={sourceNumbers} /></div>
                   <span className="mt-1 block text-[13px] text-slate-500">
-                    {findingStrengthLabels[item.strength] || "证据陈述"} · {item.evidenceReferences?.length || 0} 条记录引用
+                    {findingStrengthLabels[item.strength] || "记录事实"}
                   </span>
-                </span>
+                </div>
               </li>
             ))}
           </ol>
         </section>
       )}
-      {(answer.limitations || []).length > 0 && (
+      {limitations.length > 0 && (
         <section className="border-l-2 border-l-amber-500 bg-amber-50/70 px-4 py-3 text-amber-950">
-          <p className="data-label !text-amber-700">证据边界</p>
+          <p className="data-label !text-amber-700">需要注意</p>
           <ul className="mt-1 list-disc space-y-1 pl-5">
-            {answer.limitations.map(item => <li key={item}>{item}</li>)}
+            {limitations.map(item => <li key={item}>{item}</li>)}
           </ul>
         </section>
       )}
@@ -232,12 +367,12 @@ function ChatAnswer({ answer, onFollowUp }) {
         <section className="border-y border-slate-200 bg-slate-50 px-4 py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="data-label">多视角研判</p>
-              <p className="mt-1 font-semibold text-slate-950">工艺、质量与复核基于同一批记录交叉审查</p>
+              <p className="data-label">深入分析</p>
+              <p className="mt-1 font-semibold text-slate-950">基于相关记录整理出的分析结果</p>
             </div>
             <Badge tone={combined.status === "needs-review" ? "warning" : "neutral"}>{combined.status === "needs-review" ? "待工程复核" : "证据不足"}</Badge>
           </div>
-          <p className="mt-3 text-sm leading-6 text-slate-700">{combined.summary}</p>
+          <MarkdownContent content={combined.summary} className="mt-3 text-sm leading-6 text-slate-700" />
           {(combined.possibleCauses || []).length > 0 && (
             <div className="mt-4 grid gap-2">
               <p className="data-label">可能原因</p>
@@ -246,8 +381,8 @@ function ChatAnswer({ answer, onFollowUp }) {
                 const latestReviews = Object.values(reviews.reduce((latest, review) => ({ ...latest, [review.authorRole]: review }), {}));
                 return (
                   <article key={cause.causeId} className="border border-slate-200 bg-white p-3">
-                    <div className="flex flex-wrap items-center gap-2"><Badge tone="info">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><strong className="text-sm text-slate-900">{cause.statement}</strong></div>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">{cause.reason}</p>
+                    <div className="flex flex-wrap items-center gap-2"><Badge tone="info">{perspectiveLabels[cause.authorRole] || cause.authorRole}</Badge><MarkdownContent content={cause.statement} className="space-y-0 text-sm text-slate-900" /><CitationMarkers references={cause.relatedRecords} sourceNumbers={sourceNumbers} /></div>
+                    <div className="mt-1 text-sm leading-6 text-slate-600"><MarkdownContent content={cause.reason} className="space-y-0" /><CitationMarkers references={cause.relatedRecords} sourceNumbers={sourceNumbers} /></div>
                     {latestReviews.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{latestReviews.map(review => <span key={review.authorRole} className="border border-slate-200 bg-slate-50 px-2 py-1 text-[13px] text-slate-600">{perspectiveLabels[review.authorRole] || review.authorRole} · {reviewPositionLabels[review.position] || review.position}</span>)}</div>}
                   </article>
                 );
@@ -257,30 +392,15 @@ function ChatAnswer({ answer, onFollowUp }) {
           {(combined.reviewSteps || []).length > 0 && (
             <details className="mt-3">
               <summary className="cursor-pointer text-[13px] font-medium text-slate-700">查看 {combined.reviewSteps.length} 条交叉审查记录</summary>
-              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="border-l-2 border-slate-300 bg-white px-3 py-2 text-[13px] leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><p>{step.summary}</p></li>)}</ol>
+              <ol className="mt-2 space-y-2">{combined.reviewSteps.map((step, index) => <li key={`${step.role}-${step.round}-${index}`} className="border-l-2 border-slate-300 bg-white px-3 py-2 text-[13px] leading-5 text-slate-600"><strong className="text-slate-800">第 {step.round} 轮 · {perspectiveLabels[step.role] || step.role}</strong><MarkdownContent content={step.summary} className="space-y-0" /></li>)}</ol>
             </details>
           )}
         </section>
       )}
-      {(answer.relatedRecords || []).length > 0 && (
-        <section>
-          <p className="data-label">相关记录</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {answer.relatedRecords.map(item => item.url ? (
-              <Link key={`${item.kind}:${item.id}`} to={item.url} className="border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-trajectory-700 transition hover:border-trajectory-600 hover:bg-trajectory-50">
-                {item.label}
-              </Link>
-            ) : (
-              <span key={`${item.kind}:${item.id}`} className="border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] font-medium text-slate-700">
-                {item.label}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
+      <SourceReferences references={sourceRecords} />
       {(answer.followUpQuestions || []).length > 0 && (
         <section>
-          <p className="data-label">继续调查</p>
+          <p className="data-label">下一步</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {answer.followUpQuestions.map(item => (
               <button key={item} type="button" className="border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>
@@ -290,14 +410,22 @@ function ChatAnswer({ answer, onFollowUp }) {
           </div>
         </section>
       )}
-      </div>
-    </article>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function isGenericChatLimitation(value) {
+  return typeof value === "string" && (
+    value.includes("只能查已经上报的记录") ||
+    value.includes("回答只基于平台记录")
   );
 }
 
 function ChatHistoryList({ items, loading, submitting, deletingConversationId, selectedConversationId, onOpen, onDelete }) {
   if (loading) {
-    return <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取调查记录</div>;
+    return <div className="inline-flex items-center gap-2 px-2 py-5 text-sm text-slate-500"><ArrowPathIcon className="size-4 animate-spin" />正在读取对话记录</div>;
   }
   if (!items.length) {
     return <p className="px-3 py-6 text-sm leading-6 text-slate-500">从一项生产、质量或工艺核对开始。</p>;
@@ -306,45 +434,36 @@ function ChatHistoryList({ items, loading, submitting, deletingConversationId, s
     <div key={item.conversationId} className={`group mb-1 grid grid-cols-[minmax(0,1fr)_2rem] items-center border-l-2 ${selectedConversationId === item.conversationId ? "border-trajectory-600 bg-white" : "border-transparent hover:border-slate-300 hover:bg-white/80"}`}>
       <button type="button" className="min-w-0 px-3 py-2.5 text-left disabled:opacity-60" onClick={() => onOpen(item.conversationId)} disabled={submitting} aria-current={selectedConversationId === item.conversationId ? "page" : undefined}>
         <p className="truncate text-sm font-medium text-slate-800">{item.title}</p>
-        <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.lastMessageStatus] || item.lastMessageStatus || "调查"} · {formatTime(item.lastMessageAt)}</p>
+        <p className="mt-1 text-xs text-slate-400">{chatHistoryStatusLabels[item.lastMessageStatus] || item.lastMessageStatus || "对话"} · {formatTime(item.lastMessageAt)}</p>
       </button>
-      <button type="button" className="grid size-8 place-items-center text-slate-400 opacity-100 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 lg:opacity-0 lg:group-hover:opacity-100" aria-label={`删除调查：${item.title}`} onClick={() => onDelete(item)} disabled={Boolean(deletingConversationId) || submitting}>
+      <button type="button" className="grid size-8 place-items-center text-slate-400 opacity-100 hover:bg-rose-50 hover:text-rose-700 focus:opacity-100 lg:opacity-0 lg:group-hover:opacity-100" aria-label={`删除对话：${item.title}`} onClick={() => onDelete(item)} disabled={Boolean(deletingConversationId) || submitting}>
         <TrashIcon className="size-4" />
       </button>
     </div>
   ));
 }
 
-function InvestigationStarter({ onSelect }) {
+function ChatWelcome({ onSelect }) {
   const starters = [
-    { id: "run", title: "核对一次生产运行", detail: "根据运行号、设备或产品核对实际设定、过程轨迹和质量结果。", prompt: "核对一次生产运行：" },
-    { id: "quality", title: "排查质量偏差", detail: "查看质量结果、可比运行和当前证据边界。", prompt: "核对质量偏差：" },
-    { id: "comparison", title: "比较同类运行", detail: "比较指定运行与可比基线之间的过程和结果差异。", prompt: "比较同类运行：" },
+    { id: "capability", title: "了解 AI 助手", detail: "看看这个系统能帮你做什么。", prompt: "这个系统是做什么的？" },
+    { id: "run", title: "查看一次生产运行", detail: "了解某次运行的过程和结果。", prompt: "帮我查看一次生产运行：" },
+    { id: "comparison", title: "比较两次运行", detail: "找出两个运行之间的主要差异。", prompt: "帮我比较两次生产运行：" },
   ];
   return (
-    <section className="overflow-hidden border border-slate-300 bg-white">
-      <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="data-label">Ingot Chat</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em] text-slate-950">从一项可回查的工程问题开始</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">系统只读取当前授权范围内的生产、质量和工艺记录；每项结论都应回到来源记录和证据边界。</p>
-        </div>
-        <Badge tone="info">只读范围</Badge>
-      </header>
-      <div className="grid divide-y divide-slate-200 md:grid-cols-3 md:divide-x md:divide-y-0">
+    <section className="mx-auto flex w-full max-w-4xl flex-col items-center px-2 py-10 text-center sm:py-16">
+      <span className="grid size-14 place-items-center rounded-2xl bg-coal-950 text-evidence-400 shadow-lg shadow-coal-950/10"><SparklesIcon className="size-7" /></span>
+      <h2 className="mt-5 text-2xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-3xl">你好，我是 AI 助手</h2>
+      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">我可以帮你理解生产、质量和工艺记录。你可以直接提问，也可以从下面的示例开始。</p>
+      <div className="mt-8 grid w-full gap-3 text-left sm:grid-cols-3">
         {starters.map((starter, index) => (
-          <button key={starter.id} type="button" className="group min-h-40 px-5 py-5 text-left transition hover:bg-trajectory-50/70 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-trajectory-600" onClick={() => onSelect(starter.prompt)}>
-            <span className="data-value text-sm text-trajectory-700">0{index + 1}</span>
-            <p className="mt-4 text-sm font-semibold text-slate-900">{starter.title}</p>
-            <p className="mt-2 text-[13px] leading-5 text-slate-500">{starter.detail}</p>
-            <span className="mt-4 block text-[13px] font-semibold text-trajectory-700">填写调查事项 →</span>
+          <button key={starter.id} type="button" className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-trajectory-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trajectory-600" onClick={() => onSelect(starter.prompt)}>
+            <span className="text-xs font-semibold text-slate-400">0{index + 1}</span>
+            <p className="mt-3 text-sm font-semibold text-slate-900">{starter.title}</p>
+            <p className="mt-1.5 text-[13px] leading-5 text-slate-500">{starter.detail}</p>
+            <span className="mt-3 block text-xs font-semibold text-trajectory-700">开始提问 <span aria-hidden="true">→</span></span>
           </button>
         ))}
       </div>
-      <dl className="grid divide-y divide-slate-200 border-t border-slate-200 text-sm sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-        <div className="grid grid-cols-[6rem_minmax(0,1fr)] px-5 py-3"><dt className="font-medium text-slate-500">调查范围</dt><dd className="text-slate-700">运行、质量结果、设备状态和工艺证据</dd></div>
-        <div className="grid grid-cols-[6rem_minmax(0,1fr)] px-5 py-3"><dt className="font-medium text-slate-500">输出形式</dt><dd className="text-slate-700">结论、记录引用、限制和下一步</dd></div>
-      </dl>
     </section>
   );
 }
@@ -352,10 +471,10 @@ function InvestigationStarter({ onSelect }) {
 export function ChatPage() {
   const { conversationId: routeConversationId = "" } = useParams();
   const navigate = useNavigate();
+  const [urlParams] = useSearchParams();
   const [capabilities, setCapabilities] = useState(null);
   const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
   const [question, setQuestion] = useState("");
-  const [mode, setMode] = useState("quick");
   const [run, setRun] = useState(null);
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -372,6 +491,13 @@ export function ChatPage() {
   const controller = useRef(null);
   const queueDelayTimer = useRef(null);
   const queueDelayVersion = useRef(0);
+  const urlPageContext = useMemo(() => {
+    const kind = urlParams.get("contextKind")?.trim().toLowerCase();
+    const id = urlParams.get("contextId")?.trim();
+    const siteId = urlParams.get("contextSiteId")?.trim();
+    return kind && id ? { kind, id, ...(siteId ? { siteId } : {}) } : null;
+  }, [urlParams]);
+  const activePageContext = urlPageContext || conversation?.pageContext;
 
   const clearQueueDelayWarning = useCallback(() => {
     queueDelayVersion.current += 1;
@@ -404,7 +530,16 @@ export function ChatPage() {
     }
   }, []);
 
-  const routeFor = useCallback(value => value ? `/chat/${encodeURIComponent(value)}` : "/chat", []);
+  const routeFor = useCallback(value => {
+    if (value) return `/chat/${encodeURIComponent(value)}`;
+    if (!activePageContext) return "/chat";
+    const params = new URLSearchParams({
+      contextKind: activePageContext.kind,
+      contextId: activePageContext.id,
+    });
+    if (activePageContext.siteId) params.set("contextSiteId", activePageContext.siteId);
+    return `/chat?${params}`;
+  }, [activePageContext]);
 
   const loadConversation = useCallback(async value => {
     const detail = await getJson(`/api/v1/chat/conversations/${encodeURIComponent(value)}`);
@@ -420,7 +555,6 @@ export function ChatPage() {
     getJson("/api/v1/chat/capabilities")
       .then(value => {
         setCapabilities(value);
-        setMode(value.modes?.[0] || "quick");
       })
       .catch(requestError => setError(requestError.message))
       .finally(() => setCapabilitiesLoading(false));
@@ -457,8 +591,6 @@ export function ChatPage() {
     event.preventDefault();
     if (!question.trim()) return;
     const submittedQuestion = question.trim();
-    const availableModes = capabilities?.modes || [];
-    const submittedMode = availableModes.includes(mode) ? mode : availableModes[0] || "quick";
     setSubmitting(true);
     setError("");
     setEvents([]);
@@ -467,7 +599,8 @@ export function ChatPage() {
       const payload = {
         text: submittedQuestion,
         clientMessageId: crypto.randomUUID(),
-        mode: submittedMode,
+        mode: "auto",
+        ...(activePageContext ? { pageContext: activePageContext } : {}),
       };
       const created = routeConversationId
         ? await postJson(`/api/v1/chat/conversations/${encodeURIComponent(routeConversationId)}/messages`, payload)
@@ -482,21 +615,16 @@ export function ChatPage() {
       setQuestion("");
       warnWhenStillQueued(created.runId);
       controller.current = new AbortController();
-      let terminalReceived = false;
       try {
-        await streamSse(created.streamUrl, {
+        await streamChatRun(created.streamUrl, {
           signal: controller.current.signal,
           onEvent: ({ data }) => {
             setEvents(current => [...current, data]);
             clearQueueDelayWarning();
-            if (["run.completed", "run.failed", "run.cancelled"].includes(data?.type)) {
-              terminalReceived = true;
-              controller.current?.abort();
-            }
           },
         });
       } catch (streamError) {
-        if (streamError.name !== "AbortError" || !terminalReceived) throw streamError;
+        if (streamError.name !== "AbortError") throw streamError;
       }
       await loadConversation(created.conversationId);
       await loadHistory();
@@ -542,14 +670,13 @@ export function ChatPage() {
     clearQueueDelayWarning();
     setError("");
     setHistoryOpen(false);
-    setMode(current => capabilities?.modes?.includes(current) ? current : capabilities?.modes?.[0] || "quick");
     navigate(routeFor(""));
   }
 
   async function deleteHistory(item) {
     if (!await confirm({
-      title: "删除调查",
-      description: `“${item.title}”的全部调查说明及分析过程将被永久删除。业务运行、质检和工艺配置记录不会受影响。`,
+      title: "删除对话",
+      description: `“${item.title}”的全部消息及分析过程将被永久删除。业务运行、质检和工艺配置记录不会受影响。`,
       confirmLabel: "确认删除",
       tone: "danger",
     })) return;
@@ -559,7 +686,7 @@ export function ChatPage() {
       await deleteJson(`/api/v1/chat/conversations/${encodeURIComponent(item.conversationId)}`);
       if (routeConversationId === item.conversationId) newConversation();
       await loadHistory();
-      notify("调查已删除。", "success");
+      notify("对话已删除。", "success");
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -572,73 +699,65 @@ export function ChatPage() {
     .filter(item => item.message)
     .slice(-4);
   const serviceEnabled = Boolean(capabilities?.enabled);
-  const deterministicModel = Boolean(capabilities?.isDeterministic);
   const analysisBlocked = capabilitiesLoading || !serviceEnabled || submitting;
 
   return (
-    <div className="grid h-full min-h-0 bg-slate-100/60 lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <aside className="hidden min-h-0 border-r border-slate-300 bg-slate-50 lg:flex lg:flex-col">
-        <div className="border-b border-slate-300 p-3">
-          <Button className="w-full justify-center" variant="primary" onClick={newConversation} disabled={submitting}>
-            <MagnifyingGlassIcon className="size-4" />新建调查
+    <div className="grid h-full min-h-0 bg-slate-50 lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <aside className="hidden min-h-0 border-r border-slate-200 bg-slate-50 lg:flex lg:flex-col">
+        <div className="border-b border-slate-200 p-4">
+          <Button className="w-full justify-center rounded-xl" variant="primary" onClick={newConversation} disabled={submitting}>
+            <PlusIcon className="size-4" />新建对话
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <p className="data-label px-2 py-3">调查记录</p>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+          <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-500"><ChatBubbleLeftRightIcon className="size-4" />最近对话</div>
           <ChatHistoryList items={history} loading={historyLoading} submitting={submitting} deletingConversationId={deletingConversationId} selectedConversationId={routeConversationId} onOpen={openHistory} onDelete={deleteHistory} />
         </div>
+        <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-400">仅使用当前账号有权访问的记录</div>
       </aside>
 
       <section className="flex min-h-0 min-w-0 flex-col bg-white">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-300 bg-white px-4 py-4 sm:px-6">
+        <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
           <div className="min-w-0">
-            <p className="data-label">Ingot Chat</p>
-            <h1 className="mt-1 truncate text-xl font-semibold tracking-[-0.025em] text-slate-950">{conversation?.title || "新建调查"}</h1>
-            <p className="mt-1 truncate text-[13px] text-slate-500">授权范围内的运行、检验和工艺记录</p>
+            <h1 className="truncate text-base font-semibold text-slate-950">{conversation?.title || "新对话"}</h1>
           </div>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
-            {(capabilities?.modes || []).length > 1 && <Select aria-label="分析方法" className="w-36" value={mode} onChange={event => setMode(event.target.value)} disabled={!serviceEnabled || submitting} title={chatModeDescriptions[mode]}>
-              {capabilities.modes.map(item => <option key={item} value={item}>{chatModeLabels[item] ?? item}</option>)}
-            </Select>}
-            <Button className="lg:hidden" onClick={() => setHistoryOpen(true)}><MagnifyingGlassIcon className="size-4" />调查记录</Button>
-            <Button className="lg:hidden" onClick={newConversation} disabled={submitting}>新建调查</Button>
+          <div className="flex min-w-0 items-center justify-end gap-2 sm:flex-none">
+            <Button className="rounded-xl lg:hidden" onClick={() => setHistoryOpen(true)}><ChatBubbleLeftRightIcon className="size-4" />对话记录</Button>
+            <Button className="rounded-xl lg:hidden" onClick={newConversation} disabled={submitting}><PlusIcon className="size-4" />新建</Button>
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100/45">
-          <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6">
-            <section className="grid overflow-hidden border border-slate-300 bg-white text-[13px] sm:grid-cols-3" aria-label="调查边界">
-              <div className="border-b border-slate-200 px-4 py-3 sm:border-b-0 sm:border-r"><p className="data-label">记录范围</p><p className="mt-1 font-medium text-slate-700">已授权的生产与质量记录</p></div>
-              <div className="border-b border-slate-200 px-4 py-3 sm:border-b-0 sm:border-r"><p className="data-label">核对方式</p><p className="mt-1 font-medium text-slate-700">{chatModeLabels[mode] || "证据核对"}</p></div>
-              <div className="px-4 py-3"><p className="data-label">输出边界</p><p className="mt-1 font-medium text-slate-700">结论需工程验证</p></div>
-            </section>
-            <div className="space-y-3">
-              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="Ingot Chat 未配置模型服务">当前 Ingot Chat 尚未配置可用的模型服务，请由平台管理员在“系统管理 → 模型服务”中配置。此状态不影响现场采集、运行记录、质量检验或数值优化服务。</Alert>}
-              {!capabilitiesLoading && serviceEnabled && deterministicModel && <Alert tone="info" title="当前核对范围">当前仅核对平台记录和证据边界，不提供多视角研判。</Alert>}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f8f9fa]">
+          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4 sm:px-6">
+            <div className="space-y-3 pt-4">
+              {!capabilitiesLoading && capabilities && !serviceEnabled && <Alert tone="warning" title="AI 助手尚未配置">当前 AI 助手尚未配置可用的模型服务，请由平台管理员在“系统管理 → 模型服务”中完成配置。配置完成后即可开始对话。</Alert>}
               {error && <Alert tone="danger">{error}</Alert>}
             </div>
             {!messages.length ? (
-              <InvestigationStarter onSelect={setQuestion} />
+              <ChatWelcome onSelect={setQuestion} />
             ) : (
-              <div className="w-full space-y-5 self-start">
+              <div className="w-full space-y-8 self-start py-8">
                 {messages.map(message => message.role === "user" ? (
-                  <article key={message.messageId} className="border border-slate-300 border-l-2 border-l-slate-600 bg-white px-4 py-4">
-                    <p className="data-label mb-2">调查事项</p>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-900">{message.text}</p>
-                  </article>
+                  <div key={message.messageId} className="flex justify-end">
+                    <article className="max-w-2xl rounded-2xl rounded-br-sm bg-coal-950 px-4 py-3 text-sm leading-7 text-white shadow-sm">
+                      <p className="whitespace-pre-wrap">{message.text}</p>
+                    </article>
+                  </div>
                 ) : (
                   <section key={message.messageId} className="space-y-4">
-                    {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <section className="border border-slate-300 bg-white px-4 py-4" aria-label="调查进度">
-                      <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3"><div><p className="data-label">核对进度</p><p className="mt-1 text-sm font-semibold text-slate-900">正在建立可回查的调查记录</p></div><Badge tone="info">进行中</Badge></div>
-                      <ol className="mt-3 divide-y divide-slate-100">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="flex items-start gap-3 py-2.5 text-sm text-slate-600"><span className="data-value grid size-6 shrink-0 place-items-center border border-trajectory-500 text-xs font-semibold text-trajectory-700">{String(index + 1).padStart(2, "0")}</span><p className="whitespace-pre-wrap leading-6">{item.message}</p></li>)}</ol>
-                    </section>}
+                    {message.runId === run?.runId && !message.answer && visibleProgress.length > 0 && <div className="flex items-start gap-3" aria-label="对话进度">
+                      <AssistantAvatar />
+                      <div className="max-w-3xl rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-800"><span className="size-2 animate-pulse rounded-full bg-trajectory-600" />正在分析你的问题</div>
+                        <ol className="mt-2 space-y-1 text-xs leading-5 text-slate-500">{visibleProgress.map((item, index) => <li key={`${item.sequence || item.type || "event"}-${index}`} className="whitespace-pre-wrap">{item.message}</li>)}</ol>
+                      </div>
+                    </div>}
                     {message.runId === run?.runId && submitting && !message.answer && visibleProgress.length === 0 && (queueDelayRunId === message.runId
-                      ? <Alert tone="warning" title="调查任务仍在排队">后台 Worker 尚未领取此任务。请检查 Platform Worker 是否运行；任务会在 Worker 恢复后继续处理。</Alert>
-                      : <section className="border-l-2 border-l-trajectory-600 bg-white px-4 py-3 text-sm text-slate-600"><p className="data-label mb-1">核对进度</p>已接收调查事项，正在建立查询范围并核对记录。</section>)}
+                      ? <Alert tone="warning" title="对话任务仍在排队">后台 Worker 尚未领取此任务。请检查 Platform Worker 是否运行；任务会在 Worker 恢复后继续处理。</Alert>
+                      : <div className="flex items-center gap-3 text-sm text-slate-500"><AssistantAvatar /><div className="rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200"><span className="inline-flex items-center gap-1.5"><span className="size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-.2s]" /><span className="size-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-.1s]" /><span className="size-1.5 animate-bounce rounded-full bg-slate-400" /></span></div></div>)}
                     <ChatAnswer answer={message.answer || message.text} onFollowUp={setQuestion} />
-                    {message.status === "failed" && <Alert tone="danger" title="调查失败">{message.error || "未能形成调查结论，请重试。"}</Alert>}
-                    {message.status === "cancelled" && <Alert title="调查已取消">{message.error || "本次调查已取消。"}</Alert>}
-                    {message.runId && <p className="border-t border-slate-200 pt-2 text-right text-xs text-slate-400" title={message.runId}>调查编号 {message.runId}</p>}
+                    {message.status === "failed" && <Alert tone="danger" title="对话处理失败">{message.error || "未能形成回答，请重试。"}</Alert>}
+                    {message.status === "cancelled" && <Alert title="对话已取消">{message.error || "本次对话已取消。"}</Alert>}
                   </section>
                 ))}
               </div>
@@ -646,21 +765,20 @@ export function ChatPage() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-300 bg-white px-3 py-3 sm:px-6">
-          <form className="mx-auto flex max-w-6xl items-end gap-3 border border-slate-300 bg-white p-2 transition focus-within:border-trajectory-600 focus-within:ring-2 focus-within:ring-trajectory-500/15" onSubmit={start}>
-            <div className="min-w-0 flex-1 px-2">
-              <label className="data-label" htmlFor="investigation-question">调查事项</label>
-              <textarea id="investigation-question" aria-label="提交调查说明" className="mt-1 max-h-40 min-h-10 min-w-0 w-full resize-none border-0 bg-transparent py-1 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="描述需要核对的事实、运行号、设备或质量偏差…" onKeyDown={handleQuestionKeyDown} />
+        <footer className="border-t border-slate-200 bg-white px-3 pb-3 pt-3 sm:px-6">
+          <form className="mx-auto max-w-4xl rounded-2xl border border-slate-300 bg-white p-3 shadow-sm transition focus-within:border-trajectory-600 focus-within:ring-4 focus-within:ring-trajectory-500/10" onSubmit={start}>
+            <label className="sr-only" htmlFor="investigation-question">提交问题</label>
+            <div className="flex items-end gap-3">
+              <textarea id="investigation-question" aria-label="提交问题" className="max-h-40 min-h-14 flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400" rows="1" required value={question} onChange={event => setQuestion(event.target.value)} disabled={!serviceEnabled || submitting} placeholder="输入你的问题…" onKeyDown={handleQuestionKeyDown} />
+              {submitting ? <Button className="size-10 shrink-0 rounded-xl px-0" type="button" onClick={cancel} disabled={cancelling} aria-label="停止处理"><StopIcon className="size-4" /></Button> : <Button className="size-10 shrink-0 rounded-xl px-0" variant="primary" type="submit" aria-label="发送消息" disabled={analysisBlocked || !question.trim()}><PaperAirplaneIcon className="size-4" /></Button>}
             </div>
-            {submitting ? <Button type="button" onClick={cancel} disabled={cancelling}>{cancelling ? "取消中" : "停止调查"}</Button> : <Button className="size-10 rounded-md px-0" variant="primary" type="submit" aria-label="开始调查" disabled={analysisBlocked || !question.trim()}><MagnifyingGlassIcon className="size-5" /></Button>}
           </form>
-          <p className="mx-auto mt-2 max-w-6xl text-[13px] text-slate-500">调查只基于平台记录，并标注范围、来源和证据边界；不会自动修改配方或控制设备。</p>
         </footer>
       </section>
       <Drawer
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-        title="调查记录"
+        title="对话记录"
         description={`当前账号共 ${history.length} 条`}
         size="md"
       >

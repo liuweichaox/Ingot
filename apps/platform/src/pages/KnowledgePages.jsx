@@ -1,10 +1,13 @@
-// 提供工艺资料与机理知识的业务入口，明确知识范围、证据边界和 Ingot Chat 的使用关系。
-import { LinkButton, Page, Card } from "../ui/components";
+// 提供工艺资料与机理知识的业务入口，明确知识范围、证据边界和 AI 助手的使用关系。
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import { getJson } from "../api/http";
+import { Alert, LinkButton, Page, Card } from "../ui/components";
 
 const knowledgePages = {
   materials: {
     title: "工艺资料",
-    description: "管理经过复核、带来源和适用范围的工艺资料，供工艺分析和 Ingot Chat 按授权引用。",
+    description: "管理经过复核、带来源和适用范围的工艺资料，供工艺分析和 AI 助手按授权引用。",
     cards: [
       ["资料来源", "工艺文件、作业指导书、检验规范和工程记录应保留来源、内容哈希与适用范围；只有完成复核的片段才能被助手引用。"],
       ["使用边界", "工艺资料用于解释和约束判断，不替代实际运行、质量结果或工程师决定。"],
@@ -22,8 +25,44 @@ const knowledgePages = {
 
 function KnowledgePage({ kind }) {
   const content = knowledgePages[kind];
+  const [params] = useSearchParams();
+  const sourceId = params.get("sourceId");
+  const recordId = params.get("recordId");
+  const [citation, setCitation] = useState(null);
+  const [citationError, setCitationError] = useState("");
+
+  useEffect(() => {
+    if (!sourceId || !recordId) {
+      setCitation(null);
+      setCitationError("");
+      return undefined;
+    }
+    let active = true;
+    setCitation(null);
+    setCitationError("");
+    getJson(`/api/v1/knowledge/sources/${encodeURIComponent(sourceId)}/records/${encodeURIComponent(recordId)}`)
+      .then(value => { if (active) setCitation(value); })
+      .catch(error => { if (active) setCitationError(error.message || "来源暂时无法读取。"); });
+    return () => { active = false; };
+  }, [recordId, sourceId]);
   return (
     <Page title={content.title} description={content.description}>
+      {sourceId && recordId && (
+        <Card title="引用来源" description="仅展示当前账号有权访问且已复核的知识片段。">
+          {citationError ? <Alert tone="warning">{citationError}</Alert> : citation ? (
+            <div className="space-y-4 text-sm text-slate-700">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                <span>{citation.source.title}</span>
+                <span>{citation.source.fileName}</span>
+                {citation.record.pageOrSheet && <span>{citation.record.pageOrSheet}</span>}
+                {citation.record.region && <span>{citation.record.region}</span>}
+              </div>
+              <div className="border-l-2 border-trajectory-500 pl-4 leading-7 text-slate-800">{citation.record.content}</div>
+              <p className="text-xs text-slate-400">内容哈希：{citation.record.citation?.contentHash || citation.source.sha256}</p>
+            </div>
+          ) : <p className="text-sm text-slate-500">正在读取引用来源…</p>}
+        </Card>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         {content.cards.map(([title, description]) => (
           <Card key={title} title={title}>
@@ -31,8 +70,8 @@ function KnowledgePage({ kind }) {
           </Card>
         ))}
       </div>
-      <Card title="进入 Ingot Chat" description="Ingot Chat 只在授权站点和适用范围内检索已复核资料，并返回来源引用。">
-        <LinkButton to="/chat">打开 Ingot Chat</LinkButton>
+      <Card title="进入 AI 助手" description="AI 助手只在授权站点和适用范围内检索已复核资料，并返回来源引用。">
+        <LinkButton to="/chat">打开 AI 助手</LinkButton>
       </Card>
     </Page>
   );

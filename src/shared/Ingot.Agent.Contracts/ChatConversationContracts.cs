@@ -30,7 +30,7 @@ public sealed record StartChatConversationRequest
 
     public PageContextRef? PageContext { get; init; }
 
-    public string Mode { get; init; } = "quick";
+    public string Mode { get; init; } = "auto";
 }
 
 public sealed record SendChatMessageRequest
@@ -39,7 +39,9 @@ public sealed record SendChatMessageRequest
 
     public required string ClientMessageId { get; init; }
 
-    public string Mode { get; init; } = "quick";
+    public PageContextRef? PageContext { get; init; }
+
+    public string Mode { get; init; } = "auto";
 }
 
 public sealed record ChatMessageSnapshot

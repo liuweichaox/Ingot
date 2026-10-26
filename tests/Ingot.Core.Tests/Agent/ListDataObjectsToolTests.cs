@@ -11,6 +11,78 @@ namespace Ingot.Core.Tests.Agent;
 
 public sealed class ListDataObjectsToolTests
 {
+    [Theory]
+    [InlineData("系统目前有几个采集站点？")]
+    [InlineData("当前系统有没有质量检测数据？")]
+    [InlineData("整个系统最近有没有收到生产数据？")]
+    public async Task DeterministicPlanner_RoutesGlobalQuestionToSystemOverview(string question)
+    {
+        var result = await new DeterministicModelClient().ResolveIntentAsync(
+            new CreateChatRunRequest
+            {
+                Question = question,
+                PageContext = new PageContextRef { Kind = "execution", Id = "EXEC-001" }
+            },
+            [SystemOverviewDefinition()]);
+
+        var call = Assert.Single(result.Value.ToolCalls);
+        Assert.Equal("get_system_overview", call.Tool);
+        Assert.Empty(call.Arguments);
+    }
+
+    [Fact]
+    public async Task DeterministicPlanner_BindsCurrentSiteForScopedSystemQuestion()
+    {
+        var result = await new DeterministicModelClient().ResolveIntentAsync(
+            new CreateChatRunRequest
+            {
+                Question = "这个站点在线吗？",
+                PageContext = new PageContextRef
+                {
+                    Kind = "execution",
+                    Id = "EXEC-001",
+                    SiteId = "SITE-001"
+                }
+            },
+            [SystemOverviewDefinition()]);
+
+        var call = Assert.Single(result.Value.ToolCalls);
+        Assert.Equal("get_system_overview", call.Tool);
+        Assert.Equal("SITE-001", call.Arguments["siteId"]);
+    }
+
+    [Fact]
+    public async Task DeterministicPlanner_BindsExecutionPageContextSite()
+    {
+        var tool = new AnalysisToolDefinition
+        {
+            Name = "get_execution_trace",
+            Version = "1.0.0",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            Description = "读取执行轨迹。",
+            InputSchema = System.Text.Json.JsonDocument.Parse(
+                "{\"type\":\"object\",\"properties\":{\"siteId\":{\"type\":\"string\"},\"executionId\":{\"type\":\"string\"}}}").RootElement
+        };
+
+        var result = await new DeterministicModelClient().ResolveIntentAsync(
+            new CreateChatRunRequest
+            {
+                Question = "查看这次执行的完整过程。",
+                PageContext = new PageContextRef
+                {
+                    Kind = "execution",
+                    Id = "EXEC-001",
+                    SiteId = "SITE-001"
+                }
+            },
+            [tool]);
+
+        var call = Assert.Single(result.Value.ToolCalls);
+        Assert.Equal("SITE-001", call.Arguments["siteId"]);
+        Assert.Equal("EXEC-001", call.Arguments["executionId"]);
+    }
+
     [Fact]
     public async Task DeterministicPlanner_RoutesRunningObjectQuestionToSummaryTool()
     {
@@ -97,4 +169,15 @@ public sealed class ListDataObjectsToolTests
                 Offset = query.Offset
             });
     }
+
+    private static AnalysisToolDefinition SystemOverviewDefinition()
+        => new()
+        {
+            Name = "get_system_overview",
+            Version = "1.0.0",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            Description = "查询授权范围内的系统概览。",
+            InputSchema = System.Text.Json.JsonDocument.Parse("{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}").RootElement
+        };
 }

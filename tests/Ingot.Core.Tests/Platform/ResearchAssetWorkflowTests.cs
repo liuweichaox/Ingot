@@ -397,7 +397,9 @@ public sealed class ResearchAssetWorkflowTests
         var reference = Assert.Single(result.RelatedRecords);
         Assert.Equal("process-knowledge-record", reference.Kind);
         Assert.Equal(recordId.ToString(), reference.Id);
-        Assert.Null(reference.Url);
+        Assert.Equal(
+            $"/knowledge/process-materials?sourceId={sourceId:D}&recordId={recordId:D}",
+            reference.Url);
         Assert.Equal("hybrid", result.Data.GetProperty("retrievalMode").GetString());
         Assert.Equal("fragment-sha", result.Data.GetProperty("records")[0]
             .GetProperty("citation").GetProperty("ContentHash").GetString());

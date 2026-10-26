@@ -44,6 +44,7 @@ public static class AgentStreamEventTypes
     public const string DiscussionParticipantFailed = "discussion.participant_failed";
     public const string DiscussionCompleted = "discussion.completed";
     public const string RunCompleted = "run.completed";
+    public const string RunRetrying = "run.retrying";
     public const string RunFailed = "run.failed";
     public const string RunCancelled = "run.cancelled";
 }

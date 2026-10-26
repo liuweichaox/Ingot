@@ -18,7 +18,7 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
         await using var command = dataSource.CreateCommand(
             "SELECT to_regclass('public.agent_runs') IS NOT NULL;");
         if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not true)
-            throw new InvalidOperationException("Agent 运行表尚未迁移。请先运行 Platform Migrator。");
+            throw new InvalidOperationException("AI 助手任务表尚未迁移。请先运行 Platform Migrator。");
     }
 
     public async Task CreateAsync(AgentRunSnapshot run, CancellationToken ct = default)
@@ -63,7 +63,7 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            throw new InvalidOperationException("Agent 运行编号已经存在。", exception);
+            throw new InvalidOperationException("AI 助手任务编号已经存在。", exception);
         }
     }
 
@@ -81,6 +81,8 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
     public async Task<ClaimedAgentRun?> ClaimNextAsync(
         string leaseOwner,
         TimeSpan leaseDuration,
+        double retryInitialDelaySeconds,
+        double retryMaxDelaySeconds,
         CancellationToken ct = default)
     {
         await using var command = dataSource.CreateCommand(
@@ -88,8 +90,9 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             WITH candidate AS (
               SELECT run_id
               FROM agent_runs
-              WHERE status = 'queued'
-                 OR (status IN ('running', 'cancelling') AND lease_expires_at < now())
+              WHERE next_attempt_at <= now()
+                AND (status = 'queued'
+                 OR (status IN ('running', 'cancelling') AND lease_expires_at < now()))
               ORDER BY created_at, run_id
               FOR UPDATE SKIP LOCKED
               LIMIT 1
@@ -97,14 +100,22 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             UPDATE agent_runs run
             SET status = CASE WHEN run.status = 'cancelling' THEN 'cancelling' ELSE 'running' END,
                 snapshot = jsonb_set(
-                  run.snapshot,
-                  '{status}',
-                  to_jsonb(CASE WHEN run.status = 'cancelling' THEN 'cancelling'::text ELSE 'running'::text END),
+                  jsonb_set(
+                    run.snapshot,
+                    '{status}',
+                    to_jsonb(CASE WHEN run.status = 'cancelling' THEN 'cancelling'::text ELSE 'running'::text END),
+                    true),
+                  '{attemptCount}',
+                  to_jsonb(run.attempt_count + 1),
                   true),
                 lease_owner = $1,
                 lease_expires_at = now() + $2,
                 lease_generation = run.lease_generation + 1,
                 attempt_count = attempt_count + 1,
+                next_attempt_at = now() + make_interval(
+                  secs => LEAST(
+                    $3 * power(2.0::double precision, GREATEST(run.attempt_count, 0)),
+                    $4)),
                 updated_at = now()
             FROM candidate
             WHERE run.run_id = candidate.run_id
@@ -116,11 +127,21 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             NpgsqlDbType = NpgsqlDbType.Interval,
             Value = leaseDuration
         });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Double,
+            Value = retryInitialDelaySeconds
+        });
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Double,
+            Value = retryMaxDelaySeconds
+        });
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (!await reader.ReadAsync(ct).ConfigureAwait(false))
             return null;
         var run = JsonSerializer.Deserialize<AgentRunSnapshot>(reader.GetString(0), JsonOptions)
-                  ?? throw new InvalidOperationException("Agent 运行快照无效。");
+                  ?? throw new InvalidOperationException("AI 助手任务快照无效。");
         return new ClaimedAgentRun(run, new AgentRunLease(run.RunId, leaseOwner, reader.GetInt64(1)));
     }
 
@@ -156,7 +177,7 @@ public sealed class PostgresAgentRunStore(NpgsqlDataSource dataSource) : IDurabl
             UPDATE agent_runs
             SET lease_owner = NULL, lease_expires_at = NULL, updated_at = now()
             WHERE run_id = $1 AND lease_owner = $2 AND lease_generation = $3
-              AND status IN ('completed', 'cancelled', 'failed')
+              AND status IN ('queued', 'completed', 'cancelled', 'failed')
             """);
         command.Parameters.AddWithValue(lease.RunId);
         command.Parameters.AddWithValue(lease.Owner);

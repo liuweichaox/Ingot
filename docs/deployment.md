@@ -92,7 +92,7 @@ https://platform.example.com/auth/logout-callback
 
 ### 模型服务
 
-启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置供应商标签、`Responses` 或 `ChatCompletions` 协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。
+启用模型服务时，其接口应兼容 OpenAI。平台管理员在“系统管理 → 模型服务”页面统一配置模型服务商名称（仅用于记录和归因）、`Responses` 或 `ChatCompletions` 接口协议、API 根地址、Chat 模型标识和 API key；Chat、机理知识语义草稿和可选知识嵌入复用同一受保护的地址与密钥。当前不直接接入原生 Anthropic Messages 协议。知识嵌入不建立第二套供应商凭据，但通过 `INGOT_KNOWLEDGE_EMBEDDING_MODEL` 独立选择嵌入模型。更换兼容模型服务不需要修改 Ingot 源码。
 
 API key 为只写字段，经服务端加密后存入数据库，浏览器和读取接口只能看到是否已配置及末四位提示。Platform 启动时只探查模型清单；只有功能实际调用模型时，才会把该功能所需且经过权限控制的上下文发送给所选模型服务。启用外部服务前必须确认这些材料可以发送到该服务所在区域。
 

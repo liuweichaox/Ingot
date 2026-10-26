@@ -18,7 +18,7 @@ public sealed class PostgresAgentRunLeaseTests(PostgresIntegrationFixture postgr
         await storeA.CreateAsync(queued);
 
         var first = Assert.IsType<ClaimedAgentRun>(
-            await storeA.ClaimNextAsync("worker-a", TimeSpan.FromMinutes(5)));
+            await storeA.ClaimNextAsync("worker-a", TimeSpan.FromMinutes(5), 0, 0));
         await using (var expire = postgres.DataSource.CreateCommand(
                          "UPDATE agent_runs SET lease_expires_at = now() - interval '1 second' WHERE run_id = @id;"))
         {
@@ -26,7 +26,7 @@ public sealed class PostgresAgentRunLeaseTests(PostgresIntegrationFixture postgr
             await expire.ExecuteNonQueryAsync();
         }
         var second = Assert.IsType<ClaimedAgentRun>(
-            await storeB.ClaimNextAsync("worker-b", TimeSpan.FromMinutes(5)));
+            await storeB.ClaimNextAsync("worker-b", TimeSpan.FromMinutes(5), 0, 0));
 
         Assert.True(second.Lease.Generation > first.Lease.Generation);
         var staleTerminal = first.Run with

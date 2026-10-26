@@ -62,6 +62,80 @@ public sealed class ChatConversationApplicationTests
         Assert.Equal(2, gateway.StartCount);
     }
 
+    [Fact]
+    public async Task SendingMessageUsesRequestPageContextWhenProvided()
+    {
+        var store = new MemoryConversationStore();
+        var gateway = new RecordingRunGateway();
+        var application = new ChatConversationApplication(store, gateway);
+        var initialContext = new PageContextRef { Kind = "site", Id = "SITE-001" };
+        var updatedContext = new PageContextRef { Kind = "execution", Id = "EXEC-002" };
+        var first = await application.StartAsync(
+            "operator",
+            new StartChatConversationRequest
+            {
+                Text = "第一条",
+                ClientMessageId = Guid.CreateVersion7().ToString(),
+                PageContext = initialContext
+            },
+            new AgentRunAccessScopeSnapshot());
+
+        await application.SendAsync(
+            first.ConversationId,
+            "operator",
+            new SendChatMessageRequest
+            {
+                Text = "切换到这次运行",
+                ClientMessageId = Guid.CreateVersion7().ToString(),
+                PageContext = updatedContext
+            },
+            new AgentRunAccessScopeSnapshot());
+
+        Assert.Equal(updatedContext, gateway.Request!.PageContext);
+
+        await application.SendAsync(
+            first.ConversationId,
+            "operator",
+            new SendChatMessageRequest
+            {
+                Text = "继续查看",
+                ClientMessageId = Guid.CreateVersion7().ToString()
+            },
+            new AgentRunAccessScopeSnapshot());
+
+        Assert.Equal(updatedContext, gateway.Request!.PageContext);
+    }
+
+    [Fact]
+    public async Task SendingMessageFallsBackToConversationPageContextWhenRequestOmitsIt()
+    {
+        var store = new MemoryConversationStore();
+        var gateway = new RecordingRunGateway();
+        var application = new ChatConversationApplication(store, gateway);
+        var initialContext = new PageContextRef { Kind = "site", Id = "SITE-001" };
+        var first = await application.StartAsync(
+            "operator",
+            new StartChatConversationRequest
+            {
+                Text = "第一条",
+                ClientMessageId = Guid.CreateVersion7().ToString(),
+                PageContext = initialContext
+            },
+            new AgentRunAccessScopeSnapshot());
+
+        await application.SendAsync(
+            first.ConversationId,
+            "operator",
+            new SendChatMessageRequest
+            {
+                Text = "继续",
+                ClientMessageId = Guid.CreateVersion7().ToString()
+            },
+            new AgentRunAccessScopeSnapshot());
+
+        Assert.Equal(initialContext, gateway.Request!.PageContext);
+    }
+
     private sealed class RecordingRunGateway : IChatRunGateway
     {
         public int StartCount { get; private set; }
@@ -142,6 +216,17 @@ public sealed class ChatConversationApplicationTests
             if (Reservations.TryGetValue(clientMessageId, out var existing))
                 return Task.FromResult(existing with { AlreadyExists = true });
             return Task.FromResult(CreateReservation(conversationId, clientMessageId));
+        }
+
+        public Task UpdatePageContextAsync(
+            string conversationId,
+            string userId,
+            PageContextRef pageContext,
+            CancellationToken ct = default)
+        {
+            if (_conversations.TryGetValue(conversationId, out var conversation))
+                _conversations[conversationId] = conversation with { PageContext = pageContext };
+            return Task.CompletedTask;
         }
 
         public Task BindRunAsync(

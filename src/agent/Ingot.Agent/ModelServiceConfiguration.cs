@@ -28,6 +28,17 @@ public interface IModelServiceConfigurationProvider
     Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
+/// <summary>描述一次不落库的模型服务连接测试结果。</summary>
+public sealed record ModelServiceConnectionTestResult(bool Succeeded, string Message);
+
+/// <summary>在服务端验证模型服务连接，不把凭据返回给调用方。</summary>
+public interface IModelServiceConnectionTester
+{
+    Task<ModelServiceConnectionTestResult> TestAsync(
+        ModelServiceConnectionSettings settings,
+        CancellationToken ct = default);
+}
+
 /// <summary>在 Platform 配置存储不可用时保持模型服务禁用。</summary>
 public sealed class UnconfiguredModelServiceConfigurationProvider : IModelServiceConfigurationProvider
 {

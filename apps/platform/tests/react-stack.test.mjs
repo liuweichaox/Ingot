@@ -87,13 +87,13 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /DialogBackdrop/);
   assert.match(app, /DialogPanel/);
   assert.match(app, /MenuButton/);
-  for (const [id, domain] of [["overview", "工作台"], ["investigation", "Ingot Chat"], ["evidence", "现场运行"], ["insight", "工艺洞察"], ["optimization", "配方优化"], ["configuration", "配置与接入"]]) {
+  for (const [id, domain] of [["overview", "工作台"], ["investigation", "AI 助手"], ["evidence", "现场运行"], ["insight", "工艺洞察"], ["optimization", "配方优化"], ["configuration", "配置与接入"]]) {
     assert.match(app, new RegExp(`id: "${id}", label: "${domain}"`));
   }
   assert.match(app, /id: "overview"[\s\S]*id: "investigation"[\s\S]*id: "evidence"[\s\S]*id: "insight"[\s\S]*id: "optimization"[\s\S]*id: "configuration"/);
   assert.match(app, /id: "insight", label: "工艺洞察", icon: MagnifyingGlassCircleIcon, path: "\/comparisons"/);
   assert.match(app, /id: "optimization", label: "配方优化", icon: AdjustmentsHorizontalIcon, path: "\/configuration\/process-specifications"/);
-  assert.match(app, /id: "investigation", label: "Ingot Chat", icon: ChatBubbleLeftRightIcon, path: "\/chat", utility: true/);
+  assert.match(app, /id: "investigation", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "\/chat", utility: true/);
   assert.doesNotMatch(app, /"追因总览"|"对象目录"|"运行事件"/);
   assert.match(app, /id: "system"[\s\S]*\["\/events", "原始事件"\]/);
   assert.match(app, /path="\/analysis" element=\{<Navigate to="\/process-executions\?attention=1" replace \/>\}/);
@@ -105,7 +105,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.doesNotMatch(app, /配置总览|ConfigurationHubPage/);
   assert.match(app, /path="\/configuration" element=\{<Navigate to="\/configuration\/process-data-models" replace \/>\}/);
   assert.match(app, /id: "system"[\s\S]*\["\/identity\/users", "用户权限"\][\s\S]*\["\/model-service", "模型服务"\]/);
-  assert.match(app, /\["\/chat", "Ingot Chat"\]/);
+  assert.match(app, /\["\/chat", "AI 助手"\]/);
   assert.match(app, /\["\/process-executions", "生产运行"\], \["\/production\/changeover", "生产切换"\], \["\/production\/tooling-installations", "工装装卸"\]/);
   assert.match(app, /\["\/comparisons", "工艺分析"\]/);
   assert.match(app, /\["\/configuration\/process-specifications", "配方版本"\], \["\/recipe-adjustments", "调整与验证"\]/);
@@ -226,10 +226,9 @@ test("versioned tooling remains unique and configuration records stay bounded", 
 });
 
 test("forms expose clear labels, edit intent, and required upload fields", () => {
-  assert.match(pages, /const chatModeLabels = \{/);
-  assert.match(pages, /quick: "证据核对"/);
-  assert.match(pages, /aria-label="提交调查说明"/);
-  assert.match(pages, /aria-label="分析方法"/);
+  assert.match(pages, /mode: "auto"/);
+  assert.doesNotMatch(pages, /aria-label="回答模式"/);
+  assert.match(pages, /aria-label="提交问题"/);
   assert.match(pages, /setEditorMode\(row \? \(section === "type" \? "version" : "edit"\) : "create"\)/);
   assert.match(pages, /editorMode === "create" \? resource\.createLabel/);
 });
@@ -250,6 +249,7 @@ test("production forms use business fields and paginate long histories", () => {
   assert.match(pages, /\["validFrom", "validTo"\]\.includes\(key\)/);
   assert.match(pages, /total=\{rows\.length\}/);
   assert.match(pages, /disabled=\{saving \|\| !editorValid\}/);
+  assert.doesNotMatch(pages, /<Page className="mx-auto max-w-7xl"/);
 });
 
 test("inspection definitions use the characteristic contract and business fields", () => {

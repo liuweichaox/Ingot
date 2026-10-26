@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ChatConversationApplication>();
 
         services.AddSingleton<EdgeRegistry>();
+        services.AddSingleton<SystemSiteCatalog>();
 
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
         services.AddSingleton<ManufacturingContextApplication>();
@@ -99,6 +100,7 @@ public static class ServiceCollectionExtensions
             provider => provider.GetRequiredService<ChatEventReader>());
         services.AddSingleton<IChatDataObjectReader>(
             provider => provider.GetRequiredService<ChatEventReader>());
+        services.AddSingleton<IAnalysisTool, SystemOverviewTool>();
         services.AddSingleton<IAnalysisTool, ListDataObjectsTool>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();
         services.AddSingleton<IAnalysisTool, GetProcessExecutionTraceTool>();

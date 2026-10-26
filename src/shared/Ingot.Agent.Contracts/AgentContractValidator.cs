@@ -70,9 +70,9 @@ public static partial class AgentContractValidator
         }
 
         mode = rawMode?.Trim().ToLowerInvariant();
-        if (mode is not ("quick" or "combined"))
+        if (mode is not ("auto" or "quick" or "combined"))
         {
-            error = "Mode 只支持 quick 或 combined。";
+            error = "Mode 只支持 auto、quick 或 combined。";
             return false;
         }
 
@@ -87,7 +87,14 @@ public static partial class AgentContractValidator
                 return false;
             }
 
-            pageContext = new PageContextRef { Kind = kind, Id = id };
+            var siteId = rawPageContext.SiteId?.Trim();
+            if (siteId is not null && (siteId.Length == 0 || siteId.Length > 128))
+            {
+                error = "PageContext 的 SiteId 长度必须在 1 到 128 个字符之间。";
+                return false;
+            }
+
+            pageContext = new PageContextRef { Kind = kind, Id = id, SiteId = siteId };
         }
 
         error = string.Empty;

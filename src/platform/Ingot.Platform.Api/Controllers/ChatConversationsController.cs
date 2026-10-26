@@ -67,8 +67,6 @@ public sealed class ChatConversationsController(
             return InvalidRequest("请求体不能为空。");
         if (!TryActor(out var userId, out var identity, out var unauthorized))
             return unauthorized!;
-        if (request.PageContext is not null)
-            return InvalidRequest("对话不支持页面上下文，请在问题中写明站点和对象。");
         try
         {
             var accepted = await chat.StartAsync(
@@ -103,8 +101,6 @@ public sealed class ChatConversationsController(
             var conversation = await chat.GetSummaryAsync(conversationId, userId!, ct).ConfigureAwait(false);
             if (conversation is null)
                 return ResourceNotFound();
-            if (conversation.PageContext is not null)
-                return AuthorizationDenied();
             var accepted = await chat.SendAsync(
                 conversationId,
                 userId!,
@@ -185,12 +181,10 @@ public sealed class ChatConversationsController(
         PlatformIdentity identity,
         CancellationToken ct)
     {
-        if (conversation.PageContext is not null)
-            return false;
         var runs = await runtime.GetConversationAsync(
                 ProductEntryPoints.Chat, userId, conversation.ConversationId, ct)
             .ConfigureAwait(false);
-        return runs.All(run => CanAccessRun(run.UserId, run.AccessScope, identity));
+        return runs.Count > 0 && runs.All(run => CanAccessRun(run.UserId, run.AccessScope, identity));
     }
 
     private static bool CanAccessRun(

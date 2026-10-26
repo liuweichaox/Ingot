@@ -118,6 +118,8 @@ public sealed class ChatConversationSiteScopeTests
             => throw new NotSupportedException();
         public Task<ChatTurnReservation> AppendTurnAsync(string conversationId, string userId, string clientMessageId, string text, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task UpdatePageContextAsync(string conversationId, string userId, PageContextRef pageContext, CancellationToken ct = default)
+            => throw new NotSupportedException();
         public Task BindRunAsync(string assistantMessageId, string runId, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task CompleteAssistantMessageAsync(AgentRunSnapshot run, CancellationToken ct = default)

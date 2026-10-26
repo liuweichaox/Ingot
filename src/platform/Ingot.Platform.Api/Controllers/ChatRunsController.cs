@@ -23,9 +23,6 @@ public sealed class ChatRunsController(
         if (!TryAuthorize(out var userId, out var unauthorized))
             return unauthorized!;
         var identity = userResolver.ResolveIdentity(User)!;
-        if (normalized!.PageContext is not null)
-            return InvalidRequest("对话不支持页面上下文，请在问题中写明站点和对象。");
-
         try
         {
             var run = await runtime.StartAsync(
@@ -183,6 +180,7 @@ public sealed class ChatRunsController(
         Status = run.Status,
         ModelProvider = run.ModelProvider,
         Model = run.Model,
+        ModelServiceRevision = run.ModelServiceRevision,
         PromptVersion = run.PromptVersion,
         ToolsetVersion = run.ToolsetVersion,
         CreatedAt = run.CreatedAt,

@@ -109,6 +109,8 @@ public interface IDurableAgentRunStore : IAgentRunStore
     Task<ClaimedAgentRun?> ClaimNextAsync(
         string leaseOwner,
         TimeSpan leaseDuration,
+        double retryInitialDelaySeconds,
+        double retryMaxDelaySeconds,
         CancellationToken ct = default);
 
     Task<bool> RenewLeaseAsync(

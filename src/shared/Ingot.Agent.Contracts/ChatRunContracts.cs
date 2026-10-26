@@ -120,6 +120,8 @@ public sealed record ChatRunSnapshot
 
     public required string Model { get; init; }
 
+    public string? ModelServiceRevision { get; init; }
+
     public required string PromptVersion { get; init; }
 
     public required string ToolsetVersion { get; init; }

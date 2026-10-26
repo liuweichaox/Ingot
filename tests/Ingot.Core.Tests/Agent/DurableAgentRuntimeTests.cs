@@ -345,7 +345,11 @@ public sealed class DurableAgentRuntimeTests
             => Task.FromResult<IReadOnlyList<AgentStreamEvent>>(events.Where(item => item.Sequence > afterSequence).ToArray());
 
         public Task<ClaimedAgentRun?> ClaimNextAsync(
-            string owner, TimeSpan leaseDuration, CancellationToken ct = default)
+            string owner,
+            TimeSpan leaseDuration,
+            double retryInitialDelaySeconds,
+            double retryMaxDelaySeconds,
+            CancellationToken ct = default)
         {
             if (run is null || (run.Status != AgentRunStatuses.Queued &&
                 !(leaseExpired && run.Status is AgentRunStatuses.Running or AgentRunStatuses.Cancelling)))

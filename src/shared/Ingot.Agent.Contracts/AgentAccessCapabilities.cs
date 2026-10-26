@@ -5,6 +5,8 @@ public sealed record PageContextRef
     public required string Kind { get; init; }
 
     public required string Id { get; init; }
+
+    public string? SiteId { get; init; }
 }
 
 public sealed record AgentCapabilities

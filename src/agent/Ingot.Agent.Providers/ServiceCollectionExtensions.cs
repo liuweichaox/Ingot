@@ -17,7 +17,11 @@ public static class ServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IModelClient, ChatFrameworkOpenAiModelClient>());
         services.AddHttpClient(nameof(OpenAiCompatibleCapabilityProbe));
-        services.AddHostedService<OpenAiCompatibleCapabilityProbe>();
+        services.AddSingleton<OpenAiCompatibleCapabilityProbe>();
+        services.AddSingleton<IModelServiceConnectionTester>(provider =>
+            provider.GetRequiredService<OpenAiCompatibleCapabilityProbe>());
+        services.AddHostedService(provider =>
+            provider.GetRequiredService<OpenAiCompatibleCapabilityProbe>());
         return services;
     }
 }

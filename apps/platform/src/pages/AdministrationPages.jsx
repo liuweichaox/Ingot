@@ -1,5 +1,5 @@
 // 提供管理员维护用户角色与站点授权的受控页面。
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { postJson, putJson } from "../api/http";
@@ -272,6 +272,10 @@ export function ModelServiceConfigurationPage() {
   });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [editingApiKey, setEditingApiKey] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   useEffect(() => {
     if (!data) return;
@@ -285,6 +289,9 @@ export function ModelServiceConfigurationPage() {
       apiKey: "",
       clearApiKey: false,
     });
+    setShowApiKey(false);
+    setEditingApiKey(!data.hasApiKey);
+    setTestResult(null);
   }, [data]);
 
   function update(field, value) {
@@ -294,12 +301,15 @@ export function ModelServiceConfigurationPage() {
   async function save() {
     setBusy(true);
     setActionError("");
+    setTestResult(null);
     try {
       await putJson("/api/v1/model-service-configuration", {
         ...form,
         apiKey: form.apiKey.trim() || null,
       });
       setForm(current => ({ ...current, apiKey: "", clearApiKey: false }));
+      setShowApiKey(false);
+      setEditingApiKey(false);
       await reload();
       notify("模型服务配置已生效。");
     } catch (requestError) {
@@ -309,36 +319,63 @@ export function ModelServiceConfigurationPage() {
     }
   }
 
+  async function testConnection() {
+    setTesting(true);
+    setActionError("");
+    setTestResult(null);
+    try {
+      const result = await postJson("/api/v1/model-service-configuration/test", {
+        ...form,
+        apiKey: form.apiKey.trim() || null,
+      });
+      setTestResult({ tone: "success", message: result.message || "连接测试成功。" });
+    } catch (requestError) {
+      setTestResult({ tone: "danger", message: requestError.message });
+    } finally {
+      setTesting(false);
+    }
+  }
+
   const hasApiKey = Boolean(data?.hasApiKey) && !form.clearApiKey;
   const complete = form.provider.trim() && form.baseUrl.trim() && form.fastModel.trim() &&
     form.reasoningModel.trim() && (hasApiKey || form.apiKey.trim());
   return (
     <Page title="模型服务">
-      <Alert tone="info" title="密钥只写入，不回显">
-        API key 由 Platform 加密保存，浏览器只会看到是否已配置和末四位提示。Chat、机理语义草稿与可选知识嵌入按需共用此连接；知识嵌入还需部署方显式启用并配置支持 /embeddings 的模型。留空表示保留现有密钥，替换后旧密钥立即失效于后续模型调用。
-      </Alert>
       <RequestError error={error} title="模型服务配置不可用" onRetry={reload} />
       {actionError && <Alert tone="danger">{actionError}</Alert>}
       {loading && !data ? <LoadingCard /> : (
-        <Card
-          title="OpenAI-compatible 连接"
-          description={data?.updatedAt ? "配置来源：Platform 加密配置，供模型能力统一使用" : "尚未通过页面配置模型服务"}
-        >
+        <Card title="连接配置">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="供应商标签" hint="仅用于运行记录和成本归因，不触发供应商专用代码。">
-              <Input value={form.provider} onChange={event => update("provider", event.target.value)} placeholder="DeepSeek" />
+            <Field label="模型服务商">
+              <Input value={form.provider} onChange={event => update("provider", event.target.value)} placeholder="如 DeepSeek" />
             </Field>
-            <Field label="兼容协议">
+            <Field label="接口协议">
               <Select value={form.protocol} onChange={event => update("protocol", event.target.value)}>
                 <option value="Responses">Responses</option>
                 <option value="ChatCompletions">Chat Completions</option>
               </Select>
             </Field>
-            <Field label="API 根地址" hint="填写供应商的 OpenAI-compatible API 根地址。">
+            <Field label="API 根地址">
               <Input value={form.baseUrl} onChange={event => update("baseUrl", event.target.value)} placeholder="https://api.deepseek.com" />
             </Field>
-            <Field label="API key" hint={hasApiKey ? `已配置 ${data?.apiKeyHint || "密钥"}；留空保持不变。` : "尚未配置密钥。"}>
-              <Input type="password" autoComplete="new-password" value={form.apiKey} onChange={event => update("apiKey", event.target.value)} placeholder={hasApiKey ? "留空保持现有密钥" : "输入 API key"} />
+            <Field label="API key">
+              {hasApiKey && !editingApiKey ? (
+                <div className="flex min-h-9 items-center justify-between gap-3 rounded-sm border border-slate-300 bg-slate-50 px-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+                    <span className="text-[13px] font-medium text-slate-700">已保存密钥</span>
+                    <span className="truncate font-mono text-xs tracking-[0.04em] text-slate-500">{data?.apiKeyHint || "••••"}</span>
+                  </div>
+                  <button type="button" className="shrink-0 text-xs font-semibold text-trajectory-700 hover:text-trajectory-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trajectory-600" onClick={() => { setEditingApiKey(true); setShowApiKey(false); update("clearApiKey", false); }}>更换密钥</button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input className="pr-10" type={showApiKey ? "text" : "password"} autoComplete="new-password" value={form.apiKey} onChange={event => update("apiKey", event.target.value)} placeholder="输入 API key" />
+                  <button type="button" className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-trajectory-600" aria-label={showApiKey ? "隐藏 API key" : "显示 API key"} title={showApiKey ? "隐藏 API key" : "显示 API key"} onClick={() => setShowApiKey(current => !current)}>
+                    {showApiKey ? <EyeSlashIcon className="size-4" /> : <EyeIcon className="size-4" />}
+                  </button>
+                </div>
+              )}
             </Field>
             <Field label="快速模型">
               <Input value={form.fastModel} onChange={event => update("fastModel", event.target.value)} placeholder="deepseek-v4-flash" />
@@ -348,18 +385,24 @@ export function ModelServiceConfigurationPage() {
             </Field>
             <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
               <input type="checkbox" className="mt-0.5 size-4 accent-blue-600" checked={form.enabled} onChange={event => update("enabled", event.target.checked)} />
-              <span><span className="block font-medium text-slate-900">启用模型服务</span><span className="mt-1 block text-xs leading-5 text-slate-500">关闭后 Ingot Chat 保留历史记录，但不创建新的模型分析运行。</span></span>
+              <span className="font-medium text-slate-900">启用模型服务</span>
             </label>
             {data?.hasApiKey && (
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
                 <input type="checkbox" className="mt-0.5 size-4 accent-red-600" checked={form.clearApiKey} disabled={form.enabled} onChange={event => update("clearApiKey", event.target.checked)} />
-                <span><span className="block font-medium text-slate-900">清除已保存密钥</span><span className="mt-1 block text-xs leading-5 text-slate-500">必须先关闭模型服务，才能清除密钥。</span></span>
+                <span className="font-medium text-slate-900">清除已保存密钥</span>
               </label>
             )}
           </div>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-            <p className="text-xs text-slate-500">最近更新：{data?.updatedAt ? `${formatTime(data.updatedAt)} · ${data.updatedBy || "unknown"}` : "尚未通过页面保存"}</p>
-            <Button variant="primary" disabled={busy || (form.enabled && !complete)} onClick={save}>{busy ? "保存中" : "保存并立即生效"}</Button>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-500">最近更新：{data?.updatedAt ? `${formatTime(data.updatedAt)} · ${data.updatedBy || "unknown"}` : "尚未通过页面保存"}</p>
+              {testResult && <p className={`mt-1 text-xs font-medium ${testResult.tone === "success" ? "text-emerald-700" : "text-rose-700"}`} role="status">{testResult.message}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy || testing || !complete} onClick={testConnection}>{testing ? "测试中…" : "测试连接"}</Button>
+              <Button variant="primary" disabled={busy || testing || (form.enabled && !complete)} onClick={save}>{busy ? "保存中" : "保存并立即生效"}</Button>
+            </div>
           </div>
         </Card>
       )}

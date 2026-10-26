@@ -61,8 +61,8 @@ const sections = [
     ],
   },
   {
-    id: "investigation", label: "Ingot Chat", icon: ChatBubbleLeftRightIcon, path: "/chat", utility: true, groups: [
-      { items: [["/chat", "Ingot Chat"]] },
+    id: "investigation", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "/chat", utility: true, groups: [
+      { items: [["/chat", "AI 助手"]] },
     ],
   },
   {
@@ -102,7 +102,7 @@ const sectionItems = section => section.groups.flatMap(group => group.items);
 
 const pageDetails = {
   "/workbench": ["工作台", "集中查看待办、生产状态与质量风险"],
-  "/chat": ["Ingot Chat", "在授权记录范围内组织调查结论、证据与边界"],
+  "/chat": ["AI 助手", "与系统内 AI 助手对话"],
   "/process-executions": ["运行记录", "查看每次运行的设定、材料、过程曲线和质量结果"],
   "/events": ["原始事件", "查询现场节点上报的原始记录，用于审计和排查接入"],
   "/production/changeover": ["生产切换", "让设备、产品和配方版本对接下来的运行生效；需要追溯时可关联工装"],
@@ -110,7 +110,7 @@ const pageDetails = {
   "/inspections": ["检验任务", "录入和复核检测结果"],
   "/quality-analysis": ["质量偏差", "按产品和配方版本查看哪些结果超出质量范围"],
   "/comparisons": ["工艺分析", "比较可比运行的设定、过程曲线和结果，并检查分析数据质量"],
-  "/model-service": ["模型服务", "配置 OpenAI-compatible 供应商、协议、模型和加密 API key"],
+  "/model-service": ["模型服务", ""],
   "/data-quality": ["数据质量", "检查采样是否连续、运行是否完整，以及能否进入下一轮校正"],
   "/configuration/process-analysis-plans": ["分析方案", "规定哪些过程曲线参与比较，以及均值、最小值和最大值"],
   "/configuration/process-data-models": ["工艺变量", "定义过程量和控制参数，供配方版本与现场采集共用"],
@@ -139,7 +139,7 @@ const searchAliases = {
   "/quality-analysis": "质量偏差 不良 异常 超限",
   "/comparisons": "运行对比 工艺分析 条件差异",
   "/data-quality": "数据质量 完整性 分析准入",
-  "/chat": "证据调查 Ingot Chat 运行 质量 工艺 记录 核查 分析",
+  "/chat": "AI 助手 证据核对 对话 运行 质量 工艺 记录 分析",
   "/configuration/process-specifications": "配方优化 配方版本 参数版本 工艺规范",
   "/recipe-adjustments": "配方优化 调整 验证 下一轮校正 真实运行 质量结果",
   "/knowledge/process-materials": "工艺知识 工艺资料 文档 来源 复核 引用",
@@ -160,22 +160,37 @@ const searchEntriesForSections = navigationSections => navigationSections.flatMa
   aliases: searchAliases[path] || "",
 })));
 
+function assistantPathForLocation(location) {
+  if (location.pathname === "/chat" || location.pathname.startsWith("/chat/")) return "/chat";
+  const query = new URLSearchParams(location.search);
+  const executionId = location.pathname.match(/^\/process-executions\/([^/]+)$/)?.[1]
+    || query.get("executionId")
+    || query.get("runId");
+  const siteId = query.get("siteId");
+  const contextKind = executionId ? "execution" : siteId ? "site" : "page";
+  const contextId = executionId || siteId || location.pathname.replace(/^\/+|\/+$/g, "").replaceAll("/", ".") || "workbench";
+  const contextParams = new URLSearchParams({ contextKind, contextId });
+  if (executionId && siteId) contextParams.set("contextSiteId", siteId);
+  return `/chat?${contextParams}`;
+}
+
 function isApplePlatform() {
   if (typeof navigator === "undefined") return false;
   const platform = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent;
   return /mac|iphone|ipad|ipod|ios/i.test(platform);
 }
 
-function SidebarSection({ section, activeSectionId, activeNavigationPath, expanded, compact = false, onToggle, onNavigate }) {
+function SidebarSection({ section, activeSectionId, activeNavigationPath, expanded, compact = false, onToggle, onNavigate, chatPath }) {
   const Icon = section.icon;
   const active = section.id === activeSectionId;
   const items = sectionItems(section);
   const hasNestedItems = items.length > 1 || items[0]?.[0] !== section.path || items[0]?.[1] !== section.label;
+  const sectionPath = section.path === "/chat" ? chatPath : section.path;
 
   if (compact) {
     return (
       <Link
-        to={section.path}
+        to={sectionPath}
         onClick={onNavigate}
         className={cx("grid h-10 place-items-center rounded-sm text-slate-400 transition hover:bg-white/8 hover:text-white", active && "bg-evidence-500/15 text-evidence-100")}
         aria-label={section.label}
@@ -189,7 +204,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   return (
     <div>
       <div className={cx("flex items-center border-l-2 border-transparent transition", active ? "border-evidence-400 text-white" : section.utility ? "text-slate-200 hover:border-evidence-500/70 hover:text-white" : "text-slate-300 hover:border-white/20 hover:text-white")}>
-        <Link to={section.path} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-5">
+        <Link to={sectionPath} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-5">
           <Icon className="size-5 shrink-0" />
           <span className="truncate">{section.label}</span>
         </Link>
@@ -213,6 +228,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
               group={group}
               activeNavigationPath={activeNavigationPath}
               onNavigate={onNavigate}
+              chatPath={chatPath}
             />
           ))}
         </div>
@@ -221,7 +237,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   );
 }
 
-function SidebarGroup({ group, activeNavigationPath, onNavigate }) {
+function SidebarGroup({ group, activeNavigationPath, onNavigate, chatPath }) {
   return (
     <div
       className="grid gap-0.5"
@@ -231,7 +247,7 @@ function SidebarGroup({ group, activeNavigationPath, onNavigate }) {
       {group.items.map(([path, label]) => (
         <Link
           key={path}
-          to={path}
+          to={path === "/chat" ? chatPath : path}
           onClick={onNavigate}
           className={cx("flex min-h-9 items-center border-l-2 border-transparent px-3 py-1.5 text-sm font-medium leading-5", path === activeNavigationPath ? "border-evidence-400 bg-white/7 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-100")}
         >
@@ -242,7 +258,7 @@ function SidebarGroup({ group, activeNavigationPath, onNavigate }) {
   );
 }
 
-function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate }) {
+function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate, chatPath }) {
   return (
     <nav className={cx("scrollbar-thin grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
       {navigationSections.map(item => (
@@ -255,6 +271,7 @@ function SidebarNavigation({ navigationSections, activeSectionId, activeNavigati
           compact={compact}
           onToggle={onToggle}
           onNavigate={onNavigate}
+          chatPath={chatPath}
         />
       ))}
     </nav>
@@ -304,6 +321,7 @@ export default function App({ identity, logout }) {
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
   const isChatWorkspace = location.pathname === "/chat" || location.pathname.startsWith("/chat/");
+  const contextualChatPath = useMemo(() => assistantPathForLocation(location), [location.pathname, location.search]);
 
   useEffect(() => {
     function handleShortcut(event) {
@@ -366,6 +384,7 @@ export default function App({ identity, logout }) {
           expandedSectionId={expandedSectionId}
           compact={sidebarCollapsed}
           onToggle={toggleSection}
+          chatPath={contextualChatPath}
         />
         {sidebarCollapsed && <button type="button" className="mx-3 mb-3 grid h-10 place-items-center rounded-sm text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧边栏"><ChevronDoubleRightIcon className="size-4.5" /></button>}
       </aside>
@@ -379,8 +398,6 @@ export default function App({ identity, logout }) {
               <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate font-medium text-slate-700">{page[0]}</span>
             </nav>
-            <span className="hidden h-4 w-px bg-slate-200 2xl:block" aria-hidden="true" />
-            <p className="hidden truncate text-xs text-slate-400 2xl:block">{page[1]}</p>
           </div>
         </div>
         <SystemStatusIndicator />
@@ -427,7 +444,7 @@ export default function App({ identity, logout }) {
               <XMarkIcon className="size-5" />
             </button>
           </div>
-          <SidebarNavigation navigationSections={navigationSections} activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} />
+          <SidebarNavigation navigationSections={navigationSections} activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} chatPath={contextualChatPath} />
         </DialogPanel>
       </Dialog>
       <GlobalSearchDialog

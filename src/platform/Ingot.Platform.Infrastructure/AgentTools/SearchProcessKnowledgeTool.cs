@@ -86,7 +86,8 @@ public sealed partial class SearchProcessKnowledgeTool(
                 Id = match.Record.RecordId.ToString(),
                 Label = match.Record.PageOrSheet is null
                     ? match.Source.Title
-                    : $"{match.Source.Title} · {match.Record.PageOrSheet}"
+                    : $"{match.Source.Title} · {match.Record.PageOrSheet}",
+                Url = $"/knowledge/process-materials?sourceId={match.Source.SourceId:D}&recordId={match.Record.RecordId:D}"
             })
             .ToArray();
         return new AnalysisToolResult

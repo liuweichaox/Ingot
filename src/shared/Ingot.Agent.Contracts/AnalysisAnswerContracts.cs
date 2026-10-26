@@ -27,6 +27,8 @@ public sealed record AnalysisAnswer
 {
     public required string Summary { get; init; }
 
+    public string AnswerKind { get; init; } = AnalysisAnswerKinds.Conversation;
+
     public string SummaryStrength { get; init; } = AnalysisClaimStrengths.Observation;
 
     public IReadOnlyList<AnalysisClaim> Findings { get; init; } = [];
@@ -42,6 +44,17 @@ public sealed record AnalysisAnswer
     public IReadOnlyList<AgentProposalEnvelope> Proposals { get; init; } = [];
 
     public CombinedAnalysisResult? CombinedAnalysis { get; init; }
+}
+
+public static class AnalysisAnswerKinds
+{
+    public const string Conversation = "conversation";
+
+    public const string DataLookup = "data_lookup";
+
+    public const string Analysis = "analysis";
+
+    public const string InsufficientData = "insufficient_data";
 }
 
 public static class AnalysisClaimStrengths

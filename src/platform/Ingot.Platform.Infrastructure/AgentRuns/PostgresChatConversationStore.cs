@@ -243,6 +243,31 @@ public sealed class PostgresChatConversationStore(NpgsqlDataSource dataSource)
         return Reservation(parsedConversationId, userMessageId, assistantMessageId);
     }
 
+    public async Task UpdatePageContextAsync(
+        string conversationId,
+        string userId,
+        PageContextRef pageContext,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(pageContext);
+        await using var command = dataSource.CreateCommand(
+            """
+            UPDATE chat_conversations
+            SET page_context = $3, updated_at = $4
+            WHERE conversation_id = $1 AND user_id = $2 AND status = 'active'
+            """);
+        command.Parameters.AddWithValue(Guid.Parse(conversationId));
+        command.Parameters.AddWithValue(userId);
+        command.Parameters.Add(new NpgsqlParameter
+        {
+            NpgsqlDbType = NpgsqlDbType.Jsonb,
+            Value = JsonSerializer.Serialize(pageContext, JsonOptions)
+        });
+        command.Parameters.AddWithValue(DateTimeOffset.UtcNow);
+        if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+            throw new KeyNotFoundException("对话不存在或当前用户不能更新对话上下文。");
+    }
+
     public async Task BindRunAsync(
         string assistantMessageId,
         string runId,

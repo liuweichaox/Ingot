@@ -76,6 +76,12 @@ public sealed record AgentRunSnapshot
 
     public required string Model { get; init; }
 
+    /// <summary>创建任务时生效的模型服务配置版本。</summary>
+    public string? ModelServiceRevision { get; init; }
+
+    /// <summary>该任务被 Worker 领取的次数，用于限制崩溃恢复重试。</summary>
+    public int AttemptCount { get; init; }
+
     public required string PromptVersion { get; init; }
 
     public required string ToolsetVersion { get; init; }

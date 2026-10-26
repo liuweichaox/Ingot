@@ -26,7 +26,16 @@ public sealed class DeterministicModelClient : IModelClient
         var question = request.Question;
         var context = request.PageContext;
 
-        if (ContainsAny(
+        // 系统级问题优先走全局聚合工具；页面上下文只能提供默认提示，不能把全局问题降级成站点追问。
+        if (IsGlobalSystemQuestion(question) && available.Contains("get_system_overview"))
+        {
+            calls.Add(new AnalysisToolCall
+            {
+                Tool = "get_system_overview",
+                Arguments = CurrentSiteArguments(question, context)
+            });
+        }
+        else if (ContainsAny(
                 question,
                 "运行对象",
                 "对象目录",
@@ -47,7 +56,7 @@ public sealed class DeterministicModelClient : IModelClient
             });
         }
 
-        if (ContainsAny(question, "质量", "完整", "缺失", "缺口", "断网", "健康") &&
+        if (calls.Count == 0 && ContainsAny(question, "质量", "完整", "缺失", "缺口", "断网", "健康") &&
             available.Contains("check_data_quality"))
         {
             calls.Add(new AnalysisToolCall
@@ -113,15 +122,6 @@ public sealed class DeterministicModelClient : IModelClient
             });
         }
 
-        if (calls.Count == 0 && available.Contains("check_data_quality"))
-        {
-            calls.Add(new AnalysisToolCall
-            {
-                Tool = "check_data_quality",
-                Arguments = ContextArguments(context)
-            });
-        }
-
         return Task.FromResult(Result(new AnalysisPlan
         {
             Intent = calls.Count == 1 ? calls[0].Tool : "combined_governed_work",
@@ -167,6 +167,7 @@ public sealed class DeterministicModelClient : IModelClient
             Summary = findings.Length == 0
                 ? "没有足够的生产数据回答该问题。"
                 : string.Join(" ", findings.Select(static finding => finding.Statement)),
+            AnswerKind = AnalysisAnswerKinds.DataLookup,
             Findings = findings,
             Limitations = limitations,
             RelatedRecords = relatedRecords,
@@ -181,10 +182,14 @@ public sealed class DeterministicModelClient : IModelClient
     {
         ct.ThrowIfCancellationRequested();
         var isGreeting = ContainsAny(request.Question, "你好", "您好", "hello", "hi");
+        var isCapabilityQuestion = ContainsAny(request.Question, "系统是干什么", "系统是干啥", "你能做什么", "能做什么", "怎么用");
         return Task.FromResult(Result(new AnalysisAnswer
         {
+            AnswerKind = AnalysisAnswerKinds.Conversation,
             Summary = isGreeting
                 ? "你好，我可以帮你查找和分析当前账号有权访问的生产、质量与工艺记录。"
+                : isCapabilityQuestion
+                    ? "这是 Ingot AI 助手，一个只读的工艺记录助手。\n\n你可以让我：\n\n- 查找生产运行、设备和批次记录\n- 检查过程记录是否完整\n- 对比同类运行的过程数据\n- 查找已复核的工艺文档和记录"
                 : "要继续这项分析，请补充希望核对的站点、运行对象、执行记录或时间范围。",
             FollowUpQuestions = ["你想先查看哪个站点或运行对象？"]
         }, "conversation.compose"));
@@ -271,12 +276,42 @@ public sealed class DeterministicModelClient : IModelClient
         var arguments = new Dictionary<string, string?>();
         if (context is null)
             return arguments;
+        if (!string.IsNullOrWhiteSpace(context.SiteId))
+            arguments["siteId"] = context.SiteId;
         if (context.Kind is "asset" or "equipment" or "source")
             arguments["subjectId"] = context.Id;
         else if (context.Kind is "execution" or "correlation" or "operation-run")
             arguments["executionId"] = context.Id;
         return arguments;
     }
+
+    private static Dictionary<string, string?> CurrentSiteArguments(
+        string question,
+        PageContextRef? context)
+        => context?.SiteId is { Length: > 0 } &&
+           ContainsAny(question, "这个站点", "当前站点", "该站点", "本页", "这里")
+            ? new Dictionary<string, string?> { ["siteId"] = context.SiteId }
+            : new Dictionary<string, string?>();
+
+    private static bool IsGlobalSystemQuestion(string question)
+        => ContainsAny(
+            question,
+            "整个系统",
+            "全系统",
+            "有哪些站点",
+            "所有站点",
+            "各站点",
+            "采集站点",
+            "采集节点",
+            "质量检测数据",
+            "数据覆盖",
+            "生产数据",
+            "站点在线",
+            "站点状态",
+            "心跳",
+            "最近有没有收到生产数据",
+            "哪个站点最近没有数据",
+            "哪些站点没有数据");
 
     private static bool ContainsAny(string value, params string[] terms)
         => terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));

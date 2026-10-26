@@ -4,7 +4,7 @@ import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
-import { ChatPage } from "../src/pages/ConversationPages";
+import { ChatAnswer, ChatPage, MarkdownContent } from "../src/pages/ConversationPages";
 
 afterEach(() => {
   cleanup();
@@ -26,13 +26,48 @@ async function renderChat() {
     }));
   }));
   render(<MemoryRouter initialEntries={["/chat"]}><ChatPage /></MemoryRouter>);
-  const input = screen.getByRole("textbox", { name: "提交调查说明" });
+  const input = screen.getByRole("textbox", { name: "提交问题" });
   await waitFor(() => expect(input).toBeEnabled());
   fireEvent.change(input, { target: { value: "核对运行记录" } });
   return { input, submitted };
 }
 
-describe("Ingot Chat 输入快捷键", () => {
+describe("AI 助手输入快捷键", () => {
+  it("普通回答使用对话气泡而不是查询结果卡片", () => {
+    render(<ChatAnswer answer={{ answerKind: "conversation", summary: "这是普通回答。", limitations: ["回答只基于平台记录"] }} onFollowUp={vi.fn()} />);
+
+    expect(screen.getByText("这是普通回答。")).toBeInTheDocument();
+    expect(screen.queryByText("核对结果")).not.toBeInTheDocument();
+    expect(screen.queryByText("证据边界")).not.toBeInTheDocument();
+  });
+
+  it("将助手内容按 Markdown 渲染为加粗和列表", () => {
+    render(<MarkdownContent content={"**重点**\n\n- 项目"} />);
+
+    expect(screen.getByText("重点").tagName).toBe("STRONG");
+    expect(screen.getByText("项目").tagName).toBe("LI");
+  });
+
+  it("将查询结论与来源编号关联展示", () => {
+    render(<MemoryRouter><ChatAnswer
+      answer={{
+        answerKind: "data_lookup",
+        summary: "查询完成。",
+        findings: [{
+          statement: "该次运行记录完整。",
+          strength: "observation",
+          evidenceReferences: [{ kind: "process-execution", id: "run-1", label: "运行 run-1" }],
+        }],
+        relatedRecords: [{ kind: "process-execution", id: "run-1", label: "运行 run-1" }],
+      }}
+      onFollowUp={vi.fn()}
+    /></MemoryRouter>);
+
+    expect(screen.getAllByText("[1]").length).toBeGreaterThan(0);
+    expect(screen.getByText("来源")).toBeInTheDocument();
+    expect(screen.getAllByText("运行 run-1").length).toBeGreaterThan(0);
+  });
+
   it.each([
     ["组合输入中的 Enter", { isComposing: true }],
     ["仍使用 229 标记的输入法 Enter", { isComposing: false, keyCode: 229 }],
@@ -54,7 +89,7 @@ describe("Ingot Chat 输入快捷键", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(submitted).toHaveBeenCalledExactlyOnceWith("/api/v1/chat/conversations", expect.objectContaining({
       text: "核对运行记录",
-      mode: "quick",
+      mode: "auto",
     }));
   });
 

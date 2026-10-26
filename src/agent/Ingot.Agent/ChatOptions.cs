@@ -24,6 +24,12 @@ public sealed class ChatOptions
 
     public int MaxRunSeconds { get; set; } = 60;
 
+    public int MaxAttempts { get; set; } = 3;
+
+    public int InitialRetryDelaySeconds { get; set; } = 5;
+
+    public int MaxRetryDelaySeconds { get; set; } = 300;
+
     public int MaxConcurrentRuns { get; set; } = 8;
 
     public int MaxConcurrentRunsPerUser { get; set; } = 2;
@@ -33,6 +39,10 @@ public sealed class ChatOptions
     public int MaxProcessExecutionsPerTool { get; set; } = 200;
 
     public int MaxTimeSeriesFramesPerTool { get; set; } = 100_000;
+
+    public int MaxSystemOverviewSites { get; set; } = 100;
+
+    public int SystemOverviewHeartbeatSeconds { get; set; } = 30;
 
     public bool EnableCombinedAnalysis { get; set; }
 
