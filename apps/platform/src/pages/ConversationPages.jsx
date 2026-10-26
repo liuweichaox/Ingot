@@ -1,5 +1,5 @@
 // 管理系统内 AI 助手的会话、历史、流式状态和受控删除交互。
-import { ArrowPathIcon, ChatBubbleLeftRightIcon, PaperAirplaneIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChatBubbleLeftRightIcon, CheckCircleIcon, ChevronDownIcon, ClockIcon, InformationCircleIcon, LinkIcon, MagnifyingGlassIcon, PaperAirplaneIcon, PlusIcon, SparklesIcon, StopIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -108,11 +108,13 @@ const reviewPositionLabels = {
 };
 
 const chatProgressLabels = {
-  "run.started": "已收到消息",
+  "run.started": "正在处理",
   "plan.created": "已确定处理方式",
   "iteration.started": "正在准备回答",
   "tool.started": "正在读取相关信息",
   "tool.completed": "已读取相关信息",
+  "tool.failed": "读取相关信息失败",
+  "plan.rejected": "查询方式未通过校验",
   "relatedRecords.checked": "正在核对相关内容",
   "discussion.started": "正在进行多视角分析",
   "discussion.message": "正在整理分析结果",
@@ -136,6 +138,8 @@ const chatHistoryStatusLabels = {
 function chatProgressText(item) {
   const payload = item?.data || {};
   if (item?.type === "tool.completed" && payload.summary) return payload.summary;
+  if (item?.type === "tool.failed" && payload.error) return payload.error;
+  if (item?.type === "plan.rejected" && payload.error) return payload.error;
   if (item?.type === "answer.delta" && payload.text) return payload.text;
   if (item?.type === "run.failed" && payload.error) return payload.error;
   if (item?.type === "run.cancelled" && payload.reason) return payload.reason;
@@ -175,9 +179,18 @@ async function streamChatRun(streamUrl, { signal, onEvent, maxReconnects = 5 }) 
   }
 }
 
+function normalizeAssistantContent(content) {
+  return content
+    .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\b/g, value => formatTime(value))
+    .replace(/\btruncated\s*=\s*false\b/gi, "结果未截断")
+    .replace(/\btruncated\s*=\s*true\b/gi, "结果已截断")
+    .replace(/\breturnedCount\s*=\s*/gi, "已返回 ")
+    .replace(/\btotalCount\s*=\s*/gi, "总数 ");
+}
+
 function AssistantAvatar({ small = false }) {
   return (
-    <span className={`grid shrink-0 place-items-center rounded-xl bg-coal-950 text-evidence-400 shadow-sm ${small ? "size-7" : "size-9"}`} aria-hidden="true">
+    <span className={`grid shrink-0 place-items-center rounded-[0.85rem] bg-coal-950 text-evidence-400 shadow-[0_3px_10px_rgba(18,25,23,0.12)] ${small ? "size-7" : "size-9"}`} aria-hidden="true">
       <SparklesIcon className={small ? "size-3.5" : "size-4.5"} />
     </span>
   );
@@ -210,7 +223,7 @@ export function MarkdownContent({ content, className = "" }) {
           td: ({ children }) => <td className="border-b border-slate-200 px-3 py-2 align-top">{children}</td>,
         }}
       >
-        {content}
+        {normalizeAssistantContent(content)}
       </ReactMarkdown>
     </div>
   );
@@ -259,12 +272,15 @@ function CitationMarkers({ references, sourceNumbers }) {
 function SourceReferences({ references }) {
   if (!references.length) return null;
   return (
-    <section>
-      <p className="data-label">来源</p>
-      <ol className="mt-3 grid gap-2">
+    <details className="group border-t border-slate-200/80 pt-3" open={references.length <= 3}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-slate-700 marker:content-none">
+        <span className="inline-flex items-center gap-2"><LinkIcon className="size-4 text-trajectory-600" />来源 <span className="text-xs font-normal text-slate-400">{references.length} 条记录</span></span>
+        <ChevronDownIcon className="size-4 text-slate-400 transition group-open:rotate-180" />
+      </summary>
+      <ol className="mt-3 grid gap-2 sm:grid-cols-2">
         {references.map((reference, index) => (
-          <li key={referenceKey(reference)} className="flex min-w-0 items-start gap-2 text-[13px] leading-5 text-slate-600">
-            <span className="mt-0.5 shrink-0 font-semibold text-slate-400">[{index + 1}]</span>
+          <li key={referenceKey(reference)} className="flex min-w-0 items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[13px] leading-5 text-slate-600 ring-1 ring-slate-200/70">
+            <span className="mt-0.5 shrink-0 font-mono text-xs font-semibold text-slate-400">[{index + 1}]</span>
             <ReferenceTarget
               reference={reference}
               className="min-w-0 truncate text-trajectory-700 underline decoration-trajectory-200 underline-offset-2 hover:text-trajectory-900"
@@ -274,7 +290,45 @@ function SourceReferences({ references }) {
           </li>
         ))}
       </ol>
-    </section>
+    </details>
+  );
+}
+
+function AnswerProvenance({ provenance }) {
+  if (!provenance) return null;
+  const siteIds = Array.isArray(provenance.siteIds) ? provenance.siteIds.filter(Boolean) : [];
+  const hasCount = provenance.returnedCount != null || provenance.totalCount != null;
+  const hasAuditData = siteIds.length > 0 || hasCount || provenance.truncated || provenance.sourceAsOf;
+  if (!hasAuditData) return null;
+  const scope = siteIds.length > 0 ? siteIds.join("、") : "当前授权范围";
+  const count = hasCount
+    ? ` · 返回 ${provenance.returnedCount ?? 0}${provenance.totalCount != null ? ` / ${provenance.totalCount}` : ""}`
+    : "";
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-slate-400">
+      <span>数据范围：{scope}{count}</span>
+      {provenance.truncated && <span className="text-amber-700">结果已截断</span>}
+      {provenance.readAt && <span>读取于 {formatTime(provenance.readAt)}</span>}
+    </div>
+  );
+}
+
+function AnswerProcessingTime({ milliseconds }) {
+  const value = Number(milliseconds);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const label = value >= 1000
+    ? `${(value / 1000).toFixed(1)} 秒`
+    : `${Math.round(value)} 毫秒`;
+  return <span className="inline-flex items-center gap-1 text-xs text-slate-400"><ClockIcon className="size-3.5" />处理耗时 {label}</span>;
+}
+
+function AnswerMeta({ answer, references }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200/80 pt-4">
+      <AnswerProcessingTime milliseconds={answer.durationMilliseconds} />
+      {references.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-slate-400"><LinkIcon className="size-3.5" />已关联 {references.length} 条记录</span>}
+      <AnswerProvenance provenance={answer.provenance} />
+    </div>
   );
 }
 
@@ -284,7 +338,7 @@ export function ChatAnswer({ answer, onFollowUp }) {
     return (
       <div className="flex items-start gap-3">
         <AssistantAvatar />
-        <article className="max-w-3xl rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+        <article className="max-w-3xl rounded-[1.25rem] rounded-tl-sm bg-white px-5 py-4 text-sm leading-7 text-slate-700 shadow-[0_4px_18px_rgba(18,25,23,0.05)] ring-1 ring-slate-200/90">
           <MarkdownContent content={answer} />
         </article>
       </div>
@@ -322,8 +376,9 @@ export function ChatAnswer({ answer, onFollowUp }) {
     return (
       <div className="flex items-start gap-3">
         <AssistantAvatar />
-        <article className="max-w-3xl rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+        <article className="max-w-3xl rounded-[1.25rem] rounded-tl-sm bg-white px-5 py-4 text-sm leading-7 text-slate-700 shadow-[0_4px_18px_rgba(18,25,23,0.05)] ring-1 ring-slate-200/90">
           <MarkdownContent content={answer.summary || "请继续说明你的问题。"} />
+          {answer.durationMilliseconds != null && <div className="mt-4 border-t border-slate-100 pt-3"><AnswerProcessingTime milliseconds={answer.durationMilliseconds} /></div>}
           {(answer.followUpQuestions || []).length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">{answer.followUpQuestions.map(item => (
             <button key={item} type="button" className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>{item}</button>
           ))}</div>}
@@ -334,41 +389,48 @@ export function ChatAnswer({ answer, onFollowUp }) {
   return (
     <div className="flex items-start gap-3">
       <AssistantAvatar />
-      <article className="max-w-4xl flex-1 overflow-hidden rounded-2xl rounded-tl-sm bg-white px-5 py-4 text-sm leading-7 text-slate-700 shadow-sm ring-1 ring-slate-200">
+      <article className="max-w-4xl flex-1 overflow-hidden rounded-[1.35rem] rounded-tl-sm bg-white px-5 py-5 text-sm leading-7 text-slate-700 shadow-[0_5px_24px_rgba(18,25,23,0.06)] ring-1 ring-slate-200/90 sm:px-6 sm:py-6">
         <div className="space-y-6">
-          <MarkdownContent content={answer.summary || "未形成摘要。"} className="font-medium text-slate-950" />
+          <div className="border-b border-slate-200/80 pb-5">
+            {sourceRecords.length > 0 && <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-trajectory-50 px-2.5 py-1 text-xs font-medium text-trajectory-700"><span className="size-1.5 rounded-full bg-trajectory-500" />基于系统记录</div>}
+            <MarkdownContent content={answer.summary || "未形成摘要。"} className="text-[15px] text-slate-800" />
+          </div>
       {findings.length > 0 && (
-        <section>
-          <p className="data-label">关键发现</p>
-          <ol className="mt-3 divide-y divide-slate-200 border-y border-slate-200">
+        <details className="group rounded-xl border border-slate-200/80">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 marker:content-none">
+            <span className="inline-flex items-center gap-2"><CheckCircleIcon className="size-4 text-trajectory-600" />主要依据 <span className="text-xs font-normal text-slate-400">{findings.length} 项</span></span>
+            <ChevronDownIcon className="size-4 text-slate-400 transition group-open:rotate-180" />
+          </summary>
+          <ol className="grid gap-2 border-t border-slate-200/80 bg-slate-50/50 p-3 sm:grid-cols-2">
             {findings.map((item, index) => (
-              <li key={`${item.statement}-${index}`} className="flex gap-3 px-0 py-3">
-                <span className="data-value grid size-7 shrink-0 place-items-center border border-slate-300 bg-slate-50 text-[13px] font-semibold text-slate-700">{String(index + 1).padStart(2, "0")}</span>
+              <li key={`${item.statement}-${index}`} className="flex gap-3 rounded-xl bg-slate-50/80 px-3.5 py-3 ring-1 ring-slate-200/70">
+                <CheckCircleIcon className="mt-0.5 size-5 shrink-0 text-trajectory-600" />
                 <div className="min-w-0 flex-1">
                   <div className="text-slate-900"><MarkdownContent content={item.statement} className="space-y-0" /><CitationMarkers references={item.evidenceReferences} sourceNumbers={sourceNumbers} /></div>
-                  <span className="mt-1 block text-[13px] text-slate-500">
-                    {findingStrengthLabels[item.strength] || "记录事实"}
-                  </span>
+                  {item.strength && item.strength !== "observation" && <span className="mt-1 block text-xs text-slate-500">{findingStrengthLabels[item.strength] || item.strength}</span>}
                 </div>
               </li>
             ))}
           </ol>
-        </section>
+        </details>
       )}
       {limitations.length > 0 && (
-        <section className="border-l-2 border-l-amber-500 bg-amber-50/70 px-4 py-3 text-amber-950">
-          <p className="data-label !text-amber-700">需要注意</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            {limitations.map(item => <li key={item}>{item}</li>)}
+        <details className="group rounded-xl bg-amber-50/65 ring-1 ring-amber-200/80">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-amber-900 marker:content-none">
+            <span className="inline-flex items-center gap-2"><InformationCircleIcon className="size-4" />数据范围与限制</span>
+            <ChevronDownIcon className="size-4 transition group-open:rotate-180" />
+          </summary>
+          <ul className="border-t border-amber-200/70 px-5 py-3 pl-9 text-[13px] leading-6 text-amber-950">
+            {limitations.map(item => <li key={item} className="list-disc">{item}</li>)}
           </ul>
-        </section>
+        </details>
       )}
       {combined && (
-        <section className="border-y border-slate-200 bg-slate-50 px-4 py-4">
+        <section className="rounded-xl bg-slate-50 px-4 py-4 ring-1 ring-slate-200/80">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="data-label">深入分析</p>
-              <p className="mt-1 font-semibold text-slate-950">基于相关记录整理出的分析结果</p>
+              <p className="text-sm font-semibold text-slate-950">深入分析</p>
+              <p className="mt-1 text-xs text-slate-500">基于相关记录整理</p>
             </div>
             <Badge tone={combined.status === "needs-review" ? "warning" : "neutral"}>{combined.status === "needs-review" ? "待工程复核" : "证据不足"}</Badge>
           </div>
@@ -397,13 +459,14 @@ export function ChatAnswer({ answer, onFollowUp }) {
           )}
         </section>
       )}
+      <AnswerMeta answer={answer} references={sourceRecords} />
       <SourceReferences references={sourceRecords} />
       {(answer.followUpQuestions || []).length > 0 && (
-        <section>
-          <p className="data-label">下一步</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <section className="border-t border-slate-200/80 pt-4">
+          <span className="sr-only">继续提问</span>
+          <div className="flex flex-wrap gap-2">
             {answer.followUpQuestions.map(item => (
-              <button key={item} type="button" className="border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>
+              <button key={item} type="button" className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-left text-[13px] font-medium text-slate-700 transition hover:border-trajectory-600 hover:bg-trajectory-50" onClick={() => onFollowUp(item)}>
                 {item}
               </button>
             ))}

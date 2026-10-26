@@ -200,6 +200,7 @@ public sealed class ChatRunsController(
             Error = tool.Error,
             RelatedRecords = tool.RelatedRecords
         }).ToArray(),
+        ToolResults = run.ToolResults,
         Answer = run.Answer,
         Usage = run.Usage,
         Error = run.Error,

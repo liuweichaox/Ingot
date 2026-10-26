@@ -28,6 +28,9 @@ public sealed record ChatConversationContextTurn
 
     public required string Summary { get; init; }
 
+    /// <summary>保存前一轮已验证的页面对象，供模型解析“这个站点/这次运行”等指代。</summary>
+    public PageContextRef? PageContext { get; init; }
+
     public IReadOnlyList<string> Findings { get; init; } = [];
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
@@ -139,6 +142,8 @@ public sealed record ChatRunSnapshot
     public int Iteration { get; init; }
 
     public IReadOnlyList<ChatToolInvocation> ToolInvocations { get; init; } = [];
+
+    public IReadOnlyList<AgentToolResultSnapshot> ToolResults { get; init; } = [];
 
     public AnalysisAnswer? Answer { get; init; }
 

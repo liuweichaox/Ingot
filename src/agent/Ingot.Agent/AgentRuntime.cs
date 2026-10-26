@@ -100,6 +100,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                     {
                         Question = run.Question,
                         Summary = run.Answer!.Summary,
+                        PageContext = run.PageContext,
                         Findings = run.Answer.Findings
                             .Select(static finding => finding.Statement)
                             .Take(8)
@@ -340,6 +341,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             {
                 Question = run.Question,
                 Summary = run.Answer!.Summary,
+                PageContext = run.PageContext,
                 Findings = run.Answer.Findings.Select(static finding => finding.Statement).Take(8).ToArray(),
                 Limitations = run.Answer.Limitations.Take(5).ToArray()
             })
@@ -652,6 +654,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 RecordModelCall(conversationResult.Usage);
                 var guidance = conversationResult.Value with
                 {
+                    DurationMilliseconds = started.ElapsedMilliseconds,
                     SummaryStrength = AnalysisClaimStrengths.Observation,
                     AnswerKind = AnalysisAnswerKinds.Conversation,
                     Findings = [],
@@ -746,6 +749,12 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                         AgentTelemetry.ToolDuration.Record(toolStarted.Elapsed.TotalMilliseconds,
                             new KeyValuePair<string, object?>("ingot.agent.tool.name", tool.Definition.Name));
                         results.Add(result);
+                        run = run with
+                        {
+                            ToolResults = results.Select((item, index) => Snapshot(
+                                item,
+                                invocations[index].Version)).ToArray()
+                        };
                         invocation = invocation with
                         {
                             Status = "completed",
@@ -808,7 +817,7 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                         (type, data, token) => EmitAsync(run.RunId, type, data, token, lease),
                         ct)
                     .ConfigureAwait(false);
-                investigation = investigationResult.Verdict;
+                investigation = CanonicalizeCombinedAnalysis(investigationResult.Verdict, relatedRecords);
                 modelCalls.AddRange(investigationResult.ModelCalls);
                 foreach (var usage in investigationResult.ModelCalls)
                     RecordModelCall(usage);
@@ -826,11 +835,13 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 answer = new AnalysisAnswer
                 {
                     Summary = string.Join(" ", insufficientResults.Select(static result => result.Summary)),
+                    DurationMilliseconds = started.ElapsedMilliseconds,
                     AnswerKind = AnalysisAnswerKinds.InsufficientData,
                     Limitations = limitations.Length > 0
                         ? limitations
                         : ["当前数据不足，无法得出确定性结论。"],
                     RelatedRecords = relatedRecords,
+                    Provenance = MergeProvenance(results),
                     FollowUpQuestions = ["补充缺失的生产记录后重新分析。"]
                 };
             }
@@ -839,17 +850,19 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                 var answerResult = await model.ComposeAnswerAsync(request, plan, results, ct).ConfigureAwait(false);
                 modelCalls.Add(answerResult.Usage);
                 RecordModelCall(answerResult.Usage);
-                var limitations = answerResult.Value.Limitations
+                var composedAnswer = CanonicalizeAnswer(answerResult.Value, relatedRecords);
+                var limitations = composedAnswer.Limitations
                     .Concat(results.SelectMany(static result => result.Limitations))
                     .Where(static item => !string.IsNullOrWhiteSpace(item))
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
-                answer = answerResult.Value with
+                answer = composedAnswer with
                 {
+                    DurationMilliseconds = started.ElapsedMilliseconds,
                     AnswerKind = investigation is not null
-                        || answerResult.Value.Charts.Count > 0
-                        || answerResult.Value.Proposals.Count > 0
-                        || answerResult.Value.Findings.Any(static item =>
+                        || composedAnswer.Charts.Count > 0
+                        || composedAnswer.Proposals.Count > 0
+                        || composedAnswer.Findings.Any(static item =>
                             item.Strength is AnalysisClaimStrengths.Association
                                 or AnalysisClaimStrengths.Hypothesis
                                 or AnalysisClaimStrengths.Causal)
@@ -857,11 +870,20 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
                         : AnalysisAnswerKinds.DataLookup,
                     RelatedRecords = relatedRecords,
                     CombinedAnalysis = investigation,
-                    Limitations = limitations
+                    Limitations = limitations,
+                    Provenance = MergeProvenance(results)
                 };
             }
             if (!_relatedRecordsVerifier.TryVerifyAnswer(answer, results, out var answerError))
-                throw new InvalidOperationException(answerError);
+            {
+                // 模型回答即使格式或证据引用不合规，也不能让已经成功完成的数据查询变成失败任务；
+                // 降级为工具原文摘要，保证用户拿到可核查且不含臆测的结果。
+                _logger.LogWarning(
+                    "AI 助手回答未通过证据校验，将使用工具摘要降级回答: {RunId}; {ValidationError}",
+                    run.RunId,
+                    answerError);
+                answer = CreateGroundedFallbackAnswer(results, relatedRecords, started.ElapsedMilliseconds);
+            }
             await EmitAsync(run.RunId, AgentStreamEventTypes.AnswerDelta,
                     new { text = answer.Summary }, ct, lease)
                 .ConfigureAwait(false);
@@ -971,19 +993,143 @@ public sealed class AgentRuntime : IAgentRuntime, IAgentRunProcessor
             Version = version,
             Summary = result.Summary,
             Data = result.Data.Clone(),
+            Details = result.Details,
             RelatedRecords = result.RelatedRecords,
             Limitations = result.Limitations,
             Outcome = result.Outcome,
+            Provenance = result.Provenance,
             ContentHash = AgentToolResultIntegrity.ComputeContentHash(
                 result.Tool,
                 version,
                 result.Summary,
                 result.Data,
+                result.Details,
                 result.RelatedRecords,
                 result.Limitations,
                 result.Outcome),
             VerifiedAt = DateTimeOffset.UtcNow
         };
+    }
+
+    private static AgentProvenance? MergeProvenance(IReadOnlyList<AnalysisToolResult> results)
+    {
+        var values = results
+            .Select(static result => result.Provenance)
+            .Where(static value => value is not null)
+            .Cast<AgentProvenance>()
+            .ToArray();
+        if (values.Length == 0)
+            return null;
+        return new AgentProvenance
+        {
+            SiteIds = values.SelectMany(static value => value.SiteIds)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            ReadAt = values.Max(static value => value.ReadAt),
+            SourceAsOf = values
+                .Where(static value => value.SourceAsOf is not null)
+                .Select(static value => value.SourceAsOf)
+                .Min(),
+            IngestWatermark = values
+                .Where(static value => value.IngestWatermark is not null)
+                .Select(static value => value.IngestWatermark)
+                .Min(),
+            ReturnedCount = values.All(static value => value.ReturnedCount is not null)
+                ? values.Sum(static value => value.ReturnedCount)
+                : null,
+            TotalCount = values.All(static value => value.TotalCount is not null)
+                ? values.Sum(static value => value.TotalCount)
+                : null,
+            Truncated = values.Any(static value => value.Truncated)
+        };
+    }
+
+    private static AnalysisAnswer CanonicalizeAnswer(
+        AnalysisAnswer answer,
+        IReadOnlyList<RelatedRecordRef> canonicalRecords)
+        => answer with
+        {
+            RelatedRecords = canonicalRecords,
+            Findings = answer.Findings.Select(finding => finding with
+            {
+                EvidenceReferences = CanonicalizeReferences(finding.EvidenceReferences, canonicalRecords)
+            }).ToArray(),
+            Proposals = answer.Proposals.Select(proposal => proposal with
+            {
+                EvidenceReferences = CanonicalizeReferences(proposal.EvidenceReferences, canonicalRecords)
+            }).ToArray(),
+            CombinedAnalysis = CanonicalizeCombinedAnalysis(answer.CombinedAnalysis, canonicalRecords)
+        };
+
+    private static AnalysisAnswer CreateGroundedFallbackAnswer(
+        IReadOnlyList<AnalysisToolResult> results,
+        IReadOnlyList<RelatedRecordRef> relatedRecords,
+        long durationMilliseconds)
+    {
+        var insufficient = results.Any(static result =>
+            string.Equals(result.Outcome, AnalysisToolOutcomes.InsufficientData, StringComparison.Ordinal));
+        var limitations = results.SelectMany(static result => result.Limitations)
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new AnalysisAnswer
+        {
+            Summary = string.Join(" ", results.Select(static result => result.Summary)
+                .Where(static summary => !string.IsNullOrWhiteSpace(summary))),
+            DurationMilliseconds = durationMilliseconds,
+            AnswerKind = insufficient ? AnalysisAnswerKinds.InsufficientData : AnalysisAnswerKinds.DataLookup,
+            SummaryStrength = AnalysisClaimStrengths.Observation,
+            Limitations = limitations.Length > 0 ? limitations : ["模型回答未通过证据校验，已展示查询结果原文。"],
+            RelatedRecords = relatedRecords,
+            Provenance = MergeProvenance(results)
+        };
+    }
+
+    private static CombinedAnalysisResult? CanonicalizeCombinedAnalysis(
+        CombinedAnalysisResult? analysis,
+        IReadOnlyList<RelatedRecordRef> canonicalRecords)
+    {
+        if (analysis is null)
+            return null;
+        return analysis with
+        {
+            RelatedRecords = CanonicalizeReferences(analysis.RelatedRecords, canonicalRecords),
+            PossibleCauses = analysis.PossibleCauses.Select(cause => cause with
+            {
+                RelatedRecords = CanonicalizeReferences(cause.RelatedRecords, canonicalRecords)
+            }).ToArray(),
+            Reviews = analysis.Reviews.Select(review => review with
+            {
+                RelatedRecords = CanonicalizeReferences(review.RelatedRecords, canonicalRecords)
+            }).ToArray(),
+            ReviewSteps = analysis.ReviewSteps.Select(step => step with
+            {
+                PossibleCauses = step.PossibleCauses.Select(cause => cause with
+                {
+                    RelatedRecords = CanonicalizeReferences(cause.RelatedRecords, canonicalRecords)
+                }).ToArray(),
+                Reviews = step.Reviews.Select(review => review with
+                {
+                    RelatedRecords = CanonicalizeReferences(review.RelatedRecords, canonicalRecords)
+                }).ToArray()
+            }).ToArray()
+        };
+    }
+
+    private static IReadOnlyList<RelatedRecordRef> CanonicalizeReferences(
+        IEnumerable<RelatedRecordRef> references,
+        IReadOnlyList<RelatedRecordRef> canonicalRecords)
+    {
+        var canonical = canonicalRecords.ToDictionary(
+            static record => (record.Kind, record.Id),
+            static record => record);
+        return references
+            .Select(reference => canonical.GetValueOrDefault((reference.Kind, reference.Id)))
+            .Where(static reference => reference is not null)
+            .Cast<RelatedRecordRef>()
+            .DistinctBy(static reference => (reference.Kind, reference.Id))
+            .ToArray();
     }
 
     private async Task PersistAsync(AgentRunSnapshot run, AgentRunLease? lease)

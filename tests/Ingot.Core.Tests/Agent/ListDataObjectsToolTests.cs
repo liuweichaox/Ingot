@@ -31,6 +31,18 @@ public sealed class ListDataObjectsToolTests
     }
 
     [Fact]
+    public async Task DeterministicPlanner_RoutesCapabilityQuestionToCapabilityCatalog()
+    {
+        var result = await new DeterministicModelClient().ResolveIntentAsync(
+            new CreateChatRunRequest { Question = "这个系统能做什么？" },
+            [SystemCapabilitiesDefinition(), SystemOverviewDefinition()]);
+
+        var call = Assert.Single(result.Value.ToolCalls);
+        Assert.Equal("get_system_capabilities", call.Tool);
+        Assert.Empty(call.Arguments);
+    }
+
+    [Fact]
     public async Task DeterministicPlanner_BindsCurrentSiteForScopedSystemQuestion()
     {
         var result = await new DeterministicModelClient().ResolveIntentAsync(
@@ -178,6 +190,17 @@ public sealed class ListDataObjectsToolTests
             EntryPoint = ProductEntryPoints.Chat,
             Purpose = RunPurposes.ReadOnlyAnalysis,
             Description = "查询授权范围内的系统概览。",
+            InputSchema = System.Text.Json.JsonDocument.Parse("{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}").RootElement
+        };
+
+    private static AnalysisToolDefinition SystemCapabilitiesDefinition()
+        => new()
+        {
+            Name = "get_system_capabilities",
+            Version = "1.0.0",
+            EntryPoint = ProductEntryPoints.Chat,
+            Purpose = RunPurposes.ReadOnlyAnalysis,
+            Description = "说明系统能力。",
             InputSchema = System.Text.Json.JsonDocument.Parse("{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}").RootElement
         };
 }

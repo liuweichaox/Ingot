@@ -350,17 +350,8 @@ public sealed record AnalysisToolResult
     public IReadOnlyList<string> Limitations { get; init; } = [];
 
     public string Outcome { get; init; } = AnalysisToolOutcomes.Sufficient;
-}
 
-public sealed record ResultDetailLink
-{
-    public required string Kind { get; init; }
-
-    public required string Label { get; init; }
-
-    public required string Url { get; init; }
-
-    public long? SizeBytes { get; init; }
+    public AgentProvenance? Provenance { get; init; }
 }
 
 public static class AnalysisToolOutcomes

@@ -2,6 +2,18 @@ using System.Text.Json;
 
 namespace Ingot.Contracts.Agents;
 
+/// <summary>工具返回的可展开明细入口，随运行快照持久化并参与完整性校验。</summary>
+public sealed record ResultDetailLink
+{
+    public required string Kind { get; init; }
+
+    public required string Label { get; init; }
+
+    public required string Url { get; init; }
+
+    public long? SizeBytes { get; init; }
+}
+
 public sealed record AgentToolInvocation
 {
     public required string Tool { get; init; }
@@ -31,6 +43,8 @@ public sealed record AgentToolResultSnapshot
 
     public required JsonElement Data { get; init; }
 
+    public IReadOnlyList<ResultDetailLink> Details { get; init; } = [];
+
     public IReadOnlyList<RelatedRecordRef> RelatedRecords { get; init; } = [];
 
     public IReadOnlyList<string> Limitations { get; init; } = [];
@@ -40,6 +54,8 @@ public sealed record AgentToolResultSnapshot
     public required string ContentHash { get; init; }
 
     public required DateTimeOffset VerifiedAt { get; init; }
+
+    public AgentProvenance? Provenance { get; init; }
 }
 
 public sealed record AgentRunSnapshot

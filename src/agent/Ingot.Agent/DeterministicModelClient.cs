@@ -26,8 +26,18 @@ public sealed class DeterministicModelClient : IModelClient
         var question = request.Question;
         var context = request.PageContext;
 
+        // 能力问题读取固定的产品能力目录；它不应触发生产数据查询。
+        if (IsCapabilityQuestion(question) && available.Contains("get_system_capabilities"))
+        {
+            calls.Add(new AnalysisToolCall
+            {
+                Tool = "get_system_capabilities",
+                Arguments = new Dictionary<string, string?>()
+            });
+        }
+
         // 系统级问题优先走全局聚合工具；页面上下文只能提供默认提示，不能把全局问题降级成站点追问。
-        if (IsGlobalSystemQuestion(question) && available.Contains("get_system_overview"))
+        if (calls.Count == 0 && IsGlobalSystemQuestion(question) && available.Contains("get_system_overview"))
         {
             calls.Add(new AnalysisToolCall
             {
@@ -189,7 +199,7 @@ public sealed class DeterministicModelClient : IModelClient
             Summary = isGreeting
                 ? "你好，我可以帮你查找和分析当前账号有权访问的生产、质量与工艺记录。"
                 : isCapabilityQuestion
-                    ? "这是 Ingot AI 助手，一个只读的工艺记录助手。\n\n你可以让我：\n\n- 查找生产运行、设备和批次记录\n- 检查过程记录是否完整\n- 对比同类运行的过程数据\n- 查找已复核的工艺文档和记录"
+                    ? "这是 Ingot AI 助手，帮助你理解系统中的生产、质量与工艺信息。\n\n你可以让我：\n\n- 查找生产运行、设备和批次记录\n- 检查过程记录是否完整\n- 对比同类运行的过程数据\n- 查找已复核的工艺文档和记录"
                 : "要继续这项分析，请补充希望核对的站点、运行对象、执行记录或时间范围。",
             FollowUpQuestions = ["你想先查看哪个站点或运行对象？"]
         }, "conversation.compose"));
@@ -298,6 +308,14 @@ public sealed class DeterministicModelClient : IModelClient
             question,
             "整个系统",
             "全系统",
+            "当前系统",
+            "系统当前",
+            "系统目前",
+            "系统处于",
+            "系统情况",
+            "系统概况",
+            "整体情况",
+            "平台状态",
             "有哪些站点",
             "所有站点",
             "各站点",
@@ -312,6 +330,21 @@ public sealed class DeterministicModelClient : IModelClient
             "最近有没有收到生产数据",
             "哪个站点最近没有数据",
             "哪些站点没有数据");
+
+    private static bool IsCapabilityQuestion(string question)
+        => ContainsAny(
+            question,
+            "系统能做什么",
+            "系统可以做什么",
+            "你能做什么",
+            "助手能做什么",
+            "有哪些能力",
+            "支持哪些功能",
+            "有哪些模块",
+            "能查什么",
+            "可以查什么",
+            "怎么使用",
+            "如何使用");
 
     private static bool ContainsAny(string value, params string[] terms)
         => terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));

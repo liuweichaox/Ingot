@@ -691,7 +691,8 @@ public sealed class DefaultAnalysisResultValidator : IAnalysisResultValidator
 
     private static IReadOnlySet<string> SourceNumbers(IReadOnlyList<AnalysisToolResult> results)
         => NumberGrounding.ExtractNormalized(string.Join('\n', results.Select(result =>
-            $"{result.Summary}\n{result.Data.GetRawText()}")));
+            // 发送给模型的工具结果字段都必须进入数字证据集合，包括限制说明和来源时间。
+            JsonSerializer.Serialize(result))));
 
     private static bool TryValidateClaims(
         AnalysisAnswer answer,

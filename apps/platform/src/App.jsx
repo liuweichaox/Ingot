@@ -389,7 +389,7 @@ export default function App({ identity, logout }) {
         {sidebarCollapsed && <button type="button" className="mx-3 mb-3 grid h-10 place-items-center rounded-sm text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧边栏"><ChevronDoubleRightIcon className="size-4.5" /></button>}
       </aside>
 
-      <header className={cx("fixed inset-x-0 top-0 z-40 flex h-15 items-stretch border-b border-slate-300 bg-white transition-[left] duration-200 lg:right-0", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
+      <header className={cx("fixed inset-x-0 top-0 z-40 flex h-16 items-stretch border-b border-slate-300 bg-white transition-[left] duration-200 lg:right-0", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
         <button className="grid w-14 shrink-0 place-items-center text-slate-600 hover:bg-slate-50 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="打开主导航"><Bars3Icon className="size-5" /></button>
         <div className="flex min-w-0 flex-1 items-center px-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
@@ -424,11 +424,11 @@ export default function App({ identity, logout }) {
       </header>
 
       {isChatWorkspace ? (
-        <main className={cx("h-[100dvh] overflow-hidden pt-15 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
+        <main className={cx("fixed inset-x-0 bottom-0 top-16 overflow-hidden transition-[left] duration-200", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
           <AppRoutes identity={identity} canConfigure={canConfigure} />
         </main>
       ) : (
-        <div className={cx("pt-15 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
+        <div className={cx("pt-16 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
           <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-7">
             <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>

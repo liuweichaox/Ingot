@@ -441,13 +441,13 @@ export function MetricsPage() {
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="已保存运行" value={formatInteger(executionResponse.data?.total)} hint="可追溯生产运行" />
         <Metric label="待处理质量任务" value={formatInteger(actionRequired)} hint="录入与复核合计" />
         <Metric label="已发布采集任务" value={formatInteger(publishedProfiles)} hint="正在向现场下发" />
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <PlatformUptimeMetric startedAtSeconds={startedAtSeconds} />
         <Metric label="当前内存" value={formatBytes(memory)} />
         <Metric label="后台排队" value={formatInteger(threadQueue)} />

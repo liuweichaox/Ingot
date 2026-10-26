@@ -78,14 +78,17 @@ public sealed class SystemOverviewTool(
         };
         if (allSiteIds.Count > siteIds.Length)
             limitations.Add($"授权范围包含 {allSiteIds.Count} 个站点，本次按 {_maxSites} 个站点查询预算返回结果。请缩小范围后继续查看其余站点。");
+        var hasNoAuthorizedSites = !context.AccessScope.AllowAllSites && allSiteIds.Count == 0;
         if (allSiteIds.Count == 0)
             limitations.Add(context.AccessScope.AllowAllSites
                 ? "系统当前没有发现站点目录、采集节点或业务数据。"
-                : "当前账号没有可访问的站点。");
+                : "当前账号尚未配置可访问的生产站点，暂时无法判断系统的生产运行状态。请联系管理员配置站点访问范围后重试。");
 
         var scopeLabel = requestedSiteId is null ? "当前授权范围" : $"站点 {requestedSiteId}";
         var summary = allSiteIds.Count == 0
-            ? $"{scopeLabel}没有可汇总的站点。"
+            ? hasNoAuthorizedSites
+                ? "当前账号尚未配置可访问的生产站点，暂时无法判断系统的生产运行状态。"
+                : $"{scopeLabel}没有可汇总的站点。"
             : $"{scopeLabel}共 {allSiteIds.Count} 个站点，已汇总 {summaries.Length} 个站点，登记现场节点 {summaries.Sum(static item => item.EdgeCount)} 个，" +
               $"生产事件 {summaries.Sum(static item => item.ProductionEventCount):N0} 条，" +
               $"质量检测记录 {summaries.Sum(static item => item.QualityRecordCount):N0} 条。";
@@ -105,8 +108,18 @@ public sealed class SystemOverviewTool(
             }),
             RelatedRecords = BuildRelatedRecords(summaries),
             Limitations = limitations,
-            // 系统概览的“0 条”本身就是可回答的事实，不应被解释成无法分析。
-            Outcome = AnalysisToolOutcomes.Sufficient
+            Provenance = new AgentProvenance
+            {
+                SiteIds = siteIds,
+                ReadAt = now,
+                ReturnedCount = summaries.Length,
+                TotalCount = allSiteIds.Count,
+                Truncated = allSiteIds.Count > siteIds.Length
+            },
+            // 没有授权范围不是“系统没有数据”；必须明确告知权限配置缺口，避免模型臆测系统状态。
+            Outcome = hasNoAuthorizedSites
+                ? AnalysisToolOutcomes.InsufficientData
+                : AnalysisToolOutcomes.Sufficient
         };
     }
 

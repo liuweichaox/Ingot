@@ -46,7 +46,7 @@ export function Page({ title, actions, className, loading, error, onRetry, error
 export function LoadingCard() {
   return (
     <Card>
-      <div className="grid min-h-44 place-items-center text-sm text-slate-500">
+      <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-slate-500" role="status" aria-live="polite">
         <span className="inline-flex items-center gap-2"><ArrowPathIcon className="size-5 animate-spin" />正在读取数据</span>
       </div>
     </Card>

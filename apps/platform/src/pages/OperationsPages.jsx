@@ -156,7 +156,7 @@ export function WorkbenchPage({ identity }) {
       <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />
       {state.loading ? <LoadingCard /> : (
         <div className="flex flex-col gap-5">
-          <section className="overflow-hidden border border-slate-300 bg-white" aria-label="运行概览">
+          <section className="overflow-hidden rounded-md border border-slate-300 bg-white" aria-label="运行概览">
             <header className="flex flex-col gap-3 border-b border-slate-200 border-t-[3px] border-t-coal-900 px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
               <div>
                 <p className="data-label">运行总览</p>
@@ -180,7 +180,7 @@ export function WorkbenchPage({ identity }) {
             </dl>
           </section>
           {!hasProductionFoundation && (
-            <section className="border border-evidence-400 bg-evidence-50" aria-labelledby="first-connection-title">
+            <section className="rounded-md border border-evidence-400 bg-evidence-50" aria-labelledby="first-connection-title">
               <header className="flex flex-col gap-1 border-b border-evidence-100 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between">
                 <h2 id="first-connection-title" className="text-sm font-semibold text-slate-950">首次接入清单</h2>
                 <p className="text-xs text-slate-600">上线检查会列出某一配方版本尚缺少的项目。</p>
@@ -204,7 +204,7 @@ export function WorkbenchPage({ identity }) {
             </section>
           )}
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <section className="min-w-0 border border-slate-300 bg-white" aria-labelledby="recent-executions-title">
+            <section className="min-w-0 overflow-hidden rounded-md border border-slate-300 bg-white" aria-labelledby="recent-executions-title">
               <header className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="data-label">运行记录</p>
@@ -227,7 +227,7 @@ export function WorkbenchPage({ identity }) {
               </div>
             </section>
             <aside className="grid content-start gap-5" aria-label="工作队列与最新事件">
-              <section className="border border-slate-300 bg-white" aria-labelledby="next-actions-title">
+              <section className="rounded-md border border-slate-300 bg-white" aria-labelledby="next-actions-title">
                 <header className="border-b border-slate-200 px-5 py-4">
                   <p className="data-label">工作队列</p>
                   <h2 id="next-actions-title" className="mt-1 text-base font-semibold text-slate-950">{isQualityRole && !isEngineeringRole ? "质量待办" : "下一步"}</h2>
@@ -249,7 +249,7 @@ export function WorkbenchPage({ identity }) {
                   ))}
                 </ol>
               </section>
-              <section className="border border-slate-300 bg-white" aria-labelledby="recent-events-title">
+              <section className="rounded-md border border-slate-300 bg-white" aria-labelledby="recent-events-title">
                 <header className="border-b border-slate-200 px-5 py-4">
                   <p className="data-label">事件记录</p>
                   <h2 id="recent-events-title" className="mt-1 text-base font-semibold text-slate-950">最新事件</h2>

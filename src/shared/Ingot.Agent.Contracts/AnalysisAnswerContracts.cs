@@ -27,6 +27,9 @@ public sealed record AnalysisAnswer
 {
     public required string Summary { get; init; }
 
+    /// <summary>从接收问题到生成本次回答的实际处理耗时；不代表或暴露模型内部思维过程。</summary>
+    public long? DurationMilliseconds { get; init; }
+
     public string AnswerKind { get; init; } = AnalysisAnswerKinds.Conversation;
 
     public string SummaryStrength { get; init; } = AnalysisClaimStrengths.Observation;
@@ -44,6 +47,8 @@ public sealed record AnalysisAnswer
     public IReadOnlyList<AgentProposalEnvelope> Proposals { get; init; } = [];
 
     public CombinedAnalysisResult? CombinedAnalysis { get; init; }
+
+    public AgentProvenance? Provenance { get; init; }
 }
 
 public static class AnalysisAnswerKinds
@@ -128,6 +133,24 @@ public sealed record RelatedRecordRef
     public required string Label { get; init; }
 
     public string? Url { get; init; }
+}
+
+/// <summary>描述本次回答实际读取的数据范围、读取时刻和结果完整性。</summary>
+public sealed record AgentProvenance
+{
+    public IReadOnlyList<string> SiteIds { get; init; } = [];
+
+    public DateTimeOffset ReadAt { get; init; }
+
+    public DateTimeOffset? SourceAsOf { get; init; }
+
+    public long? IngestWatermark { get; init; }
+
+    public int? ReturnedCount { get; init; }
+
+    public int? TotalCount { get; init; }
+
+    public bool Truncated { get; init; }
 }
 
 public sealed record ChartSpec

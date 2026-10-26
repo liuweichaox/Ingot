@@ -100,6 +100,7 @@ public static class ServiceCollectionExtensions
             provider => provider.GetRequiredService<ChatEventReader>());
         services.AddSingleton<IChatDataObjectReader>(
             provider => provider.GetRequiredService<ChatEventReader>());
+        services.AddSingleton<IAnalysisTool, SystemCapabilitiesTool>();
         services.AddSingleton<IAnalysisTool, SystemOverviewTool>();
         services.AddSingleton<IAnalysisTool, ListDataObjectsTool>();
         services.AddSingleton<IAnalysisTool, CheckDataQualityTool>();

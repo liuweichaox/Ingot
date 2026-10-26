@@ -14,6 +14,7 @@ public static class AgentToolResultIntegrity
             result.Version,
             result.Summary,
             result.Data,
+            result.Details,
             result.RelatedRecords,
             result.Limitations,
             result.Outcome);
@@ -27,6 +28,25 @@ public static class AgentToolResultIntegrity
         IReadOnlyList<RelatedRecordRef> relatedRecords,
         IReadOnlyList<string> limitations,
         string outcome)
+        => ComputeContentHash(
+            tool,
+            version,
+            summary,
+            data,
+            [],
+            relatedRecords,
+            limitations,
+            outcome);
+
+    public static string ComputeContentHash(
+        string tool,
+        string version,
+        string summary,
+        JsonElement data,
+        IReadOnlyList<ResultDetailLink> details,
+        IReadOnlyList<RelatedRecordRef> relatedRecords,
+        IReadOnlyList<string> limitations,
+        string outcome)
     {
         var content = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -34,6 +54,7 @@ public static class AgentToolResultIntegrity
             Version = version,
             Summary = summary,
             Data = data,
+            Details = details,
             RelatedRecords = relatedRecords,
             Limitations = limitations,
             Outcome = outcome

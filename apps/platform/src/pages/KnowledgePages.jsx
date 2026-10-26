@@ -63,7 +63,7 @@ function KnowledgePage({ kind }) {
           ) : <p className="text-sm text-slate-500">正在读取引用来源…</p>}
         </Card>
       )}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {content.cards.map(([title, description]) => (
           <Card key={title} title={title}>
             <p className="text-sm leading-6 text-slate-600">{description}</p>

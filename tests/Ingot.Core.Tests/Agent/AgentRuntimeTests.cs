@@ -36,6 +36,7 @@ public sealed class AgentRuntimeTests
         Assert.Equal("check_data_quality", Assert.Single(completed.ToolInvocations).Tool);
         var toolResult = Assert.Single(completed.ToolResults);
         Assert.Equal("check_data_quality", toolResult.Tool);
+        Assert.Equal("质检结果明细", Assert.Single(toolResult.Details).Label);
         Assert.Equal(64, toolResult.ContentHash.Length);
         Assert.NotEqual(default, toolResult.VerifiedAt);
         Assert.Single(completed.Answer!.RelatedRecords);
@@ -112,7 +113,11 @@ public sealed class AgentRuntimeTests
         var first = await runtime.StartAsync(
             ProductEntryPoints.Chat,
             "analyst",
-            new CreateChatRunRequest { Question = "hi" },
+            new CreateChatRunRequest
+            {
+                Question = "hi",
+                PageContext = new PageContextRef { Kind = "site", Id = "SITE-001" }
+            },
             SiteScope);
         var firstCompleted = await WaitForTerminalAsync(runtime, first.RunId);
 
@@ -131,6 +136,7 @@ public sealed class AgentRuntimeTests
         Assert.Equal(first.ConversationId, second.ConversationId);
         var previous = Assert.Single(model.LastRequest!.ConversationHistory);
         Assert.Equal("hi", previous.Question);
+        Assert.Equal("SITE-001", previous.PageContext!.Id);
         Assert.Contains("继续这段对话", previous.Summary, StringComparison.Ordinal);
         Assert.Equal(2, (await runtime.GetConversationAsync(
             ProductEntryPoints.Chat,
@@ -403,6 +409,12 @@ public sealed class AgentRuntimeTests
                 Tool = call.Tool,
                 Summary = "已检查 10 条事件，数据完整。",
                 Data = JsonSerializer.SerializeToElement(new { eventCount = 10 }),
+                Details = [new ResultDetailLink
+                {
+                    Kind = "quality-detail",
+                    Label = "质检结果明细",
+                    Url = "/inspections?siteId=SITE-001"
+                }],
                 RelatedRecords = [new RelatedRecordRef { Kind = "dataset", Id = "quality-1", Label = "数据质量" }]
             });
     }

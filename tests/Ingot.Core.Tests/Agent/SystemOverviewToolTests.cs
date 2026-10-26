@@ -14,7 +14,7 @@ namespace Ingot.Core.Tests.Agent;
 public sealed class SystemOverviewToolTests
 {
     [Fact]
-    public async Task ExecuteAsync_WithNoAuthorizedSites_ReturnsScopedEmptyOverview()
+    public async Task ExecuteAsync_WithNoAuthorizedSites_ReturnsAuthorizationBoundary()
     {
         await using var dataSource = NpgsqlDataSource.Create("Host=127.0.0.1;Database=unused");
         var tool = new SystemOverviewTool(
@@ -32,8 +32,9 @@ public sealed class SystemOverviewToolTests
             },
             Context(new AgentAccessScope()));
 
-        Assert.Equal(AnalysisToolOutcomes.Sufficient, result.Outcome);
-        Assert.Contains("没有可汇总的站点", result.Summary, StringComparison.Ordinal);
+        Assert.Equal(AnalysisToolOutcomes.InsufficientData, result.Outcome);
+        Assert.Contains("尚未配置可访问的生产站点", result.Summary, StringComparison.Ordinal);
+        Assert.Contains(result.Limitations, item => item.Contains("联系管理员配置站点访问范围", StringComparison.Ordinal));
         Assert.Equal(0, result.Data.GetProperty("siteCount").GetInt32());
     }
 
