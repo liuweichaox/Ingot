@@ -2,6 +2,7 @@
 namespace Ingot.Edge.ConnectorHost.Configuration;
 
 using Ingot.Contracts.Acquisition;
+using Ingot.Edge.ConnectorHost.Acquisition;
 
 public static class ProductionConfigurationValidator
 {
@@ -123,6 +124,16 @@ public static class ProductionConfigurationValidator
 
         ValidateHostAllowlist(configuration, "AllowedHttpHosts", errors);
         ValidateHostAllowlist(configuration, "AllowedNetworkHosts", errors);
+        var serialPorts = configuration.GetSection("Acquisition:Security:AllowedSerialPorts").Get<string[]>() ?? [];
+        foreach (var portName in serialPorts)
+        {
+            if (!AcquisitionSerialPortPolicy.TryNormalizePortName(portName, out _, out _))
+            {
+                errors.Add(
+                    "Acquisition:Security:AllowedSerialPorts must contain COMn names on Windows or /dev absolute paths on Unix.");
+                break;
+            }
+        }
     }
 
     private static void ValidateHostAllowlist(

@@ -142,7 +142,7 @@ Choose a reading path from the [documentation index](docs/index.en.md) or [onlin
 - **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
 - **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
 - **Connect and operate**: [Data integration](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment](docs/deployment.en.md).
-- **Connector demo**: [Optical lens PLC acquisition demo](docs/optical-lens-demo.en.md) starts an independent Modbus TCP simulator and verifies 19 process values, 20 recipe parameters, and a 300-second batch path.
+- **Connector demo**: [Semiconductor wafer etch acquisition demo](docs/semiconductor-demo.en.md) starts an independent Modbus TCP simulator and verifies 19 process values, 20 demonstration parameters, and a 300-second run path.
 - **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundary](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
 - **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
 

@@ -167,8 +167,9 @@ Platform 按 `EdgeId` 发布版本化采集配置。Edge 主动拉取、在本�
 - Platform 明确发布零配置时，Edge 停止对应采集并报告状态；
 - 生产环境禁止静默启用未版本化本地 fallback；
 - HTTP/MQTT 可以读取示例报文，OPC UA 可以浏览节点；
-- Modbus TCP 和 MELSEC 只读取用户明确配置的地址，不进行盲扫；
-- HTTP、MQTT、OPC UA、Modbus TCP 和 MELSEC 默认拒绝所有未登记目标；设备主机必须显式加入 `Acquisition:Security:AllowedHttpHosts`（HTTP）或 `AllowedNetworkHosts`，并固定使用校验过的 DNS 解析结果；回环、链路本地、未指定和组播地址即使列入白名单也不会放行；
+- Modbus TCP、Modbus RTU/ASCII、MELSEC 1E、MELSEC 3E/SLMP、Siemens S7、EtherNet/IP 和 Omron FINS/TCP/UDP 只读取用户明确配置的地址或标签，不进行盲扫；
+- HTTP、MQTT、OPC UA、MTConnect、Modbus TCP、MELSEC 1E、MELSEC 3E/SLMP、Siemens S7、EtherNet/IP 和 Omron FINS/TCP/UDP 默认拒绝所有未登记网络目标；设备主机必须显式加入 `Acquisition:Security:AllowedHttpHosts`（HTTP/MTConnect）或 `AllowedNetworkHosts`，并固定使用校验过的 DNS 解析结果；FINS/UDP 也按目标主机执行同一白名单和 DNS 固定策略；回环、链路本地、未指定和组播地址即使列入白名单也不会放行；
+- Modbus RTU/ASCII 与 BACnet MS/TP 默认拒绝全部串口；必须在 `Acquisition:Security:AllowedSerialPorts` 中逐个精确列出允许的串口名，例如 `COM3` 或 `/dev/ttyUSB0`。运行于 Linux 容器时，还要在本地 Compose 覆盖中映射设备并授予 ConnectorHost 进程访问权限；不要把不存在的串口设备硬编码进通用 Compose 文件；Edge 镜像会按目标架构发布 `linux-x64` 或 `linux-arm64` 串口运行文件；自定义发布时也要指定与目标匹配的 Runtime Identifier。
 - 任何会发送 Edge 密钥、用户名密码或客户端证书的目标都必须显式加入上述主机白名单，只有“位于私网”不足以获得凭据；
 - 发布前和发布请求中都执行真实值校验。
 

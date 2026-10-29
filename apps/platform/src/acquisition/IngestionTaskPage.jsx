@@ -1,13 +1,13 @@
 // 编排采集任务创建、探查、发布和站点可见性反馈。
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  Alert, Badge, Button, Card, Field, Input, LinkButton, Page, Select, StatusBadge, WorkflowGuide, notify, useConfirmDialog,
+  Alert, Badge, Button, Card, Field, Input, LinkButton, Page, Select, StatusBadge, notify, useConfirmDialog,
 } from "../ui/components";
 import { deleteJson, downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
 import {
-  mergeServerCapabilities, protocolDescriptor, protocolOptions,
+  mergeServerCapabilities, normalizeSnmpOid, protocolDescriptor, protocolOptionGroups,
 } from "./protocolRegistry";
 import {
   applyProtocolChange, createIngestionTaskForm, modelValue, parseModelValue,
@@ -16,8 +16,19 @@ import {
 import { ConnectionPanel } from "./panels/ConnectionPanel";
 import { PointMappingPanel, blankRow } from "./panels/PointMappingPanel";
 import { DevicePointsPanel } from "./panels/DevicePointsPanel";
+import { ReusableBindingPanel } from "./ReusableBindingPanel";
+import { IngestionDeviceGroupCanvas } from "./IngestionDeviceGroupCanvas";
+import { deviceProfileOption, deviceProfileOptions } from "./deviceProfileRegistry";
 
 const ENDPOINT = "/api/v1/ingestion-tasks";
+
+function deviceGroupPayload(form) {
+  const taskForm = { ...form, status: "draft" };
+  const payload = toPayload(taskForm);
+  if (!String(taskForm.source || "").trim())
+    payload.source = `connector/${taskForm.protocol}/${taskForm.taskId.trim()}`;
+  return payload;
+}
 
 export function IngestionTaskPage({ canWrite = true }) {
   const { taskId } = useParams();
@@ -26,11 +37,22 @@ export function IngestionTaskPage({ canWrite = true }) {
   const isNew = !taskId || taskId === "new";
   const requestedVersion = searchParams.get("version");
   const mode = searchParams.get("mode") || (isNew ? "create" : "maintain");
+  const [groupActivated, setGroupActivated] = useState(false);
+  const multiDeviceSetup = isNew && canWrite && groupActivated;
+  const groupEnabled = isNew && canWrite && groupActivated;
+  const [deviceGroupEntries, setDeviceGroupEntries] = useState([]);
+  const [activeDeviceKey, setActiveDeviceKey] = useState("");
+  const [groupSaveError, setGroupSaveError] = useState("");
+  const groupDeviceOrdinal = useRef(0);
+  const { confirm, confirmationDialog } = useConfirmDialog();
 
-  const { data: modelData } = useApi("/api/v1/process-data-models");
-  const { data: edgeData } = useApi("/api/edges");
+  const { data: modelData, error: modelLoadError, reload: reloadModels } = useApi("/api/v1/process-data-models");
+  const { data: edgeData, error: edgeLoadError, reload: reloadEdges } = useApi("/api/edges");
+  const { data: groupTaskData, error: groupTasksError, reload: reloadGroupTasks } = useApi(ENDPOINT, { enabled: groupEnabled });
   const models = extractRows(modelData);
   const edges = extractRows(edgeData);
+  const groupTasks = extractRows(groupTaskData);
+  const deviceGroupLoadError = edgeLoadError || modelLoadError || groupTasksError;
 
   const [form, setForm] = useState(() => createIngestionTaskForm({}, undefined));
   const [loading, setLoading] = useState(!isNew);
@@ -40,7 +62,28 @@ export function IngestionTaskPage({ canWrite = true }) {
   const [probe, setProbe] = useState(null);
   const [probeError, setProbeError] = useState("");
   const [probing, setProbing] = useState(false);
+  const probeRevision = useRef(0);
+  const probeValidationRevision = useRef(0);
+  const [validatedProbeRevision, setValidatedProbeRevision] = useState(null);
   const [showErrors, setShowErrors] = useState(false);
+
+  const deviceGroupCards = useMemo(() => {
+    if (!multiDeviceSetup) return [];
+    return deviceGroupEntries.map(entry => {
+      const currentForm = entry.key === activeDeviceKey ? form : entry.form;
+      let fingerprint = "";
+      try { fingerprint = JSON.stringify(deviceGroupPayload(currentForm)); }
+      catch { /* The task editor will expose incomplete values through its normal validation. */ }
+      return {
+        ...entry,
+        form: currentForm,
+        saved: Boolean(entry.savedFingerprint && entry.savedFingerprint === fingerprint),
+      };
+    });
+  }, [multiDeviceSetup, deviceGroupEntries, activeDeviceKey, form]);
+  const canvasDevices = multiDeviceSetup
+    ? deviceGroupCards
+    : [{ key: "single-device", form, saved: false, error: "" }];
 
   useEffect(() => {
     let cancelled = false;
@@ -69,14 +112,25 @@ export function IngestionTaskPage({ canWrite = true }) {
     return () => { cancelled = true; };
   }, [taskId, requestedVersion, mode, isNew]);
 
+  useEffect(() => {
+    if (!multiDeviceSetup || !activeDeviceKey) return;
+    setDeviceGroupEntries(current => {
+      const active = current.find(item => item.key === activeDeviceKey);
+      if (!active || active.form === form) return current;
+      return current.map(item => item.key === activeDeviceKey
+        ? { ...item, form, error: "" }
+        : item);
+    });
+  }, [form, multiDeviceSetup, activeDeviceKey]);
+
   const descriptor = protocolDescriptor(form.protocol);
   const selectedModel = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selectedModel.id && item.version === selectedModel.version);
   const dataItems = model?.acquisition?.dataItems || [];
   const controlParameters = model?.controlParameters || [];
   const managedByBinding = Boolean(form.templateId && form.dataSourceId);
-  const readOnly = !canWrite || managedByBinding || (mode === "maintain" && form.status !== "draft");
-  const allowProbe = canWrite && form.status === "draft";
+  const readOnly = !canWrite || managedByBinding || (mode === "maintain" && form.status !== "draft") || (multiDeviceSetup && saving);
+  const allowProbe = canWrite && form.status === "draft" && !saving;
 
   const validation = useMemo(
     () => validateIngestionTask(form, { dataItems }),
@@ -84,18 +138,57 @@ export function IngestionTaskPage({ canWrite = true }) {
   );
   const errors = showErrors ? validation.errors : {};
 
-  const probeFingerprint = useMemo(
-    () => JSON.stringify({
-      edgeId: form.edgeId, protocol: form.protocol, dataModel: form.dataModel,
-      section: form[descriptor.section], valueMappings: form.valueMappings,
-      contextMappings: form.contextMappings, processSpecification: form.processSpecification,
-    }),
-    [form, descriptor.section],
-  );
-  useEffect(() => { setProbe(null); setProbeError(""); }, [probeFingerprint]);
+  const probeTask = useMemo(() => ({ ...toPayload(form), status: "draft" }), [form]);
+  const probeFingerprint = JSON.stringify(probeTask);
+  const probeSourceFingerprint = JSON.stringify({
+    edgeId: probeTask.edgeId,
+    protocol: probeTask.protocol,
+    connection: probeTask[descriptor.section],
+  });
+  const configuredReadPoints = descriptor.addressing === "modbus-register"
+    ? probeTask.valueMappings.map(({ modbusArea, modbusAddress, bitIndex, sourceDataType, sourceByteLength }) =>
+        [modbusArea, modbusAddress, bitIndex, sourceDataType, sourceByteLength])
+    : descriptor.id === "melsec-a1e"
+      ? probeTask.valueMappings.map(({ melsecDevice, melsecAddress, bitIndex, sourceDataType, sourceByteLength }) =>
+          [melsecDevice, melsecAddress, bitIndex, sourceDataType, sourceByteLength])
+      : descriptor.id === "ethernet-ip"
+        ? probeTask.valueMappings.map(({ sourcePath, sourceDataType }) => [sourcePath, sourceDataType])
+        : ["omron-fins-tcp", "omron-fins-udp", "melsec-mc-3e"].includes(descriptor.id)
+          ? probeTask.valueMappings.map(({ sourcePath, sourceDataType, wordOrder }) => [sourcePath, sourceDataType, wordOrder])
+        : null;
+  const probeCatalogFingerprint = JSON.stringify({ source: probeSourceFingerprint, configuredReadPoints });
+  useLayoutEffect(() => {
+    // Any mapping edit invalidates publication evidence without discarding discovered points.
+    probeValidationRevision.current += 1;
+    setValidatedProbeRevision(null);
+  }, [probeFingerprint]);
+  useLayoutEffect(() => {
+    // Points from a different Edge, protocol, or connection cannot be reused.
+    probeRevision.current += 1;
+    setProbe(null);
+    setProbeError("");
+    setProbing(false);
+    setValidatedProbeRevision(null);
+  }, [probeSourceFingerprint]);
+  useEffect(() => () => { probeRevision.current += 1; }, []);
+
+  const probeValidationCurrent = Boolean(probe && validatedProbeRevision === probeValidationRevision.current);
+  const probeView = probe ? {
+    ...probe,
+    success: probeValidationCurrent && probe.success,
+    mappingsValidated: probeValidationCurrent && probe.mappingsValidated,
+    mappings: probeValidationCurrent ? probe.mappings : [],
+    validationCurrent: probeValidationCurrent,
+    catalogCurrent: probe.catalogFingerprint === probeCatalogFingerprint,
+    nextCursor: probe.catalogFingerprint === probeCatalogFingerprint ? probe.nextCursor : null,
+    scanLimitReached: probe.catalogFingerprint === probeCatalogFingerprint && probe.scanLimitReached,
+    message: probeValidationCurrent
+      ? probe.message
+      : "配置已变化；点位清单可继续辅助映射，重新探查后才能发布。",
+  } : null;
 
   const advisories = descriptor.advisories ? descriptor.advisories(form) : [];
-  const probeValid = Boolean(probe?.success && probe?.mappingsValidated);
+  const probeValid = Boolean(!probing && probeView?.validationCurrent && probeView.success && probeView.mappingsValidated);
   const publishChecklist = [
     { label: "选择现场节点与工艺变量", done: Boolean(form.edgeId && form.dataModel) },
     { label: "填写连接参数", done: !Object.keys(descriptor.validateConnection(form[descriptor.section] || {}) || {}).length },
@@ -110,29 +203,208 @@ export function IngestionTaskPage({ canWrite = true }) {
 
   function update(patch) { setForm(value => ({ ...value, ...patch })); }
   function updateSection(section, value) { setForm(current => ({ ...current, [section]: value })); }
+  function updateDeviceKind(kind) {
+    const profile = deviceProfileOption(kind);
+    setForm(current => {
+      const deviceProfile = { ...current.deviceProfile, kind };
+      const next = { ...current, deviceProfile };
+      return profile.drivers.includes(current.protocol) || profile.drivers.length === 0
+        ? next
+        : { ...applyProtocolChange(next, profile.drivers[0]), deviceProfile };
+    });
+  }
+
+  function resetActiveProbe() {
+    probeRevision.current += 1;
+    probeValidationRevision.current += 1;
+    setProbe(null);
+    setProbeError("");
+    setProbing(false);
+    setValidatedProbeRevision(null);
+  }
+
+  function nextDeviceGroupKey() {
+    groupDeviceOrdinal.current += 1;
+    return `device-${groupDeviceOrdinal.current}`;
+  }
+
+  function nextDeviceTaskId(index, entries = deviceGroupEntries) {
+    const used = new Set([
+      ...groupTasks.map(item => String(item.taskId || "").trim().toLowerCase()),
+      ...entries.map(item => String(item.form?.taskId || "").trim().toLowerCase()),
+      String(form.taskId || "").trim().toLowerCase(),
+    ].filter(Boolean));
+    const stamp = Date.now().toString(36);
+    let candidate = `device-${stamp}-${index}`;
+    let suffix = 1;
+    while (used.has(candidate.toLowerCase())) {
+      candidate = `device-${stamp}-${index}-${suffix}`;
+      suffix += 1;
+    }
+    return candidate;
+  }
+
+  function selectDeviceGroupTask(key) {
+    const target = deviceGroupCards.find(item => item.key === key);
+    if (!target || target.key === activeDeviceKey) return;
+    setActiveDeviceKey(key);
+    setForm(target.form);
+    setShowErrors(false);
+    setGroupSaveError("");
+    resetActiveProbe();
+  }
+
+  function addDeviceGroupTask(kindOverride, edgeIdOverride) {
+    const initialKey = multiDeviceSetup ? "" : nextDeviceGroupKey();
+    const initialForm = multiDeviceSetup ? null : {
+      ...form,
+      taskId: form.taskId || nextDeviceTaskId(1, []),
+      name: form.name || "采集设备 1",
+    };
+    const initialEntries = multiDeviceSetup
+      ? deviceGroupCards.map(({ key, form: entryForm, savedFingerprint, error }) => ({ key, form: entryForm, savedFingerprint, error }))
+      : [{ key: initialKey, form: initialForm, savedFingerprint: "", error: "" }];
+    const baseForm = multiDeviceSetup ? form : initialForm;
+    const index = initialEntries.length + 1;
+    const key = nextDeviceGroupKey();
+    const kind = kindOverride || baseForm.deviceProfile?.kind || "other";
+    const assignedEdgeId = edgeIdOverride === undefined ? baseForm.edgeId : edgeIdOverride || "";
+    if (assignedEdgeId && !edges.some(edge => edge.edgeId === assignedEdgeId)) {
+      const message = `现场节点 ${assignedEdgeId} 当前不可用；请选择清单中的 Edge，或先保存为未分配草稿。`;
+      if (multiDeviceSetup) setGroupSaveError(message);
+      else setSaveError(message);
+      return;
+    }
+    const profile = deviceProfileOption(kind);
+    const protocol = profile.drivers[0] || "http-polling";
+    const selected = parseModelValue(baseForm.dataModel);
+    const newTask = applyProtocolChange(createIngestionTaskForm({
+      taskId: nextDeviceTaskId(index, initialEntries),
+      name: `${profile.label}采集 ${index}`,
+      status: "draft",
+      edgeId: assignedEdgeId,
+      dataModelId: selected.id,
+      dataModelVersion: selected.version,
+      subjectType: baseForm.subjectType || "equipment",
+      deviceProfile: { kind, manufacturer: "", model: "" },
+    }), protocol);
+    const nextForm = {
+      ...newTask,
+      edgeId: assignedEdgeId,
+      dataModel: baseForm.dataModel,
+      deviceProfile: { kind, manufacturer: "", model: "" },
+    };
+    const nextEntries = [
+      ...initialEntries,
+      { key, form: nextForm, savedFingerprint: "", error: "" },
+    ];
+    setGroupActivated(true);
+    setDeviceGroupEntries(nextEntries);
+    setActiveDeviceKey(key);
+    setForm(nextForm);
+    setShowErrors(false);
+    setSaveError("");
+    setGroupSaveError("");
+    resetActiveProbe();
+  }
+
+  function assignDeviceGroupEdge(key, edgeId) {
+    if (!multiDeviceSetup && key === "single-device") {
+      const normalizedEdgeId = edgeId || "";
+      if (form.edgeId !== normalizedEdgeId) {
+        setForm(current => ({ ...current, edgeId: normalizedEdgeId }));
+        resetActiveProbe();
+      }
+      return;
+    }
+    const target = deviceGroupCards.find(item => item.key === key);
+    const normalizedEdgeId = edgeId || "";
+    if (!target || target.form.edgeId === normalizedEdgeId) return;
+    if (normalizedEdgeId && !edges.some(edge => edge.edgeId === normalizedEdgeId)) {
+      setGroupSaveError(`现场节点 ${normalizedEdgeId} 当前不可用；请刷新 Edge 清单后重新分配。`);
+      return;
+    }
+
+    const nextForm = { ...target.form, edgeId: normalizedEdgeId };
+    setDeviceGroupEntries(deviceGroupCards.map(({ key: entryKey, form: entryForm, savedFingerprint, error }) => ({
+      key: entryKey,
+      form: entryKey === key ? nextForm : entryForm,
+      savedFingerprint,
+      error: entryKey === key ? "" : error,
+    })));
+    setActiveDeviceKey(key);
+    setForm(nextForm);
+    setShowErrors(false);
+    setGroupSaveError("");
+    resetActiveProbe();
+  }
+
+  async function removeDeviceGroupTask(key) {
+    if (deviceGroupCards.length <= 1) return;
+    const target = deviceGroupCards.find(item => item.key === key);
+    if (!target) return;
+    if (target.savedFingerprint && !await confirm({
+      title: `移出设备 ${target.form.name || target.form.taskId}`,
+      description: "该设备已保存的独立草稿会保留在采集配置列表中；继续后只从当前画布移除。",
+      confirmLabel: "移出画布",
+      tone: "warning",
+    })) return;
+    const remaining = deviceGroupCards.filter(item => item.key !== key).map(({ key: entryKey, form: entryForm, savedFingerprint, error }) => ({
+      key: entryKey, form: entryForm, savedFingerprint, error,
+    }));
+    setDeviceGroupEntries(remaining);
+    if (key === activeDeviceKey) {
+      const next = remaining[0];
+      setActiveDeviceKey(next.key);
+      setForm(next.form);
+      setShowErrors(false);
+      resetActiveProbe();
+    }
+    setGroupSaveError("");
+  }
 
   async function runProbe(discovery = {}) {
     const { append = false, ...query } = discovery;
+    const revision = ++probeRevision.current;
+    const validationRevision = probeValidationRevision.current;
+    const catalogFingerprint = probeCatalogFingerprint;
     setProbing(true);
     setProbeError("");
+    setValidatedProbeRevision(null);
     try {
       const result = await postJson(`${ENDPOINT}/probe`, {
-        task: { ...toPayload(form), status: "draft" },
+        task: probeTask,
         discovery: { pageSize: 300, ...query },
       });
-      setProbe(current => append && current
-        ? { ...result, points: [...(current.points || []), ...(result.points || [])] }
-        : result);
+      if (revision !== probeRevision.current) return;
+      setProbe(current => {
+        const sameSource = current?.sourceFingerprint === probeSourceFingerprint;
+        return append && sameSource
+          ? {
+            ...result,
+            sourceFingerprint: probeSourceFingerprint,
+            catalogFingerprint,
+            points: [...(current.points || []), ...(result.points || [])],
+          }
+          : { ...result, sourceFingerprint: probeSourceFingerprint, catalogFingerprint };
+      });
+      if (validationRevision === probeValidationRevision.current)
+        setValidatedProbeRevision(validationRevision);
     } catch (error) {
+      if (revision !== probeRevision.current) return;
       setProbe(null);
       setProbeError(error.message);
     } finally {
-      setProbing(false);
+      if (revision === probeRevision.current) setProbing(false);
     }
   }
 
   function mapProbePoint(point, dataItemCode) {
-    const patch = patchFromProbePoint(point, dataItemCode, dataItems, descriptor);
+    const configuredMappings = [
+      ...form.valueMappings,
+      ...(form.processSpecification?.parameterMappings || []),
+    ];
+    const patch = patchFromProbePoint(point, dataItemCode, dataItems, descriptor, configuredMappings);
     setForm(current => {
       const rows = current.valueMappings;
       const existing = rows.findIndex(item => item.dataItemCode === dataItemCode);
@@ -172,17 +444,113 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
   }
 
+  async function saveDeviceGroupDrafts() {
+    if (!groupTaskData || deviceGroupLoadError) {
+      setGroupSaveError("任务编号清单尚未完整载入；请等待载入或重试后再保存。未完整载入时不会写入草稿。");
+      return;
+    }
+    if (deviceGroupCards.length === 0) {
+      setGroupSaveError("请先添加至少一个采集设备。");
+      return;
+    }
+
+    const seenIds = new Set();
+    const existingIds = new Set(groupTasks.map(item => String(item.taskId || "").trim().toLowerCase()));
+    const prepared = deviceGroupCards.map(device => {
+      const taskForm = { ...device.form, status: "draft" };
+      const selected = parseModelValue(taskForm.dataModel);
+      const model = models.find(item => item.modelId === selected.id && Number(item.version) === Number(selected.version));
+      const dataItems = model?.acquisition?.dataItems || [];
+      const check = validateIngestionTask(taskForm, { dataItems });
+      const errors = [];
+      const taskId = String(taskForm.taskId || "").trim().toLowerCase();
+      if (!model || model.status !== "published") errors.push("请选择当前可用的已发布工艺模型。");
+      if (existingIds.has(taskId)) errors.push("任务编号已存在；请换一个编号，避免覆盖现有任务版本。");
+      if (seenIds.has(taskId)) errors.push("画布中有重复的任务编号。");
+      seenIds.add(taskId);
+      if (check.count > 0) errors.push(`还有 ${check.count} 处配置需要修正。`);
+      const payload = deviceGroupPayload(taskForm);
+      return {
+        ...device,
+        form: taskForm,
+        payload,
+        fingerprint: JSON.stringify(payload),
+        errors,
+      };
+    });
+    const invalid = prepared.filter(item => item.errors.length > 0);
+    if (invalid.length > 0) {
+      const firstInvalid = invalid[0];
+      setDeviceGroupEntries(prepared.map(item => ({
+        key: item.key,
+        form: item.form,
+        savedFingerprint: item.savedFingerprint,
+        error: item.errors.join(" "),
+      })));
+      setActiveDeviceKey(firstInvalid.key);
+      setForm(firstInvalid.form);
+      setShowErrors(true);
+      resetActiveProbe();
+      setGroupSaveError(`${invalid.length} 个设备配置未通过检查。已切换到第一个待修正设备；修正后再次保存全部草稿。`);
+      return;
+    }
+
+    setSaving(true);
+    setGroupSaveError("");
+    const results = prepared.map(item => ({
+      key: item.key,
+      form: item.form,
+      savedFingerprint: item.savedFingerprint,
+      error: "",
+    }));
+    let savedCount = 0;
+    const failures = [];
+    try {
+      for (const item of prepared) {
+        const current = results.find(result => result.key === item.key);
+        if (current.savedFingerprint === item.fingerprint) {
+          savedCount += 1;
+          continue;
+        }
+        try {
+          await postJson(ENDPOINT, item.payload);
+          current.savedFingerprint = item.fingerprint;
+          current.error = "";
+          savedCount += 1;
+        } catch (error) {
+          current.error = error.message;
+          failures.push(`${item.form.name || item.form.taskId}：${error.message}`);
+        }
+        setDeviceGroupEntries(results.map(result => ({ ...result })));
+      }
+      if (failures.length > 0) {
+        setGroupSaveError(`已保存 ${savedCount} 个设备草稿，${failures.length} 个失败。可修正失败项后重试；已成功项不会重复写入。\n${failures.join("\n")}`);
+        return;
+      }
+      notify(`已保存 ${savedCount} 个独立采集草稿任务`);
+      navigate("/configuration/ingestion-tasks");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <Page title="采集配置"><Card><p className="text-sm text-slate-500">正在载入配置…</p></Card></Page>;
   if (loadError) return <Page title="采集配置"><Alert tone="danger">{loadError}</Alert></Page>;
 
   return (
     <Page
-      title={isNew ? "新建采集配置" : form.name || form.taskId}
+      title={isNew ? "采集配置工作区" : form.name || form.taskId}
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
             to="/configuration/ingestion-tasks">返回列表</Link>
-          {!readOnly && (
+          {multiDeviceSetup && (
+            <Button variant="primary" disabled={saving || !groupTaskData || Boolean(deviceGroupLoadError)}
+              onClick={() => void saveDeviceGroupDrafts()}>
+              {saving ? "逐设备保存中…" : `保存 ${deviceGroupCards.length} 个草稿`}
+            </Button>
+          )}
+          {!readOnly && !multiDeviceSetup && (
             <>
               <Button disabled={saving} onClick={() => save("draft")}>{saving ? "保存中…" : "保存草稿"}</Button>
               <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
@@ -190,7 +558,7 @@ export function IngestionTaskPage({ canWrite = true }) {
               </Button>
             </>
           )}
-          {canWrite && managedByBinding && form.status === "draft" && (
+          {!multiDeviceSetup && canWrite && managedByBinding && form.status === "draft" && (
             <Button variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
               发布任务绑定
             </Button>
@@ -198,31 +566,41 @@ export function IngestionTaskPage({ canWrite = true }) {
         </div>
       }
     >
-      <div className="grid gap-5">
-        {readOnly && <Alert tone="info">{!canWrite
-          ? "当前为只读视图；你可以核对驱动、点位映射和上下文来源，修改与发布由工艺工程师或平台管理员完成。"
-          : managedByBinding
-            ? "该任务由不可变模板与数据源版本生成；需要调整时请创建新的资产版本和任务绑定。"
-            : "已发布或已停用的配置不可修改。要调整参数请创建新版本。"}</Alert>}
-        {saveError && <Alert tone="danger">{saveError}</Alert>}
-        {showErrors && validation.count > 0 && (
-          <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
-        )}
+      {confirmationDialog}
+      {multiDeviceSetup && deviceGroupLoadError && <Alert tone="danger">
+        <p>读取可访问任务清单失败，无法安全检查多设备配置中的编号冲突：{deviceGroupLoadError}</p>
+        <Button className="mt-2" onClick={() => void Promise.all([reloadEdges(), reloadModels(), reloadGroupTasks()])}>重试读取</Button>
+      </Alert>}
+      {multiDeviceSetup && groupSaveError && <Alert tone="warning"><p className="whitespace-pre-line">{groupSaveError}</p></Alert>}
+      {readOnly && <Alert tone="info">{!canWrite
+        ? "当前为只读视图；你可以核对驱动、点位映射和上下文来源，修改与发布由工艺工程师或平台管理员完成。"
+        : managedByBinding
+          ? "该任务由不可变模板与数据源版本生成；需要调整时请创建新的资产版本和任务绑定。"
+          : "已发布或已停用的配置不可修改。要调整参数请创建新版本。"}</Alert>}
+      {saveError && <Alert tone="danger">{saveError}</Alert>}
+      {!multiDeviceSetup && showErrors && validation.count > 0 && (
+        <Alert tone="warning">还有 {validation.count} 处配置需要修正，已在对应字段下方标出。</Alert>
+      )}
 
-        <WorkflowGuide
-          title="完成 4 步即可发布"
-          description="先确定数据归属，再验证真实连接；高级采集策略可在需要时展开。"
-          steps={[
-            { title: "选择来源与工艺变量", description: "选择现场节点、数据归属和工艺变量。", state: form.edgeId && form.dataModel && form.subjectId ? "done" : "current" },
-            { title: "填写连接参数", description: `按 ${descriptor.label} 填写设备、仪器或系统连接。`, state: publishChecklist[1].done ? "done" : form.edgeId && form.dataModel && form.subjectId ? "current" : "upcoming" },
-            { title: "验证并映射变量", description: "读取真实点位，再映射必需工艺变量。", state: probe ? (publishChecklist[2].done ? "done" : "current") : (publishChecklist[1].done ? "current" : "upcoming") },
-            { title: "检查并发布", description: "连接和点位换算全部通过后发布到现场节点。", state: probeValid ? "current" : "upcoming" },
-          ]}
-        />
-
-        <div className="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,1fr)]">
-          <div className="grid gap-5">
-            <Card title="基本信息" description="数据来自哪里、关联哪台设备、结果采用哪套工艺变量。">
+      <IngestionDeviceGroupCanvas
+        devices={canvasDevices}
+        edges={edges}
+        models={models}
+        activeEdgeId={form.edgeId || null}
+        activeDeviceKey={multiDeviceSetup ? activeDeviceKey : "single-device"}
+        onSelect={multiDeviceSetup ? selectDeviceGroupTask : undefined}
+        onAddDeviceProfile={isNew && canWrite && !managedByBinding ? addDeviceGroupTask : undefined}
+        onAssignEdge={assignDeviceGroupEdge}
+        onRemove={multiDeviceSetup ? removeDeviceGroupTask : undefined}
+        canAddDevice={isNew && canWrite && !managedByBinding}
+        groupSaving={multiDeviceSetup && saving}
+        probe={probeView}
+        edgeError={errors.edgeId}
+        disabled={saving || readOnly}
+      >
+        <div className="grid gap-5">
+            <div id="acquisition-basic-info" className="scroll-mt-4">
+              <Card title="任务与数据归属" description="识别设备、选择运行节点，并指定采集数据对应的工艺变量和对象。">
               <div className="grid items-start gap-4 md:grid-cols-2">
                 <Field label="接入配置代码" hint="创建后不可修改。" error={errors.taskId}>
                   <Input value={form.taskId} disabled={readOnly || (!isNew && mode !== "create")}
@@ -231,18 +609,19 @@ export function IngestionTaskPage({ canWrite = true }) {
                 <Field label="配置名称" error={errors.name}>
                   <Input value={form.name} disabled={readOnly} onChange={event => update({ name: event.target.value })} />
                 </Field>
-                <Field label="现场节点" hint="运行在设备所在网络、负责执行采集的边缘节点。" error={errors.edgeId}>
-                  <Select value={form.edgeId} disabled={readOnly} onChange={event => update({ edgeId: event.target.value })}>
-                    <option value="">请选择现场节点</option>
-                    {form.edgeId && !edges.some(edge => edge.edgeId === form.edgeId) && (
-                      <option value={form.edgeId}>{form.edgeId}（历史值）</option>
-                    )}
-                    {edges.map(edge => (
-                      <option key={edge.edgeId} value={edge.edgeId}>
-                        {edge.hostname || edge.displayName || edge.edgeId} · {edge.edgeId}
-                      </option>
-                    ))}
+                <Field label="设备类型">
+                  <Select value={form.deviceProfile?.kind || "other"} disabled={readOnly}
+                    onChange={event => updateDeviceKind(event.target.value)}>
+                    {deviceProfileOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
+                </Field>
+                <Field label="设备厂商（可选）">
+                  <Input value={form.deviceProfile?.manufacturer || ""} disabled={readOnly} placeholder="例如 Mitsubishi、Siemens、Fanuc"
+                    onChange={event => update({ deviceProfile: { ...form.deviceProfile, manufacturer: event.target.value } })} />
+                </Field>
+                <Field label="设备型号（可选）">
+                  <Input value={form.deviceProfile?.model || ""} disabled={readOnly} placeholder="填写现场铭牌型号或系列"
+                    onChange={event => update({ deviceProfile: { ...form.deviceProfile, model: event.target.value } })} />
                 </Field>
                 <Field label="工艺变量" hint="规定过程量和控制参数的代码与单位，不包含来源地址。" error={errors.dataModel}>
                   <Select value={form.dataModel} disabled={readOnly} onChange={event => update({ dataModel: event.target.value })}>
@@ -265,59 +644,72 @@ export function IngestionTaskPage({ canWrite = true }) {
                   </Select>
                 </Field>
                 <Field label="归属对象编号" hint="数据所归属对象的唯一编号，例如 PRESS-01。" error={errors.subjectId}>
-                  <Input value={form.subjectId} disabled={readOnly} onChange={event => update({ subjectId: event.target.value })} />
+                  <Input id="acquisition-subject-id" value={form.subjectId} disabled={readOnly} onChange={event => update({ subjectId: event.target.value })} />
                 </Field>
-                <Field label="通信驱动" hint={descriptor.summary}>
+                <Field label="生产设备单元编号（可选）" hint="填写生产准备、工装安装或生产上下文所关联的设备编号；编号粒度按现场资产关系确定。">
+                  <Input id="acquisition-equipment-id" value={form.equipmentId} disabled={readOnly} onChange={event => update({ equipmentId: event.target.value })} />
+                </Field>
+                <Field label="通信驱动" hint={`${descriptor.summary} 当前设备类型可用的驱动。`}>
                   <Select value={form.protocol} disabled={readOnly}
                     onChange={event => setForm(current => applyProtocolChange(current, event.target.value))}>
-                    {protocolOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    {protocolOptionGroups(deviceProfileOption(form.deviceProfile?.kind).drivers).map(group => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </optgroup>
+                    ))}
                   </Select>
                 </Field>
               </div>
-            </Card>
+              </Card>
+            </div>
 
-            <ConnectionPanel
-              descriptor={descriptor}
-              connection={form[descriptor.section]}
-              errors={errors}
-              readOnly={readOnly}
-              allowProbe={allowProbe}
-              onChange={value => updateSection(descriptor.section, value)}
-            />
-          </div>
+            <details id="acquisition-connection" open className="scroll-mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-2">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-slate-900">连接参数 · {descriptor.label}</summary>
+              <ConnectionPanel
+                descriptor={descriptor}
+                connection={form[descriptor.section]}
+                errors={errors}
+                readOnly={readOnly}
+                allowProbe={allowProbe}
+                onChange={value => updateSection(descriptor.section, value)}
+              />
+            </details>
+            <details id="acquisition-probe" open className="scroll-mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-2">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-slate-900">连接探查与设备点位</summary>
+              <DevicePointsPanel
+                descriptor={descriptor}
+                form={form}
+                dataItems={dataItems}
+                probe={probeView}
+                probeError={probeError}
+                probing={probing}
+                readOnly={readOnly}
+                allowProbe={allowProbe}
+                advisories={advisories}
+                publishChecklist={publishChecklist}
+                onProbe={runProbe}
+                onMapPoint={mapProbePoint}
+              />
+            </details>
 
-          <div className="2xl:sticky 2xl:top-4 2xl:row-span-2">
-            <DevicePointsPanel
-              descriptor={descriptor}
-              form={form}
-              dataItems={dataItems}
-              probe={probe}
-              probeError={probeError}
-              probing={probing}
-              readOnly={readOnly}
-              advisories={advisories}
-              publishChecklist={publishChecklist}
-              onProbe={runProbe}
-              onMapPoint={mapProbePoint}
-            />
-          </div>
+            <details id="acquisition-mappings" open className="scroll-mt-4 rounded-xl border border-slate-200 bg-slate-50/50 p-2">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-slate-900">工艺变量映射</summary>
+              <PointMappingPanel
+                title="工艺变量映射"
+                description="把设备点位对应到平台的工艺变量，并给出换算关系。"
+                descriptor={descriptor}
+                rows={form.valueMappings}
+                options={dataItems}
+                errors={errors}
+                errorPrefix="valueMappings"
+                probe={probeView}
+                form={form}
+                readOnly={readOnly}
+                onChange={value => update({ valueMappings: value })}
+              />
+            </details>
 
-          <div className="grid gap-5 2xl:col-start-1">
-            <PointMappingPanel
-              title="工艺变量映射"
-              description="把设备点位对应到平台的工艺变量，并给出换算关系。"
-              descriptor={descriptor}
-              rows={form.valueMappings}
-              options={dataItems}
-              errors={errors}
-              errorPrefix="valueMappings"
-              probe={probe}
-              form={form}
-              readOnly={readOnly}
-              onChange={value => update({ valueMappings: value })}
-            />
-
-            <details className="rounded-lg border border-slate-200 bg-white">
+            <details id="acquisition-advanced" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white">
               <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-slate-900">高级采集与运行识别</summary>
               <div className="grid gap-5 border-t border-slate-200 p-5">
                 <ContextPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
@@ -337,22 +729,24 @@ export function IngestionTaskPage({ canWrite = true }) {
                 <StrategyPanel descriptor={descriptor} form={form} errors={errors} readOnly={readOnly} onChange={update} />
               </div>
             </details>
-          </div>
         </div>
-      </div>
+      </IngestionDeviceGroupCanvas>
     </Page>
   );
 }
 
 function ContextPanel({ descriptor, form, errors, readOnly, onChange }) {
   const rows = form.contextMappings;
+  const supportsDynamicContexts = descriptor.id !== "ethernet-ip";
   const update = (index, patch) =>
     onChange({ contextMappings: rows.map((item, rowIndex) => rowIndex === index ? { ...item, ...patch } : item) });
   return (
     <Card
       title="运行上下文"
-      description="从设备读取生产状态、产品、批次等上下文。阶段号由工艺模型中用途为「阶段号」的变量自动识别。"
-      actions={!readOnly ? (
+      description={supportsDynamicContexts
+        ? "从设备读取生产状态、产品、批次等上下文。阶段号由工艺模型中用途为「阶段号」的变量自动识别。"
+        : "EtherNet/IP 当前只接受带明确数据类型的采集点和时间标签；固定上下文仍可使用。"}
+      actions={!readOnly && supportsDynamicContexts ? (
         <Button onClick={() => onChange({ contextMappings: [...rows, { contextKey: "", sourcePath: "", required: false, topic: "" }] })}>
           添加上下文
         </Button>
@@ -395,6 +789,13 @@ function descriptorSourceHint(descriptor) {
   switch (descriptor.addressing) {
     case "modbus-register": return "使用寄存器选择器，例如 holding-register:120:uint16。";
     case "melsec-device": return "使用软元件选择器，例如 D:120:uint16 或 M:30:boolean。";
+    case "siemens-s7-address": return "使用 S7 绝对地址，例如 DB1.DBL0（Unix 毫秒）或 DB1.DBD0（Unix 秒）。";
+    case "ethernet-ip-tag": return "使用控制器符号标签，例如 Program:MainProgram.ProductCode 或 Motor.Speed。";
+    case "bacnet-object": return "从已指定 Device Instance 的对象目录选择 object-type:instance，例如 analog-input:1。";
+    case "omron-fins-address": return "填写已配置内存区地址，例如 DM:120:int16、CIO:12.3:boolean；不支持地址扫描。";
+    case "melsec-mc-3e-device": return "填写二进制 MC 3E 软元件选择器并带类型，例如 D:120:int16、D:120.3:boolean、X:1A:boolean。X/Y/B/W 按十六进制，M/L/D 按十进制。";
+    case "snmp-oid": return "填写数字 OID，例如 1.3.6.1.2.1.1.5.0；可带前导点，不支持 MIB 符号名称。";
+    case "mtconnect-data-item": return "使用设备 /probe 返回的 MTConnect DataItem ID，例如 xact 或 avail。";
     case "node-id": return "使用 OPC UA 节点编号。";
     default: return "使用报文中的 JSON 字段路径。";
   }
@@ -404,6 +805,13 @@ function descriptorSourcePlaceholder(descriptor) {
   switch (descriptor.addressing) {
     case "modbus-register": return "holding-register:120:uint16";
     case "melsec-device": return "D:120:uint16";
+    case "siemens-s7-address": return "DB1.DBD0";
+    case "ethernet-ip-tag": return "Program:MainProgram.ProductCode";
+    case "bacnet-object": return "analog-input:1";
+    case "omron-fins-address": return "DM:120:int16";
+    case "melsec-mc-3e-device": return "D:120:int16";
+    case "snmp-oid": return "1.3.6.1.2.1.1.5.0";
+    case "mtconnect-data-item": return "xact";
     case "node-id": return "ns=2;s=Machine.Product";
     default: return "productFamilyCode";
   }
@@ -411,14 +819,21 @@ function descriptorSourcePlaceholder(descriptor) {
 
 function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe, readOnly, onChange }) {
   const processSpecification = form.processSpecification;
+  const supportsProcessSpecification = !["ethernet-ip", "mtconnect", "bacnet-ip", "bacnet-mstp"].includes(descriptor.id);
   const update = patch => onChange({ processSpecification: { ...processSpecification, ...patch } });
   return (
     <Card
       title="设备配方版本识别"
-      description="从设备读取当前生效的配方版本标识，让每次运行都能关联到实际配方版本。"
+      description={supportsProcessSpecification
+        ? "从设备读取当前生效的配方版本标识，让每次运行都能关联到实际配方版本。"
+        : descriptor.id === "mtconnect"
+          ? "MTConnect 首期不把多个 DataItem 组合成设备配方参数对象；已有配置可关闭后移除。"
+          : descriptor.id.startsWith("bacnet-")
+            ? "BACnet 首期只采集标量 present-value；已有配方版本映射可关闭后移除。"
+            : "EtherNet/IP 当前不支持未声明数据类型的配方版本辅助标签；已有配置可关闭后移除。"}
       actions={
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={processSpecification.enabled} disabled={readOnly}
+          <input type="checkbox" checked={processSpecification.enabled} disabled={readOnly || (!supportsProcessSpecification && !processSpecification.enabled)}
             onChange={event => update({ enabled: event.target.checked })} />启用
         </label>
       }
@@ -427,17 +842,24 @@ function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe
         <p className="text-sm text-slate-500">当前采集任务不从设备数据识别配方版本。</p>
       ) : (
         <div className="grid gap-4">
+          {!supportsProcessSpecification && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {descriptor.id === "mtconnect"
+                ? "MTConnect 首期不支持把多个 DataItem 组合成设备配方参数对象；关闭上方开关后即可继续。"
+                : "EtherNet/IP 当前不支持未声明数据类型的配方版本辅助标签；关闭上方开关后即可继续。"}
+            </p>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="配方版本编号来源" error={errors["processSpecification.idPath"]}>
-              <Input value={processSpecification.idPath} disabled={readOnly} placeholder={descriptorSourcePlaceholder(descriptor)}
+              <Input value={processSpecification.idPath} disabled={readOnly || !supportsProcessSpecification} placeholder={descriptorSourcePlaceholder(descriptor)}
                 onChange={event => update({ idPath: event.target.value })} />
             </Field>
             <Field label="配方版本号来源" error={errors["processSpecification.versionPath"]}>
-              <Input value={processSpecification.versionPath} disabled={readOnly}
+              <Input value={processSpecification.versionPath} disabled={readOnly || !supportsProcessSpecification}
                 onChange={event => update({ versionPath: event.target.value })} />
             </Field>
             <Field label="配方版本名称来源（可选）">
-              <Input value={processSpecification.namePath} disabled={readOnly}
+              <Input value={processSpecification.namePath} disabled={readOnly || !supportsProcessSpecification}
                 onChange={event => update({ namePath: event.target.value })} />
             </Field>
             {descriptor.capabilities.parameterObjectPath && (
@@ -456,7 +878,7 @@ function ProcessSpecificationPanel({ descriptor, form, parameters, errors, probe
             errorPrefix="processSpecification.parameterMappings"
             probe={probe}
             form={form}
-            readOnly={readOnly}
+            readOnly={readOnly || !supportsProcessSpecification}
             onChange={value => update({ parameterMappings: value })}
           />
         </div>
@@ -487,10 +909,21 @@ function LifecyclePanel({ form, errors, readOnly, onChange }) {
             <Input value={lifecycle.activeContextKey || ""} disabled={readOnly}
               onChange={event => update({ activeContextKey: event.target.value })} />
           </Field>
-          <Field label="生产中的取值" hint="该上下文等于此值时视为生产中。">
-            <Input value={lifecycle.activeValue || ""} disabled={readOnly}
-              onChange={event => update({ activeValue: event.target.value })} />
+          <Field label="运行激活条件" hint="选择如何根据生产状态判断运行开始和结束。" error={errors["lifecycle.activeCondition"]}>
+            <Select value={lifecycle.activeCondition ?? "equals"} disabled={readOnly}
+              onChange={event => update({ activeCondition: event.target.value })}>
+              <option value="equals">等于指定值</option>
+              <option value="nonzero">非零生产序号</option>
+            </Select>
           </Field>
+          {(lifecycle.activeCondition ?? "equals") === "equals" ? (
+            <Field label="生产中的取值" hint="该上下文等于此值时视为生产中。" error={errors["lifecycle.activeValue"]}>
+              <Input value={lifecycle.activeValue || ""} disabled={readOnly}
+                onChange={event => update({ activeValue: event.target.value })} />
+            </Field>
+          ) : lifecycle.activeCondition === "nonzero" && (
+            <p className="text-sm text-slate-600">生产状态上下文为非零数值时视为生产中，为零时结束运行。</p>
+          )}
         </div>
       )}
     </Card>
@@ -548,13 +981,18 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
             <Field label="时间来源" hint={descriptorSourceHint(descriptor)} error={errors.timestampPath}>
               <Input value={form.timestampPath} disabled={readOnly}
                 placeholder={descriptorSourcePlaceholder(descriptor)}
-                onChange={event => onChange({ timestampPath: event.target.value })} />
+                onChange={event => {
+                  const timestampPath = descriptor.id === "snmp"
+                    ? normalizeSnmpOid(event.target.value) || event.target.value
+                    : event.target.value;
+                  onChange({ timestampPath });
+                }} />
             </Field>
             <Field label="时间戳编码" error={errors.timestampEncoding}>
               <Select value={form.timestampEncoding} disabled={readOnly}
                 onChange={event => onChange({ timestampEncoding: event.target.value })}>
                 <option value="auto">按协议自动选择</option>
-                <option value="iso-8601">ISO 8601</option>
+                {!(["siemens-s7", "ethernet-ip"].includes(descriptor.id)) && <option value="iso-8601">ISO 8601</option>}
                 <option value="unix-s">Unix 秒</option>
                 <option value="unix-ms">Unix 毫秒</option>
               </Select>
@@ -562,9 +1000,17 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
           </>
         )}
         {capabilities.sequencePath && (
-          <Field label="序号字段（可选）">
-            <Input value={form.sequencePath} disabled={readOnly} placeholder="没有可留空"
-              onChange={event => onChange({ sequencePath: event.target.value })} />
+          <Field label={descriptor.id === "snmp" ? "序号 OID（可选）" : "序号字段（可选）"}
+            hint={descriptor.id === "snmp" ? "填写数字 OID，例如 1.3.6.1.2.1.1.5.0；可带前导点，保存时规范化。" : undefined}
+            error={errors.sequencePath}>
+            <Input value={form.sequencePath} disabled={readOnly}
+              placeholder={descriptor.id === "snmp" ? "1.3.6.1.2.1.1.5.0" : "没有可留空"}
+              onChange={event => {
+                const sequencePath = descriptor.id === "snmp"
+                  ? normalizeSnmpOid(event.target.value) || event.target.value
+                  : event.target.value;
+                onChange({ sequencePath });
+              }} />
           </Field>
         )}
         <Field label="采样事件类型" error={errors.sampleEventType}>
@@ -583,13 +1029,15 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
 
 export function IngestionTasksPage({ canWrite = true }) {
   const { data, error, reload } = useApi(ENDPOINT);
-  const { data: templateData, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");
-  const { data: sourceData, reload: reloadSources } = useApi("/api/v1/ingestion-configuration/data-sources");
-  const { data: bindingData, reload: reloadBindings } = useApi("/api/v1/ingestion-configuration/bindings");
+  const { data: templateData, error: templateError, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");
+  const { data: sourceData, error: sourceError, reload: reloadSources } = useApi("/api/v1/ingestion-configuration/data-sources");
+  const { data: bindingData, error: bindingError, reload: reloadBindings } = useApi("/api/v1/ingestion-configuration/bindings");
+  const { data: capabilityData, error: capabilityError } = useApi("/api/v1/acquisition-protocols");
   const rows = extractRows(data);
   const templates = extractRows(templateData);
   const sources = extractRows(sourceData);
   const bindings = extractRows(bindingData);
+  const capabilities = capabilityData?.protocols || [];
   const navigate = useNavigate();
   const { confirm, confirmationDialog } = useConfirmDialog();
 
@@ -657,12 +1105,16 @@ export function IngestionTasksPage({ canWrite = true }) {
     >
       <div className="grid gap-4">
         {error && <Alert tone="danger">{error}</Alert>}
+        {templateError && <Alert tone="danger">任务模板读取失败：{templateError}</Alert>}
+        {sourceError && <Alert tone="danger">数据源读取失败：{sourceError}</Alert>}
+        {bindingError && <Alert tone="danger">任务绑定读取失败：{bindingError}</Alert>}
+        {capabilityError && <Alert tone="warning">驱动能力读取失败，暂无法确认连接复用方式：{capabilityError}</Alert>}
         {canWrite ? (
           <details className="group rounded-lg border border-slate-200 bg-white">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:content-none">
               <div>
-                <p className="font-semibold text-slate-950">多台同类设备</p>
-                <p className="mt-1 text-sm text-slate-600">首台设备发布后再展开。这里维护任务模板、连接实例和任务绑定，已有 {templates.filter(item => item.status === "published").length} 个模板。</p>
+                <p className="font-semibold text-slate-950">复用数据源与采集模板</p>
+                <p className="mt-1 text-sm text-slate-600">首条任务发布后可提取模板和数据源，为不同采集对象建立绑定；已有 {templates.filter(item => item.status === "published").length} 个模板。</p>
               </div>
               <span className="text-sm font-medium text-blue-700 group-open:hidden">展开配置</span>
               <span className="hidden text-sm font-medium text-blue-700 group-open:inline">收起</span>
@@ -674,6 +1126,7 @@ export function IngestionTasksPage({ canWrite = true }) {
                 templates={templates}
                 sources={sources}
                 bindings={bindings}
+                capabilities={capabilities}
                 onDeleteDraft={removeReusableDraft}
                 onChanged={() => Promise.all([reload?.(), reloadTemplates?.(), reloadSources?.(), reloadBindings?.()])}
               />
@@ -686,6 +1139,7 @@ export function IngestionTasksPage({ canWrite = true }) {
               <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">已发布数据源</p><strong className="text-xl">{sources.filter(item => item.status === "published").length}</strong></div>
               <div className="rounded-lg border border-slate-200 p-3"><p className="text-xs text-slate-500">任务绑定</p><strong className="text-xl">{bindings.length}</strong></div>
             </div>
+            <ReusableBindingPanel tasks={rows} templates={templates} sources={sources} bindings={bindings} capabilities={capabilities} canWrite={false} />
           </Card>
         )}
         <Card>
@@ -746,7 +1200,7 @@ export function IngestionTasksPage({ canWrite = true }) {
   );
 }
 
-function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDeleteDraft, onChanged, embedded = false }) {
+function ReusableConfigurationPanel({ tasks, templates, sources, bindings, capabilities, onDeleteDraft, onChanged, embedded = false }) {
   const firstPublished = tasks.find(item => item.status === "published" && !item.templateId && !item.dataSourceId);
   const [taskKey, setTaskKey] = useState(firstPublished ? `${firstPublished.taskId}@${firstPublished.version}` : "");
   const selected = tasks.find(item => `${item.taskId}@${item.version}` === taskKey);
@@ -821,6 +1275,7 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDel
           <Field label="首台数据源代码" hint={`将创建 v${nextDataSourceVersion}`}><Input value={dataSourceId} placeholder="press-01-source" onChange={event => setDataSourceId(event.target.value)} /></Field>
           <Button className="self-end" disabled={busy === "extract"} onClick={extract}>{busy === "extract" ? "提取中…" : "提取复用资产"}</Button>
         </div>
+        <ReusableBindingPanel tasks={tasks} templates={templates} sources={sources} bindings={bindings} capabilities={capabilities} onChanged={onChanged} />
         <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           <Button variant="ghost" onClick={() => downloadFile("/api/v1/ingestion-configuration/data-sources.csv", "data-sources.csv")}>导出数据源 CSV</Button>
           <Button variant="ghost" onClick={() => sourceFile.current?.click()} disabled={Boolean(busy)}>导入数据源 CSV</Button>
@@ -847,7 +1302,7 @@ function ReusableConfigurationPanel({ tasks, templates, sources, bindings, onDel
 
   if (embedded) return content;
   return (
-    <Card title="批量接入同类设备" description="首台设备通过真实探查后提取版本化模板；连接实例与任务绑定可用 CSV 原子导入，避免重复维护整份点位映射。">
+    <Card title="复用数据源与采集模板" description="首条任务通过真实探查后提取版本化模板；数据源与任务绑定可用 CSV 原子导入。">
       {content}
     </Card>
   );

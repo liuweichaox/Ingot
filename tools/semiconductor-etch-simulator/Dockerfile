@@ -1,3 +1,4 @@
+# Build the read-only Modbus TCP simulator and health endpoint for synthetic wafer-etch demo data.
 FROM python:3.12-alpine
 
 WORKDIR /app

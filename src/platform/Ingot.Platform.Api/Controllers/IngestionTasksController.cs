@@ -113,6 +113,9 @@ public sealed class IngestionTasksController(
             return InvalidRequest("发布采集配置前，引用的工艺数据模型必须已经发布。");
         if (normalized.Status == ConfigurationStatuses.Published)
         {
+            var sessionErrors = await store.ValidateSessionAsync(normalized, ct).ConfigureAwait(false);
+            if (sessionErrors.Count > 0)
+                return InvalidRequest(string.Join("；", sessionErrors.Select(static item => item.ToString())));
             var probe = await ProbeEdgeAsync(
                 new AcquisitionDeployment { Task = normalized, DataModel = model },
                 null,

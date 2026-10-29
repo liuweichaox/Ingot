@@ -1,3 +1,5 @@
+// 定义过程运行摘要、状态和质量结果的跨层响应契约。
+
 namespace Ingot.Contracts.Events;
 
 public static class ProcessExecutionKinds
@@ -12,6 +14,8 @@ public sealed record ProcessExecutionSummary
     public required string SiteId { get; init; }
     public string Kind { get; init; } = ProcessExecutionKinds.Discrete;
     public required string EquipmentId { get; init; }
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
 
     public IReadOnlyList<string> EdgeIds { get; init; } = [];
     public required string Status { get; init; }

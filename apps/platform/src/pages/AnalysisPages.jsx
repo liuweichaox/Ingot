@@ -186,6 +186,7 @@ export function ExecutionComparisonPage() {
     execution.completedAt ? new Date(execution.completedAt).toLocaleString("zh-CN") : "时间未知",
     execution.productFamilyCode || execution.productCode || "未标注产品",
     execution.equipmentId || "未标注设备",
+    execution.subjectId && execution.subjectId !== execution.equipmentId ? `逻辑对象 ${execution.subjectId}` : null,
     `…${String(execution.executionId || "").slice(-8)}`,
   ].filter(Boolean).join(" · ");
 
@@ -344,7 +345,7 @@ export function ExecutionComparisonPage() {
               columns={[
                 { key: "comparisonRole", label: "角色", render: value => <Badge tone={value === "基准" ? "info" : "neutral"}>{value}</Badge> },
                 { key: "executionId", label: "运行" },
-                { key: "equipmentId", label: "设备" },
+                { key: "equipmentId", label: "设备单元", render: (value, row) => <div><p>{value || "未记录"}</p>{row.subjectId && row.subjectId !== value && <p className="text-xs text-slate-500">逻辑对象 {row.subjectId}</p>}</div> },
                 { key: "completedAt", label: "结束时间", render: formatTime },
                 { key: "durationMs", label: "时长（秒）", render: value => formatDecimal(Number(value) / 1000) },
                 { key: "sampleCount", label: "样本数", render: formatInteger },

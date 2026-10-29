@@ -1,15 +1,20 @@
+// Edit and validate protocol-specific device points and their process-variable mappings.
 import { Badge, Button, Card, Field, Input, Select } from "../../ui/components";
 import {
   ADDRESSING,
   MELSEC_DEVICES,
+  MELSEC_MC3E_DEVICES,
   MODBUS_AREAS,
   isModbusBitArea,
   melsecAddressHint,
   melsecDevice,
+  melsecMc3eDevice,
   melsecWireAddress,
   modbusArea,
+  normalizeSnmpOid,
   registerWordCount,
 } from "../protocolRegistry";
+import { PointMappingCsvPanel } from "../PointMappingCsvPanel";
 
 export function PointMappingPanel({
   title,
@@ -39,6 +44,15 @@ export function PointMappingPanel({
         <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{errors[errorPrefix]}</p>
       )}
       <div className="grid gap-4">
+        <PointMappingCsvPanel
+          descriptor={descriptor}
+          rows={rows}
+          options={options}
+          form={form}
+          readOnly={readOnly}
+          createBlankRow={blankRow}
+          onApply={onChange}
+        />
         {rows.length === 0 && <p className="text-sm text-slate-500">还没有配置点位。</p>}
         {rows.map((row, index) => (
           <PointRow
@@ -68,15 +82,12 @@ export function blankRow(descriptor) {
     dataItemCode: "",
     sourcePath: "",
     required: true,
-    sourceDataType: descriptor.dataTypes.includes("auto") ? "auto" : "int16",
+    sourceDataType: descriptor.defaultDataType || (descriptor.dataTypes.includes("auto") ? "auto" : "int16"),
     sourceByteLength: 16,
     scale: 1,
     offset: 0,
     qualityPath: "",
     acceptedQualityValues: "",
-    minimum: "",
-    maximum: "",
-    outOfRangeBehavior: "reject",
     missingValueBehavior: "inherit",
     defaultValue: "",
     modbusArea: "holding-register",
@@ -97,6 +108,10 @@ function PointRow({
   const definition = options.find(item => item.code === row.dataItemCode);
   const listId = `${path}-points`;
   const error = field => errors[`${path}.${field}`];
+  const mc3eFamily = form.melsecMc3E?.family;
+  const mc3eFamilyRange = mc3eFamily === "iq-r"
+    ? "iQ-R 的帧地址上限为 0xFFFFFFFF"
+    : ["q-l", "iq-f"].includes(mc3eFamily) ? `${mc3eFamily === "iq-f" ? "iQ-F" : "Q/L"} 的帧地址上限为 0xFFFFFF` : "选择 PLC 系列后显示该系列的帧地址上限";
 
   return (
     <div className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-2 xl:grid-cols-3">
@@ -120,34 +135,99 @@ function PointRow({
       </Field>
 
       {descriptor.addressing === ADDRESSING.modbusRegister && (
-        <ModbusAddressFields row={row} form={form} error={error} readOnly={readOnly} onChange={onChange} />
+        <ModbusAddressFields row={row} form={form} descriptor={descriptor} error={error} readOnly={readOnly} onChange={onChange} />
       )}
       {descriptor.addressing === ADDRESSING.melsecDevice && (
         <MelsecAddressFields row={row} error={error} readOnly={readOnly} onChange={onChange} />
       )}
-      {[ADDRESSING.jsonPath, ADDRESSING.nodeId].includes(descriptor.addressing) && (
+      {[ADDRESSING.jsonPath, ADDRESSING.mtConnectDataItem, ADDRESSING.nodeId, ADDRESSING.siemensS7Address, ADDRESSING.ethernetIpTag, ADDRESSING.omronFinsAddress, ADDRESSING.melsecMc3EDevice, ADDRESSING.bacnetObject, ADDRESSING.snmpOid].includes(descriptor.addressing) && (
         <Field
           label={descriptor.pointLabel}
-          hint={probe ? "可从右侧读取到的设备点位中选择。" : "验证连接后可直接从设备点位中选择。"}
+          hint={descriptor.addressing === ADDRESSING.siemensS7Address
+            ? "填写 PLC 绝对地址，例如 DB1.DBW0、DB1.DBX0.0、MW10；S7 不扫描未知地址。"
+            : descriptor.addressing === ADDRESSING.ethernetIpTag
+              ? "填写控制器符号标签，例如 Program:MainProgram.Temperature、Motor.Speed 或 Values[0]；只回读已填写的标签。"
+              : descriptor.addressing === ADDRESSING.omronFinsAddress
+                ? "填写已知内存区地址，例如 DM:100 或 CIO:100.3；数据类型由下方选择，也可写成 DM:100:int16。"
+                : descriptor.addressing === ADDRESSING.melsecMc3EDevice
+                  ? "填写二进制 MC 3E 点位选择器并带类型后缀，例如 D:100:int16、D:100.3:boolean 或 X:1A:boolean。X/Y/B/W 用十六进制，M/L/D 用十进制。"
+                  : descriptor.addressing === ADDRESSING.mtConnectDataItem
+                    ? "使用 /probe 返回的 DataItem ID，例如 xact 或 avail；运行时只请求已配置 ID。"
+                    : descriptor.addressing === ADDRESSING.bacnetObject
+                      ? "从指定 Device Instance 的对象目录选择 object-type:instance，例如 analog-input:1；读取对象 present-value 标量。"
+                      : descriptor.addressing === ADDRESSING.snmpOid
+                        ? "填写数字 OID，例如 1.3.6.1.2.1.1.5.0；从 browseRootOid 子树浏览并拖拽点位。只读 GET，不支持 MIB 符号名称。"
+            : probe ? "可从右侧读取到的设备点位中选择。" : "验证连接后可直接从设备点位中选择。"}
           error={error("sourcePath")}
         >
           <Input
             list={listId}
             value={row.sourcePath}
             disabled={readOnly}
-            placeholder={descriptor.addressing === ADDRESSING.nodeId ? "ns=2;s=Machine.Temperature" : "sensors.temperature"}
-            onChange={event => onChange({ sourcePath: event.target.value })}
+            placeholder={descriptor.addressing === ADDRESSING.nodeId
+              ? "ns=2;s=Machine.Temperature"
+              : descriptor.addressing === ADDRESSING.siemensS7Address ? "DB1.DBW0"
+                : descriptor.addressing === ADDRESSING.ethernetIpTag ? "Program:MainProgram.Temperature"
+                  : descriptor.addressing === ADDRESSING.omronFinsAddress ? "DM:100"
+                    : descriptor.addressing === ADDRESSING.melsecMc3EDevice ? "D:100:int16"
+                      : descriptor.addressing === ADDRESSING.mtConnectDataItem ? "xact"
+                        : descriptor.addressing === ADDRESSING.bacnetObject ? "analog-input:1"
+                          : descriptor.addressing === ADDRESSING.snmpOid ? "1.3.6.1.2.1.1.5.0" : "sensors.temperature"}
+            onChange={event => {
+              let sourcePath = event.target.value;
+              if (descriptor.addressing === ADDRESSING.snmpOid)
+                sourcePath = normalizeSnmpOid(sourcePath) || sourcePath;
+              const [deviceCode = ""] = sourcePath.split(":");
+              const device = descriptor.addressing === ADDRESSING.melsecMc3EDevice ? melsecMc3eDevice(deviceCode) : null;
+              if (descriptor.addressing === ADDRESSING.melsecMc3EDevice &&
+                  /^[A-Za-z]+:[0-9A-Fa-f]+(?:\.\d{1,2})?(?::[A-Za-z0-9]+)?$/.test(sourcePath))
+                sourcePath = canonicalizeMc3eSelector(sourcePath, row.sourceDataType);
+              const canonicalType = sourcePath.split(":")[2]?.toLowerCase();
+              onChange({
+                sourcePath,
+                ...(canonicalType && descriptor.dataTypes.includes(canonicalType)
+                  ? { sourceDataType: canonicalType }
+                  : device?.bit ? { sourceDataType: "boolean" } : {}),
+              });
+            }}
           />
           <datalist id={listId}>
+            {descriptor.addressing === ADDRESSING.melsecMc3EDevice && [
+              ["D:100:int16", "D 字软元件 · 十进制"], ["D:100.3:boolean", "D 字内位"],
+              ["W:1A:uint16", "W 字软元件 · 十六进制"], ["X:1A:boolean", "X 位软元件 · 十六进制"],
+            ].map(([value, label]) => <option key={`example-${value}`} value={value}>{label}</option>)}
             {(probe?.points || []).map(point => (
-              <option key={point.path} value={point.path}>{point.name}</option>
+              <option key={`probe-${point.path}`} value={point.path}>{point.name}</option>
             ))}
           </datalist>
+          {descriptor.addressing === ADDRESSING.melsecMc3EDevice && (
+            <p className="mt-1 text-xs text-slate-500">
+              支持区：{MELSEC_MC3E_DEVICES.map(device => `${device.code}（${device.description}，${device.radix === 16 ? "十六进制" : "十进制"}${device.bit ? "，boolean" : ""}）`).join("、")}。
+              {mc3eFamilyRange}；这是 3E 二进制选择器，A 兼容 1E 的 X/Y 八进制规则不适用。
+            </p>
+          )}
         </Field>
       )}
 
-      {[ADDRESSING.modbusRegister, ADDRESSING.melsecDevice].includes(descriptor.addressing) && (
+      {[ADDRESSING.modbusRegister, ADDRESSING.melsecDevice, ADDRESSING.siemensS7Address, ADDRESSING.ethernetIpTag, ADDRESSING.omronFinsAddress, ADDRESSING.melsecMc3EDevice, ADDRESSING.bacnetObject, ADDRESSING.snmpOid].includes(descriptor.addressing) && (
         <DataTypeField row={row} descriptor={descriptor} error={error} readOnly={readOnly} onChange={onChange} />
+      )}
+
+      {descriptor.addressing === ADDRESSING.omronFinsAddress && row.sourceDataType !== "boolean" && registerWordCount(row.sourceDataType) > 1 && (
+        <Field label="多字字序" hint="PLC 将 32/64 位值拆分到多个连续字时，选择高字或低字在前。" error={error("wordOrder")}>
+          <Select value={row.wordOrder || "high-low"} disabled={readOnly}
+            onChange={event => onChange({ wordOrder: event.target.value })}>
+            <option value="high-low">高字在前</option>
+            <option value="low-high">低字在前</option>
+          </Select>
+        </Field>
+      )}
+
+      {descriptor.addressing === ADDRESSING.siemensS7Address && row.sourceDataType === "string" && (
+        <Field label="STRING 最大长度（字符）" hint="按 PLC DB 中 S7 STRING 的长度字节填写；单点最多读取 200 字节。" error={error("sourceByteLength")}>
+          <Input type="number" min="1" max="198" value={row.sourceByteLength} disabled={readOnly}
+            onChange={event => onChange({ sourceByteLength: event.target.value })} />
+        </Field>
       )}
 
       {descriptor.capabilities.perTopicMapping && (
@@ -175,30 +255,33 @@ function PointRow({
           onChange={event => onChange({ offset: event.target.value })} />
       </Field>
 
-      <Field label="质量字段" hint="可选；例如 OPC UA 状态或报文中的 quality。" error={error("qualityPath")}>
-        <Input value={row.qualityPath || ""} disabled={readOnly || descriptor.addressing === ADDRESSING.nodeId}
-          placeholder={descriptor.addressing === ADDRESSING.nodeId ? "$status" : undefined}
+      <Field label="质量字段"
+        hint={descriptor.id === "ethernet-ip" ? "EtherNet/IP 当前不支持质量标签；如有旧值，请清空后保存。"
+          : descriptor.addressing === ADDRESSING.melsecMc3EDevice ? "填写带类型后缀的 MC 3E 选择器，例如 M:100:boolean 或 D:100:int16。"
+            : descriptor.addressing === ADDRESSING.mtConnectDataItem ? "MTConnect observation 自带质量状态，首期不支持额外质量 DataItem 映射。"
+              : descriptor.addressing === ADDRESSING.snmpOid ? "SNMP OID 点位不提供独立质量路径。"
+            : "可选；例如 OPC UA 状态或报文中的 quality。"}
+        error={error("qualityPath")}>
+        <Input value={row.qualityPath || ""}
+          disabled={readOnly || descriptor.addressing === ADDRESSING.nodeId ||
+            descriptor.addressing === ADDRESSING.mtConnectDataItem ||
+            descriptor.addressing === ADDRESSING.snmpOid ||
+            (descriptor.id === "ethernet-ip" && !(row.qualityPath || "").trim())}
+          placeholder={descriptor.addressing === ADDRESSING.nodeId ? "$status"
+            : descriptor.addressing === ADDRESSING.melsecMc3EDevice ? "M:100:boolean" : undefined}
           onChange={event => onChange({ qualityPath: event.target.value })} />
       </Field>
-      <Field label="允许的质量值" hint="多个值用逗号分隔；配置后其他质量值会被拒绝。" error={error("acceptedQualityValues")}>
-        <Input value={row.acceptedQualityValues || ""} disabled={readOnly} placeholder="Good, Valid"
+      <Field label="允许的质量值"
+        hint={descriptor.id === "ethernet-ip" ? "EtherNet/IP 当前不支持质量过滤；如有旧值，请清空后保存。"
+          : descriptor.addressing === ADDRESSING.mtConnectDataItem ? "由 MTConnect observation 自带的质量状态决定；首期不提供过滤规则。"
+            : descriptor.addressing === ADDRESSING.snmpOid ? "SNMP OID 点位不提供独立质量状态过滤。"
+            : "多个值用逗号分隔；配置后其他质量值会被拒绝。"}
+        error={error("acceptedQualityValues")}>
+        <Input value={row.acceptedQualityValues || ""}
+          disabled={readOnly || descriptor.addressing === ADDRESSING.mtConnectDataItem || descriptor.addressing === ADDRESSING.snmpOid ||
+            (descriptor.id === "ethernet-ip" && !(row.acceptedQualityValues || "").trim())}
+          placeholder="Good, Valid"
           onChange={event => onChange({ acceptedQualityValues: event.target.value })} />
-      </Field>
-      <Field label="有效下限" error={error("minimum")}>
-        <Input type="number" step="any" value={row.minimum ?? ""} disabled={readOnly}
-          onChange={event => onChange({ minimum: event.target.value })} />
-      </Field>
-      <Field label="有效上限" error={error("maximum")}>
-        <Input type="number" step="any" value={row.maximum ?? ""} disabled={readOnly}
-          onChange={event => onChange({ maximum: event.target.value })} />
-      </Field>
-      <Field label="越界处理" error={error("outOfRangeBehavior")}>
-        <Select value={row.outOfRangeBehavior || "reject"} disabled={readOnly}
-          onChange={event => onChange({ outOfRangeBehavior: event.target.value })}>
-          <option value="reject">拒绝整条快照</option>
-          <option value="clamp">限制到边界</option>
-          <option value="omit">省略该值</option>
-        </Select>
       </Field>
       <Field label="缺失处理" error={error("missingValueBehavior")}>
         <Select value={row.missingValueBehavior || "inherit"} disabled={readOnly}
@@ -254,20 +337,33 @@ function Readout({ label, value }) {
 
 function DataTypeField({ row, descriptor, error, readOnly, onChange }) {
   const bitArea = descriptor.addressing === ADDRESSING.modbusRegister && isModbusBitArea(row.modbusArea);
-  const types = bitArea ? ["boolean"] : descriptor.dataTypes;
+  const mc3eArea = descriptor.addressing === ADDRESSING.melsecMc3EDevice
+    ? melsecMc3eDevice(String(row.sourcePath || "").split(":")[0])
+    : null;
+  const types = bitArea || mc3eArea?.bit ? ["boolean"] : descriptor.dataTypes;
   return (
     <Field
       label="设备数据类型"
-      hint={bitArea ? "位区读取结果固定为布尔值。" : undefined}
+      hint={bitArea || mc3eArea?.bit ? "位软元件只支持 boolean；MC 3E 字软元件读取 boolean 时在选择器中填写 .0-.15 位偏移。"
+        : [ADDRESSING.mtConnectDataItem, ADDRESSING.bacnetObject, ADDRESSING.snmpOid].includes(descriptor.addressing)
+          ? descriptor.addressing === ADDRESSING.bacnetObject
+            ? "对象目录读取的 present-value 标量按目标变量类型自动解析。"
+            : descriptor.addressing === ADDRESSING.snmpOid
+              ? "auto 按平台目标变量类型解析 SNMP 标量；Counter32/64 保留为累计值，不计算速率。"
+              : "Agent 返回 XML 文本；按平台目标变量类型解析成标量。"
+          : undefined}
       error={error("sourceDataType")}
     >
       <Select
         value={row.sourceDataType}
-        disabled={readOnly || bitArea}
+        disabled={readOnly || bitArea || mc3eArea?.bit}
         onChange={event => {
           const next = event.target.value;
           onChange({
             sourceDataType: next,
+            ...(descriptor.addressing === ADDRESSING.melsecMc3EDevice
+              ? { sourcePath: withMelsecMc3eType(row.sourcePath, next) }
+              : {}),
             bitIndex: next === "boolean" ? row.bitIndex : "",
             modbusQuantity: next === "string"
               ? Math.max(1, Math.ceil((Number(row.sourceByteLength) || 1) / 2))
@@ -276,16 +372,36 @@ function DataTypeField({ row, descriptor, error, readOnly, onChange }) {
         }}
       >
         {types.map(value => (
-          <option key={value} value={value}>{value === "auto" ? "按样本识别（不推荐）" : value}</option>
+          <option key={value} value={value}>{value === "auto"
+          ? [ADDRESSING.mtConnectDataItem, ADDRESSING.bacnetObject, ADDRESSING.snmpOid].includes(descriptor.addressing)
+            ? "按平台目标变量类型解析" : "按样本识别（不推荐）"
+            : value}</option>
         ))}
       </Select>
     </Field>
   );
 }
 
-function ModbusAddressFields({ row, form, error, readOnly, onChange }) {
+function withMelsecMc3eType(sourcePath, dataType) {
+  const selector = String(sourcePath || "").trim();
+  return canonicalizeMc3eSelector(selector, dataType);
+}
+
+function canonicalizeMc3eSelector(sourcePath, fallbackType) {
+  const selector = String(sourcePath || "").trim();
+  const match = /^([A-Za-z]+):([0-9A-Fa-f]+)(?:\.(\d{1,2}))?(?::([A-Za-z0-9]+))?$/i.exec(selector);
+  if (!match) return selector;
+  const [, rawCode, rawAddress, bit, rawType] = match;
+  const device = melsecMc3eDevice(rawCode);
+  if (!device) return selector;
+  const address = device.radix === 16 ? rawAddress.toUpperCase() : rawAddress;
+  const dataType = rawType?.toLowerCase() || (device.bit ? "boolean" : fallbackType);
+  return `${device.code}:${address}${bit === undefined ? "" : `.${bit}`}:${dataType}`;
+}
+
+function ModbusAddressFields({ row, form, descriptor, error, readOnly, onChange }) {
   const area = modbusArea(row.modbusArea);
-  const oneBased = form.modbusTcp?.addressBase === "one-based";
+  const oneBased = form[descriptor.section]?.addressBase === "one-based";
   const words = row.sourceDataType === "string"
     ? Math.max(1, Math.ceil((Number(row.sourceByteLength) || 1) / 2))
     : registerWordCount(row.sourceDataType);

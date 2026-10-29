@@ -352,7 +352,7 @@ export function ProcessExecutionsPage() {
             onRowClick={row => navigate(`/process-executions/${encodeURIComponent(row.executionId)}?siteId=${encodeURIComponent(row.siteId)}`)}
             columns={[
               { key: "executionId", label: "运行号" },
-              { key: "equipmentId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value}</p><p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
+              { key: "equipmentId", label: "来源", render: (value, row) => <div><p className="font-medium text-slate-800">{value || "设备单元未记录"}</p>{row.subjectId && row.subjectId !== value && <p className="text-xs text-slate-600">逻辑对象 {row.subjectId}</p>}<p className="text-xs text-slate-500">{row.edgeIds?.join("、") || "Edge 未记录"}</p></div> },
               { key: "productCode", label: "产品" },
               { key: "externalBatchRef", label: "批次 / 工件", render: (value, row) => <div><p>{value || "批次未记录"}</p><p className="text-xs text-slate-500">{row.outputItemId || "工件未记录"}</p></div> },
               { key: "processSpecificationId", label: "配方版本" },
@@ -580,7 +580,8 @@ export function ProcessExecutionDetailPage() {
                 <Card title="生产身份">
                   <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                     {[
-                      ["设备", execution.equipmentId],
+                      ["设备单元", execution.equipmentId],
+                      ...(execution.subjectId && execution.subjectId !== execution.equipmentId ? [["逻辑对象", execution.subjectId]] : []),
                       ["现场节点", execution.edgeIds?.join("、")],
                       ["产品系列", execution.productFamilyCode],
                       ["产品", execution.productCode],

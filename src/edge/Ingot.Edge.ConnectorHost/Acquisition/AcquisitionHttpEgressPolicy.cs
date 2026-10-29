@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Microsoft.Extensions.Options;
 
@@ -148,9 +149,48 @@ public sealed class AcquisitionHttpEgressPolicy(
                 client.Dispose();
                 lastError = exception;
             }
+            catch
+            {
+                // Caller cancellation must also release a socket which never reached the shared session.
+                client.Dispose();
+                throw;
+            }
         }
 
         throw new IOException($"无法连接允许的 {protocol} 采集目标 {host}:{port}。", lastError);
+    }
+
+    public async Task<UdpClient> ConnectUdpAsync(
+        string host,
+        int port,
+        string protocol,
+        int timeoutMs,
+        CancellationToken ct = default)
+    {
+        var addresses = await ResolvePermittedAddressesAsync(host, protocol, ct).ConfigureAwait(false);
+        var address = addresses[0];
+        if (string.Equals(protocol, "Omron FINS/UDP", StringComparison.Ordinal) &&
+            address.AddressFamily != AddressFamily.InterNetwork)
+            throw new InvalidOperationException("Omron FINS/UDP 仅支持 IPv4 单播目标。");
+        if (string.Equals(protocol, "Omron FINS/UDP", StringComparison.Ordinal) &&
+            IsIpv4BroadcastTarget(address))
+            throw new InvalidOperationException("Omron FINS/UDP 采集目标不能是 IPv4 广播地址。");
+
+        var timeout = Math.Max(1000, timeoutMs);
+        var client = new UdpClient(address.AddressFamily);
+        try
+        {
+            client.EnableBroadcast = false;
+            client.Client.ReceiveTimeout = timeout;
+            client.Client.SendTimeout = timeout;
+            client.Connect(address, port);
+            return client;
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
     }
 
     private async Task<IReadOnlyList<IPAddress>> ResolvePermittedAddressesAsync(
@@ -260,4 +300,49 @@ public sealed class AcquisitionHttpEgressPolicy(
         return bytes[0] == 169 && bytes[1] == 254 ||
                bytes[0] is >= 224 and <= 239;
     }
+
+    private static bool IsIpv4BroadcastTarget(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+        if (address.Equals(IPAddress.Broadcast))
+            return true;
+
+        // Subnet masks are needed to distinguish a directed-broadcast address from a valid
+        // site host ending in .255; reject broadcasts for networks configured on this host.
+        var targetBytes = address.GetAddressBytes();
+        foreach (var network in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (network.OperationalStatus != OperationalStatus.Up)
+                continue;
+            foreach (var unicast in network.GetIPProperties().UnicastAddresses)
+            {
+                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork)
+                    continue;
+
+                var mask = unicast.IPv4Mask.GetAddressBytes();
+                if (mask.Length != targetBytes.Length || IsHostMask(mask))
+                    continue;
+
+                var localBytes = unicast.Address.GetAddressBytes();
+                var isBroadcast = true;
+                for (var index = 0; index < targetBytes.Length; index++)
+                {
+                    var broadcastByte = (byte)(localBytes[index] | ~mask[index]);
+                    if (targetBytes[index] != broadcastByte)
+                    {
+                        isBroadcast = false;
+                        break;
+                    }
+                }
+                if (isBroadcast)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsHostMask(byte[] mask)
+        => mask.Length == 4 && mask[0] == 255 && mask[1] == 255 &&
+           mask[2] == 255 && mask[3] >= 254;
 }

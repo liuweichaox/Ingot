@@ -187,6 +187,12 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 .ToArray();
             try
             {
+                var sessionErrors = AcquisitionSessionCompatibility.Validate(deployment.Task,
+                    deployments.Select(static item => item.Task)
+                        .Concat(_workers.Values.Where(static worker => worker.Deployment is not null)
+                            .Select(static worker => worker.Deployment!.Task)));
+                if (sessionErrors.Count > 0)
+                    throw new InvalidDataException(string.Join("；", sessionErrors.Select(static item => item.ToString())));
                 status.RecordApplicationState(
                     deployment.Task.TaskId,
                     AcquisitionApplicationStates.Validating);

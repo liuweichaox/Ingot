@@ -770,11 +770,14 @@ public sealed class ExecutionComparisonService(
             .FirstOrDefault();
         var visualReview = visualRecord is null ? null : latestReviews.GetValueOrDefault(visualRecord.RecordId);
         var context = ResolveContext(ordered);
-        var lifecycleComplete = started is not null && completed is not null;
+        var lifecycleComplete = ProcessExecutionLifecycle.IsComplete(started?.Event, completed?.Event);
+        var equipmentId = PhysicalEquipmentIdentity.Resolve(ordered.Select(static row => row.Event));
         return new ExecutionComparisonRow
         {
             ExecutionId = executionId,
-            EquipmentId = first.Event.Subject.Id,
+            EquipmentId = equipmentId,
+            SubjectType = first.Event.Subject.Type,
+            SubjectId = first.Event.Subject.Id,
             EdgeIds = ordered.Select(static row => row.EdgeId)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
@@ -836,7 +839,7 @@ public sealed class ExecutionComparisonService(
         return InspectionPlanMatcher.Resolve(
             plans,
             ResolveContext(ordered),
-            first.Event.Subject.Id,
+            PhysicalEquipmentIdentity.Resolve(ordered.Select(static row => row.Event)),
             startedAt);
     }
 

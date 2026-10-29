@@ -9,6 +9,8 @@ public sealed class AcquisitionSecurityOptions
 
     public string[] AllowedNetworkHosts { get; set; } = [];
 
+    public string[] AllowedSerialPorts { get; set; } = [];
+
     public bool AllowPrivateNetworkHttpTargets { get; set; }
 
     public bool AllowPrivateNetworkTargets { get; set; }

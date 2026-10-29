@@ -1,3 +1,6 @@
+// 定义采集配置、逻辑归属对象与数据源身份的跨层契约。
+
+using System.Text.Json.Serialization;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
 
@@ -9,9 +12,59 @@ public static class AcquisitionProtocols
     public const string Mqtt = "mqtt";
     public const string OpcUa = "opc-ua";
     public const string ModbusTcp = "modbus-tcp";
+    public const string ModbusRtu = "modbus-rtu";
+    public const string ModbusAscii = "modbus-ascii";
     public const string MelsecA1E = "melsec-a1e";
+    public const string MelsecMc3E = "melsec-mc-3e";
+    public const string SiemensS7 = "siemens-s7";
+    public const string EtherNetIp = "ethernet-ip";
+    public const string OmronFinsTcp = "omron-fins-tcp";
+    public const string OmronFinsUdp = "omron-fins-udp";
+    public const string MtConnect = "mtconnect";
+    public const string BacnetIp = "bacnet-ip";
+    public const string BacnetMstp = "bacnet-mstp";
+    public const string Snmp = "snmp";
 
-    public static bool IsSupported(string? value) => value is HttpPolling or Mqtt or OpcUa or ModbusTcp or MelsecA1E;
+    public static bool IsSupported(string? value) => value is HttpPolling or Mqtt or OpcUa or ModbusTcp or ModbusRtu or ModbusAscii or MelsecA1E or MelsecMc3E or SiemensS7 or EtherNetIp or OmronFinsTcp or OmronFinsUdp or MtConnect or BacnetIp or BacnetMstp or Snmp;
+}
+
+public static class AcquisitionDeviceKinds
+{
+    public const string Plc = "plc";
+    public const string Cnc = "cnc";
+    public const string IndustrialRobot = "industrial-robot";
+    public const string Dcs = "dcs";
+    public const string RemoteIo = "remote-io";
+    public const string Drive = "drive";
+    public const string SensorTransmitter = "sensor-transmitter";
+    public const string MeasurementInstrument = "measurement-instrument";
+    public const string EnergyMeter = "energy-meter";
+    public const string MachineVision = "machine-vision";
+    public const string IndustrialComputer = "industrial-computer";
+    public const string IndustrialGateway = "industrial-gateway";
+    public const string ScadaMes = "scada-mes";
+    public const string Other = "other";
+    public const string BuildingAutomation = "building-automation";
+    public const string HmiPanel = "hmi-panel";
+    public const string ProcessInstrument = "process-instrument";
+    public const string WeighingInstrument = "weighing-instrument";
+    public const string PowerAsset = "power-asset";
+    public const string BarcodeRfid = "barcode-rfid";
+    public const string EnvironmentalMonitor = "environmental-monitor";
+    public const string NetworkInfrastructure = "network-infrastructure";
+
+    public static bool IsSupported(string? value) => value is Plc or Cnc or IndustrialRobot or Dcs or RemoteIo or
+        Drive or SensorTransmitter or MeasurementInstrument or EnergyMeter or MachineVision or IndustrialComputer or
+        IndustrialGateway or ScadaMes or Other or BuildingAutomation or HmiPanel or ProcessInstrument or
+        WeighingInstrument or PowerAsset or BarcodeRfid or EnvironmentalMonitor or NetworkInfrastructure;
+}
+
+/// <summary>Describes the physical or logical source device independently from its data owner and protocol driver.</summary>
+public sealed record AcquisitionDeviceProfile
+{
+    public required string Kind { get; init; }
+    public string? Manufacturer { get; init; }
+    public string? Model { get; init; }
 }
 
 public static class AcquisitionTimestampEncodings
@@ -42,11 +95,31 @@ public sealed record IngestionTask
     public required string Source { get; init; }
     public string SubjectType { get; init; } = "equipment";
     public required string SubjectId { get; init; }
+    // Equipment unit used for independent production preparation and tooling; may be a machine or a cavity.
+    public string? EquipmentId { get; init; }
+    public AcquisitionDeviceProfile? DeviceProfile { get; init; }
     public HttpPollingConnection HttpPolling { get; init; } = new();
     public MqttConnection? Mqtt { get; init; }
     public OpcUaConnection? OpcUa { get; init; }
     public ModbusTcpConnection? ModbusTcp { get; init; }
+    public ModbusRtuConnection? ModbusRtu { get; init; }
+    public ModbusAsciiConnection? ModbusAscii { get; init; }
     public McA1EConnection? MelsecA1E { get; init; }
+    public Mc3EConnection? MelsecMc3E { get; init; }
+    public SiemensS7Connection? SiemensS7 { get; init; }
+    [JsonPropertyName("ethernetIp")]
+    public EtherNetIpConnection? EtherNetIp { get; init; }
+    public OmronFinsTcpConnection? OmronFinsTcp { get; init; }
+    [JsonPropertyName("omronFinsUdp")]
+    public OmronFinsUdpConnection? OmronFinsUdp { get; init; }
+    [JsonPropertyName("mtConnect")]
+    public MtConnectConnection? MtConnect { get; init; }
+    [JsonPropertyName("bacnetIp")]
+    public BacnetIpConnection? BacnetIp { get; init; }
+    [JsonPropertyName("bacnetMstp")]
+    public BacnetMstpConnection? BacnetMstp { get; init; }
+    [JsonPropertyName("snmp")]
+    public SnmpConnection? Snmp { get; init; }
     public AcquisitionExecutionOptions Execution { get; init; } = new();
     public string TimestampMode { get; init; } = "source";
     public string TimestampPath { get; init; } = "timestamp";
@@ -154,6 +227,32 @@ public sealed record ModbusTcpConnection
     public int MaxMergeGap { get; init; } = 8;
 }
 
+public sealed record ModbusRtuConnection
+{
+    public string PortName { get; init; } = string.Empty;
+    public int BaudRate { get; init; } = 9600;
+    public int DataBits { get; init; } = 8;
+    public string Parity { get; init; } = "even";
+    public string StopBits { get; init; } = "one";
+    public byte UnitId { get; init; } = 1;
+    public string AddressBase { get; init; } = "zero-based";
+    public int PollIntervalMs { get; init; } = 1000;
+    public int MaxMergeGap { get; init; } = 8;
+}
+
+public sealed record ModbusAsciiConnection
+{
+    public string PortName { get; init; } = string.Empty;
+    public int BaudRate { get; init; } = 9600;
+    public int DataBits { get; init; } = 7;
+    public string Parity { get; init; } = "even";
+    public string StopBits { get; init; } = "one";
+    public byte UnitId { get; init; } = 1;
+    public string AddressBase { get; init; } = "zero-based";
+    public int PollIntervalMs { get; init; } = 1000;
+    public int MaxMergeGap { get; init; } = 8;
+}
+
 public sealed record IngestionTaskTemplate
 {
     public required string TemplateId { get; init; }
@@ -189,11 +288,29 @@ public sealed record DataSourceInstance
     public required string SourceKey { get; init; }
     public string SubjectType { get; init; } = "equipment";
     public required string SubjectId { get; init; }
+    public AcquisitionDeviceProfile? DeviceProfile { get; init; }
     public HttpPollingConnection? HttpPolling { get; init; }
     public MqttConnection? Mqtt { get; init; }
     public OpcUaConnection? OpcUa { get; init; }
     public ModbusTcpConnection? ModbusTcp { get; init; }
+    public ModbusRtuConnection? ModbusRtu { get; init; }
+    public ModbusAsciiConnection? ModbusAscii { get; init; }
     public McA1EConnection? MelsecA1E { get; init; }
+    public Mc3EConnection? MelsecMc3E { get; init; }
+    public SiemensS7Connection? SiemensS7 { get; init; }
+    [JsonPropertyName("ethernetIp")]
+    public EtherNetIpConnection? EtherNetIp { get; init; }
+    public OmronFinsTcpConnection? OmronFinsTcp { get; init; }
+    [JsonPropertyName("omronFinsUdp")]
+    public OmronFinsUdpConnection? OmronFinsUdp { get; init; }
+    [JsonPropertyName("mtConnect")]
+    public MtConnectConnection? MtConnect { get; init; }
+    [JsonPropertyName("bacnetIp")]
+    public BacnetIpConnection? BacnetIp { get; init; }
+    [JsonPropertyName("bacnetMstp")]
+    public BacnetMstpConnection? BacnetMstp { get; init; }
+    [JsonPropertyName("snmp")]
+    public SnmpConnection? Snmp { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
@@ -207,6 +324,9 @@ public sealed record IngestionTaskBinding
     public int TemplateVersion { get; init; } = 1;
     public required string DataSourceId { get; init; }
     public int DataSourceVersion { get; init; } = 1;
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
+    public string? EquipmentId { get; init; }
     public DateTimeOffset UpdatedAt { get; init; }
 }
 
@@ -227,6 +347,151 @@ public sealed record McA1EConnection
     public string WordOrderLayout { get; init; } = "A";
 
     public int MaxMergeGap { get; init; } = 8;
+}
+
+public static class MelsecMc3EFamilies
+{
+    public const string QL = "q-l";
+    public const string IqR = "iq-r";
+    public const string IqF = "iq-f";
+
+    public static bool IsSupported(string? value) => value is QL or IqR or IqF;
+}
+
+/// <summary>Connection and routing parameters for binary MC 3E / SLMP TCP sessions.</summary>
+public sealed record Mc3EConnection
+{
+    public string Host { get; init; } = string.Empty;
+
+    // SLMP port numbers are configured by the target PLC or network module; there is no universal default.
+    public int Port { get; init; }
+
+    public string Family { get; init; } = string.Empty;
+
+    public byte NetworkNumber { get; init; }
+
+    public byte PcNumber { get; init; } = 0xFF;
+
+    public ushort ModuleIoNumber { get; init; } = 0x03FF;
+
+    public byte StationNumber { get; init; }
+
+    public ushort MonitoringTimer { get; init; } = 0x0010;
+
+    public int PollIntervalMs { get; init; } = 1000;
+
+    public int MaxMergeGap { get; init; }
+}
+
+public sealed record SiemensS7Connection
+{
+    public string Host { get; init; } = string.Empty;
+
+    public int Port { get; init; } = 102;
+
+    public string CpuType { get; init; } = "S71200";
+
+    public int Rack { get; init; }
+
+    public int Slot { get; init; }
+
+    public int PollIntervalMs { get; init; } = 1000;
+
+    public int MaxMergeGap { get; init; }
+}
+
+public sealed record EtherNetIpConnection
+{
+    public string Host { get; init; } = string.Empty;
+
+    public int Port { get; init; } = 44818;
+
+    public string ControllerFamily { get; init; } = "control-logix";
+
+    public string Path { get; init; } = "1,0";
+
+    public int PollIntervalMs { get; init; } = 1000;
+}
+
+public sealed record OmronFinsTcpConnection
+{
+    public string Host { get; init; } = string.Empty;
+
+    public int Port { get; init; } = 9600;
+
+    public int PollIntervalMs { get; init; } = 1000;
+}
+
+/// <summary>Read-only direct FINS/UDP connection with explicitly assigned station node addresses.</summary>
+public sealed record OmronFinsUdpConnection
+{
+    public string Host { get; init; } = string.Empty;
+
+    public int Port { get; init; } = 9600;
+
+    public int ClientNodeAddress { get; init; } = 1;
+
+    public int ServerNodeAddress { get; init; } = 2;
+
+    public int PollIntervalMs { get; init; } = 1000;
+}
+
+/// <summary>Read-only connection settings for the selected MTConnect Agent device.</summary>
+public sealed record MtConnectConnection
+{
+    /// <summary>Absolute HTTP(S) Agent root URL; an optional reverse-proxy path prefix is allowed.</summary>
+    public string BaseUrl { get; init; } = string.Empty;
+
+    /// <summary>The exact Device name or UUID selected from the Agent probe response.</summary>
+    public string DeviceNameOrUuid { get; init; } = string.Empty;
+
+    public int PollIntervalMs { get; init; } = 1000;
+
+    /// <summary>Maximum response body size in bytes for probe/current requests.</summary>
+    public int MaximumResponseBytes { get; init; } = 4 * 1024 * 1024;
+
+    public IReadOnlyDictionary<string, string> Headers { get; init; } = new Dictionary<string, string>();
+
+    public IReadOnlyDictionary<string, string> HeaderSecretRefs { get; init; } = new Dictionary<string, string>();
+}
+
+/// <summary>Read-only BACnet/IP connection to one explicitly configured device over unicast UDP.</summary>
+public sealed record BacnetIpConnection
+{
+    public string Host { get; init; } = string.Empty;
+    public int Port { get; init; } = 47808;
+    public uint DeviceInstance { get; init; }
+    public int PollIntervalMs { get; init; } = 1000;
+}
+
+/// <summary>Read-only BACnet MS/TP connection to one explicitly selected device on an allowed RS-485 port.</summary>
+public sealed record BacnetMstpConnection
+{
+    public string PortName { get; init; } = string.Empty;
+    public int BaudRate { get; init; } = 38400;
+    public int? LocalStationAddress { get; init; }
+    public byte MaxMaster { get; init; } = 127;
+    public byte MaxInfoFrames { get; init; } = 1;
+    public uint DeviceInstance { get; init; }
+    public int PollIntervalMs { get; init; } = 1000;
+}
+
+/// <summary>Read-only SNMP v2c/v3 connection to one explicitly configured IPv4 unicast agent.</summary>
+public sealed record SnmpConnection
+{
+    public string Host { get; init; } = string.Empty;
+    public int Port { get; init; } = 161;
+    public string Version { get; init; } = "v2c";
+    public string BrowseRootOid { get; init; } = "1.3.6.1.2.1";
+    public int PollIntervalMs { get; init; } = 1000;
+    public string? CommunitySecretRef { get; init; }
+    public string? UserName { get; init; }
+    public string SecurityLevel { get; init; } = "authPriv";
+    public string? AuthenticationProtocol { get; init; }
+    public string? AuthenticationSecretRef { get; init; }
+    public string? PrivacyProtocol { get; init; }
+    public string? PrivacySecretRef { get; init; }
+    public string? ContextName { get; init; }
 }
 
 public sealed record AcquisitionContextMapping
@@ -289,10 +554,21 @@ public sealed record AcquisitionLifecycleMapping
     public string Mode { get; init; } = ProcessExecutionKinds.Discrete;
 
     public string? ActiveContextKey { get; init; }
+    public string ActiveCondition { get; init; } = AcquisitionLifecycleActiveConditions.EqualTo;
     public string ActiveValue { get; init; } = "true";
     public string StartedEventType { get; init; } = "process.execution.started";
     public string CompletedEventType { get; init; } = "process.execution.completed";
     public string StepChangedEventType { get; init; } = "process.stage_changed";
+}
+
+public static class AcquisitionLifecycleActiveConditions
+{
+    public const string EqualTo = "equals";
+    public const string Nonzero = "nonzero";
+
+    public static bool IsSupported(string? value)
+        => string.Equals(value, EqualTo, StringComparison.Ordinal) ||
+           string.Equals(value, Nonzero, StringComparison.Ordinal);
 }
 
 public sealed record AcquisitionDeployment
@@ -367,6 +643,7 @@ public sealed record AcquisitionProbePoint
     public string? Unit { get; init; }
     public string? Quality { get; init; }
     public DateTimeOffset? SourceTimestamp { get; init; }
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
 
     public string? Topic { get; init; }
 }

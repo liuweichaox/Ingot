@@ -13,14 +13,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="BACnet" Version="4.0.0" />
+    <PackageReference Include="BACnet.Serial" Version="4.0.0" />
+    <PackageReference Include="libplctag" Version="1.5.2" />
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
+    <PackageReference Include="Lextm.SharpSnmpLib" Version="12.5.7" />
     <PackageReference Include="NModbus" Version="3.0.83" />
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.156" />
     <PackageReference Include="prometheus-net" Version="8.2.1" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
+    <PackageReference Include="S7netplus" Version="0.20.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

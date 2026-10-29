@@ -1,3 +1,4 @@
+// Validate reusable source bindings and publish only configurations confirmed by the target Edge.
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessConfiguration;
@@ -16,6 +17,7 @@ public sealed record AcquisitionBatchFailure(
     string TaskId,
     IReadOnlyList<AcquisitionValidationError> Errors);
 
+/// <summary>Report configuration failures without losing validation or batch identity.</summary>
 public sealed class AcquisitionWorkflowException : Exception
 {
     public AcquisitionWorkflowException(
@@ -39,6 +41,7 @@ public sealed record PublishedIngestionTask(
     IngestionTask Task,
     AcquisitionProbeResult Validation);
 
+/// <summary>Manage immutable source, template, and logical-task versions with real-source publication checks.</summary>
 public sealed class IngestionConfigurationWorkflow(
     IIngestionConfigurationStore store,
     IIngestionTaskStore taskStore,
@@ -182,6 +185,11 @@ public sealed class IngestionConfigurationWorkflow(
             throw Failure(AcquisitionWorkflowFailureKind.Invalid, "引用的工艺数据模型必须已经发布。");
         if (!IngestionTaskMaterializer.TryCreate(template, source, binding, model, out var task, out var errors))
             throw ValidationFailure(errors);
+
+        var sessionErrors = AcquisitionSessionCompatibility.Validate(task!,
+            await taskStore.ListPublishedForEdgeAsync(task!.EdgeId, ct).ConfigureAwait(false));
+        if (sessionErrors.Count > 0)
+            throw ValidationFailure(sessionErrors);
 
         AcquisitionProbeResult result;
         try

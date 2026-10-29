@@ -1,0 +1,32 @@
+﻿# Isolates the local demo ports and persistent volumes from the default application stack.
+# Override scope is limited to demo-only names and loopback ports.
+services:
+  postgres:
+    container_name: ingot-demo-postgres
+    ports: !override
+      - "127.0.0.1:5433:5432"
+  optimizer:
+    container_name: ingot-demo-optimizer
+  platform-api:
+    container_name: ingot-demo-platform-api
+  platform-web:
+    container_name: ingot-demo-platform-web
+  connector-host:
+    container_name: ingot-demo-connector-host
+    ports: !override
+      - "127.0.0.1:8003:8001"
+  semiconductor-etch-simulator:
+    container_name: ingot-demo-semiconductor-etch-simulator
+volumes:
+  ingot-postgres-data:
+    name: ingot-demo-postgres-data
+  ingot-inspection-attachments:
+    name: ingot-demo-inspection-attachments
+  ingot-inspection-archive:
+    name: ingot-demo-inspection-archive
+  ingot-process-knowledge:
+    name: ingot-demo-process-knowledge
+  ingot-process-knowledge-archive:
+    name: ingot-demo-process-knowledge-archive
+  ingot-platform-data-protection:
+    name: ingot-demo-platform-data-protection

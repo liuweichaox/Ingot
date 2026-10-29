@@ -1,3 +1,5 @@
+// 验证采集任务契约的协议、安全与逻辑Subject/物理设备身份边界。
+
 using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Xunit;
@@ -86,6 +88,72 @@ public class IngestionTaskValidatorTests
             string.Join("；", errors));
         Assert.Equal("source", normalized!.TimestampMode);
         Assert.Empty(normalized.TimestampPath);
+    }
+
+    [Fact]
+    public void EquipmentIdRejectsConflictingStaticEquipmentContext()
+    {
+        var task = Profile(AcquisitionProtocols.ModbusTcp, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "holding-register:100:int16",
+            ModbusArea = "holding-register",
+            ModbusAddress = 100,
+            SourceDataType = "int16"
+        }) with
+        {
+            EquipmentId = "PRESS-01",
+            StaticContext = new Dictionary<string, string> { ["equipment_id"] = "PRESS-02" }
+        };
+
+        Assert.False(IngestionTaskValidator.TryValidate(task, null, out _, out var errors));
+        Assert.Contains(errors, item => item.Path == "staticContext.equipment_id");
+    }
+
+    [Fact]
+    public void EquipmentIdRejectsDynamicEquipmentContextMapping()
+    {
+        var task = Profile(AcquisitionProtocols.ModbusTcp, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "holding-register:100:int16",
+            ModbusArea = "holding-register",
+            ModbusAddress = 100,
+            SourceDataType = "int16"
+        }) with
+        {
+            EquipmentId = "PRESS-01",
+            ContextMappings =
+            [
+                new AcquisitionContextMapping
+                {
+                    ContextKey = "equipment_id",
+                    SourcePath = "holding-register:101:int16"
+                }
+            ]
+        };
+
+        Assert.False(IngestionTaskValidator.TryValidate(task, null, out _, out var errors));
+        Assert.Contains(errors, item => item.Path == "contextMappings[0].contextKey");
+    }
+
+    [Fact]
+    public void EquipmentIdAllowsMatchingStaticEquipmentContext()
+    {
+        var task = Profile(AcquisitionProtocols.ModbusTcp, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "holding-register:100:int16",
+            ModbusArea = "holding-register",
+            ModbusAddress = 100,
+            SourceDataType = "int16"
+        }) with
+        {
+            EquipmentId = "PRESS-01",
+            StaticContext = new Dictionary<string, string> { ["equipment_id"] = "PRESS-01" }
+        };
+
+        Assert.True(IngestionTaskValidator.TryValidate(task, null, out _, out var errors), string.Join("；", errors));
     }
 
     [Fact]
@@ -282,6 +350,88 @@ public class IngestionTaskValidatorTests
         Assert.Contains(errors, item => item.Path == "lifecycle.activeValue");
         Assert.Contains(errors, item => item.Path == "lifecycle.startedEventType");
     }
+
+    [Fact]
+    public void LifecycleWithoutActiveConditionRetainsLegacyEqualsSemantics()
+    {
+        var profile = LifecycleProfile(new AcquisitionLifecycleMapping
+        {
+            ActiveContextKey = "run_active",
+            ActiveValue = "1"
+        });
+
+        Assert.True(IngestionTaskValidator.TryValidate(profile, null, out var normalized, out var errors),
+            string.Join("；", errors));
+        Assert.Equal(AcquisitionLifecycleActiveConditions.EqualTo, normalized!.Lifecycle!.ActiveCondition);
+    }
+
+    [Fact]
+    public void LifecycleNonzeroConditionDoesNotRequireAnActiveValue()
+    {
+        var profile = LifecycleProfile(new AcquisitionLifecycleMapping
+        {
+            ActiveContextKey = "run_active",
+            ActiveCondition = " NONZERO ",
+            ActiveValue = " "
+        });
+
+        Assert.True(IngestionTaskValidator.TryValidate(profile, null, out var normalized, out var errors),
+            string.Join("；", errors));
+        Assert.Equal(AcquisitionLifecycleActiveConditions.Nonzero, normalized!.Lifecycle!.ActiveCondition);
+        Assert.Equal(string.Empty, normalized.Lifecycle.ActiveValue);
+    }
+
+    [Fact]
+    public void LifecycleNonzeroConditionStillRequiresMappedActiveContext()
+    {
+        var profile = LifecycleProfile(new AcquisitionLifecycleMapping
+        {
+            ActiveCondition = AcquisitionLifecycleActiveConditions.Nonzero,
+            ActiveValue = string.Empty
+        }, includeActiveContextMapping: false);
+
+        Assert.False(IngestionTaskValidator.TryValidate(profile, null, out _, out var errors));
+        Assert.Contains(errors, item => item.Path == "lifecycle.activeContextKey");
+    }
+
+    [Fact]
+    public void LifecycleRejectsUnknownActiveCondition()
+    {
+        var profile = LifecycleProfile(new AcquisitionLifecycleMapping
+        {
+            ActiveContextKey = "run_active",
+            ActiveCondition = "greater-than-zero",
+            ActiveValue = "1"
+        });
+
+        Assert.False(IngestionTaskValidator.TryValidate(profile, null, out _, out var errors));
+        Assert.Contains(errors, item => item.Path == "lifecycle.activeCondition");
+    }
+
+    private static IngestionTask LifecycleProfile(
+        AcquisitionLifecycleMapping lifecycle,
+        bool includeActiveContextMapping = true)
+        => Profile(AcquisitionProtocols.ModbusTcp, new AcquisitionValueMapping
+        {
+            DataItemCode = "press.temperature",
+            SourcePath = "holding-register:100:int16",
+            ModbusArea = "holding-register",
+            ModbusAddress = 100,
+            SourceDataType = "int16"
+        }) with
+        {
+            ContextMappings = includeActiveContextMapping
+                ?
+                [
+                    new AcquisitionContextMapping
+                    {
+                        ContextKey = "run_active",
+                        SourcePath = "holding-register:101:int16"
+                    }
+                ]
+                : [],
+            Lifecycle = lifecycle
+        };
 
     [Fact]
     public void HttpMethodIsNormalizedBeforeValidation()

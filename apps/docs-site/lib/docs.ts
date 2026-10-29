@@ -39,7 +39,7 @@ export const docs: Doc[] = files.map((file) => {
 
 export const groups = [
   { key: "start", zh: "开始使用", en: "Getting started", slugs: ["", "getting-started", "status", "pilot"] },
-  { key: "guides", zh: "操作指南", en: "Guides", slugs: ["data-connection", "deployment", "rollout", "troubleshooting"] },
+  { key: "guides", zh: "操作指南", en: "Guides", slugs: ["data-connection", "semiconductor-demo", "deployment", "rollout", "troubleshooting"] },
   { key: "concepts", zh: "概念与架构", en: "Concepts & architecture", slugs: ["design", "optimization", "mechanism-knowledge", "production-architecture"] },
   { key: "reference", zh: "参考资料", en: "Reference", slugs: ["data-model", "faq", "glossary", "project-plan", "brand", "open-source-dependencies", "documentation-guide"] },
 ];

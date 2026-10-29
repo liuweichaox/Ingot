@@ -125,7 +125,7 @@ public sealed class ProcessExecutionService(
             {
                 SiteId = Normalize(siteId),
                 EdgeId = Normalize(edgeId),
-                SubjectId = Normalize(equipmentId),
+                EquipmentId = Normalize(equipmentId),
                 From = from,
                 To = to,
                 SearchText = Normalize(search),
@@ -342,11 +342,12 @@ public sealed class ProcessExecutionService(
         var completed = ordered.LastOrDefault(static row => row.Event.EventType == "process.execution.completed");
         var startedAt = started?.Event.OccurredAt ?? first.Event.OccurredAt;
         var context = ResolveContext(ordered);
+        var equipmentId = PhysicalEquipmentIdentity.Resolve(ordered.Select(static row => row.Event));
         var processAnalysis = materialized.Analysis;
         var phaseRows = processAnalysis.Phases;
-        var lifecycleComplete = started is not null && completed is not null;
+        var lifecycleComplete = ProcessExecutionLifecycle.IsComplete(started?.Event, completed?.Event);
 
-        var plan = InspectionPlanMatcher.Resolve(plans, context, first.Event.Subject.Id, startedAt);
+        var plan = InspectionPlanMatcher.Resolve(plans, context, equipmentId, startedAt);
         var analysisRecords = InspectionRecordSet.AnalysisEligible(inspectionRecords, plan, latestReviews);
         var requiredItems = plan?.Items.Where(static item => item.Required).ToArray() ?? [];
         var completedItems = requiredItems.Count(item => analysisRecords.Any(record =>
@@ -366,18 +367,21 @@ public sealed class ProcessExecutionService(
         var issues = BuildIssues(
             started is not null,
             completed is not null,
+            lifecycleComplete,
             processAnalysis.Quality,
             context);
         return new ProcessExecutionSummary
         {
             ExecutionId = executionId,
             SiteId = first.SiteId,
-            EquipmentId = first.Event.Subject.Id,
+            EquipmentId = equipmentId,
+            SubjectType = first.Event.Subject.Type,
+            SubjectId = first.Event.Subject.Id,
             EdgeIds = ordered.Select(static row => row.EdgeId)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray(),
-            Status = lifecycleComplete ? "completed" : started is not null ? "active" : "incomplete",
+            Status = lifecycleComplete ? "completed" : completed is not null ? "incomplete" : started is not null ? "active" : "incomplete",
             HasStarted = started is not null,
             HasCompleted = completed is not null,
             LifecycleComplete = lifecycleComplete,
@@ -480,6 +484,7 @@ public sealed class ProcessExecutionService(
     private static IReadOnlyList<ExecutionDataIssue> BuildIssues(
         bool hasStarted,
         bool hasCompleted,
+        bool lifecycleComplete,
         ProcessDataQualitySummary processData,
         IReadOnlyDictionary<string, string> context)
     {
@@ -491,6 +496,9 @@ public sealed class ProcessExecutionService(
                 "execution.end.missing",
                 hasStarted ? "info" : "error",
                 hasStarted ? "生产已开始，尚未收到生产结束事件。" : "未找到生产结束事件。"));
+        if (hasStarted && hasCompleted && !lifecycleComplete)
+            issues.Add(Issue("execution.capture.incomplete", "error",
+                "运行边界采集不完整或结束状态无效，不能作为完整运行用于配方推荐。"));
         issues.AddRange(processData.Issues.Select(message => Issue(
             "process_data." + processData.Status,
             processData.Status == ProcessDataStatuses.Unavailable ? "error" : "warning",

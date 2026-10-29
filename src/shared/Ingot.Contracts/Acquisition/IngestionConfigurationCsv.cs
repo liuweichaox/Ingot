@@ -1,3 +1,5 @@
+// 将采集数据源与任务绑定契约导入、导出为兼容旧格式的 CSV。
+
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -12,9 +14,19 @@ public static class IngestionConfigurationCsv
     private static readonly string[] SourceHeaders =
     [
         "dataSourceId", "version", "name", "status", "edgeId", "protocol",
+        "sourceKey", "subjectType", "subjectId", "connectionJson", "deviceProfileJson"
+    ];
+    private static readonly string[] LegacySourceHeaders =
+    [
+        "dataSourceId", "version", "name", "status", "edgeId", "protocol",
         "sourceKey", "subjectType", "subjectId", "connectionJson"
     ];
     private static readonly string[] BindingHeaders =
+    [
+        "taskId", "version", "name", "status", "templateId", "templateVersion",
+        "dataSourceId", "dataSourceVersion", "subjectType", "subjectId", "equipmentId"
+    ];
+    private static readonly string[] LegacyBindingHeaders =
     [
         "taskId", "version", "name", "status", "templateId", "templateVersion",
         "dataSourceId", "dataSourceVersion"
@@ -32,7 +44,8 @@ public static class IngestionConfigurationCsv
             value.SourceKey,
             value.SubjectType,
             value.SubjectId,
-            ConnectionJson(value)
+            ConnectionJson(value),
+            value.DeviceProfile is null ? string.Empty : JsonSerializer.Serialize(value.DeviceProfile, JsonOptions)
         }));
 
     public static string WriteBindings(IEnumerable<IngestionTaskBinding> values)
@@ -45,18 +58,24 @@ public static class IngestionConfigurationCsv
             value.TemplateId,
             value.TemplateVersion.ToString(CultureInfo.InvariantCulture),
             value.DataSourceId,
-            value.DataSourceVersion.ToString(CultureInfo.InvariantCulture)
+            value.DataSourceVersion.ToString(CultureInfo.InvariantCulture),
+            value.SubjectType ?? string.Empty,
+            value.SubjectId ?? string.Empty,
+            value.EquipmentId ?? string.Empty
         }));
 
     public static IReadOnlyList<DataSourceInstance> ReadDataSources(string text)
     {
-        var rows = Read(text, SourceHeaders);
+        var rows = ReadDataSourceRows(text, out var hasDeviceProfile);
         return rows.Select((row, index) =>
         {
             try
             {
                 var protocol = row[5].Trim().ToLowerInvariant();
                 var connection = row[9];
+                var deviceProfile = hasDeviceProfile && !string.IsNullOrWhiteSpace(row[10])
+                    ? JsonSerializer.Deserialize<AcquisitionDeviceProfile>(row[10], JsonOptions)
+                    : null;
                 return new DataSourceInstance
                 {
                     DataSourceId = row[0],
@@ -68,6 +87,7 @@ public static class IngestionConfigurationCsv
                     SourceKey = row[6],
                     SubjectType = row[7],
                     SubjectId = row[8],
+                    DeviceProfile = deviceProfile,
                     HttpPolling = protocol == AcquisitionProtocols.HttpPolling
                         ? ParseConnection<HttpPollingConnection>(connection)
                         : null,
@@ -80,8 +100,41 @@ public static class IngestionConfigurationCsv
                     ModbusTcp = protocol == AcquisitionProtocols.ModbusTcp
                         ? ParseConnection<ModbusTcpConnection>(connection)
                         : null,
+                    ModbusRtu = protocol == AcquisitionProtocols.ModbusRtu
+                        ? ParseConnection<ModbusRtuConnection>(connection)
+                        : null,
+                    ModbusAscii = protocol == AcquisitionProtocols.ModbusAscii
+                        ? ParseConnection<ModbusAsciiConnection>(connection)
+                        : null,
                     MelsecA1E = protocol == AcquisitionProtocols.MelsecA1E
                         ? ParseConnection<McA1EConnection>(connection)
+                        : null,
+                    MelsecMc3E = protocol == AcquisitionProtocols.MelsecMc3E
+                        ? ParseConnection<Mc3EConnection>(connection)
+                        : null,
+                    SiemensS7 = protocol == AcquisitionProtocols.SiemensS7
+                        ? ParseConnection<SiemensS7Connection>(connection)
+                        : null,
+                    EtherNetIp = protocol == AcquisitionProtocols.EtherNetIp
+                        ? ParseConnection<EtherNetIpConnection>(connection)
+                        : null,
+                    OmronFinsTcp = protocol == AcquisitionProtocols.OmronFinsTcp
+                        ? ParseConnection<OmronFinsTcpConnection>(connection)
+                        : null,
+                    OmronFinsUdp = protocol == AcquisitionProtocols.OmronFinsUdp
+                        ? ParseConnection<OmronFinsUdpConnection>(connection)
+                        : null,
+                    MtConnect = protocol == AcquisitionProtocols.MtConnect
+                        ? ParseConnection<MtConnectConnection>(connection)
+                        : null,
+                    BacnetIp = protocol == AcquisitionProtocols.BacnetIp
+                        ? ParseConnection<BacnetIpConnection>(connection)
+                        : null,
+                    BacnetMstp = protocol == AcquisitionProtocols.BacnetMstp
+                        ? ParseConnection<BacnetMstpConnection>(connection)
+                        : null,
+                    Snmp = protocol == AcquisitionProtocols.Snmp
+                        ? ParseConnection<SnmpConnection>(connection)
                         : null
                 };
             }
@@ -92,9 +145,26 @@ public static class IngestionConfigurationCsv
         }).ToArray();
     }
 
+    private static IReadOnlyList<string[]> ReadDataSourceRows(string text, out bool hasDeviceProfile)
+    {
+        var rows = ParseRows(text);
+        if (rows.Count == 0)
+            throw new InvalidDataException("CSV 不能为空。");
+        var headers = rows[0].Select(static item => item.Trim().TrimStart('\uFEFF')).ToArray();
+        hasDeviceProfile = headers.SequenceEqual(SourceHeaders, StringComparer.OrdinalIgnoreCase);
+        var isLegacy = headers.SequenceEqual(LegacySourceHeaders, StringComparer.OrdinalIgnoreCase);
+        if (!hasDeviceProfile && !isLegacy)
+            throw new InvalidDataException($"CSV 表头必须是：{string.Join(',', SourceHeaders)}（也兼容旧版表头：{string.Join(',', LegacySourceHeaders)}）。");
+        var result = rows.Skip(1).Where(static row => row.Any(static cell => !string.IsNullOrWhiteSpace(cell))).ToArray();
+        var bad = result.FirstOrDefault(row => row.Length != headers.Length);
+        if (bad is not null)
+            throw new InvalidDataException($"CSV 每行必须包含 {headers.Length} 列。");
+        return result.Select(static row => row.Select(UnprotectSpreadsheetCell).ToArray()).ToArray();
+    }
+
     public static IReadOnlyList<IngestionTaskBinding> ReadBindings(string text)
     {
-        var rows = Read(text, BindingHeaders);
+        var rows = ReadBindingsRows(text, out var hasSubjectOverrides);
         return rows.Select((row, index) =>
         {
             try
@@ -108,7 +178,10 @@ public static class IngestionConfigurationCsv
                     TemplateId = row[4],
                     TemplateVersion = PositiveInt(row[5], "templateVersion"),
                     DataSourceId = row[6],
-                    DataSourceVersion = PositiveInt(row[7], "dataSourceVersion")
+                    DataSourceVersion = PositiveInt(row[7], "dataSourceVersion"),
+                    SubjectType = hasSubjectOverrides ? OptionalCell(row[8]) : null,
+                    SubjectId = hasSubjectOverrides ? OptionalCell(row[9]) : null,
+                    EquipmentId = hasSubjectOverrides ? OptionalCell(row[10]) : null
                 };
             }
             catch (Exception exception) when (exception is FormatException or InvalidDataException)
@@ -118,6 +191,26 @@ public static class IngestionConfigurationCsv
         }).ToArray();
     }
 
+    private static IReadOnlyList<string[]> ReadBindingsRows(string text, out bool hasSubjectOverrides)
+    {
+        var rows = ParseRows(text);
+        if (rows.Count == 0)
+            throw new InvalidDataException("CSV 不能为空。");
+        var headers = rows[0].Select(static item => item.Trim().TrimStart('\uFEFF')).ToArray();
+        hasSubjectOverrides = headers.SequenceEqual(BindingHeaders, StringComparer.OrdinalIgnoreCase);
+        var isLegacy = headers.SequenceEqual(LegacyBindingHeaders, StringComparer.OrdinalIgnoreCase);
+        if (!hasSubjectOverrides && !isLegacy)
+            throw new InvalidDataException($"CSV 表头必须是：{string.Join(',', BindingHeaders)}（也兼容旧版表头：{string.Join(',', LegacyBindingHeaders)}）。");
+        var result = rows.Skip(1).Where(static row => row.Any(static cell => !string.IsNullOrWhiteSpace(cell))).ToArray();
+        var bad = result.FirstOrDefault(row => row.Length != headers.Length);
+        if (bad is not null)
+            throw new InvalidDataException($"CSV 每行必须包含 {headers.Length} 列。");
+        return result.Select(static row => row.Select(UnprotectSpreadsheetCell).ToArray()).ToArray();
+    }
+
+    private static string? OptionalCell(string value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
+
     private static string ConnectionJson(DataSourceInstance value)
         => value.Protocol switch
         {
@@ -125,7 +218,18 @@ public static class IngestionConfigurationCsv
             AcquisitionProtocols.Mqtt => JsonSerializer.Serialize(value.Mqtt, JsonOptions),
             AcquisitionProtocols.OpcUa => JsonSerializer.Serialize(value.OpcUa, JsonOptions),
             AcquisitionProtocols.ModbusTcp => JsonSerializer.Serialize(value.ModbusTcp, JsonOptions),
+            AcquisitionProtocols.ModbusRtu => JsonSerializer.Serialize(value.ModbusRtu, JsonOptions),
+            AcquisitionProtocols.ModbusAscii => JsonSerializer.Serialize(value.ModbusAscii, JsonOptions),
             AcquisitionProtocols.MelsecA1E => JsonSerializer.Serialize(value.MelsecA1E, JsonOptions),
+            AcquisitionProtocols.MelsecMc3E => JsonSerializer.Serialize(value.MelsecMc3E, JsonOptions),
+            AcquisitionProtocols.SiemensS7 => JsonSerializer.Serialize(value.SiemensS7, JsonOptions),
+            AcquisitionProtocols.EtherNetIp => JsonSerializer.Serialize(value.EtherNetIp, JsonOptions),
+            AcquisitionProtocols.OmronFinsTcp => JsonSerializer.Serialize(value.OmronFinsTcp, JsonOptions),
+            AcquisitionProtocols.OmronFinsUdp => JsonSerializer.Serialize(value.OmronFinsUdp, JsonOptions),
+            AcquisitionProtocols.MtConnect => JsonSerializer.Serialize(value.MtConnect, JsonOptions),
+            AcquisitionProtocols.BacnetIp => JsonSerializer.Serialize(value.BacnetIp, JsonOptions),
+            AcquisitionProtocols.BacnetMstp => JsonSerializer.Serialize(value.BacnetMstp, JsonOptions),
+            AcquisitionProtocols.Snmp => JsonSerializer.Serialize(value.Snmp, JsonOptions),
             _ => "null"
         };
 

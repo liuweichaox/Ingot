@@ -108,7 +108,7 @@ test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /每次工艺运行就是一次实验/);
   assert.match(source, /具体场景评估由部署方用自己的数据完成/);
   assert.doesNotMatch(source, /公开验证协议与结果可以独立复现/);
-  assert.doesNotMatch(source, /自动发现确定根因|已经减少\s*\d+%|FX3U|光学镜片|模压/);
+  assert.doesNotMatch(source, /自动发现确定根因|已经减少\s*\d+%|FX3U|光学镜片|半导体晶圆刻蚀|模压/);
   assert.match(source, /docker compose -f docker-compose\.app\.yml/);
   assert.match(source, /https:\/\/docs\.ingotstack\.com\/zh\/getting-started/);
   assert.doesNotMatch(source, retired);
@@ -132,7 +132,7 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /Each process run is an experiment/i);
   assert.match(source, /scenario-specific evaluation belongs to the deployer(?:'|&#x27;)s own data/i);
   assert.doesNotMatch(source, /public validation protocols and results are independently reproducible/i);
-  assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|molding|one real lens/i);
+  assert.doesNotMatch(source, /automatically discovered root cause|already reduced\s*\d+%|FX3U|Optical lens|Semiconductor wafer etch|molding|one real lens/i);
   assert.match(source, /rel="canonical" href="https:\/\/ingotstack\.com\/en\/"/i);
   assert.doesNotMatch(source, retired);
 });

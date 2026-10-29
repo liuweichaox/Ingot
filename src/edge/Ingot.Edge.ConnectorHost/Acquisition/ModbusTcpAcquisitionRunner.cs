@@ -10,10 +10,13 @@ public sealed class ModbusTcpAcquisitionRunner(
     IEventSink sink,
     AcquisitionStatus status,
     AcquisitionHttpEgressPolicy egressPolicy,
-    ILogger<ModbusTcpAcquisitionRunner> logger) : IAcquisitionProtocolRunner
+    ILogger<ModbusTcpAcquisitionRunner> logger,
+    RegisterAcquisitionSessionPool? sessionPool = null) : IAcquisitionProtocolRunner
 {
     private static readonly System.Text.Encoding StrictUtf8 =
         new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private readonly RegisterAcquisitionSessionPool _sessionPool = sessionPool ?? new();
+
     public string Protocol => AcquisitionProtocols.ModbusTcp;
 
     public async Task RunAsync(
@@ -24,102 +27,129 @@ public sealed class ModbusTcpAcquisitionRunner(
     {
         var connection = deployment.Task.ModbusTcp
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
+        await RunWithSharedSessionAsync(
+            configurationKey,
+            deployment,
+            normalizedSource,
+            connection,
+            _sessionPool,
+            ct).ConfigureAwait(false);
+    }
+
+    private async Task RunWithSharedSessionAsync(
+        string configurationKey,
+        AcquisitionDeployment deployment,
+        string normalizedSource,
+        ModbusTcpConnection connection,
+        RegisterAcquisitionSessionPool pool,
+        CancellationToken ct)
+    {
+        var task = deployment.Task;
+        await using var lease = await pool.AcquireAsync(
+            AcquisitionProtocols.ModbusTcp,
+            connection.Host,
+            connection.Port,
+            string.Empty,
+            task.DataSourceId,
+            task.DataSourceVersion,
+            RegisterAcquisitionSessionPool.CreateSourceVersionFingerprint(connection, task),
+            token => egressPolicy.ConnectTcpAsync(
+                connection.Host,
+                connection.Port,
+                "Modbus TCP",
+                task.Execution.TimeoutMs,
+                token),
+            ct).ConfigureAwait(false);
+
         string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
+        logger.LogInformation(
+            "Modbus TCP 采集任务已加入共享连接：Configuration={Configuration}, Device={Host}:{Port}, Unit={UnitId}",
+            configurationKey,
+            connection.Host,
+            connection.Port,
+            connection.UnitId);
+
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                using var tcpClient = await egressPolicy.ConnectTcpAsync(
-                    connection.Host,
-                    connection.Port,
-                    "Modbus TCP",
-                    deployment.Task.Execution.TimeoutMs,
+                var selectors = BuildSelectors(deployment, connection.AddressBase);
+                var read = await lease.ExecuteModbusAsync(
+                    task.Execution.TimeoutMs,
+                    async (master, readToken) =>
+                    {
+                        var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                        status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
+                        var raw = await ReadSnapshotAsync(
+                            master,
+                            connection.UnitId,
+                            selectors,
+                            connection.MaxMergeGap,
+                            readToken).ConfigureAwait(false);
+                        return (Raw: raw, ReadDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    },
                     ct).ConfigureAwait(false);
-                var factory = new ModbusFactory();
-                using var master = factory.CreateMaster(tcpClient);
-                logger.LogInformation(
-                    "Modbus TCP 采集任务已连接：Configuration={Configuration}, Device={Host}:{Port}, Unit={UnitId}",
-                    configurationKey, connection.Host, connection.Port, connection.UnitId);
-                while (!ct.IsCancellationRequested && tcpClient.Connected)
+
+                var observedAt = DateTimeOffset.UtcNow;
+                var raw = read.Raw;
+                status.RecordReadSuccess(configurationKey, observedAt, read.ReadDurationMs);
+                var occurredAt = DateTimeOffset.UtcNow;
+                if (task.TimestampMode == "source" && !string.IsNullOrWhiteSpace(task.TimestampPath))
                 {
-                    var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-                    status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
-                    using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    readTimeout.CancelAfter(Math.Max(1000, deployment.Task.Execution.TimeoutMs));
-                    var selectors = BuildSelectors(deployment, connection.AddressBase);
-                    Dictionary<string, object?> raw;
-                    try
-                    {
-                        raw = await ReadSnapshotAsync(
-                                master,
-                                connection.UnitId,
-                                selectors,
-                                connection.MaxMergeGap,
-                                readTimeout.Token)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                    {
-                        throw new TimeoutException(
-                            $"读取 Modbus 设备 {connection.Host}:{connection.Port} 超过 {deployment.Task.Execution.TimeoutMs}ms 未完成。");
-                    }
-                    var observedAt = DateTimeOffset.UtcNow;
-                    var readDurationMs = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
-                    status.RecordReadSuccess(configurationKey, observedAt, readDurationMs);
-                    var occurredAt = DateTimeOffset.UtcNow;
-                    if (deployment.Task.TimestampMode == "source" &&
-                        !string.IsNullOrWhiteSpace(deployment.Task.TimestampPath))
-                    {
-                        var sourceTimestamp = raw[deployment.Task.TimestampPath];
-                        occurredAt = AcquisitionTimestampParser.Parse(
-                            sourceTimestamp,
-                            deployment.Task.TimestampEncoding,
-                            deployment.Task.TimestampPath,
-                            observedAt,
-                            deployment.Task.Execution.MaximumFutureTimestampSkewMs);
-                    }
-                    var mapped = ProtocolAcquisitionSnapshotMapper.Map(
-                        deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
-                    var deduplication = sourceDeduplicator.Evaluate(
-                        mapped.Sample,
+                    occurredAt = AcquisitionTimestampParser.Parse(
+                        raw[task.TimestampPath],
+                        task.TimestampEncoding,
+                        task.TimestampPath,
                         observedAt,
-                        TimeSpan.FromMilliseconds(deployment.Task.Execution.SourceIdentityStaleAfterMs));
-                    if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
-                    {
-                        currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                        status.RecordDuplicateSnapshot(
-                            configurationKey,
-                            deduplication == AcquisitionDeduplicationResult.Stalled,
-                            $"设备源身份超过 {deployment.Task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
-                        await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
-                        continue;
-                    }
-                    var events = lifecycle.Track(
-                        mapped,
-                        deployment.Task.Lifecycle,
-                        connection.PollIntervalMs);
-                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
-                    status.RecordEmissionOutcome(
-                        configurationKey,
-                        events.Count,
-                        deployment.Task.Lifecycle is not null && events.Count == 0);
-                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                    status.RecordValidSnapshot(
-                        configurationKey,
-                        observedAt,
-                        currentProcessSpecification,
-                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
-                    await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
+                        task.Execution.MaximumFutureTimestampSkewMs);
                 }
+
+                var mapped = ProtocolAcquisitionSnapshotMapper.Map(
+                    deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
+                var deduplication = sourceDeduplicator.Evaluate(
+                    mapped.Sample,
+                    observedAt,
+                    TimeSpan.FromMilliseconds(task.Execution.SourceIdentityStaleAfterMs));
+                if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
+                {
+                    currentProcessSpecification = mapped.ProcessSpecificationIdentity;
+                    status.RecordDuplicateSnapshot(
+                        configurationKey,
+                        deduplication == AcquisitionDeduplicationResult.Stalled,
+                        $"设备源身份超过 {task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
+                    await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                var events = lifecycle.Track(mapped, task.Lifecycle, connection.PollIntervalMs);
+                await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                status.RecordEmissionOutcome(
+                    configurationKey,
+                    events.Count,
+                    task.Lifecycle is not null && events.Count == 0);
+                currentProcessSpecification = mapped.ProcessSpecificationIdentity;
+                status.RecordValidSnapshot(
+                    configurationKey,
+                    observedAt,
+                    currentProcessSpecification,
+                    deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
             {
                 status.RecordFailure(configurationKey, exception.Message);
-                logger.LogWarning(exception, "Modbus TCP 采集任务 {Configuration} 读取失败，等待重连", configurationKey);
-                await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
+                logger.LogWarning(
+                    exception,
+                    "Modbus TCP 共享采集任务 {Configuration} 读取失败，等待后重试",
+                    configurationKey);
+                await Task.Delay(task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
         }
     }

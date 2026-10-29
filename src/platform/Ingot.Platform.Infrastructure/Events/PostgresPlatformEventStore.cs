@@ -325,12 +325,20 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
             return captured is null ? evt : evt with { Context = MergeCapturedContext(captured, evt.Context) };
         }
 
-        var resolved = await _manufacturingContexts.ResolveAsync(siteId, evt.Subject.Id, evt.OccurredAt, ct)
-            .ConfigureAwait(false);
+        var equipmentId = evt.Context.TryGetValue("equipment_id", out var contextualEquipmentId) &&
+                          !string.IsNullOrWhiteSpace(contextualEquipmentId)
+            ? contextualEquipmentId.Trim()
+            : string.Equals(evt.Subject.Type, "equipment", StringComparison.OrdinalIgnoreCase)
+                ? evt.Subject.Id
+                : null;
+        var resolved = equipmentId is null
+            ? null
+            : await _manufacturingContexts.ResolveAsync(siteId, equipmentId, evt.OccurredAt, ct)
+                .ConfigureAwait(false);
         var context = new Dictionary<string, string>(evt.Context, StringComparer.Ordinal);
         context["execution_id"] = executionId;
-        if (string.Equals(evt.Subject.Type, "equipment", StringComparison.OrdinalIgnoreCase))
-            context["equipment_id"] = evt.Subject.Id;
+        if (equipmentId is not null)
+            context["equipment_id"] = equipmentId;
         if (resolved is not null)
         {
             context["production_context_id"] = resolved.Production.ContextId.ToString("D");
@@ -944,6 +952,11 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         AddEquality(command, predicates, "event_type", "event_type", query.EventType);
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
+        if (!string.IsNullOrWhiteSpace(query.EquipmentId))
+        {
+            predicates.Add("COALESCE(NULLIF(BTRIM(context ->> 'equipment_id'), ''), CASE WHEN LOWER(subject_type) = 'equipment' THEN subject_id END) = @equipment_id");
+            command.Parameters.AddWithValue("equipment_id", query.EquipmentId.Trim());
+        }
         AddEquality(command, predicates, "execution_id", "execution_id", query.ExecutionId);
         if (!string.IsNullOrWhiteSpace(query.SearchText))
         {

@@ -1,4 +1,4 @@
-
+// Share presentation helpers and labels across product pages.
 export { LoadingCard } from "../ui/components";
 export { toFiniteNumber } from "../utils/numbers.js";
 import { toFiniteNumber } from "../utils/numbers.js";
@@ -57,7 +57,17 @@ export const acquisitionProtocolLabels = {
   mqtt: "MQTT",
   "opc-ua": "OPC UA",
   "modbus-tcp": "Modbus TCP",
+  "modbus-rtu": "Modbus RTU",
+  "modbus-ascii": "Modbus ASCII",
   "melsec-a1e": "三菱 MC 1E",
+  "melsec-mc-3e": "Mitsubishi MC 3E/SLMP",
+  "siemens-s7": "Siemens S7",
+  "ethernet-ip": "Rockwell EtherNet/IP",
+  "omron-fins-tcp": "Omron FINS/TCP",
+  "omron-fins-udp": "Omron FINS/UDP",
+  mtconnect: "MTConnect",
+  "bacnet-ip": "BACnet/IP",
+  "bacnet-mstp": "BACnet MS/TP",
 };
 
 const objectTypeLabels = {

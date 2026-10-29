@@ -50,7 +50,9 @@ internal static class AcquisitionProbeSupport
                 }
                 occurredAt = AcquisitionTimestampParser.Parse(
                     rawTimestamp,
-                    deployment.Task.TimestampEncoding,
+                    deployment.Task.Protocol == AcquisitionProtocols.Snmp
+                        ? SnmpProtocolSupport.ResolveTimestampEncoding(deployment.Task, rawTimestamp)
+                        : deployment.Task.TimestampEncoding,
                     deployment.Task.TimestampPath,
                     occurredAt,
                     deployment.Task.Execution.MaximumFutureTimestampSkewMs);

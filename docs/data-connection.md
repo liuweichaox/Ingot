@@ -24,7 +24,7 @@
 ## 接入前准备
 
 1. 按[部署运维](deployment.md#启动与停止)启用可选连接器 profile，分配稳定的工厂/生产现场（`SiteId`）与采集器身份，并配置三个不同的凭据。
-2. 在 `Acquisition:Security:AllowedHttpHosts` 或 `AllowedNetworkHosts` 中显式允许设备主机。默认名单为空，启动 ConnectorHost 不会授权任何目标。Compose 可在本地覆盖文件中添加带索引的环境项，例如 `Acquisition__Security__AllowedNetworkHosts__0=192.168.10.20`。
+2. 网络协议在 `Acquisition:Security:AllowedHttpHosts` 或 `AllowedNetworkHosts` 中显式允许设备主机；Modbus RTU、ASCII 和 BACnet MS/TP 则在 `Acquisition:Security:AllowedSerialPorts` 中精确允许串口名。默认名单为空，启动 ConnectorHost 不会授权任何目标。Compose 可在本地覆盖文件中添加带索引的环境项，例如 `Acquisition__Security__AllowedNetworkHosts__0=192.168.10.20` 或 `Acquisition__Security__AllowedSerialPorts__0=/dev/ttyUSB0`。
 3. 映射协议点位前，定义工艺数据模型、必需字段、单位和运行与检验身份。
 4. 在目标 Edge 探查、验证真实值、发布，确认应用版本以及一条完整且关联检验的运行。
 
@@ -74,6 +74,30 @@
 - 必需点位、运行边界和上下文来源齐全；
 - 标准单位与工艺模型一致。
 
+新建和编辑采集配置时，通用拓扑画布会汇总 Edge、协议连接、逻辑对象/设备单元和工艺变量映射。画布适用于 HTTP、MQTT、OPC UA、MTConnect、Modbus TCP、Modbus RTU、Modbus ASCII、MELSEC 1E、MELSEC 3E/SLMP、Siemens S7、EtherNet/IP、Omron FINS/TCP、Omron FINS/UDP、BACnet/IP、BACnet MS/TP 和 SNMP；选择节点后，可在属性面板直接修改现场节点、归属和当前驱动已登记的全部连接字段。条件字段会根据协议选项显示；分组字段可展开编辑。任务级高级映射和点位换算仍在同一任务表单中配置。BACnet/IP 与 MS/TP 画布均可显示指定设备目录探查到的对象，SNMP 画布可显示配置的数字 OID 子树点位；这些点位都能拖到工艺变量完成映射。MQTT 节点会展开显示订阅主题，并可在画布中添加、编辑或移除主题的通道代码、过滤器、QoS、报文根路径和主题变量；这些编辑复用任务表单状态与主题校验。探查后可在点位节点把设备点位拖到工艺变量完成映射，也可先用键盘选择目标变量再选择来源点位；点位表还支持按当前驱动下载 CSV 模板、导入预览、按变量合并更新或替换映射，以及导出当前清单。导入后仍需完成整张任务校验并重新探查；任何映射或连接配置变化都会使上次探查校验失效。该任务画布编辑一条协议连接。新建时可切换到通用多设备画布：顶部“添加设备”按钮会沿用当前任务的设备画像和 Edge 创建新任务；设备类型入口可按类别名称搜索；把设备类别拖到目标 Edge 分区会按指定 Edge 创建独立任务；点击设备类型卡片，或聚焦后按 Enter，会按该卡片类别和当前 Edge 创建任务（当前 Edge 未设置时进入未分配分区）。已有设备卡片可拖到另一 Edge 分区迁移，也可使用卡片上的 Edge 选择器改派，选择器支持键盘操作。设备类别是设备画像，与通信驱动分开；每台设备分别配置驱动、点位和归属，各任务独立编辑、探查和校验，批量保存为每台设备生成独立草稿，之后分别探查和发布。PLC 是设备类型；Mitsubishi 是厂商，MELSEC 是通信驱动。单设备任务还可选择 Siemens S7、Rockwell EtherNet/IP、Omron FINS/TCP、Omron FINS/UDP、BACnet/IP、BACnet MS/TP 和 SNMP 驱动，并按驱动显示对应连接与点位属性。
+
+### 设备类别与驱动范围
+
+通用任务画布提供 PLC、CNC、工业机器人、DCS、HMI/操作面板、楼宇自动化、远程 I/O、变频器/伺服、传感器/变送器、过程仪表、检测/测量仪器、工业称重/计量、电能表/能源仪表、配电/UPS、机器视觉、条码/RFID、环境监测、工控机/边缘计算机、工业网关、网络与基础设施、SCADA/MES/上位系统和其他类别，并支持填写厂商与型号。设备画像与数据归属类型、通信驱动分开保存，也会随可复用数据源保留。厂商和型号目前仅作自由文本记录，不是型号兼容清单，也不会自动筛选或验证驱动。
+
+画布按设备类别推荐已登记驱动；驱动列表仍可手动选择其他已登记驱动。推荐关系表示常见接入路径，不代表厂商认证或该型号已验证。能否连接取决于设备接口、CPU/网络配置及驱动限制，须从目标 Edge 探查确认。
+
+| 设备类别 | 常见接入驱动 | 接入范围 |
+| --- | --- | --- |
+| PLC | Siemens S7、MELSEC 1E/3E、Omron FINS/TCP/UDP、EtherNet/IP、Modbus TCP/RTU/ASCII、OPC UA | 已实现列出的驱动；其他品牌可通过设备本身或网关提供的标准接口接入 |
+| CNC | MTConnect、OPC UA、Modbus TCP/RTU/ASCII、MQTT、HTTP | MTConnect 可读设备提供的机床数据；厂商专用接口需通过已登记标准接口或网关提供 |
+| 工业机器人、机器视觉、条码/RFID | EtherNet/IP、OPC UA、Modbus TCP/RTU/ASCII、MQTT、HTTP | 取决于设备或网关实际开放的接口；未实现机器人厂商专用协议 |
+| DCS、HMI、SCADA/MES | OPC UA、Modbus TCP/RTU/ASCII、MQTT、HTTP | 通过设备或上位系统开放的标签、主题或 HTTP 接口接入 |
+| 工控机、工业网关 | SNMP、HTTP、MQTT、OPC UA、Modbus TCP/RTU/ASCII | 按设备开放的接口接入；SNMP 只浏览和读取配置的 OID 子树 |
+| 网络与基础设施设备 | SNMP、HTTP、MQTT、OPC UA | SNMP 仅按配置的 OID 子树有限只读浏览与读取；需由目标 Edge 访问并通过白名单检查 |
+| 楼宇自动化 | BACnet/IP、BACnet MS/TP、Modbus TCP/RTU/ASCII、OPC UA、MQTT、HTTP | 两种 BACnet 驱动均只读指定设备对象目录；MS/TP 通过 Edge 允许的 RS-485 串口连接；不支持 BACnet/SC |
+| 配电/UPS | SNMP、Modbus TCP/RTU/ASCII、OPC UA、MQTT、HTTP | 按设备开放的接口接入；专用电力协议未登记为采集驱动 |
+| 远程 I/O、变频器/伺服、传感器、过程仪表、测量、称重、能源、环境监测 | Modbus TCP/RTU/ASCII、OPC UA、MQTT、HTTP | 由现场设备或网关提供相应接口 |
+
+当前已登记 16 种驱动：HTTP 轮询、MQTT、OPC UA、MTConnect、Modbus TCP、Modbus RTU、Modbus ASCII、Mitsubishi MELSEC 1E、Mitsubishi MC 3E/SLMP、Siemens S7、Rockwell EtherNet/IP、Omron FINS/TCP、Omron FINS/UDP、BACnet/IP、BACnet MS/TP 和 SNMP。PLC 是设备类型；Mitsubishi 是厂商，MELSEC 是通信驱动。类别或厂商名称不会自动增加原生驱动，实际连通性仍需由目标 Edge 上的驱动、网络准入和真实探查确认。
+
+真实探查结果显示最近探查时间、来源提供的质量与时间戳，以及点位换算前后的值；来源未提供质量或时间戳时会明确显示“未提供”。Modbus、MELSEC、Siemens S7、EtherNet/IP、Omron FINS/TCP 和 FINS/UDP 只回读已声明的点位，不枚举未知地址。BACnet/IP 仅单播浏览配置的 Device Instance 对象目录；BACnet MS/TP 只在已配置的本地总线上按该实例限定 Who-Is，不扫描其他网络设备。SNMP 只浏览用户指定根 OID 下最多 512 个对象，不扫描网段。MQTT 点位以主题和字段路径共同识别；未绑定主题的字段按任意订阅主题处理。
+
 Edge 保存最后一次成功配置。新配置只有在形成一份必需项完整、可解码的有效快照后才通过启动健康期；仅建立连接或建立 OPC UA 订阅不算成功。新配置失败时保留旧版本并上报失败，不能静默切换到未版本化本地配置。
 
 运行状态分别报告读取尝试、设备读取成功、有效快照、事件产出、非运行空快照、重复抑制、源身份停滞和最后错误。`running` 表示最近存在有效快照，不再用单一“采样成功”同时代表连接、数据与事件健康。
@@ -90,19 +114,23 @@ HTTP 数据路径只能相对于已配置的设备基础地址，设备请求不
 
 不同协议支持的配置不同。平台能力矩阵同时驱动界面和发布校验，避免接受一个最终会被驱动忽略的字段。
 
-| 能力 | HTTP 轮询 | MQTT | OPC UA | Modbus TCP | 三菱 1E |
-|---|---|---|---|---|---|
-| 采样时间取自设备 | ✅ | ✅ | 使用服务器 SourceTimestamp | ✅ | ✅ |
-| 序号字段 | ✅ | ✅ | ❌ | ❌ | ❌ |
-| 连接与单次操作超时 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 重连间隔 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 控制参数集合路径 | ✅ | ✅ | ❌ | ❌ | ❌ |
-| 按主题绑定点位 | ❌ | ✅ | ❌ | ❌ | ❌ |
-| 字节序 / 字序 | ❌ | ❌ | ❌ | ✅ | ❌ |
-| 位寻址 | ❌ | ❌ | ❌ | ✅ | ✅ |
-| 探查枚举点位 | ✅ | ✅ | ✅ | 只回读已配置寄存器 | 只回读已配置软元件 |
+| 能力 | HTTP 轮询 | MQTT | OPC UA | MTConnect | Modbus TCP | Modbus RTU | Modbus ASCII | 三菱 1E | 三菱 3E/SLMP | Siemens S7 | Rockwell EtherNet/IP | Omron FINS/TCP | Omron FINS/UDP | BACnet/IP | BACnet MS/TP | SNMP |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 采样事件时间策略 | ✅ | ✅ | 使用服务器 SourceTimestamp | 使用 Edge 接收时间 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 使用 Edge 接收时间 | 使用 Edge 接收时间 | 默认 Edge 接收时间；可选 OID |
+| 序号字段 | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| 连接与单次操作超时 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 重连间隔 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 控制参数集合路径 | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 按主题绑定点位 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 可配置字节序 / 字序 | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | 仅字序 | 仅字序 | ❌ | ❌ | ❌ |
+| 位寻址 | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 通过 Boolean 标签 | ✅ | ✅ | ❌ | ❌ | ❌ |
+| 探查枚举点位 | ✅ | ✅ | ✅ | ✅ | 只回读已配置寄存器 | 只回读已配置寄存器 | 只回读已配置寄存器 | 只回读已配置软元件 | 只回读已配置软元件 | 只回读已配置地址 | 只回读已配置标签 | 只回读已配置地址 | 只回读已配置地址 | 只浏览指定设备对象目录 | 只浏览指定设备对象目录 | 只浏览指定数字 OID 子树 |
 
-Modbus 和 MELSEC 不执行地址盲扫，防止意外访问不应读取的区域。
+Modbus、MELSEC、Siemens S7、EtherNet/IP、Omron FINS/TCP 和 FINS/UDP 不执行地址盲扫，防止意外访问不应读取的区域。BACnet/IP 通过单播访问配置的设备与 Device Instance；MS/TP 只对配置实例发送范围受限的 Who-Is。两者都只浏览该设备的对象目录，不探查其他网络设备。
+
+SNMP 只对用户指定的目标地址与根 OID 进行有限浏览，不扫描子网；浏览最多接受 512 个对象。运行阶段只 GET 已映射 OID，不支持 SET、Trap 或 MIB 符号名称。SNMPv2c Community 仅接受 `env:NAME` 密钥引用，协议本身不加密报文；SNMPv3 默认使用 `authPriv`、SHA-256 和 AES-128，可配置 SHA-384/512、AES-192/256。所有真实目标仍须通过 Edge 的网络白名单检查，并在目标设备上探查确认。
+
+MTConnect CNC 驱动通过所选 Agent 的 `/probe` 发现 DataItem，并在运行时按任务映射的 DataItem ID 读取 `/current`。首期仅支持标量 Sample 与 Event，采样时间使用 Edge 接收时间；`/current` 是最新值快照，不能保证捕获两次轮询之间短暂出现的状态。Condition、复合值、数组和 `/sample` 序号游标暂不支持。请求路径与 `path` 过滤参数遵循 [MTConnect v2.5 Part 1](https://docs.mtconnect.org/MBSD_MTConnect_Part_1_2-5-0.pdf)。
 
 ## 点位选择器
 
@@ -117,6 +145,12 @@ Modbus 和 MELSEC 不执行地址盲扫，防止意外访问不应读取的区�
 
 字符串类型在第 4 段声明字节长度。连接配置决定地址基准；使用从 1 开始的手册地址时，Edge 在请求前转换为协议地址。
 
+### Modbus RTU 与 ASCII
+
+两种串口驱动使用相同的寄存器点位语法、地址基准和只读映射。RTU 使用 8 个数据位和 CRC；ASCII 使用 7 个数据位和 LRC，校验位可选偶校验、奇校验或无校验。ASCII 默认 7E1；无校验时必须使用 2 个停止位，有校验时使用 1 个停止位。实际串口参数必须与仪表或 PLC 串口设置一致，参考 [Modbus Serial Line Protocol and Implementation Guide](https://www.modbus.org/docs/Modbus_over_serial_line_V1.pdf)。
+
+同一串口会话可以访问不同 Unit ID，但帧格式、波特率、数据位、校验位和停止位必须一致；RTU 与 ASCII 不能混用同一物理总线。平台在发布时校验 Edge 上已配置的任务，Edge 运行时也会拒绝冲突的活动会话。驱动仅探查和读取已映射寄存器，不扫描地址。串口名必须加入 Edge `AllowedSerialPorts` 精确白名单；Linux 容器还需映射 `/dev/tty*` 并授予进程访问权限。
+
 ### 三菱 MC A-compatible 1E
 
 ```text
@@ -130,9 +164,57 @@ Modbus 和 MELSEC 不执行地址盲扫，防止意外访问不应读取的区�
 - M / X / Y / B / S / L 作为 `boolean` 时使用位单位读取；
 - 位软元件作为 `int16` 等数值读取时表示从该点开始的连续位打包字。
 
+### 三菱 MC 3E/SLMP
+
+首期驱动使用 MC 3E Binary over TCP，端口必须填写目标 PLC 工程中配置的 SLMP TCP 端口；协议没有可用于所有机型的统一 TCP 默认端口。CPU 系列和路由参数按连接配置提供。Q/L 与 iQ-F 使用 QnA-compatible 3E 字段格式；iQ-R 使用不同宽度的设备号和设备代码字段及对应读取子命令。PLC、以太网模块及其工程参数必须支持并启用对应的 3E 通信。
+
+点位格式为 `<软元件>:<编号>:<类型>`，例如 `D:100:int16`、`W:1A:uint16`、`X:1A:boolean`、`M:100:boolean` 或 `D:100.3:boolean`。首期软元件目录限于 X、Y、M、L、B、D、W；二进制驱动中 X/Y、B/W 编号使用十六进制，其他已支持软元件使用十进制。Q/L 和 iQ-F 设备号字段可表达 0 到 `0xFFFFFF`；iQ-R 可表达 0 到 `0xFFFFFFFF`。这是帧字段边界，不代表目标 PLC 的实际软元件范围，实际范围仍由具体型号和参数决定。这里的 X/Y 十六进制规则属于 3E Binary，与 1E 中的八进制规则不同。
+
+探查和运行只读取显式配置的点位（MC 读取命令 `0401`），不会扫描地址或写入 PLC。控制器系列、模块、固件、地址范围和端口设置会影响实际可用性；填写与 PLC 工程一致的参数，并在目标设备上探查确认。当前不支持 3E ASCII、4E、UDP、标签访问和写入。设备能力及地址规则请以 [MELSEC SLMP Reference Manual](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080956eng/sh080956engl.pdf)、[MELSEC-Q/L Ethernet communication manual](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080811eng/sh080811engy.pdf) 和 [FX5 User's Manual (SLMP)](https://dl.mitsubishielectric.com/dl/fa/document/manual/plcf/jy997d56001/jy997d56001k.pdf) 为准。
+
+### Siemens S7 ISO-on-TCP
+
+S7 连接配置包含 PLC 主机、端口（默认 102）、CPU 系列、机架、槽位和轮询间隔。点位使用 PLC 绝对地址并在映射表中选择数据类型：例如 `DB1.DBW0` 可选 `int16` / `uint16`，`DB1.DBD0` 可选 `int32` / `uint32` / `float32`，`DB1.DBL0` 可选 64 位整数或 `float64`，`DB1.DBX0.0`、`M0.0` 和 `I0.0` 表示布尔位；`DB1.DBB0` 可读取字节或 S7 STRING。STRING 需要填写最大字符长度，当前单次读取上限为 198 个字符。S7 使用大端字节序，不提供可切换的字节序选项。
+
+驱动只读取配置中声明的 DB、输入、输出和 M 区地址，不浏览或扫描地址，也不写 PLC。地址间隙合并默认关闭；CPU 系列、机架和槽位按现场配置填写。S7 设备时间使用数值地址，并选择 Unix 秒或 Unix 毫秒编码。S7-1200/1500 读取 DB 时还要按现场 CPU 安全配置允许 PUT/GET，并使用非优化 DB 访问；最终连通性和地址权限需在目标设备上探查确认。
+
+### Rockwell EtherNet/IP
+
+连接配置支持 ControlLogix / CompactLogix 与 Micro800。Logix 控制器需要填写直连背板槽位路径 `1,0` 到 `1,31`；Micro800 不填写路径。默认端口为 44818。点位填写区分大小写的符号标签，例如 `Temperature`、`Program:MainProgram.Speed`、`Array[0]` 或 `Motor.Status.Running`，并选择 Boolean、8/16/32/64 位整数或 32/64 位浮点类型。当前不支持字符串、UDT、结构体、标签枚举和隐式 I/O。
+
+探查和运行只读取已配置的标签，不扫描或写入 PLC。新建任务默认使用 Edge 接收时间；需要设备时间时，可配置数值标签并选择 Unix 秒或 Unix 毫秒编码。同一标签若也作为数据点使用，数据类型必须兼容。单任务最多读取 256 个不同标签，标签会按配置顺序逐个读取。当前不支持动态上下文、质量路径和配方版本辅助标签；这些字段没有声明源类型时不会假定标签类型。连接主机必须在目标 Edge 的 `AllowedNetworkHosts` 白名单中。最终连通性、控制器系列、路径和标签权限应在目标设备上探查确认。
+
+### Omron FINS/TCP
+
+FINS/TCP 连接使用 PLC 主机和端口（常见默认值为 9600）。点位按内存区与字地址填写，例如 `DM:100:int16`、`CIO:100.3:boolean` 或 `W:100:uint16`；支持 CIO、WR/W、HR/H、AR/A 和 DM 区。字内字节序固定为高字节在前，多字数值可选择字序。Boolean 点位必须指定 0-15 的位偏移。
+
+探查和运行只回读明确配置的点位，不扫描、不写入，也不执行 FINS 路由。FINS/TCP 是否可用、内存区范围与 PLC 可用连接数由具体机型和设备设置决定；配置语法通过后仍需在现场目标设备上探查。该驱动不支持 EM 区、计时器、计数器和文本点位。
+
+### Omron FINS/UDP
+
+FINS/UDP 使用 PLC 主机和 UDP 端口（默认 9600），并要求分别填写 PLC 节点号和采集端节点号（1-254）；节点号必须与 PLC 的 FINS 网络设置匹配。端口和节点号设置可参阅 [Omron FINS/UDP 参考手册](https://assets.omron.eu/downloads/latest/manual/en/w421_cj1w-etn21_cs1w-etn21_ethernet_units_-_construction_of_applications_operation_manual_en.pdf)。它使用与 FINS/TCP 相同的内存区点位语法与数值类型，且只适合直接 FINS 通信，不提供 FINS 路由配置。探查和运行只发送 MEMORY AREA READ 请求读取已配置点位，不扫描地址、不写入 PLC。设备对 FINS/UDP 的支持及节点号设置因型号和网络配置而异；填写正确的网络参数后仍需从目标 Edge 探查确认。
+
+### BACnet/IP
+
+BACnet/IP 连接填写目标设备单播地址、UDP 端口（默认 47808）、Device Instance（0-4194302）和轮询间隔。连接探查会向该地址和 Device Instance 浏览对象目录；不会发送 Who-Is 广播或发现网络中的其他设备。设备实例范围见 [BACnet 标准 Addendum 135-2010ak](https://bacnet.org/wp-content/uploads/sites/4/2022/08/Add-135-2010ak.pdf)，默认端口说明见 [BACnet Committee 的 BACnet/IP 网络说明](https://bacnet.org/wp-content/uploads/sites/4/2022/06/Building-Wide-Area-Networks-With-BACnet-Part-2.pdf)。
+
+对象点位选择器使用 `object-type:instance`，例如 `analog-input:1`。映射默认使用 `auto`，对已发现对象的 `present-value` 标量按目标变量类型解析。单任务最多映射 128 个对象；目录浏览最多接收 512 个对象，首次浏览只读取对象目录，完成映射后探查才读取已映射对象的当前值。运行只读映射对象的 `present-value`，不写入属性。该驱动适用于提供 BACnet/IP 的 HVAC、照明、门禁等楼宇自动化设备；当前不支持 BACnet/SC、数组或非标量属性值。最终连通性和对象权限需在目标设备上探查确认。
+
+### BACnet MS/TP
+
+BACnet MS/TP 连接填写 Edge 串口、波特率（9600、19200、38400、76800 或 115200）、本机 MS/TP 站地址（0-127）、Max Master、Max Info Frames、目标 Device Instance 和轮询间隔。串口采用 8N1；本机站地址必须在现场总线上唯一。同一 Edge 上共享这条总线的任务要使用相同波特率、本机站地址、Max Master 和 Max Info Frames；多个 Device Instance 可以共用一个 Edge 会话。BACnet MS/TP 波特率范围参见 [Johnson Controls MS/TP bus guidance](https://docs.johnsoncontrols.com/bas/r/Metasys/en-US/MS/TP-Communications-Bus-Technical-Bulletin/11.0/MS/TP-Bus-overview/Baud-rates-on-the-MS/TP-Bus)。
+
+Edge 只会打开 `Acquisition:Security:AllowedSerialPorts` 精确允许的端口。Linux 容器还需映射 `/dev/tty*` 并授予 ConnectorHost 进程访问权限。探查会在这条本地 MS/TP 总线上发送 Device Instance 上下界相同的 Who-Is，只接受该实例的 I-Am 响应；发现多个设备声明同一实例时会拒绝继续。点位选择器与 BACnet/IP 相同，使用 `object-type:instance`，例如 `analog-input:1`。单任务最多映射 128 个对象，目录最多接收 512 个对象；只读对象目录与已映射对象的标量 `present-value`，不写属性。该驱动不支持 BACnet/SC、数组或非标量值。串口由 MS/TP、Modbus RTU/ASCII 或其他驱动共享时，平台发布检查和 Edge 运行时都会拒绝冲突参数或并发占用。
+
+### SNMPv2c/v3
+
+连接配置填写目标主机、UDP 端口（默认 161）、协议版本、轮询间隔和浏览根 OID。SNMPv2c 只填写 `env:NAME` Community 密钥引用；不要把 Community 明文写入任务配置或 CSV。SNMPv3 默认采用 `authPriv`、SHA-256 和 AES-128，用户名及认证/隐私密钥均使用环境密钥引用；可选择 SHA-256/384/512 和 AES-128/192/256。Context Name 可选。SNMP 没有内建设备时间戳，默认使用 Edge 接收时间；若设备提供时间型标量，可选择设备时间并将 `timestampPath` 配置为数字 OID。设备提供递增序号时，也可将 `sequencePath` 配置为数字 OID；不使用时留空。运行和探查目标必须加入 Edge `AllowedNetworkHosts` 白名单，并且需要在真实目标设备上探查验证。
+
+点位使用数字 OID，例如 `1.3.6.1.2.1.1.5.0`；输入时可带前导点，保存后规范化为无前导点格式。OID 仅接受数字 arc，不支持 MIB 名称。探查只在用户指定的根 OID 子树内有限浏览，最多接收 512 个对象；运行只 GET 已映射的标量 OID。当前不支持 SET、Trap、网段扫描或 MIB 名称解析。`auto` 按平台工艺变量类型解析；对于 SNMP OctetString，`auto` 保留有效 UTF-8 文本，无效 UTF-8 或含不可打印控制字符（例如 NUL、SOH）时回退为小写十六进制；常见文本空白 `\t`、`\r`、`\n` 保留。显式选择 `string` 时，无效 UTF-8 仍会被拒绝。Counter32/Counter64 按累计值映射为 `uint32`/`uint64`，不计算速率。实际主机连通性、凭据、访问控制和 OID 权限仍以目标 Edge 探查结果为准。
+
 相邻点位可以按连接配置合并为连续读取，减少网络往返；Modbus 与 MELSEC 都限制最大合并间隙，不跨越较大的未声明地址区。诊断单点问题时可把合并间隔设为 0。
 
-寄存器设备时间必须显式声明 `unix-s`、`unix-ms` 或 `iso-8601` 编码。发布校验会检查点位数据宽度，32 位 Unix 秒不会再被当作 Unix 毫秒解释。
+寄存器设备时间必须显式声明时间编码。Modbus 和 MELSEC 可选 `unix-s`、`unix-ms` 或 `iso-8601`；Siemens S7 与 EtherNet/IP 使用数值地址或标签并支持 `unix-s` 或 `unix-ms`。发布校验会检查点位数据宽度，32 位 Unix 秒不会再被当作 Unix 毫秒解释。
 
 ## MQTT 多主题
 
@@ -158,8 +240,8 @@ Modbus 和 MELSEC 不执行地址盲扫，防止意外访问不应读取的区�
 | 对象 | 保存什么 | 何时变化 |
 |---|---|---|
 | 任务模板 | 协议语义、工艺数据模型、点位映射、运行边界和采集策略 | 型号语义或映射变化时发布新版本 |
-| 数据源实例 | 目标 Edge、设备身份、实际网络地址和密钥引用 | 每台设备独立维护 |
-| 任务绑定 | 选择哪个模板版本与哪个数据源版本 | 组合关系变化时创建新版本 |
+| 数据源实例 | 目标 Edge、默认采集对象、实际网络地址和密钥引用 | 每个来源独立维护 |
+| 任务绑定 | 模板与数据源版本、逻辑对象及可选的所属机器 | 组合关系变化时创建新版本 |
 | 设备接入任务 | 由绑定生成、可探查并最终发布的部署单元 | 每台设备逐一验证和发布 |
 
 因此“数据源”和“任务绑定”不是同一份配置：前者回答“连接哪台设备”，后者回答“这台设备采用哪套采集模板”。模板不允许任意继承或覆盖点位定义；变更点位必须发布新的模板版本。
@@ -175,9 +257,23 @@ CSV 的四个动作是两个对象各自的导入与导出，不是重复功能�
 
 两类 CSV 都使用带表头的 UTF-8 格式，单批最多 500 项，并在一个事务内校验和写入；任一行无效时整批不写入。先导入数据源，再导入引用它们的绑定。凭据字段只保存密钥引用；固定请求体和普通请求头会随数据源 CSV 导出，不能在其中填写凭据。导出还会中和电子表格公式前缀，避免名称等文本在表格软件中被当作公式执行。
 
+数据源 CSV 在末尾增加 `deviceProfileJson` 列以保存设备类别、厂商和型号；旧版十列数据源表头仍可导入。空画像字段不会改变既有数据源的驱动配置。
+
 批量实例化只生成草稿，每台设备必须单独完成真实探查才能发布。
 
-模板、数据源、绑定和最终任务都记录版本来源。已发布版本不可覆盖；修改通过新版本完成。这样可以回答某条现场数据使用了哪一版映射和哪一版连接实例，而不是把配置复制后失去来源关系。
+## 共享连接与逻辑采集组
+
+在采集配置列表中展开“复用数据源与采集模板”，选择已发布数据源和同协议的模板，为逻辑对象创建任务草稿。关系预览显示数据源、现场节点、模板、对象和设备单元。绑定生成的配置保持只读，但可以执行真实探查，验证通过后再发布。逻辑对象需要不同点位定义时，应选择对应模板；创建绑定不会推断地址偏移。
+
+绑定可显式提供 `subjectType` 和 `subjectId`，二者必须一起填写；旧绑定或旧版八列绑定 CSV 不提供这两个字段时，继续使用数据源默认对象。可选 `equipmentId` 用于关联生产准备、工装安装等设备级信息；逻辑对象、设备单元和任务身份分别保留。编号粒度及对象之间的层级由部署方按现场资产与业务语义确定，系统不会假设控制器数量或从属设备结构，也不会从数据源名称、默认对象或逻辑对象推导设备层级。新增绑定 CSV 导出包含这三个字段，旧表头仍可导入。
+
+Modbus TCP 和三菱 A 兼容 1E 任务对同一规范化主机和端口共享 TCP 会话，完整读取快照与探查在同一会话上串行执行。Modbus RTU 与 ASCII 任务按规范化串口名共享总线仲裁，串口参数及 RTU/ASCII 帧格式必须一致；Unit ID 是每次请求的路由地址，同一总线可以串行访问不同从站。每个任务分别维护点位映射、运行边界和运行 ID。当前批读只在单个任务内合并；不同任务的读计划不做跨组并批，也不保证多个读块同时采样。采集配置页按同一端点已发布任务的轮询周期合计预计快照数，并单独显示草稿；该数值不包含重试开销，也不代替现场核对设备响应时间和实际扫描周期。不同主机别名不会自动识别为同一物理设备。
+
+三菱 1E 支持 `binary` 和 `ascii`，数据码应与设备端口配置一致。同一活动端点的协议或数据码不兼容时，新的连接请求会被拒绝；更改该设置需要先停止相关采集任务。Modbus RTU 和 ASCII 仅访问 `AllowedSerialPorts` 精确列出的串口，并只读取用户明确配置的寄存器；Linux 容器还需映射对应 `/dev/tty*` 设备并授予进程访问权限。会话最后一个任务和探查释放后关闭；中断中的读取会重建会话，避免把未读完的串口帧交给另一个任务。
+
+HTTP、MQTT 和 OPC UA 保留各自的接入机制，不宣称共享这些协议的任务会话。复用 MQTT 数据源时可留空 `clientId`，由 Edge 和任务身份生成独立编号；同一 Broker 的显式客户端编号必须唯一。平台拒绝同一 Edge 上已发布任务的编号冲突，跨 Edge 部署仍须统一分配编号。
+
+离散运行激活条件支持 `equals` 和 `nonzero`。前者按配置值比较；后者适用于生产序号，零为空闲，有限非零数值为活动状态。无效数值会报告采集错误，不会被当作运行结束。活动状态下启动连接器产生的部分运行，即使后来收到结束事件，也不会被认定为完整运行进入配方推荐。
 
 ## 值转换与质量策略
 

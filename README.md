@@ -142,7 +142,7 @@ Ingot Chat（独立调查入口）
 - **首次使用**：[快速开始](docs/getting-started.md) → [配方优化试点指南](docs/pilot.md)。
 - **理解系统**：[系统设计](docs/design.md)、[数据模型](docs/data-model.md)与[分析与优化](docs/optimization.md)。
 - **接入与运维**：[数据接入](docs/data-connection.md)、[生产架构](docs/production-architecture.md)与[部署运维](docs/deployment.md)。
-- **连接器演示**：[光学镜片 PLC 采集演示](docs/optical-lens-demo.md)可启动独立 Modbus TCP 模拟 PLC，验证 19 项过程数据、20 个配方参数和 300 秒批次链路。
+- **连接器演示**：[半导体晶圆刻蚀采集演示](docs/semiconductor-demo.md)可启动独立 Modbus TCP 模拟器，验证 19 项过程数据、20 个演示参数和 300 秒运行链路。
 - **判断适用范围**：[当前状态](docs/status.md)、[场景评估边界](docs/rollout.md)与[常见问题](docs/faq.md)。
 - **参与建设**：[贡献指南](CONTRIBUTING.md)与[开源依赖](docs/open-source-dependencies.md)。
 

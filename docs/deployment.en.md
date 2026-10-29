@@ -164,8 +164,9 @@ Platform publishes versioned acquisition configuration by `EdgeId`. Edge pulls a
 - An explicit zero-configuration publication stops the corresponding acquisition and reports state.
 - Production never silently enables an unversioned local fallback.
 - HTTP/MQTT may read a sample payload; OPC UA may browse nodes.
-- Modbus TCP and MELSEC read only explicitly configured addresses and never blind-scan.
-- HTTP, MQTT, OPC UA, Modbus TCP, and MELSEC reject every unregistered target by default. Device hosts require an explicit `Acquisition:Security:AllowedHttpHosts` entry for HTTP or `AllowedNetworkHosts` entry for other protocols, and connections use the validated DNS result as the pinned address. Loopback, link-local, unspecified, and multicast addresses remain forbidden even when allowlisted.
+- Modbus TCP, Modbus RTU/ASCII, MELSEC 1E, MELSEC 3E/SLMP, Siemens S7, EtherNet/IP, and Omron FINS/TCP/UDP read only explicitly configured addresses or tags and never blind-scan.
+- HTTP, MQTT, OPC UA, MTConnect, Modbus TCP, MELSEC 1E, MELSEC 3E/SLMP, Siemens S7, EtherNet/IP, and Omron FINS/TCP/UDP reject every unregistered network target by default. Device hosts require an explicit `Acquisition:Security:AllowedHttpHosts` entry for HTTP/MTConnect or `AllowedNetworkHosts` entry for other protocols, and connections use the validated DNS result as the pinned address. FINS/UDP applies the same host allowlist and DNS-pinning policy. Loopback, link-local, unspecified, and multicast addresses remain forbidden even when allowlisted.
+- Modbus RTU/ASCII and BACnet MS/TP reject every serial port by default. List each exact permitted port name in `Acquisition:Security:AllowedSerialPorts`, such as `COM3` or `/dev/ttyUSB0`. A Linux container also needs a local Compose override that maps the device and grants the ConnectorHost process access; do not hard-code a potentially absent serial device in the generic Compose file. Edge images publish `linux-x64` or `linux-arm64` serial runtime assets for the target architecture; custom publishing must also specify the matching Runtime Identifier.
 - Every target that receives an Edge secret, username/password, or client certificate must be explicitly host-allowlisted; merely resolving to a private address is not enough to receive credentials.
 - Real-value validation runs before and during publication.
 

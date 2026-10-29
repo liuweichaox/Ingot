@@ -11,8 +11,11 @@ public sealed class MelsecA1EAcquisitionRunner(
     IEventSink sink,
     AcquisitionStatus status,
     AcquisitionHttpEgressPolicy egressPolicy,
-    ILogger<MelsecA1EAcquisitionRunner> logger) : IAcquisitionProtocolRunner
+    ILogger<MelsecA1EAcquisitionRunner> logger,
+    RegisterAcquisitionSessionPool? sessionPool = null) : IAcquisitionProtocolRunner
 {
+    private readonly RegisterAcquisitionSessionPool _sessionPool = sessionPool ?? new();
+
     public string Protocol => AcquisitionProtocols.MelsecA1E;
 
     private static readonly IReadOnlyDictionary<string, byte[]> DeviceCodes =
@@ -47,94 +50,126 @@ public sealed class MelsecA1EAcquisitionRunner(
         var fallbackPlan = plan.Any(static read => read.Points.Count > 1)
             ? BuildReadPlan(selectors, 0)
             : plan;
+        await RunWithSharedSessionAsync(
+            configurationKey,
+            deployment,
+            normalizedSource,
+            connection,
+            plan,
+            fallbackPlan,
+            _sessionPool,
+            ct).ConfigureAwait(false);
+    }
+
+    private async Task RunWithSharedSessionAsync(
+        string configurationKey,
+        AcquisitionDeployment deployment,
+        string normalizedSource,
+        McA1EConnection connection,
+        IReadOnlyList<McRead> plan,
+        IReadOnlyList<McRead> fallbackPlan,
+        RegisterAcquisitionSessionPool pool,
+        CancellationToken ct)
+    {
+        var task = deployment.Task;
+        await using var lease = await pool.AcquireAsync(
+            AcquisitionProtocols.MelsecA1E,
+            connection.Host,
+            connection.Port,
+            connection.DataCode,
+            task.DataSourceId,
+            task.DataSourceVersion,
+            RegisterAcquisitionSessionPool.CreateSourceVersionFingerprint(connection, task),
+            token => egressPolicy.ConnectTcpAsync(
+                connection.Host,
+                connection.Port,
+                "MELSEC 1E",
+                task.Execution.TimeoutMs,
+                token),
+            ct).ConfigureAwait(false);
+
         string? currentProcessSpecification = null;
         var lifecycle = new AcquisitionLifecycleTracker();
         var sourceDeduplicator = new AcquisitionSourceDeduplicator();
+        logger.LogInformation(
+            "MELSEC 1E 采集任务已加入共享连接：Configuration={Configuration}, Device={Host}:{Port}",
+            configurationKey,
+            connection.Host,
+            connection.Port);
+
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                using var tcpClient = await egressPolicy.ConnectTcpAsync(
-                    connection.Host,
-                    connection.Port,
-                    "MELSEC 1E",
-                    deployment.Task.Execution.TimeoutMs,
-                    ct).ConfigureAwait(false);
-                using var stream = tcpClient.GetStream();
-                logger.LogInformation(
-                    "MELSEC 1E 采集任务已连接：Configuration={Configuration}, Device={Host}:{Port}, " +
-                    "Points={PointCount}, Reads={ReadCount}",
-                    configurationKey, connection.Host, connection.Port, selectors.Count, plan.Count);
-                while (!ct.IsCancellationRequested && tcpClient.Connected)
-                {
-                    var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-                    status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
-                    using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    readTimeout.CancelAfter(Math.Max(1000, deployment.Task.Execution.TimeoutMs));
-                    Dictionary<string, object?> raw;
-                    try
+                var read = await lease.ExecuteMelsecAsync(
+                    task.Execution.TimeoutMs,
+                    async (stream, readToken) =>
                     {
+                        var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                        status.RecordAttempt(configurationKey, DateTimeOffset.UtcNow);
+                        Dictionary<string, object?> raw;
                         try
                         {
-                            raw = await ReadSnapshotAsync(stream, connection, plan, readTimeout.Token)
+                            raw = await ReadSnapshotAsync(stream, connection, plan, readToken)
                                 .ConfigureAwait(false);
                         }
                         catch (InvalidOperationException) when (!ReferenceEquals(plan, fallbackPlan))
                         {
-                            raw = await ReadSnapshotAsync(stream, connection, fallbackPlan, readTimeout.Token)
+                            raw = await ReadSnapshotAsync(stream, connection, fallbackPlan, readToken)
                                 .ConfigureAwait(false);
                         }
-                    }
-                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                    {
-                        throw new TimeoutException(
-                            $"读取 MELSEC PLC {connection.Host}:{connection.Port} 超过 {deployment.Task.Execution.TimeoutMs}ms 未完成。");
-                    }
-                    var observedAt = DateTimeOffset.UtcNow;
-                    var readDurationMs = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
-                    status.RecordReadSuccess(configurationKey, observedAt, readDurationMs);
-                    var occurredAt = ResolveTimestamp(deployment.Task, raw, observedAt);
-                    var mapped = ProtocolAcquisitionSnapshotMapper.Map(
-                        deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
-                    var deduplication = sourceDeduplicator.Evaluate(
-                        mapped.Sample,
-                        observedAt,
-                        TimeSpan.FromMilliseconds(deployment.Task.Execution.SourceIdentityStaleAfterMs));
-                    if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
-                    {
-                        currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                        status.RecordDuplicateSnapshot(
-                            configurationKey,
-                            deduplication == AcquisitionDeduplicationResult.Stalled,
-                            $"设备源身份超过 {deployment.Task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
-                        await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
-                        continue;
-                    }
-                    var events = lifecycle.Track(
-                        mapped,
-                        deployment.Task.Lifecycle,
-                        connection.PollIntervalMs);
-                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
-                    status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
-                    status.RecordEmissionOutcome(
-                        configurationKey,
-                        events.Count,
-                        deployment.Task.Lifecycle is not null && events.Count == 0);
+                        return (Raw: raw, ReadDurationMs: System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds);
+                    },
+                    ct).ConfigureAwait(false);
 
+                var observedAt = DateTimeOffset.UtcNow;
+                var raw = read.Raw;
+                status.RecordReadSuccess(configurationKey, observedAt, read.ReadDurationMs);
+                var occurredAt = ResolveTimestamp(task, raw, observedAt);
+                var mapped = ProtocolAcquisitionSnapshotMapper.Map(
+                    deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
+                var deduplication = sourceDeduplicator.Evaluate(
+                    mapped.Sample,
+                    observedAt,
+                    TimeSpan.FromMilliseconds(task.Execution.SourceIdentityStaleAfterMs));
+                if (deduplication is AcquisitionDeduplicationResult.Duplicate or AcquisitionDeduplicationResult.Stalled)
+                {
                     currentProcessSpecification = mapped.ProcessSpecificationIdentity;
-                    status.RecordValidSnapshot(
+                    status.RecordDuplicateSnapshot(
                         configurationKey,
-                        observedAt,
-                        currentProcessSpecification,
-                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                        deduplication == AcquisitionDeduplicationResult.Stalled,
+                        $"设备源身份超过 {task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
                     await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
+                    continue;
                 }
+
+                var events = lifecycle.Track(mapped, task.Lifecycle, connection.PollIntervalMs);
+                await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
+                status.RecordEmissionOutcome(
+                    configurationKey,
+                    events.Count,
+                    task.Lifecycle is not null && events.Count == 0);
+                currentProcessSpecification = mapped.ProcessSpecificationIdentity;
+                status.RecordValidSnapshot(
+                    configurationKey,
+                    observedAt,
+                    currentProcessSpecification,
+                    deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
             {
                 status.RecordFailure(configurationKey, exception.Message);
-                logger.LogWarning(exception, "MELSEC 1E 采集任务 {Configuration} 读取失败，等待重连", configurationKey);
-                await Task.Delay(deployment.Task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
+                logger.LogWarning(
+                    exception,
+                    "MELSEC 1E 共享采集任务 {Configuration} 读取失败，等待后重试",
+                    configurationKey);
+                await Task.Delay(task.Execution.ReconnectDelayMs, ct).ConfigureAwait(false);
             }
         }
     }

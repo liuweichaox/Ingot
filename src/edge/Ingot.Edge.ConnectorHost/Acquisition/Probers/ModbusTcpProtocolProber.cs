@@ -1,12 +1,14 @@
-// Modbus TCP 协议探查。
+// Modbus TCP 协议探查通过共享会话读取一份完整寄存器快照。
 using Ingot.Contracts.Acquisition;
-using NModbus;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition.Probers;
 
 public sealed class ModbusTcpProtocolProber(
-    AcquisitionHttpEgressPolicy httpEgressPolicy) : IProtocolProber
+    AcquisitionHttpEgressPolicy httpEgressPolicy,
+    RegisterAcquisitionSessionPool? sessionPool = null) : IProtocolProber
 {
+    private readonly RegisterAcquisitionSessionPool _sessionPool = sessionPool ?? new();
+
     public string Protocol => AcquisitionProtocols.ModbusTcp;
 
     public async Task<ProbeSnapshot> ProbeAsync(
@@ -16,20 +18,33 @@ public sealed class ModbusTcpProtocolProber(
     {
         var connection = deployment.Task.ModbusTcp
             ?? throw new InvalidOperationException("Modbus TCP 连接配置不能为空。");
-        using var client = await httpEgressPolicy.ConnectTcpAsync(
+        var task = deployment.Task;
+        var selectors = ModbusTcpAcquisitionRunner.BuildSelectors(deployment, connection.AddressBase);
+        await using var lease = await _sessionPool.AcquireAsync(
+            AcquisitionProtocols.ModbusTcp,
             connection.Host,
             connection.Port,
-            "Modbus TCP",
-            deployment.Task.Execution.TimeoutMs,
+            string.Empty,
+            task.DataSourceId,
+            task.DataSourceVersion,
+            RegisterAcquisitionSessionPool.CreateSourceVersionFingerprint(connection, task),
+            token => httpEgressPolicy.ConnectTcpAsync(
+                connection.Host,
+                connection.Port,
+                "Modbus TCP",
+                task.Execution.TimeoutMs,
+                token),
             ct).ConfigureAwait(false);
-        var factory = new ModbusFactory();
-        using var master = factory.CreateMaster(client);
-        var values = await ModbusTcpAcquisitionRunner.ReadSnapshotAsync(
-            master,
-            connection.UnitId,
-            ModbusTcpAcquisitionRunner.BuildSelectors(deployment, connection.AddressBase),
-            connection.MaxMergeGap,
+        var values = await lease.ExecuteModbusAsync(
+            task.Execution.TimeoutMs,
+            (master, readToken) => ModbusTcpAcquisitionRunner.ReadSnapshotAsync(
+                master,
+                connection.UnitId,
+                selectors,
+                connection.MaxMergeGap,
+                readToken),
             ct).ConfigureAwait(false);
+
         var mappingsValidated = AcquisitionProbeSupport.ValidateProtocolMapping(deployment, values);
         return AcquisitionProbeSupport.FromRegisterValues(values, "register", mappingsValidated);
     }

@@ -249,7 +249,7 @@ public sealed class CompareExecutionsTool(
             ordered.Select(static row => row.Event.EventType).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             ordered.Select(static row => row.Event.Context).FirstOrDefault(static value => value.Count > 0)
                 ?? new Dictionary<string, string>(),
-            ordered.FirstOrDefault()?.Event.Subject.Id ?? "unknown");
+            PhysicalEquipmentIdentity.Resolve(ordered.Select(static row => row.Event)));
     }
 
     private static IReadOnlyList<InspectionRecord> EligibleInspections(

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ingot.Contracts.Acquisition;
 using Ingot.Domain.Events;
 
@@ -28,6 +29,7 @@ public sealed class AcquisitionLifecycleTracker
                 mapped,
                 lifecycle.ActiveContextKey,
                 lifecycle.ActiveValue,
+                lifecycle.ActiveCondition,
                 lifecycle.StartedEventType,
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
@@ -43,6 +45,7 @@ public sealed class AcquisitionLifecycleTracker
                 mapped,
                 lifecycle.ActiveContextKey,
                 lifecycle.ActiveValue,
+                lifecycle.ActiveCondition,
                 lifecycle.StartedEventType,
                 lifecycle.CompletedEventType,
                 lifecycle.StepChangedEventType,
@@ -52,6 +55,7 @@ public sealed class AcquisitionLifecycleTracker
         AcquisitionMappingResult mapped,
         string? activeContextKey,
         string activeValue,
+        string activeCondition,
         string startedEventType,
         string completedEventType,
         string stepChangedEventType,
@@ -70,10 +74,7 @@ public sealed class AcquisitionLifecycleTracker
                     $"离散运行采样缺少运行激活状态；请检查上下文映射 {activeContextKey}。");
             }
 
-            var isActive = string.Equals(
-                currentActiveValue,
-                activeValue,
-                StringComparison.OrdinalIgnoreCase);
+            var isActive = ResolveActive(currentActiveValue, activeValue, activeCondition);
             var firstObservedState = !_hasObservedLifecycleState;
             _hasObservedLifecycleState = true;
             if (!isActive)
@@ -163,6 +164,19 @@ public sealed class AcquisitionLifecycleTracker
                     ? "partial_after_connector_start"
                     : "completed"
             });
+
+    // A production counter is not a Boolean bit: validate numeric values before treating zero as an end boundary.
+    private static bool ResolveActive(string value, string expected, string condition)
+    {
+        if (condition == "equals")
+            return string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
+        if (condition != "nonzero")
+            throw new InvalidDataException($"不支持的运行激活条件：{condition}。");
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ||
+            !double.IsFinite(number))
+            throw new InvalidDataException("非零运行条件要求有限数值，不能将无效状态当作运行结束。");
+        return number != 0;
+    }
 
     private void ResetActiveRun()
     {

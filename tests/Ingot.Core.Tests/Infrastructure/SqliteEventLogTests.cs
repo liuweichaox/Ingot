@@ -1,3 +1,5 @@
+// 验证 SQLite 事件日志的持久化、游标、筛选与保留行为。
+
 using Ingot.Domain.Events;
 using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Data.Sqlite;
@@ -61,6 +63,45 @@ public sealed class SqliteEventLogTests
             Assert.Equal(["missing_value"], evt.QualityFlags);
             Assert.True(ProductionEventIntegrity.HasValidPayloadHash(evt));
             Assert.Equal(3, await reopened.CountPendingAsync());
+        }
+        finally
+        {
+            DeleteSqliteFiles(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task QueryEquipmentId_ShouldMatchParentMachineAcrossLogicalCavitiesAndLegacyEquipmentSubjects()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var log = new SqliteEventLog(
+                Options.Create(new EventOptions { DatabasePath = dbPath }),
+                NullLogger<SqliteEventLog>.Instance);
+            var firstCavity = PhysicalEvent("cavity", "PRESS-01:CAVITY-1", "PRESS-01");
+            var secondCavity = PhysicalEvent("cavity", "PRESS-01:CAVITY-2", "PRESS-01");
+            var legacyEquipment = PhysicalEvent("equipment", "PRESS-01", null);
+            var misleadingCavity = PhysicalEvent("cavity", "PRESS-01", null);
+            var otherMachine = PhysicalEvent("cavity", "PRESS-02:CAVITY-1", "PRESS-02");
+            foreach (var evt in new[] { firstCavity, secondCavity, legacyEquipment, misleadingCavity, otherMachine })
+                await log.AppendAsync(evt);
+
+            var parentMatches = await log.QueryAsync(new EventQuery { EquipmentId = "PRESS-01", Limit = 100 });
+            var combinedMatches = await log.QueryAsync(new EventQuery
+            {
+                EquipmentId = "PRESS-01",
+                SubjectId = "PRESS-01",
+                Limit = 100
+            });
+
+            Assert.Equal(3, parentMatches.Count);
+            Assert.Contains(parentMatches, item => item.EventId == firstCavity.EventId);
+            Assert.Contains(parentMatches, item => item.EventId == secondCavity.EventId);
+            Assert.Contains(parentMatches, item => item.EventId == legacyEquipment.EventId);
+            Assert.DoesNotContain(parentMatches, item => item.EventId == misleadingCavity.EventId);
+            Assert.DoesNotContain(parentMatches, item => item.EventId == otherMachine.EventId);
+            Assert.Equal([legacyEquipment.EventId], combinedMatches.Select(static item => item.EventId).ToArray());
         }
         finally
         {
@@ -330,6 +371,15 @@ public sealed class SqliteEventLogTests
             new Dictionary<string, object?> { ["count"] = 2 },
             new AppliedConfigurationRef("ingestion-task", "TASK-01", 2),
             ["missing_value"]);
+
+    private static ProductionEvent PhysicalEvent(string subjectType, string subjectId, string? equipmentId)
+        => ProductionEvent.Create(
+            "process.execution.completed",
+            DateTimeOffset.UtcNow,
+            "edge/EDGE-01/PLC-01/rule-01",
+            new ObjectRef(subjectType, subjectId),
+            Guid.CreateVersion7().ToString("N"),
+            equipmentId is null ? null : new Dictionary<string, string> { ["equipment_id"] = equipmentId });
 
     private static string CreateTempDbPath()
         => Path.Combine(Path.GetTempPath(), $"ingot-events-{Guid.NewGuid():N}.db");

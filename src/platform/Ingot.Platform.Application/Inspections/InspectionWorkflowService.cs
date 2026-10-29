@@ -51,7 +51,8 @@ public sealed class InspectionWorkflowService(
             return BuildTask(scope, scopePlan, scopeRecords, scopeReviews);
         }
         var plans = await masterData.ListInspectionPlansAsync(ct).ConfigureAwait(false);
-        var plan = InspectionPlanMatcher.Resolve(plans, completed.Event.Context, completed.Event.Subject.Id, completed.Event.OccurredAt);
+        var equipmentId = PhysicalEquipmentIdentity.Resolve(completed.Event);
+        var plan = InspectionPlanMatcher.Resolve(plans, completed.Event.Context, equipmentId, completed.Event.OccurredAt);
         if (plan is null) return null;
         var records = await inspections.QueryAllByExecutionIdsAsync(
             [executionId], siteId, ct).ConfigureAwait(false);
@@ -96,7 +97,7 @@ public sealed class InspectionWorkflowService(
                 Plan = InspectionPlanMatcher.Resolve(
                     plans,
                     item.Event.Context,
-                    item.Event.Subject.Id,
+                    PhysicalEquipmentIdentity.Resolve(item.Event),
                     item.Event.OccurredAt)
             })
             .Where(static item => item.Plan is not null)
@@ -183,7 +184,7 @@ public sealed class InspectionWorkflowService(
             ScopeType = "production-execution",
             ExecutionId = completed.Event.ExecutionId!,
             OutputItemId = context.GetValueOrDefault("output_item_id"),
-            EquipmentId = completed.Event.Subject.Id,
+            EquipmentId = PhysicalEquipmentIdentity.Resolve(completed.Event),
             ProductFamilyCode = context.GetValueOrDefault("product_family_code", "unknown"),
             InspectionPlanId = plan.PlanId,
             InspectionPlanVersion = plan.Version,
@@ -230,7 +231,9 @@ public sealed class InspectionWorkflowService(
             ScopeType = scope.ScopeType,
             ExecutionId = scope.ScopeId,
             OutputItemId = scope.OutputItemId,
-            EquipmentId = scope.SubjectId,
+            EquipmentId = PhysicalEquipmentIdentity.Resolve(
+                scope.Context,
+                new Ingot.Domain.Events.ObjectRef(scope.SubjectType, scope.SubjectId)),
             ProductFamilyCode = scope.ProductFamilyCode,
             InspectionPlanId = plan.PlanId,
             InspectionPlanVersion = plan.Version,

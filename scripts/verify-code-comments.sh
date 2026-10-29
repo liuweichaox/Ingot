@@ -70,6 +70,7 @@ while IFS= read -r file; do
     [[ -z "$failure" ]] || failures+=("$failure")
   done < <(
     awk '
+      { sub(/\r$/, "") }
       /^public interface / {
         if (previous_nonblank !~ /^\/\/\/ <summary>.*<\/summary>$/ &&
             previous_nonblank !~ /^\/\/\/ <\/summary>$/)
@@ -85,6 +86,7 @@ while IFS= read -r file; do
     [[ -z "$failure" ]] || failures+=("$failure")
   done < <(
     awk '
+      { sub(/\r$/, "") }
       /^public (sealed |abstract )*class / || /^public sealed partial class [^(]+\(/ {
         if (previous_nonblank !~ /^\/\/\/ <summary>.*<\/summary>$/ &&
             previous_nonblank !~ /^\/\/\/ <\/summary>$/)

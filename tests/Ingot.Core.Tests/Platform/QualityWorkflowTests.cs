@@ -1,3 +1,5 @@
+// 验证生产运行比较、检验任务和质量工作流的站点及设备边界。
+
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.Inspections;
@@ -80,6 +82,57 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task ProcessExecutionServicesKeepPhysicalEquipmentSeparateFromCavitySubjectAndFailClosedOnPartialLifecycle()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        var startedAt = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        AddCavityExecution(rows, 1, "RUN-CAVITY-1", "PRESS-01:CAVITY-1", "M01C01", startedAt, partial: true);
+        AddCavityExecution(rows, 3, "RUN-CAVITY-2", "PRESS-01:CAVITY-2", "M01C02", startedAt.AddMinutes(1));
+        var eventStore = new FakeEventStore(rows);
+        var timeSeries = new FakeTimeSeriesStore(rows);
+        var configurations = new FakeProcessConfigurationStore();
+        var inspections = new FakeInspectionStore([]);
+        var reviews = new FakeReviewStore();
+        var masterData = new FakeMasterDataStore();
+        var processExecutions = new ProcessExecutionService(
+            eventStore,
+            inspections,
+            reviews,
+            masterData,
+            new ProcessAnalysisResolver(configurations),
+            timeSeries);
+        var comparisons = new ExecutionComparisonService(
+            eventStore,
+            inspections,
+            reviews,
+            masterData,
+            new ProcessAnalysisResolver(configurations),
+            timeSeries);
+
+        var filtered = await processExecutions.QueryAsync(
+            null, null, null, null, null, "M01C01", null, null, null, 10,
+            siteId: "SITE-001");
+        var summary = Assert.Single(filtered.Data);
+        var comparisonRows = await comparisons.GetProcessExecutionsAsync(
+            ["RUN-CAVITY-1", "RUN-CAVITY-2"], siteId: "SITE-001");
+
+        Assert.Equal(1, filtered.Total);
+        Assert.Equal("RUN-CAVITY-1", summary.ExecutionId);
+        Assert.Equal("M01C01", summary.EquipmentId);
+        Assert.Equal("cavity", summary.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-1", summary.SubjectId);
+        Assert.False(summary.LifecycleComplete);
+        Assert.Equal("M01C01", comparisonRows["RUN-CAVITY-1"].EquipmentId);
+        Assert.Equal("cavity", comparisonRows["RUN-CAVITY-1"].SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-1", comparisonRows["RUN-CAVITY-1"].SubjectId);
+        Assert.False(comparisonRows["RUN-CAVITY-1"].LifecycleComplete);
+        Assert.Equal("M01C02", comparisonRows["RUN-CAVITY-2"].EquipmentId);
+        Assert.Equal("cavity", comparisonRows["RUN-CAVITY-2"].SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-2", comparisonRows["RUN-CAVITY-2"].SubjectId);
+        Assert.True(comparisonRows["RUN-CAVITY-2"].LifecycleComplete);
+    }
+
+    [Fact]
     public async Task ExecutionComparison_RestrictsInspectionOutcomesToAuthorizedSite()
     {
         var rows = new List<PlatformProductionEvent>();
@@ -151,6 +204,53 @@ public sealed class QualityWorkflowTests
         var tasks = await workflow.QueryTasksAsync("all", 100);
 
         Assert.Empty(tasks);
+    }
+
+    [Fact]
+    public async Task WorkflowUsesPhysicalEquipmentContextForPlanMatchingAndTaskIdentity()
+    {
+        var at = DateTimeOffset.Parse("2026-07-20T08:10:00Z");
+        var executionId = "CAVITY-RUN-1";
+        var completion = ProductionEvent.Create(
+            "process.execution.completed",
+            at,
+            "edge/EDGE-001/PLC-01/test",
+            new ObjectRef("cavity", "PRESS-01:CAVITY-1"),
+            executionId,
+            new Dictionary<string, string>
+            {
+                ["equipment_id"] = "PRESS-01",
+                ["product_family_code"] = "lens-a"
+            });
+        var plans = new[]
+        {
+            new InspectionPlan
+            {
+                PlanId = "press.plan",
+                Name = "Machine plan",
+                Status = InspectionPlanStatuses.Published,
+                Priority = 1,
+                Scope = new InspectionPlanScope { EquipmentId = "PRESS-01" }
+            },
+            new InspectionPlan
+            {
+                PlanId = "cavity.plan",
+                Name = "Logical cavity plan",
+                Status = InspectionPlanStatuses.Published,
+                Priority = 100,
+                Scope = new InspectionPlanScope { EquipmentId = "PRESS-01:CAVITY-1" }
+            }
+        };
+        var workflow = new InspectionWorkflowService(
+            new FakeEventStore([Row(1, completion)]),
+            new FakeInspectionStore([]),
+            new FakeReviewStore(),
+            new FakeMasterDataStore(plans));
+
+        var task = Assert.Single(await workflow.QueryTasksAsync("all", 100));
+
+        Assert.Equal("press.plan", task.InspectionPlanId);
+        Assert.Equal("PRESS-01", task.EquipmentId);
     }
 
     [Fact]
@@ -769,6 +869,46 @@ public sealed class QualityWorkflowTests
         Assert.Equal(0, result.ComparisonWindows.Single().Quality.InspectionCount);
     }
 
+    private static void AddCavityExecution(
+        ICollection<PlatformProductionEvent> rows,
+        int firstIngestId,
+        string executionId,
+        string subjectId,
+        string equipmentId,
+        DateTimeOffset start,
+        bool partial = false)
+    {
+        var context = new Dictionary<string, string>
+        {
+            ["equipment_id"] = equipmentId,
+            ["product_family_code"] = "lens-a"
+        };
+        var startData = partial
+            ? new Dictionary<string, object?> { ["lifecycleCaptureStatus"] = "partial" }
+            : new Dictionary<string, object?>();
+        var completionData = partial
+            ? new Dictionary<string, object?> { ["completionStatus"] = "partial" }
+            : new Dictionary<string, object?>();
+        var source = "edge/EDGE-001/PLC-01/test";
+        var subject = new ObjectRef("cavity", subjectId);
+        rows.Add(Row(firstIngestId, ProductionEvent.Create(
+            "process.execution.started",
+            start,
+            source,
+            subject,
+            executionId,
+            context,
+            startData) with { Seq = firstIngestId }));
+        rows.Add(Row(firstIngestId + 1, ProductionEvent.Create(
+            "process.execution.completed",
+            start.AddMinutes(10),
+            source,
+            subject,
+            executionId,
+            context,
+            completionData) with { Seq = firstIngestId + 1 }));
+    }
+
     private static void AddProcessExecution(
         ICollection<PlatformProductionEvent> rows,
         string executionId,
@@ -839,6 +979,7 @@ public sealed class QualityWorkflowTests
             Seq = 1,
             Context = new Dictionary<string, string>
             {
+                ["equipment_id"] = equipmentId,
                 ["output_item_id"] = outputItemId,
                 ["product_family_code"] = productFamilyCode,
                 ["product_code"] = $"{productFamilyCode}-01",
@@ -905,6 +1046,8 @@ public sealed class QualityWorkflowTests
             if (!string.IsNullOrWhiteSpace(query.EventType)) filtered = filtered.Where(item => item.Event.EventType == query.EventType);
             if (!string.IsNullOrWhiteSpace(query.SubjectType)) filtered = filtered.Where(item => item.Event.Subject.Type == query.SubjectType);
             if (!string.IsNullOrWhiteSpace(query.SubjectId)) filtered = filtered.Where(item => item.Event.Subject.Id == query.SubjectId);
+            if (!string.IsNullOrWhiteSpace(query.EquipmentId)) filtered = filtered.Where(item =>
+                PhysicalEquipmentIdentity.Resolve(item.Event) == query.EquipmentId.Trim());
             if (!string.IsNullOrWhiteSpace(query.ExecutionId)) filtered = filtered.Where(item => item.Event.ExecutionId == query.ExecutionId);
             if (query.From.HasValue) filtered = filtered.Where(item => item.Event.OccurredAt >= query.From.Value);
             if (query.To.HasValue) filtered = filtered.Where(item => item.Event.OccurredAt <= query.To.Value);

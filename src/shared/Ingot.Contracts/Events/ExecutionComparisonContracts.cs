@@ -258,6 +258,10 @@ public sealed record ExecutionComparisonRow
 
     public required string EquipmentId { get; init; }
 
+    public string? SubjectType { get; init; }
+
+    public string? SubjectId { get; init; }
+
     public IReadOnlyList<string> EdgeIds { get; init; } = [];
 
     public IReadOnlyDictionary<string, string> Context { get; init; } =

@@ -147,9 +147,7 @@ public sealed class MqttAcquisitionRunner(
             UsesCredentials(connection)).ConfigureAwait(false);
         var optionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(pinnedHost, connection.Port)
-            .WithClientId(string.IsNullOrWhiteSpace(connection.ClientId)
-                ? $"ingot-{deployment.Task.EdgeId}-{deployment.Task.TaskId}"
-                : connection.ClientId)
+            .WithClientId(AcquisitionSessionCompatibility.EffectiveMqttClientId(deployment.Task))
             .WithProtocolVersion(connection.ProtocolVersion == "3.1.1"
                 ? MqttProtocolVersion.V311
                 : MqttProtocolVersion.V500)

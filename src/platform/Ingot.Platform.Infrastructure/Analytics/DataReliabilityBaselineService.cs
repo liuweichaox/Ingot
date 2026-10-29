@@ -71,7 +71,7 @@ public sealed class DataReliabilityBaselineService(
             SiteId = Normalize(query.SiteId),
             EventType = "process.execution.completed",
             EdgeId = Normalize(query.EdgeId),
-            SubjectId = Normalize(query.EquipmentId),
+            EquipmentId = Normalize(query.EquipmentId),
             From = query.From,
             To = query.To
         }, ct).ConfigureAwait(false);
@@ -351,8 +351,8 @@ public sealed class DataReliabilityBaselineService(
     {
         var value = field switch
         {
-            "equipment_id" => ProcessAnalysisResolver.ContextValue(
-                                  row.Context, "equipment_id") ?? row.EquipmentId,
+            "equipment_id" => Normalize(ProcessAnalysisResolver.ContextValue(
+                                      row.Context, "equipment_id")) ?? Normalize(row.EquipmentId),
             "tooling_assembly_id" => ProcessAnalysisResolver.ContextValue(
                                 row.Context, "tooling_assembly_id") ??
                             ProcessAnalysisResolver.ContextValue(row.Context, "tooling_assembly_id"),

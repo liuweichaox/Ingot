@@ -15,6 +15,11 @@ public sealed class AcquisitionApplication(
         => tasks.ListPublishedForEdgeAsync(edgeId, ct);
     public Task<IngestionTask?> GetAsync(string taskId, int version, CancellationToken ct = default)
         => tasks.GetAsync(taskId, version, ct);
+
+    public async Task<IReadOnlyList<AcquisitionValidationError>> ValidateSessionAsync(
+        IngestionTask task, CancellationToken ct = default)
+        => AcquisitionSessionCompatibility.Validate(task,
+            await tasks.ListPublishedForEdgeAsync(task.EdgeId, ct).ConfigureAwait(false));
     public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
         => tasks.UpsertAsync(value, ct);
     public Task<IngestionTask> PublishExclusiveAsync(IngestionTask value, CancellationToken ct = default)

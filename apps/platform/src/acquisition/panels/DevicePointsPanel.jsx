@@ -1,6 +1,25 @@
+// Present edge-side probe results and conversion evidence before a task can be published.
 import { useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Input, Select } from "../../ui/components";
 import { PROBE_MODE } from "../protocolRegistry";
+
+const metadataLabels = {
+  category: "类别",
+  type: "类型",
+  subType: "子类型",
+  componentPath: "组件路径",
+  componentId: "组件 ID",
+  supportReason: "不支持原因",
+};
+
+function visibleProbeMetadata(metadata) {
+  return Object.entries(metadata || {}).filter(([key, value]) =>
+    metadataLabels[key] && typeof value === "string" && value.trim());
+}
+
+function formatProbeTime(value) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "—";
+}
 
 export function DevicePointsPanel({
   descriptor,
@@ -19,34 +38,86 @@ export function DevicePointsPanel({
   const [search, setSearch] = useState("");
   const [selections, setSelections] = useState({});
   const readiness = descriptor.probeReadiness(form);
+  const edgeMissing = !form.edgeId;
   const points = (probe?.points || []).filter(point =>
-    !search.trim() || `${point.name} ${point.path} ${point.topic || ""}`.toLowerCase().includes(search.trim().toLowerCase()));
-  const mappedPaths = new Set(form.valueMappings.map(item => item.sourcePath).filter(Boolean));
+    !search.trim() || `${point.name} ${point.path} ${point.topic || ""} ${Object.values(point.metadata || {}).join(" ")}`
+      .toLowerCase().includes(search.trim().toLowerCase()));
+  const pointKey = point => `${descriptor.id === "mqtt" ? point.topic || "" : ""}\u001f${point.path}`;
+  const mappedPaths = new Set(form.valueMappings
+    .filter(item => item.sourcePath)
+    .map(item => pointKey({ topic: item.topic, path: item.sourcePath })));
+  const anyTopicMappedPaths = descriptor.id === "mqtt"
+    ? new Set(form.valueMappings.filter(item => item.sourcePath && !(item.topic || "").trim()).map(item => item.sourcePath))
+    : new Set();
+  const isPointMapped = point => anyTopicMappedPaths.has(point.path) || mappedPaths.has(pointKey(point));
+  const checkedMappings = probe?.mappings || [];
+  const acceptedMappings = checkedMappings.filter(item => item.found && item.accepted).length;
 
   return (
     <div className="grid gap-4">
       <Card
-        title="验证连接"
+        title={descriptor.probeActionLabel || "验证连接"}
         description={descriptor.probeMode === PROBE_MODE.discover
           ? `由所选现场节点真实连接设备，成功后显示${descriptor.probeViewLabel}。`
           : "该协议无法枚举地址空间，验证连接只会回读下方已配置的点位。"}
         actions={allowProbe ? (
-          <Button variant="primary" disabled={probing || Boolean(readiness)} onClick={() => onProbe()}>
-            {probing ? "读取中…" : "验证连接"}
+          <Button variant="primary" disabled={probing || Boolean(readiness) || edgeMissing} onClick={() => onProbe()}>
+            {probing ? "读取中…" : descriptor.probeActionLabel || "验证连接"}
           </Button>
         ) : undefined}
       >
         <div className="grid gap-3">
           {readiness && allowProbe && <Alert tone="warning">{readiness}</Alert>}
+          {edgeMissing && allowProbe && <Alert tone="warning">请先选择能够访问设备网段的现场节点；连接探查会在该节点上执行。</Alert>}
           {probeError && <Alert tone="danger">{probeError}</Alert>}
           {probe && (
-            <Alert tone={probe.success && probe.mappingsValidated ? "success" : probe.success ? "info" : "warning"}>
-              {probe.message}
-            </Alert>
+            <div className="grid gap-2">
+              <Alert tone={probe.success && probe.mappingsValidated ? "success" : probe.success ? "info" : "warning"}>
+                {probe.message}
+              </Alert>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <span>最近探查：{formatProbeTime(probe.testedAt)}</span>
+                <span>返回点位：{probe.points?.length || 0}</span>
+                {checkedMappings.length > 0 && <span>换算校验：{acceptedMappings}/{checkedMappings.length} 通过</span>}
+                {probe.scannedPointCount > 0 && <span>扫描点位：{probe.scannedPointCount}</span>}
+              </div>
+              {(probe.warnings || []).map((warning, index) => (
+                <Alert key={`${index}:${warning}`} tone="warning">{warning}</Alert>
+              ))}
+              {checkedMappings.length > 0 && (
+                <details className="rounded-lg border border-slate-200 bg-white">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-slate-700">
+                    查看点位换算校验（{acceptedMappings}/{checkedMappings.length} 通过）
+                  </summary>
+                  <div className="max-h-56 overflow-auto border-t border-slate-100">
+                    <table className="w-full text-left text-xs">
+                      <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                        <tr><th className="px-3 py-2">工艺变量</th><th className="px-3 py-2">来源点位</th><th className="px-3 py-2">原始值 → 换算值</th><th className="px-3 py-2">结果</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {checkedMappings.map((item, index) => {
+                          const accepted = item.found && item.accepted;
+                          return (
+                            <tr key={`${item.dataItemCode}:${item.sourcePath}:${index}`}>
+                              <td className="px-3 py-2 font-medium text-slate-800">{item.dataItemCode}</td>
+                              <td className="px-3 py-2 break-all text-slate-600">{item.sourcePath}</td>
+                              <td className="px-3 py-2 text-slate-600">{item.rawValue ?? "—"} → {item.convertedValue ?? "—"}</td>
+                              <td className="px-3 py-2">
+                                <Badge tone={accepted ? "success" : "danger"}>{accepted ? "通过" : item.error || "未找到或未接受"}</Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </div>
           )}
           {!probe && !probeError && !readiness && (
             <p className="text-sm leading-6 text-slate-500">
-              验证会由现场节点真实连接设备一次，读取样本并校验每个点位的换算结果。发布前必须验证通过。
+              验证会由现场节点连接设备并读取样本，同时展示点位质量、来源时间和换算结果。发布前必须验证通过。
             </p>
           )}
         </div>
@@ -79,34 +150,57 @@ export function DevicePointsPanel({
         )}
         {probe && points.length > 0 && (
           <div className="max-h-[26rem] overflow-auto rounded-xl border border-slate-200">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[56rem] text-left text-sm">
               <thead className="sticky top-0 bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-3 py-2">设备点位</th>
                   <th className="px-3 py-2">原始值</th>
+                  <th className="px-3 py-2">质量 / 来源时间</th>
                   <th className="px-3 py-2">映射</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {points.map(point => (
-                  <tr key={`${point.topic || ""}${point.path}`} className={mappedPaths.has(point.path) ? "bg-emerald-50/40" : undefined}>
+                  <tr key={pointKey(point)} className={isPointMapped(point) ? "bg-emerald-50/40" : undefined}>
                     <td className="px-3 py-2">
                       <p className="font-medium text-slate-700">{point.name}</p>
                       <code className="text-xs text-slate-500">{point.path}</code>
                       <p className="mt-0.5 flex flex-wrap gap-1">
                         <Badge tone="neutral">{point.dataType}</Badge>
+                        {point.kind && <Badge tone="info">{point.kind}</Badge>}
+                        {point.unit && <Badge tone="neutral">{point.unit}</Badge>}
                         {point.topic && <Badge tone="info">{point.topic}</Badge>}
-                        {mappedPaths.has(point.path) && <Badge tone="success">已映射</Badge>}
+                        {point.metadata?.supported === "false" && <Badge tone="danger">不支持</Badge>}
+                        {isPointMapped(point) && <Badge tone="success">已映射</Badge>}
                       </p>
+                      {visibleProbeMetadata(point.metadata).length > 0 && (
+                        <p className="mt-1 break-all text-xs leading-5 text-slate-500">
+                          {visibleProbeMetadata(point.metadata).map(([key, value]) => `${metadataLabels[key]}：${value}`).join(" · ")}
+                        </p>
+                      )}
+                      {point.metadata?.supported === "false" && isPointMapped(point) && (
+                        <p role="alert" className="mt-1 rounded-md bg-rose-50 px-2 py-1 text-xs leading-5 text-rose-800">
+                          此点位已有映射，但当前驱动不支持采集。请移除此映射或改用受支持的 DataItem。
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-slate-700">{point.rawValue ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <Badge tone={!point.quality ? "neutral" : /^Good/i.test(point.quality) ? "success" : "warning"}>
+                        {point.quality || "未提供质量"}
+                      </Badge>
+                      <p className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                        {point.sourceTimestamp ? `来源：${formatProbeTime(point.sourceTimestamp)}` : "来源时间未提供"}
+                      </p>
+                    </td>
                     <td className="px-3 py-2">
                       {readOnly ? "—" : (
                         <div className="flex gap-2">
                           <Select
-                            value={selections[point.path] || ""}
-                            aria-label={`映射 ${point.path}`}
-                            onChange={event => setSelections(value => ({ ...value, [point.path]: event.target.value }))}
+                            value={selections[pointKey(point)] || ""}
+                            disabled={point.metadata?.supported === "false"}
+                            aria-label={`映射 ${point.topic ? `${point.topic} / ` : ""}${point.path}`}
+                            onChange={event => setSelections(value => ({ ...value, [pointKey(point)]: event.target.value }))}
                           >
                             <option value="">选择变量</option>
                             {dataItems.map(item => (
@@ -116,8 +210,8 @@ export function DevicePointsPanel({
                             ))}
                           </Select>
                           <Button
-                            disabled={!selections[point.path]}
-                            onClick={() => onMapPoint(point, selections[point.path])}
+                            disabled={point.metadata?.supported === "false" || !selections[pointKey(point)]}
+                            onClick={() => onMapPoint(point, selections[pointKey(point)])}
                           >
                             映射
                           </Button>

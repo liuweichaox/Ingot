@@ -166,10 +166,42 @@ public sealed class DataReliabilityBaselineServiceTests
         Assert.Equal(1, baseline.UnidentifiableConfoundingCount);
     }
 
+    [Fact]
+    public async Task CalculateAsync_EquipmentFilterIncludesCavitiesAndLegacyEquipmentButNotOtherSubjects()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var completed = new[]
+        {
+            Completed(1, "RUN-CAVITY-1", now.AddMinutes(-5), "cavity", "PRESS-01:CAVITY-1", "PRESS-01"),
+            Completed(2, "RUN-CAVITY-2", now.AddMinutes(-4), "cavity", "PRESS-01:CAVITY-2", "PRESS-01"),
+            Completed(3, "RUN-LEGACY", now.AddMinutes(-3), "equipment", "PRESS-01", null),
+            Completed(4, "RUN-NON-EQUIPMENT", now.AddMinutes(-2), "cavity", "PRESS-01", null),
+            Completed(5, "RUN-OTHER-MACHINE", now.AddMinutes(-1), "cavity", "PRESS-02:CAVITY-1", "PRESS-02")
+        };
+        var service = new DataReliabilityBaselineService(
+            new FakeEventStore(completed),
+            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow>()));
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            EquipmentId = "PRESS-01"
+        });
+
+        Assert.Equal(3, baseline.MatchingCompletedRunCount);
+        Assert.Equal(0, baseline.AnalyzedRunCount);
+    }
+
     private static double? Rate(DataReliabilityBaseline value, string code)
         => Assert.Single(value.Rates, item => item.Code == code).Rate;
 
-    private static PlatformProductionEvent Completed(long ingestId, string executionId, DateTimeOffset at)
+    private static PlatformProductionEvent Completed(
+        long ingestId,
+        string executionId,
+        DateTimeOffset at,
+        string subjectType = "equipment",
+        string subjectId = "PRESS-01",
+        string? equipmentId = "PRESS-01")
         => new()
         {
             IngestId = ingestId,
@@ -180,8 +212,9 @@ public sealed class DataReliabilityBaselineServiceTests
                 "process.execution.completed",
                 at,
                 "edge/EDGE-001/equipment/PRESS-01",
-                new ObjectRef("equipment", "PRESS-01"),
-                executionId) with
+                new ObjectRef(subjectType, subjectId),
+                executionId,
+                equipmentId is null ? null : new Dictionary<string, string> { ["equipment_id"] = equipmentId }) with
             {
                 Seq = ingestId
             }
@@ -264,6 +297,8 @@ public sealed class DataReliabilityBaselineServiceTests
             => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
                 .Where(row => string.IsNullOrWhiteSpace(query.SiteId) || row.SiteId == query.SiteId)
                 .Where(row => query.EventType is null || row.Event.EventType == query.EventType)
+                .Where(row => string.IsNullOrWhiteSpace(query.EquipmentId) ||
+                              PhysicalEquipmentIdentity.Resolve(row.Event) == query.EquipmentId.Trim())
                 .Where(row => !query.AfterIngestId.HasValue || row.IngestId > query.AfterIngestId)
                 .OrderBy(static row => row.IngestId)
                 .Take(query.Limit)

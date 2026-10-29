@@ -320,8 +320,8 @@ services:
       Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
       Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
       Acquisition__StartupHealthTimeoutMs: "30000"
-      # The demo PLC is an explicitly allow-listed private network target.
-      Acquisition__Security__AllowedNetworkHosts__0: ${INGOT_DEMO_PLC_HOST:-optical-lens-plc}
+      # The demo simulator is an explicitly allow-listed private network target.
+      Acquisition__Security__AllowedNetworkHosts__0: semiconductor-etch-simulator
     depends_on:
       platform-api:
         condition: service_healthy
@@ -333,20 +333,20 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  optical-lens-plc:
+  semiconductor-etch-simulator:
     profiles:
-      - optical-lens-demo
+      - semiconductor-demo
     build:
-      context: tools/optical-lens-plc
+      context: tools/semiconductor-etch-simulator
       dockerfile: Dockerfile
-    container_name: ingot-optical-lens-plc
+    container_name: ingot-semiconductor-etch-simulator
     ports:
       - "127.0.0.1:1502:1502"
       - "127.0.0.1:9100:9100"
     environment:
-      PLC_MODBUS_PORT: 1502
-      PLC_HEALTH_PORT: 9100
-      PLC_IDLE_SECONDS: ${INGOT_DEMO_PLC_IDLE_SECONDS:-10}
+      DEVICE_MODBUS_PORT: 1502
+      DEVICE_HEALTH_PORT: 9100
+      DEVICE_IDLE_SECONDS: ${INGOT_DEMO_DEVICE_IDLE_SECONDS:-10}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health', timeout=2)"]
       interval: 5s

@@ -39,6 +39,9 @@ public static class ProtocolAcquisitionSnapshotMapper
             }
             context[mapping.ContextKey] = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
         }
+        // A logical subject may be a cavity; the explicitly configured machine owns its tooling context.
+        if (!string.IsNullOrWhiteSpace(task.EquipmentId))
+            context["equipment_id"] = task.EquipmentId;
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var mapping in task.ValueMappings)
@@ -105,6 +108,9 @@ public static class ProtocolAcquisitionSnapshotMapper
 
         var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
         sampleData["values"] = values;
+        if (!string.IsNullOrWhiteSpace(task.SequencePath) &&
+            raw.TryGetValue(task.SequencePath, out var sequence) && sequence is not null)
+            sampleData["sourceSequence"] = sequence;
         if (task.TimestampMode == "source")
             sampleData["sourceTimestamp"] = occurredAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
         var sample = ProductionEvent.Create(

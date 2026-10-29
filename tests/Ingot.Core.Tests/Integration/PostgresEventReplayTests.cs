@@ -84,6 +84,115 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                 new ObjectRef("equipment", "PRESS-01")) with { Seq = sequence };
     }
 
+    [LinuxDockerFact]
+    public async Task LogicalSubjectUsesContextEquipmentIdAndDoesNotTreatSubjectIdAsEquipment()
+    {
+        await postgres.EnsureSchemaAsync();
+        var options = Options.Create(new PlatformEventOptions());
+        var manufacturing = new PostgresManufacturingContextStore(postgres.DataSource);
+        var configurations = new PostgresProcessConfigurationStore(postgres.DataSource);
+        var materializations = new PostgresProcessExecutionAnalysisMaterializationStore(
+            postgres.DataSource,
+            NullLogger<PostgresProcessExecutionAnalysisMaterializationStore>.Instance);
+        using var timeSeries = new PostgresTimeSeriesStore(
+            postgres.DataSource,
+            NullLogger<PostgresTimeSeriesStore>.Instance,
+            options);
+        using var events = new PostgresPlatformEventStore(
+            postgres.DataSource,
+            NullLogger<PostgresPlatformEventStore>.Instance,
+            new PlatformEventMetrics(),
+            options,
+            manufacturing,
+            new ProcessAnalysisResolver(configurations),
+            materializations,
+            timeSeries);
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var siteId = $"SITE-CAVITY-{suffix}";
+        var edgeId = $"EDGE-CAVITY-{suffix}";
+        var now = DateTimeOffset.UtcNow.AddMinutes(-2);
+        await CreateProductionContextAsync(manufacturing, siteId, suffix, "C", now);
+
+        var associated = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(1),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("cavity", "PRESS-01:CAVITY-1"),
+            $"execution-associated-{suffix}",
+            new Dictionary<string, string> { ["equipment_id"] = "PRESS-01" }) with { Seq = 1 };
+        var unassociated = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(2),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("cavity", "PRESS-01:CAVITY-2"),
+            $"execution-unassociated-{suffix}") with { Seq = 2 };
+        var secondCavity = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(3),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("cavity", "PRESS-01:CAVITY-3"),
+            $"execution-cavity-3-{suffix}",
+            new Dictionary<string, string> { ["equipment_id"] = "PRESS-01" }) with { Seq = 3 };
+        var legacyEquipment = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(4),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01"),
+            $"execution-legacy-equipment-{suffix}") with { Seq = 4 };
+        var misleadingSubject = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(5),
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("cavity", "PRESS-01"),
+            $"execution-non-equipment-{suffix}") with { Seq = 5 };
+        var secondMachine = ProductionEvent.Create(
+            "process.execution.started",
+            now.AddSeconds(6),
+            $"edge/{edgeId}/equipment/PRESS-02",
+            new ObjectRef("cavity", "PRESS-02:CAVITY-1"),
+            $"execution-press-02-{suffix}",
+            new Dictionary<string, string> { ["equipment_id"] = "PRESS-02" }) with { Seq = 6 };
+
+        await events.IngestAsync(new EventBatchRequest
+        {
+            SiteId = siteId,
+            EdgeId = edgeId,
+            Events = [associated, unassociated, secondCavity, legacyEquipment, misleadingSubject, secondMachine]
+        });
+
+        await using (var command = postgres.DataSource.CreateCommand(
+                         "UPDATE production_events SET context = context - 'equipment_id' WHERE site_id = @site_id AND event_id = @event_id"))
+        {
+            command.Parameters.AddWithValue("site_id", siteId);
+            command.Parameters.AddWithValue("event_id", legacyEquipment.EventId);
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        var captured = await events.QueryAsync(new PlatformEventQuery { SiteId = siteId });
+        var associatedEvent = Assert.Single(captured, item => item.Event.EventId == associated.EventId).Event;
+        var unassociatedEvent = Assert.Single(captured, item => item.Event.EventId == unassociated.EventId).Event;
+        var equipmentRuns = await events.QueryAsync(new PlatformEventQuery { SiteId = siteId, EquipmentId = "PRESS-01" });
+        var combinedFilter = await events.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = siteId,
+            EquipmentId = "PRESS-01",
+            SubjectId = "PRESS-01"
+        });
+
+        Assert.Equal("cavity", associatedEvent.Subject.Type);
+        Assert.Equal("PRESS-01:CAVITY-1", associatedEvent.Subject.Id);
+        Assert.Equal("PRESS-01", associatedEvent.Context["equipment_id"]);
+        Assert.Equal($"PRODUCT-C-{suffix}", associatedEvent.Context["product_code"]);
+        Assert.Equal("configuration_missing", unassociatedEvent.Context["context_capture_status"]);
+        Assert.False(unassociatedEvent.Context.ContainsKey("product_code"));
+        Assert.Equal(
+            new[] { associated.EventId, secondCavity.EventId, legacyEquipment.EventId }
+                .Order(StringComparer.Ordinal).ToArray(),
+            equipmentRuns.Select(static item => item.Event.EventId).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal([legacyEquipment.EventId], combinedFilter.Select(static item => item.Event.EventId).ToArray());
+    }
+
     private static async Task CreateProductionContextAsync(
         PostgresManufacturingContextStore manufacturing,
         string siteId,

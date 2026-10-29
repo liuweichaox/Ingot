@@ -61,6 +61,29 @@ public sealed class IngestionTaskDecomposerTests
     }
 
     [Fact]
+    public void DecompositionPreservesLogicalSubjectAndExplicitEquipmentIdentity()
+    {
+        var task = Task(AcquisitionProtocols.ModbusTcp) with
+        {
+            ModbusTcp = new ModbusTcpConnection { Host = "10.0.0.10" },
+            SubjectType = "cavity",
+            SubjectId = "PRESS-01:CAVITY-2",
+            EquipmentId = "PRESS-01"
+        };
+
+        Assert.True(IngestionTaskDecomposer.TryCreate(
+            task, Model(), "press-template", "press-source", out var result, out var errors),
+            string.Join("；", errors));
+
+        Assert.Equal("cavity", result!.DataSource.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-2", result.DataSource.SubjectId);
+        Assert.Null(result.Binding.SubjectType);
+        Assert.Null(result.Binding.SubjectId);
+        Assert.Equal("PRESS-01", result.Binding.EquipmentId);
+        Assert.Equal("PRESS-01", result.Task.EquipmentId);
+    }
+
+    [Fact]
     public void DraftTaskCannotClaimReusableFieldValidation()
     {
         var task = Task(AcquisitionProtocols.ModbusTcp) with { Status = ConfigurationStatuses.Draft };

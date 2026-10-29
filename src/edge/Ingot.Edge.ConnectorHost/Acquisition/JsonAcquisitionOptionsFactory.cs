@@ -1,4 +1,4 @@
-
+// Translate versioned ingestion tasks into the shared HTTP and MQTT snapshot mapping configuration.
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
@@ -40,6 +40,7 @@ public static class JsonAcquisitionOptionsFactory
             Source = task.Source,
             SubjectType = task.SubjectType,
             SubjectId = task.SubjectId,
+            EquipmentId = task.EquipmentId,
             TimestampMode = task.TimestampMode,
             TimestampEncoding = task.TimestampEncoding,
             TimestampPath = task.TimestampPath,
@@ -101,6 +102,7 @@ public static class JsonAcquisitionOptionsFactory
                 Mode = task.Lifecycle.Mode,
                 ActiveContextKey = task.Lifecycle.ActiveContextKey,
                 ActiveValue = task.Lifecycle.ActiveValue,
+                ActiveCondition = task.Lifecycle.ActiveCondition,
                 StartedEventType = task.Lifecycle.StartedEventType,
                 CompletedEventType = task.Lifecycle.CompletedEventType,
                 StepChangedEventType = task.Lifecycle.StepChangedEventType

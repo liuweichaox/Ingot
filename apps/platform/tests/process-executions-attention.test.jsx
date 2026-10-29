@@ -40,6 +40,20 @@ const execution = (executionId, overrides = {}) => ({
 });
 
 describe("运行记录需要处理筛选", () => {
+  it("保留同一设备单元内不同逻辑对象的身份，并兼容旧运行", async () => {
+    stubExecutions([
+      execution("RUN-CAVITY-1", { subjectType: "cavity", subjectId: "M01C01" }),
+      execution("RUN-CAVITY-2", { subjectType: "cavity", subjectId: "M01C02" }),
+      execution("RUN-LEGACY"),
+    ]);
+    render(<MemoryRouter initialEntries={["/process-executions"]}><ProcessExecutionsPage /></MemoryRouter>);
+
+    expect(await screen.findByText("逻辑对象 M01C01")).toBeInTheDocument();
+    expect(screen.getByText("逻辑对象 M01C02")).toBeInTheDocument();
+    expect(screen.getByText("RUN-LEGACY")).toBeInTheDocument();
+    expect(screen.getAllByText("press-01")).toHaveLength(3);
+  });
+
   it("读取已完成运行并只列出质量或数据异常的运行", async () => {
     const fetchMock = stubExecutions([
       execution("RUN-OK"),

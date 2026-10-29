@@ -46,7 +46,10 @@ public sealed class IngestionConfigurationCsvTests
             TemplateId = "press-model",
             TemplateVersion = 3,
             DataSourceId = "press-source-01",
-            DataSourceVersion = 4
+            DataSourceVersion = 4,
+            SubjectType = "cavity",
+            SubjectId = "PRESS-01:CAVITY-2",
+            EquipmentId = "PRESS-01"
         };
 
         var parsed = Assert.Single(IngestionConfigurationCsv.ReadBindings(
@@ -54,6 +57,21 @@ public sealed class IngestionConfigurationCsvTests
 
         Assert.Equal(3, parsed.TemplateVersion);
         Assert.Equal(4, parsed.DataSourceVersion);
+        Assert.Equal("cavity", parsed.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-2", parsed.SubjectId);
+        Assert.Equal("PRESS-01", parsed.EquipmentId);
+    }
+
+    [Fact]
+    public void LegacyBindingCsvUsesDataSourceDefaultSubject()
+    {
+        var parsed = Assert.Single(IngestionConfigurationCsv.ReadBindings(
+            "taskId,version,name,status,templateId,templateVersion,dataSourceId,dataSourceVersion\r\n" +
+            "press-cavity-1,1,Cavity 1,draft,press-template,2,press-source,3\r\n"));
+
+        Assert.Null(parsed.SubjectType);
+        Assert.Null(parsed.SubjectId);
+        Assert.Null(parsed.EquipmentId);
     }
 
     [Fact]

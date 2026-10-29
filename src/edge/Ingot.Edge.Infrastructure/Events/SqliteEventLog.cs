@@ -1,3 +1,5 @@
+// 持久化边缘事实与待发送事件，并为本地查询保留逻辑对象和物理设备边界。
+
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -264,6 +266,11 @@ public sealed class SqliteEventLog : IEventLog
         AddOptionalEquality(command, predicates, "e.event_type", "$event_type", query.EventType);
         AddOptionalEquality(command, predicates, "e.subject_type", "$subject_type", query.SubjectType);
         AddOptionalEquality(command, predicates, "e.subject_id", "$subject_id", query.SubjectId);
+        if (!string.IsNullOrWhiteSpace(query.EquipmentId))
+        {
+            predicates.Add("COALESCE(NULLIF(TRIM(json_extract(e.context_json, '$.equipment_id')), ''), CASE WHEN lower(e.subject_type) = 'equipment' THEN e.subject_id END) = $equipment_id");
+            command.Parameters.AddWithValue("$equipment_id", query.EquipmentId.Trim());
+        }
         AddOptionalEquality(command, predicates, "e.execution_id", "$execution_id", query.ExecutionId);
 
         if (query.From.HasValue)

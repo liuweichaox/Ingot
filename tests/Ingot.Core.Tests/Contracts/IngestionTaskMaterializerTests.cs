@@ -33,6 +33,86 @@ public sealed class IngestionTaskMaterializerTests
     }
 
     [Fact]
+    public void BindingSubjectOverrideIsIndependentAndPreservesDefaultEquipmentIdentity()
+    {
+        var source = Source("shared-press-source", "PRESS-01", "10.0.0.11");
+        var binding = Binding("press-cavity-2", source.DataSourceId) with
+        {
+            SubjectType = "cavity",
+            SubjectId = "PRESS-01:CAVITY-2",
+            EquipmentId = "PRESS-01"
+        };
+
+        Assert.True(IngestionTaskMaterializer.TryCreate(
+            Template(), source, binding, null, out var task, out var errors), string.Join("；", errors));
+
+        Assert.Equal("cavity", task!.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-2", task.SubjectId);
+        Assert.Equal("PRESS-01", task.EquipmentId);
+        Assert.Equal("PRESS-01", source.SubjectId);
+    }
+
+    [Fact]
+    public void ExplicitBindingEquipmentIdTakesPrecedenceAndLegacyBindingFallsBackToEquipmentSubject()
+    {
+        var source = Source("shared-press-source", "PRESS-01", "10.0.0.11");
+        var legacyBinding = Binding("press-default", source.DataSourceId);
+        var overrideBinding = Binding("press-cavity-3", source.DataSourceId) with
+        {
+            SubjectType = "cavity",
+            SubjectId = "PRESS-01:CAVITY-3",
+            EquipmentId = "PRESS-02"
+        };
+
+        Assert.True(IngestionTaskMaterializer.TryCreate(
+            Template(), source, legacyBinding, null, out var legacyTask, out var legacyErrors),
+            string.Join("；", legacyErrors));
+        Assert.True(IngestionTaskMaterializer.TryCreate(
+            Template(), source, overrideBinding, null, out var overrideTask, out var overrideErrors),
+            string.Join("；", overrideErrors));
+
+        Assert.Null(legacyTask!.EquipmentId);
+        Assert.Equal("PRESS-02", overrideTask!.EquipmentId);
+        Assert.Equal("cavity", overrideTask.SubjectType);
+    }
+
+    [Fact]
+    public void SourceLogicalSubjectDoesNotImplicitlyBecomePhysicalEquipmentId()
+    {
+        var source = Source("shared-cavity-source", "PRESS-01:CAVITY-1", "10.0.0.11") with
+        {
+            SubjectType = "cavity"
+        };
+
+        Assert.True(IngestionTaskMaterializer.TryCreate(
+            Template(), source, Binding("press-cavity-1", source.DataSourceId), null,
+            out var task, out var errors), string.Join("；", errors));
+
+        Assert.Equal("cavity", task!.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-1", task.SubjectId);
+        Assert.Null(task.EquipmentId);
+    }
+
+    [Fact]
+    public void EquipmentTypedLogicalSubjectMayBelongToAnotherPhysicalEquipment()
+    {
+        var source = Source("shared-press-source", "PRESS-01", "10.0.0.11");
+        var binding = Binding("press-child-unit", source.DataSourceId) with
+        {
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01:CAVITY-2-UNIT",
+            EquipmentId = "PRESS-01"
+        };
+
+        Assert.True(IngestionTaskMaterializer.TryCreate(
+            Template(), source, binding, null, out var task, out var errors), string.Join("；", errors));
+
+        Assert.Equal("equipment", task!.SubjectType);
+        Assert.Equal("PRESS-01:CAVITY-2-UNIT", task.SubjectId);
+        Assert.Equal("PRESS-01", task.EquipmentId);
+    }
+
+    [Fact]
     public void DraftTemplateCannotCreateADeviceTask()
     {
         var template = Template() with { Status = ConfigurationStatuses.Draft };

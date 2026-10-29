@@ -45,6 +45,9 @@ public static class HttpPollingSnapshotMapper
             }
             context[mapping.Key] = ScalarText(value, mapping.SourcePath);
         }
+        // Keep the physical machine explicit when a gateway reports an independent cavity or process unit.
+        if (!string.IsNullOrWhiteSpace(options.EquipmentId))
+            context["equipment_id"] = options.EquipmentId;
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var field in options.Fields)

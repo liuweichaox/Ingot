@@ -1,3 +1,4 @@
+// Define bounded snapshot mappings while keeping logical subjects separate from physical machine context.
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
 
@@ -30,6 +31,7 @@ public sealed class HttpPollingAcquisitionOptions
     public string Source { get; init; } = "connector/http-polling";
     public string SubjectType { get; init; } = "equipment";
     public string SubjectId { get; init; } = string.Empty;
+    public string? EquipmentId { get; init; }
     public string TimestampPath { get; init; } = "timestamp";
     public string TimestampMode { get; init; } = "source";
     public string TimestampEncoding { get; init; } = "iso-8601";
@@ -97,6 +99,7 @@ public sealed class LifecycleFieldMapping
     public string Mode { get; init; } = ProcessExecutionKinds.Discrete;
     public string? ActiveContextKey { get; init; }
     public string ActiveValue { get; init; } = "true";
+    public string ActiveCondition { get; init; } = "equals";
     public string StartedEventType { get; init; } = "process.execution.started";
     public string CompletedEventType { get; init; } = "process.execution.completed";
     public string StepChangedEventType { get; init; } = "process.stage_changed";

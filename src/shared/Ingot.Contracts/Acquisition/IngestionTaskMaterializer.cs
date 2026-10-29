@@ -1,4 +1,6 @@
 
+// 将经过校验的采集配置物化为可执行任务并保留对象身份边界。
+
 using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Contracts.Acquisition;
@@ -26,6 +28,14 @@ public static class IngestionTaskMaterializer
             errors = found;
             return false;
         }
+
+        if (!IngestionTaskValidator.TryValidateBinding(
+                binding, out var normalizedBinding, out var bindingErrors))
+        {
+            errors = bindingErrors;
+            return false;
+        }
+        binding = normalizedBinding!;
 
         if (template!.Status != ConfigurationStatuses.Published)
             found.Add(new AcquisitionValidationError("template.status", "只有已发布的任务模板可以实例化。"));
@@ -64,13 +74,26 @@ public static class IngestionTaskMaterializer
             DataModelId = template.DataModelId,
             DataModelVersion = template.DataModelVersion,
             Source = dataSource.SourceKey,
-            SubjectType = dataSource.SubjectType,
-            SubjectId = dataSource.SubjectId,
+            SubjectType = binding.SubjectType ?? dataSource.SubjectType,
+            SubjectId = binding.SubjectId ?? dataSource.SubjectId,
+            EquipmentId = binding.EquipmentId,
+            DeviceProfile = dataSource.DeviceProfile,
             HttpPolling = dataSource.HttpPolling ?? new HttpPollingConnection(),
             Mqtt = dataSource.Mqtt,
             OpcUa = dataSource.OpcUa,
             ModbusTcp = dataSource.ModbusTcp,
+            ModbusRtu = dataSource.ModbusRtu,
+            ModbusAscii = dataSource.ModbusAscii,
             MelsecA1E = dataSource.MelsecA1E,
+            MelsecMc3E = dataSource.MelsecMc3E,
+            SiemensS7 = dataSource.SiemensS7,
+            EtherNetIp = dataSource.EtherNetIp,
+            OmronFinsTcp = dataSource.OmronFinsTcp,
+            OmronFinsUdp = dataSource.OmronFinsUdp,
+            MtConnect = dataSource.MtConnect,
+            BacnetIp = dataSource.BacnetIp,
+            BacnetMstp = dataSource.BacnetMstp,
+            Snmp = dataSource.Snmp,
             Execution = template.Execution,
             TimestampMode = template.TimestampMode,
             TimestampPath = template.TimestampPath,

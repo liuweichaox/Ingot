@@ -54,7 +54,9 @@ public sealed class AcquisitionProbeService(IEnumerable<IProtocolProber> probers
             Points = page.Points,
             NextCursor = page.NextCursor,
             ScannedPointCount = raw.Points.Count,
-            ScanLimitReached = raw.Points.Count >= AcquisitionProbeSupport.MaximumPoints,
+            ScanLimitReached = deployment.Task.Protocol == AcquisitionProtocols.Snmp
+                ? raw.Points.Count >= SnmpProtocolSupport.MaximumBrowseEntries
+                : raw.Points.Count >= AcquisitionProbeSupport.MaximumPoints,
             Mappings = previews,
             Warnings = warnings
         };

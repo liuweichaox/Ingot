@@ -1,4 +1,6 @@
 // 校验采集任务字段、协议约束、输入规模和秘密引用格式。
+using System.Net;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
@@ -41,6 +43,10 @@ public static partial class IngestionTaskValidator
         }
 
         value = SanitizeNullCollectionsAndMembers(value, found);
+        value = value with
+        {
+            DeviceProfile = NormalizeDeviceProfile(value.DeviceProfile, "deviceProfile", found)
+        };
         if (!ValidateStructuralLimits(value, found))
         {
             errors = found;
@@ -51,12 +57,45 @@ public static partial class IngestionTaskValidator
         ValidateConnection(value, protocol!, capability, found);
         ValidateExecution(value, capability, found);
         ValidateTimestamp(value, capability, found);
+        if (protocol == AcquisitionProtocols.Snmp && !string.IsNullOrWhiteSpace(value.SequencePath))
+            ValidateSelectorSyntax(capability, value.SequencePath.Trim(), "sequencePath", found);
 
         var contextMappings = NormalizeContextMappings(value, capability, found);
         var valueMappings = NormalizeValueMappings(
-            value.ValueMappings, protocol!, capability, "valueMappings", found);
-        var processSpecification = NormalizeProcessSpecification(value.ProcessSpecification, protocol!, capability, found);
+            value.ValueMappings, protocol!, capability, "valueMappings", found, value.MelsecMc3E?.Family);
+        ValidateEtherNetIpPointTypes(value, valueMappings, capability, found);
+        ValidateOmronFinsPointLimit(value, protocol!, found);
+        var processSpecification = NormalizeProcessSpecification(
+            value.ProcessSpecification, protocol!, capability, found, value.MelsecMc3E?.Family);
+        ValidateMtConnectPointLimit(
+            value with
+            {
+                ContextMappings = contextMappings,
+                ValueMappings = valueMappings,
+                ProcessSpecification = processSpecification
+            },
+            protocol!,
+            found);
+        ValidateBacnetPointLimit(
+            value with
+            {
+                ContextMappings = contextMappings,
+                ValueMappings = valueMappings,
+                ProcessSpecification = processSpecification
+            },
+            protocol!,
+            found);
+        ValidateSnmpPointLimit(
+            value with
+            {
+                ContextMappings = contextMappings,
+                ValueMappings = valueMappings,
+                ProcessSpecification = processSpecification
+            },
+            protocol!,
+            found);
         var staticContext = NormalizeStaticContext(value, found);
+        ValidateEquipmentContext(value, staticContext, contextMappings, found);
 
         if (valueMappings.Count == 0)
             found.Add(new AcquisitionValidationError("valueMappings", "至少需要配置一个采集数据项。"));
@@ -84,6 +123,7 @@ public static partial class IngestionTaskValidator
             Source = value.Source.Trim().TrimStart('/'),
             SubjectType = value.SubjectType.Trim().ToLowerInvariant(),
             SubjectId = value.SubjectId.Trim(),
+            EquipmentId = CleanOptional(value.EquipmentId),
             HttpPolling = value.HttpPolling with
             {
                 BaseUrl = value.HttpPolling.BaseUrl.Trim().TrimEnd('/'),
@@ -97,7 +137,18 @@ public static partial class IngestionTaskValidator
             Mqtt = NormalizeMqtt(value.Mqtt),
             OpcUa = NormalizeOpcUa(value.OpcUa),
             ModbusTcp = NormalizeModbusTcp(value.ModbusTcp),
+            ModbusRtu = NormalizeModbusRtu(value.ModbusRtu),
+            ModbusAscii = NormalizeModbusAscii(value.ModbusAscii),
             MelsecA1E = NormalizeMelsecA1E(value.MelsecA1E),
+            MelsecMc3E = NormalizeMelsecMc3E(value.MelsecMc3E),
+            SiemensS7 = NormalizeSiemensS7(value.SiemensS7),
+            EtherNetIp = NormalizeEtherNetIp(value.EtherNetIp),
+            OmronFinsTcp = NormalizeOmronFinsTcp(value.OmronFinsTcp),
+            OmronFinsUdp = NormalizeOmronFinsUdp(value.OmronFinsUdp),
+            MtConnect = NormalizeMtConnect(value.MtConnect),
+            BacnetIp = NormalizeBacnetIp(value.BacnetIp),
+            BacnetMstp = NormalizeBacnetMstp(value.BacnetMstp),
+            Snmp = NormalizeSnmp(value.Snmp),
             TimestampMode = capability.SupportsSourceTimestamp
                 ? capability.UsesIntrinsicSourceTimestamp
                     ? "source"
@@ -105,10 +156,12 @@ public static partial class IngestionTaskValidator
                 : "edge-received",
             TimestampPath = capability.UsesIntrinsicSourceTimestamp
                 ? string.Empty
-                : value.TimestampPath?.Trim() ?? string.Empty,
+                : capability.Addressing is AcquisitionAddressingKinds.MtConnectDataItem or AcquisitionAddressingKinds.BacnetObject
+                    ? string.Empty
+                    : NormalizeSelector(value.TimestampPath, capability, value.MelsecMc3E?.Family),
             TimestampEncoding = NormalizeTimestampEncoding(value.TimestampEncoding, capability),
             SequencePath = capability.SupportsSequencePath && !string.IsNullOrWhiteSpace(value.SequencePath)
-                ? value.SequencePath.Trim()
+                ? NormalizeSelector(value.SequencePath, capability, value.MelsecMc3E?.Family)
                 : null,
             SampleEventType = value.SampleEventType.Trim(),
             StaticContext = staticContext,
@@ -148,6 +201,13 @@ public static partial class IngestionTaskValidator
             Source = value.Source ?? string.Empty,
             SubjectType = value.SubjectType ?? string.Empty,
             SubjectId = value.SubjectId ?? string.Empty,
+            EquipmentId = value.EquipmentId,
+            DeviceProfile = value.DeviceProfile is null ? null : value.DeviceProfile with
+            {
+                Kind = value.DeviceProfile.Kind ?? string.Empty,
+                Manufacturer = value.DeviceProfile.Manufacturer,
+                Model = value.DeviceProfile.Model
+            },
             SampleEventType = value.SampleEventType ?? string.Empty,
             TimestampMode = value.TimestampMode ?? string.Empty,
             TimestampPath = value.TimestampPath ?? string.Empty,
@@ -157,7 +217,18 @@ public static partial class IngestionTaskValidator
             Mqtt = SanitizeMqtt(value.Mqtt, found),
             OpcUa = SanitizeOpcUa(value.OpcUa),
             ModbusTcp = SanitizeModbus(value.ModbusTcp),
+            ModbusRtu = SanitizeModbusRtu(value.ModbusRtu),
+            ModbusAscii = SanitizeModbusAscii(value.ModbusAscii),
             MelsecA1E = SanitizeMelsec(value.MelsecA1E),
+            MelsecMc3E = SanitizeMelsecMc3E(value.MelsecMc3E),
+            SiemensS7 = SanitizeSiemensS7(value.SiemensS7),
+            EtherNetIp = SanitizeEtherNetIp(value.EtherNetIp),
+            OmronFinsTcp = SanitizeOmronFinsTcp(value.OmronFinsTcp),
+            OmronFinsUdp = SanitizeOmronFinsUdp(value.OmronFinsUdp),
+            MtConnect = SanitizeMtConnect(value.MtConnect),
+            BacnetIp = SanitizeBacnetIp(value.BacnetIp),
+            BacnetMstp = SanitizeBacnetMstp(value.BacnetMstp),
+            Snmp = SanitizeSnmp(value.Snmp),
             StaticContext = value.StaticContext ?? new Dictionary<string, string>(),
             ContextMappings = contextMappings.OfType<AcquisitionContextMapping>()
                 .Select(static item => item with
@@ -183,6 +254,23 @@ public static partial class IngestionTaskValidator
                 CompletedEventType = value.Lifecycle.CompletedEventType ?? string.Empty,
                 StepChangedEventType = value.Lifecycle.StepChangedEventType ?? string.Empty
             }
+        };
+    }
+
+    internal static AcquisitionDeviceProfile? NormalizeDeviceProfile(
+        AcquisitionDeviceProfile? value,
+        string path,
+        List<AcquisitionValidationError> found)
+    {
+        if (value is null) return null;
+        var kind = value.Kind?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (!AcquisitionDeviceKinds.IsSupported(kind))
+            found.Add(new AcquisitionValidationError($"{path}.kind", "设备类别不在已登记的设备类型中。"));
+        return value with
+        {
+            Kind = kind,
+            Manufacturer = CleanOptional(value.Manufacturer),
+            Model = CleanOptional(value.Model)
         };
     }
 
@@ -235,12 +323,89 @@ public static partial class IngestionTaskValidator
             AddressBase = value.AddressBase ?? string.Empty
         };
 
+    private static ModbusRtuConnection? SanitizeModbusRtu(ModbusRtuConnection? value)
+        => value is null ? null : value with
+        {
+            PortName = value.PortName ?? string.Empty,
+            Parity = value.Parity ?? string.Empty,
+            StopBits = value.StopBits ?? string.Empty,
+            AddressBase = value.AddressBase ?? string.Empty
+        };
+
+    private static ModbusAsciiConnection? SanitizeModbusAscii(ModbusAsciiConnection? value)
+        => value is null ? null : value with
+        {
+            PortName = value.PortName ?? string.Empty,
+            Parity = value.Parity ?? string.Empty,
+            StopBits = value.StopBits ?? string.Empty,
+            AddressBase = value.AddressBase ?? string.Empty
+        };
+
     private static McA1EConnection? SanitizeMelsec(McA1EConnection? value)
         => value is null ? null : value with
         {
             Host = value.Host ?? string.Empty,
             DataCode = value.DataCode ?? string.Empty,
             WordOrderLayout = value.WordOrderLayout ?? string.Empty
+        };
+
+    private static Mc3EConnection? SanitizeMelsecMc3E(Mc3EConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host ?? string.Empty,
+            Family = value.Family?.Trim().ToLowerInvariant() ?? string.Empty
+        };
+
+    private static SiemensS7Connection? SanitizeSiemensS7(SiemensS7Connection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host ?? string.Empty,
+            CpuType = value.CpuType ?? string.Empty
+        };
+
+    private static EtherNetIpConnection? SanitizeEtherNetIp(EtherNetIpConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host ?? string.Empty,
+            ControllerFamily = value.ControllerFamily ?? string.Empty,
+            Path = value.Path ?? string.Empty
+        };
+
+    private static OmronFinsTcpConnection? SanitizeOmronFinsTcp(OmronFinsTcpConnection? value)
+        => value is null ? null : value with { Host = value.Host ?? string.Empty };
+
+    private static OmronFinsUdpConnection? SanitizeOmronFinsUdp(OmronFinsUdpConnection? value)
+        => value is null ? null : value with { Host = value.Host ?? string.Empty };
+
+    private static MtConnectConnection? SanitizeMtConnect(MtConnectConnection? value)
+        => value is null ? null : value with
+        {
+            BaseUrl = value.BaseUrl ?? string.Empty,
+            DeviceNameOrUuid = value.DeviceNameOrUuid ?? string.Empty,
+            Headers = value.Headers ?? new Dictionary<string, string>(),
+            HeaderSecretRefs = value.HeaderSecretRefs ?? new Dictionary<string, string>()
+        };
+
+    private static BacnetIpConnection? SanitizeBacnetIp(BacnetIpConnection? value)
+        => value is null ? null : value with { Host = value.Host ?? string.Empty };
+
+    private static BacnetMstpConnection? SanitizeBacnetMstp(BacnetMstpConnection? value)
+        => value is null ? null : value with { PortName = value.PortName ?? string.Empty };
+
+    private static SnmpConnection? SanitizeSnmp(SnmpConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host ?? string.Empty,
+            Version = value.Version ?? string.Empty,
+            BrowseRootOid = value.BrowseRootOid ?? string.Empty,
+            CommunitySecretRef = value.CommunitySecretRef,
+            UserName = value.UserName,
+            SecurityLevel = value.SecurityLevel ?? string.Empty,
+            AuthenticationProtocol = value.AuthenticationProtocol,
+            AuthenticationSecretRef = value.AuthenticationSecretRef,
+            PrivacyProtocol = value.PrivacyProtocol,
+            PrivacySecretRef = value.PrivacySecretRef,
+            ContextName = value.ContextName
         };
 
     private static AcquisitionValueMapping SanitizeMapping(AcquisitionValueMapping value)
@@ -268,11 +433,28 @@ public static partial class IngestionTaskValidator
         CheckLength(value.Source, 512, "source", "事件来源", found);
         CheckLength(value.SubjectType, 128, "subjectType", "归属对象类型", found);
         CheckLength(value.SubjectId, 256, "subjectId", "归属对象编号", found);
+        CheckLength(value.EquipmentId, 256, "equipmentId", "物理设备编号", found);
+        if (value.DeviceProfile is { } deviceProfile)
+        {
+            CheckLength(deviceProfile.Kind, 64, "deviceProfile.kind", "设备类别", found);
+            CheckLength(deviceProfile.Manufacturer, 128, "deviceProfile.manufacturer", "设备厂商", found);
+            CheckLength(deviceProfile.Model, 128, "deviceProfile.model", "设备型号", found);
+        }
         CheckLength(value.SampleEventType, 256, "sampleEventType", "采样事件类型", found);
         CheckLength(value.TimestampMode, 64, "timestampMode", "时间戳模式", found);
         CheckLength(value.TimestampPath, 2048, "timestampPath", "时间戳来源", found);
         CheckLength(value.TimestampEncoding, 64, "timestampEncoding", "时间戳编码", found);
         CheckLength(value.SequencePath, 2048, "sequencePath", "源序号来源", found);
+        if (value.Snmp is { } snmp)
+        {
+            CheckLength(snmp.Host, 15, "snmp.host", "SNMP IPv4 地址", found);
+            CheckLength(snmp.BrowseRootOid, 2048, "snmp.browseRootOid", "SNMP 浏览根 OID", found);
+            CheckLength(snmp.CommunitySecretRef, 512, "snmp.communitySecretRef", "SNMP community 密钥引用", found);
+            CheckLength(snmp.UserName, 128, "snmp.userName", "SNMPv3 用户名", found);
+            CheckLength(snmp.AuthenticationSecretRef, 512, "snmp.authenticationSecretRef", "SNMPv3 认证密钥引用", found);
+            CheckLength(snmp.PrivacySecretRef, 512, "snmp.privacySecretRef", "SNMPv3 隐私密钥引用", found);
+            CheckLength(snmp.ContextName, 256, "snmp.contextName", "SNMPv3 Context Name", found);
+        }
         CheckLength(value.HttpPolling.BaseUrl, 2048, "httpPolling.baseUrl", "HTTP 地址", found);
         CheckLength(value.HttpPolling.SnapshotPath, 2048, "httpPolling.snapshotPath", "HTTP 路径", found);
         CheckLength(value.HttpPolling.Method, 16, "httpPolling.method", "HTTP 方法", found);
@@ -285,6 +467,22 @@ public static partial class IngestionTaskValidator
             CheckLength(name, 256, "httpPolling.headers", "HTTP 请求头名称", found);
             CheckLength(content, 8192, $"httpPolling.headers.{name}", "HTTP 请求头值", found);
         }
+        if (value.MtConnect is { } mtConnect)
+        {
+            CheckLength(mtConnect.BaseUrl, 2048, "mtConnect.baseUrl", "MTConnect Agent 地址", found);
+            CheckLength(mtConnect.DeviceNameOrUuid, 256, "mtConnect.deviceNameOrUuid", "MTConnect 设备名称或 UUID", found);
+            if (mtConnect.Headers.Count > 64 || mtConnect.HeaderSecretRefs.Count > 64)
+                found.Add(new AcquisitionValidationError("mtConnect.headers", "MTConnect 请求头和密钥请求头分别最多 64 项。"));
+            foreach (var (name, content) in mtConnect.Headers.Concat(mtConnect.HeaderSecretRefs))
+            {
+                CheckLength(name, 256, "mtConnect.headers", "MTConnect 请求头名称", found);
+                CheckLength(content, 8192, $"mtConnect.headers.{name}", "MTConnect 请求头值", found);
+            }
+        }
+        if (value.BacnetIp is { } bacnetIp)
+            CheckLength(bacnetIp.Host, 253, "bacnetIp.host", "BACnet/IP 设备地址", found);
+        if (value.BacnetMstp is { } bacnetMstp)
+            CheckLength(bacnetMstp.PortName, 260, "bacnetMstp.portName", "BACnet MS/TP 串口名", found);
         if (value.ContextMappings.Count > 1024)
             found.Add(new AcquisitionValidationError("contextMappings", "单个任务最多配置 1024 个动态上下文。"));
         if (value.ValueMappings.Count > 20_000)
@@ -344,8 +542,32 @@ public static partial class IngestionTaskValidator
         }
         if (value.ModbusTcp is { } modbus)
             CheckLength(modbus.Host, 255, "modbusTcp.host", "Modbus 主机名", found);
+        if (value.ModbusRtu is { } modbusRtu)
+            CheckLength(modbusRtu.PortName, 260, "modbusRtu.portName", "Modbus RTU 串口名", found);
+        if (value.ModbusAscii is { } modbusAscii)
+            CheckLength(modbusAscii.PortName, 260, "modbusAscii.portName", "Modbus ASCII 串口名", found);
         if (value.MelsecA1E is { } melsec)
             CheckLength(melsec.Host, 255, "melsecA1E.host", "MELSEC 主机名", found);
+        if (value.MelsecMc3E is { } melsecMc3E)
+        {
+            CheckLength(melsecMc3E.Host, 255, "melsecMc3E.host", "MELSEC MC 3E 主机名", found);
+            CheckLength(melsecMc3E.Family, 64, "melsecMc3E.family", "MELSEC MC 3E 系列", found);
+        }
+        if (value.SiemensS7 is { } siemensS7)
+        {
+            CheckLength(siemensS7.Host, 255, "siemensS7.host", "Siemens S7 主机名", found);
+            CheckLength(siemensS7.CpuType, 64, "siemensS7.cpuType", "Siemens S7 CPU 类型", found);
+        }
+        if (value.EtherNetIp is { } etherNetIp)
+        {
+            CheckLength(etherNetIp.Host, 255, "etherNetIp.host", "EtherNet/IP 主机名", found);
+            CheckLength(etherNetIp.ControllerFamily, 64, "etherNetIp.controllerFamily", "EtherNet/IP 控制器系列", found);
+            CheckLength(etherNetIp.Path, 128, "etherNetIp.path", "EtherNet/IP 路径", found);
+        }
+        if (value.OmronFinsTcp is { } omronFinsTcp)
+            CheckLength(omronFinsTcp.Host, 255, "omronFinsTcp.host", "Omron FINS/TCP 主机名", found);
+        if (value.OmronFinsUdp is { } omronFinsUdp)
+            CheckLength(omronFinsUdp.Host, 255, "omronFinsUdp.host", "Omron FINS/UDP 主机名", found);
         if (value.ProcessSpecification is { } specification)
         {
             CheckLength(specification.EventType, 256, "processSpecification.eventType", "配方版本事件类型", found);
@@ -358,6 +580,7 @@ public static partial class IngestionTaskValidator
         {
             CheckLength(lifecycle.Mode, 64, "lifecycle.mode", "生命周期模式", found);
             CheckLength(lifecycle.ActiveContextKey, 128, "lifecycle.activeContextKey", "生命周期激活上下文", found);
+            CheckLength(lifecycle.ActiveCondition, 64, "lifecycle.activeCondition", "生命周期激活条件", found);
             CheckLength(lifecycle.ActiveValue, 1024, "lifecycle.activeValue", "生命周期激活值", found);
             CheckLength(lifecycle.StartedEventType, 256, "lifecycle.startedEventType", "开始事件类型", found);
             CheckLength(lifecycle.CompletedEventType, 256, "lifecycle.completedEventType", "完成事件类型", found);
@@ -415,6 +638,8 @@ public static partial class IngestionTaskValidator
             found.Add(new AcquisitionValidationError("subjectId", "数据归属对象编号不能为空。"));
         if (!CodePattern().IsMatch(NormalizeCode(value.SubjectType)))
             found.Add(new AcquisitionValidationError("subjectType", "数据归属对象类型格式无效。"));
+        if (value.EquipmentId is not null && string.IsNullOrWhiteSpace(value.EquipmentId))
+            found.Add(new AcquisitionValidationError("equipmentId", "物理设备编号不能是空白。"));
         if (string.IsNullOrWhiteSpace(value.Source))
             found.Add(new AcquisitionValidationError("source", "事件来源不能为空。"));
         if (string.IsNullOrWhiteSpace(value.DataModelId))
@@ -656,6 +881,64 @@ public static partial class IngestionTaskValidator
                     found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "合并读取间隔必须在 0-125 之间。"));
                 break;
 
+            case AcquisitionProtocols.ModbusRtu:
+                if (value.ModbusRtu is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 Modbus RTU 串口参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.ModbusRtu.PortName) || value.ModbusRtu.PortName.Any(char.IsControl))
+                    found.Add(new AcquisitionValidationError($"{section}.portName", "串口名不能为空或包含控制字符。"));
+                if (value.ModbusRtu.BaudRate is < 300 or > 4_000_000)
+                    found.Add(new AcquisitionValidationError($"{section}.baudRate", "波特率必须在 300-4000000 之间。"));
+                if (value.ModbusRtu.DataBits != 8)
+                    found.Add(new AcquisitionValidationError($"{section}.dataBits", "Modbus RTU 固定使用 8 个数据位。"));
+                if (value.ModbusRtu.Parity is not ("none" or "even" or "odd"))
+                    found.Add(new AcquisitionValidationError($"{section}.parity", "校验位必须是 none、even 或 odd。"));
+                if (value.ModbusRtu.StopBits is not ("one" or "two"))
+                    found.Add(new AcquisitionValidationError($"{section}.stopBits", "停止位必须是 1 或 2。"));
+                if (value.ModbusRtu.UnitId is < 1 or > 247)
+                    found.Add(new AcquisitionValidationError($"{section}.unitId", "RTU 从站编号必须是 1-247，0 为广播地址，不能用于读取。"));
+                if (value.ModbusRtu.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                if (value.ModbusRtu.AddressBase is not ("zero-based" or "one-based"))
+                    found.Add(new AcquisitionValidationError($"{section}.addressBase", "地址起点必须是 0 基地址或 1 基地址。"));
+                if (value.ModbusRtu.MaxMergeGap is < 0 or > 125)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "合并读取间隔必须在 0-125 之间。"));
+                break;
+
+            case AcquisitionProtocols.ModbusAscii:
+                if (value.ModbusAscii is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 Modbus ASCII 串口参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.ModbusAscii.PortName) || value.ModbusAscii.PortName.Any(char.IsControl))
+                    found.Add(new AcquisitionValidationError($"{section}.portName", "串口名不能为空或包含控制字符。"));
+                if (value.ModbusAscii.BaudRate is < 300 or > 4_000_000)
+                    found.Add(new AcquisitionValidationError($"{section}.baudRate", "波特率必须在 300-4000000 之间。"));
+                if (value.ModbusAscii.DataBits != 7)
+                    found.Add(new AcquisitionValidationError($"{section}.dataBits", "Modbus ASCII 使用 7 个数据位。"));
+                if (value.ModbusAscii.Parity is not ("none" or "even" or "odd"))
+                    found.Add(new AcquisitionValidationError($"{section}.parity", "校验位必须是 none、even 或 odd。"));
+                if (value.ModbusAscii.StopBits is not ("one" or "two"))
+                    found.Add(new AcquisitionValidationError($"{section}.stopBits", "停止位必须是 1 或 2。"));
+                else if (value.ModbusAscii.Parity == "none" && value.ModbusAscii.StopBits != "two")
+                    found.Add(new AcquisitionValidationError($"{section}.stopBits", "无校验时必须使用 2 个停止位。"));
+                else if (value.ModbusAscii.Parity is "even" or "odd" && value.ModbusAscii.StopBits != "one")
+                    found.Add(new AcquisitionValidationError($"{section}.stopBits", "启用奇偶校验时必须使用 1 个停止位。"));
+                if (value.ModbusAscii.UnitId is < 1 or > 247)
+                    found.Add(new AcquisitionValidationError($"{section}.unitId", "ASCII 从站编号必须是 1-247，0 为广播地址，不能用于读取。"));
+                if (value.ModbusAscii.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                if (value.ModbusAscii.AddressBase is not ("zero-based" or "one-based"))
+                    found.Add(new AcquisitionValidationError($"{section}.addressBase", "地址起点必须是 0 基地址或 1 基地址。"));
+                if (value.ModbusAscii.MaxMergeGap is < 0 or > 125)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "合并读取间隔必须在 0-125 之间。"));
+                break;
+
             case AcquisitionProtocols.MelsecA1E:
                 if (value.MelsecA1E is null)
                 {
@@ -678,6 +961,271 @@ public static partial class IngestionTaskValidator
                     found.Add(new AcquisitionValidationError($"{section}.dataCode", "通信数据码必须是二进制或 ASCII。"));
                 if (value.MelsecA1E.MaxMergeGap is < 0 or > 256)
                     found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "合并读取间隔必须在 0-256 之间。"));
+                break;
+
+            case AcquisitionProtocols.MelsecMc3E:
+                if (value.MelsecMc3E is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 MELSEC MC 3E / SLMP 连接参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.MelsecMc3E.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.host", "PLC 地址不能为空。"));
+                if (value.MelsecMc3E.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "必须按目标 PLC 或网络模块工程显式填写 1-65535 之间的端口。"));
+                if (!MelsecMc3EFamilies.IsSupported(value.MelsecMc3E.Family))
+                    found.Add(new AcquisitionValidationError($"{section}.family", "PLC 系列必须是 q-l、iq-r 或 iq-f。"));
+                if (value.MelsecMc3E.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                if (value.MelsecMc3E.MaxMergeGap is < 0 or > 256)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "连续地址合并间隔必须在 0-256 个字之间。"));
+                break;
+
+            case AcquisitionProtocols.SiemensS7:
+                if (value.SiemensS7 is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 Siemens S7 连接参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.SiemensS7.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.host", "PLC 地址不能为空。"));
+                if (value.SiemensS7.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "端口必须在 1-65535 之间。"));
+                if (value.SiemensS7.CpuType is not ("S7200" or "S7200Smart" or "S7300" or "S7400" or "S71200" or "S71500" or "Logo0BA8"))
+                    found.Add(new AcquisitionValidationError($"{section}.cpuType", "CPU 类型不在已登记的 Siemens S7 系列中。"));
+                if (value.SiemensS7.Rack is < 0 or > 7)
+                    found.Add(new AcquisitionValidationError($"{section}.rack", "机架号必须在 0-7 之间。"));
+                if (value.SiemensS7.Slot is < 0 or > 31)
+                    found.Add(new AcquisitionValidationError($"{section}.slot", "CPU 槽位必须在 0-31 之间。"));
+                if (value.SiemensS7.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                if (value.SiemensS7.MaxMergeGap is < 0 or > 256)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMergeGap", "连续地址合并间隔必须在 0-256 字节之间。"));
+                break;
+
+            case AcquisitionProtocols.EtherNetIp:
+                if (value.EtherNetIp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 EtherNet/IP 连接参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.EtherNetIp.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.host", "PLC 地址不能为空。"));
+                if (value.EtherNetIp.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "端口必须在 1-65535 之间。"));
+                if (value.EtherNetIp.ControllerFamily is not ("control-logix" or "micro800"))
+                    found.Add(new AcquisitionValidationError($"{section}.controllerFamily", "控制器系列必须是 ControlLogix/CompactLogix 或 Micro800。"));
+                if (value.EtherNetIp.ControllerFamily == "control-logix" &&
+                    !Regex.IsMatch(value.EtherNetIp.Path, @"^1,(?:[0-9]|[12][0-9]|3[01])$", RegexOptions.CultureInvariant))
+                    found.Add(new AcquisitionValidationError($"{section}.path", "ControlLogix/CompactLogix 路径必须是 1,0 到 1,31 的直连背板槽位。"));
+                if (value.EtherNetIp.ControllerFamily == "micro800" && !string.IsNullOrWhiteSpace(value.EtherNetIp.Path))
+                    found.Add(new AcquisitionValidationError($"{section}.path", "Micro800 连接不使用路径；请留空。"));
+                if (value.EtherNetIp.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                break;
+
+            case AcquisitionProtocols.OmronFinsTcp:
+                if (value.OmronFinsTcp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 Omron FINS/TCP 连接参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.OmronFinsTcp.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.host", "PLC 地址不能为空。"));
+                if (value.OmronFinsTcp.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "端口必须在 1-65535 之间。"));
+                if (value.OmronFinsTcp.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                break;
+
+            case AcquisitionProtocols.OmronFinsUdp:
+                if (value.OmronFinsUdp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 Omron FINS/UDP 连接参数。"));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(value.OmronFinsUdp.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.host", "PLC 地址不能为空。"));
+                if (value.OmronFinsUdp.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "UDP 端口必须在 1-65535 之间。"));
+                if (value.OmronFinsUdp.ClientNodeAddress is < 1 or > 254)
+                    found.Add(new AcquisitionValidationError($"{section}.clientNodeAddress", "客户端 FINS 节点号必须在 1-254 之间。"));
+                if (value.OmronFinsUdp.ServerNodeAddress is < 1 or > 254)
+                    found.Add(new AcquisitionValidationError($"{section}.serverNodeAddress", "PLC FINS 节点号必须在 1-254 之间。"));
+                if (value.OmronFinsUdp.ClientNodeAddress == value.OmronFinsUdp.ServerNodeAddress)
+                    found.Add(new AcquisitionValidationError($"{section}.serverNodeAddress", "客户端与 PLC 的 FINS 节点号不能相同。"));
+                if (value.OmronFinsUdp.PollIntervalMs is < 1 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "读取后等待时间必须是 1-3600000ms。"));
+                break;
+
+            case AcquisitionProtocols.MtConnect:
+                if (value.MtConnect is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 MTConnect 连接参数。"));
+                    break;
+                }
+
+                var baseUrl = value.MtConnect.BaseUrl;
+                if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var mtConnectUri) ||
+                    mtConnectUri.Scheme is not ("http" or "https") ||
+                    string.IsNullOrWhiteSpace(mtConnectUri.Host))
+                    found.Add(new AcquisitionValidationError($"{section}.baseUrl", "Agent 地址必须是 HTTP 或 HTTPS 绝对地址。"));
+                else if (!string.IsNullOrEmpty(mtConnectUri.UserInfo) ||
+                         !string.IsNullOrEmpty(mtConnectUri.Query) ||
+                         !string.IsNullOrEmpty(mtConnectUri.Fragment) ||
+                         baseUrl.Contains('?') || baseUrl.Contains('#'))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.baseUrl", "Agent 基础地址不能包含用户名密码、查询参数或片段；可保留反向代理路径前缀。"));
+                if (baseUrl.Any(char.IsControl))
+                    found.Add(new AcquisitionValidationError($"{section}.baseUrl", "Agent 地址不能包含控制字符。"));
+                var selectedDevice = value.MtConnect.DeviceNameOrUuid;
+                if (string.IsNullOrWhiteSpace(selectedDevice) ||
+                    selectedDevice.Length > 256 ||
+                    selectedDevice.Any(char.IsControl) ||
+                    !string.Equals(selectedDevice, selectedDevice.Trim(), StringComparison.Ordinal) ||
+                    selectedDevice is "." or ".." ||
+                    selectedDevice.Contains('/') || selectedDevice.Contains('\\'))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.deviceNameOrUuid", "必须选择有效的设备名称或 UUID（最多 256 个字符，不能包含首尾空白、路径分隔符或控制字符）。"));
+                if (value.MtConnect.PollIntervalMs is < 100 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "轮询间隔必须是 100-3600000ms。"));
+                if (value.MtConnect.MaximumResponseBytes is < 1 or > 16 * 1024 * 1024)
+                    found.Add(new AcquisitionValidationError($"{section}.maximumResponseBytes", "响应体上限必须是 1-16777216 字节。"));
+                ValidateHttpHeaders(value.MtConnect.Headers, $"{section}.headers", allowSensitive: false, found);
+                ValidateHttpHeaders(value.MtConnect.HeaderSecretRefs, $"{section}.headerSecretRefs", allowSensitive: true, found);
+                foreach (var (name, reference) in value.MtConnect.HeaderSecretRefs)
+                    ValidateSecretReference(reference, $"{section}.headerSecretRefs.{name}", found);
+                foreach (var name in value.MtConnect.Headers.Keys.Intersect(
+                             value.MtConnect.HeaderSecretRefs.Keys, StringComparer.OrdinalIgnoreCase))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.headers.{name}", "同一个请求头不能同时配置明文值和密钥引用。"));
+                AddDuplicateHeaderErrors(value.MtConnect.Headers, $"{section}.headers", found);
+                AddDuplicateHeaderErrors(value.MtConnect.HeaderSecretRefs, $"{section}.headerSecretRefs", found);
+                if (value.MtConnect.Headers.Keys.Concat(value.MtConnect.HeaderSecretRefs.Keys)
+                    .Any(static name => string.Equals(name, "Accept", StringComparison.OrdinalIgnoreCase)))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.headers.Accept", "MTConnect 固定使用 application/xml，不能配置自定义 Accept 请求头。"));
+                break;
+
+            case AcquisitionProtocols.BacnetIp:
+                if (value.BacnetIp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 BACnet/IP 连接参数。"));
+                    break;
+                }
+                if (!TryParseUnicastIpv4(value.BacnetIp.Host, out _))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.host", "必须填写单播 IPv4 地址，不能使用主机名、广播、组播或本机地址。"));
+                if (value.BacnetIp.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "UDP 端口必须在 1-65535 之间。"));
+                if (value.BacnetIp.DeviceInstance > 4_194_302)
+                    found.Add(new AcquisitionValidationError($"{section}.deviceInstance", "Device Instance 必须在 0-4194302 之间。"));
+                if (value.BacnetIp.PollIntervalMs is < 100 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "轮询间隔必须是 100-3600000ms。"));
+                break;
+
+            case AcquisitionProtocols.BacnetMstp:
+                if (value.BacnetMstp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 BACnet MS/TP 连接参数。"));
+                    break;
+                }
+                var mstp = value.BacnetMstp;
+                if (!IsValidAcquisitionSerialPortName(mstp.PortName))
+                    found.Add(new AcquisitionValidationError($"{section}.portName", "请填写 COMn、\\\\.\\COMn 或 /dev 下的串口路径。"));
+                if (mstp.BaudRate is not (9600 or 19200 or 38400 or 76800 or 115200))
+                    found.Add(new AcquisitionValidationError($"{section}.baudRate", "BACnet MS/TP 波特率必须是 9600、19200、38400、76800 或 115200。"));
+                if (mstp.LocalStationAddress is null or < 0 or > 127)
+                    found.Add(new AcquisitionValidationError($"{section}.localStationAddress", "现场 MS/TP 站地址必须在 0-127 之间，并且在总线上唯一。"));
+                if (mstp.MaxMaster > 127)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMaster", "Max Master 必须在 0-127 之间。"));
+                else if (mstp.LocalStationAddress is { } localAddress && localAddress > mstp.MaxMaster)
+                    found.Add(new AcquisitionValidationError($"{section}.maxMaster", "Max Master 必须大于或等于本机 MS/TP 站地址。"));
+                if (mstp.MaxInfoFrames == 0)
+                    found.Add(new AcquisitionValidationError($"{section}.maxInfoFrames", "Max Info Frames 必须大于 0。"));
+                if (mstp.DeviceInstance > 4_194_302)
+                    found.Add(new AcquisitionValidationError($"{section}.deviceInstance", "Device Instance 必须在 0-4194302 之间。"));
+                if (mstp.PollIntervalMs is < 100 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "轮询间隔必须是 100-3600000ms。"));
+                break;
+
+            case AcquisitionProtocols.Snmp:
+                if (value.Snmp is null)
+                {
+                    found.Add(new AcquisitionValidationError(section, "缺少 SNMP 连接参数。"));
+                    break;
+                }
+
+                if (!TryParseUnicastIpv4(value.Snmp.Host, out _))
+                    found.Add(new AcquisitionValidationError(
+                        $"{section}.host", "必须填写单播 IPv4 字面地址，不能使用主机名、广播、组播或本机地址。"));
+                if (value.Snmp.Port is < 1 or > 65535)
+                    found.Add(new AcquisitionValidationError($"{section}.port", "UDP 端口必须在 1-65535 之间。"));
+                if (value.Snmp.PollIntervalMs is < 100 or > 3_600_000)
+                    found.Add(new AcquisitionValidationError($"{section}.pollIntervalMs", "轮询间隔必须是 100-3600000ms。"));
+                if (value.Snmp.Version is not ("v2c" or "v3"))
+                    found.Add(new AcquisitionValidationError($"{section}.version", "SNMP 版本必须是 v2c 或 v3。"));
+                if (!AcquisitionSelectors.TryParseSnmpOid(value.Snmp.BrowseRootOid, out _, out var browseOidError))
+                    found.Add(new AcquisitionValidationError($"{section}.browseRootOid", browseOidError));
+                ValidateOptionalSecretReference(value.Snmp.CommunitySecretRef, $"{section}.communitySecretRef", found);
+                ValidateOptionalSecretReference(value.Snmp.AuthenticationSecretRef, $"{section}.authenticationSecretRef", found);
+                ValidateOptionalSecretReference(value.Snmp.PrivacySecretRef, $"{section}.privacySecretRef", found);
+                if (value.Snmp.Version == "v2c")
+                {
+                    if (string.IsNullOrWhiteSpace(value.Snmp.CommunitySecretRef))
+                        found.Add(new AcquisitionValidationError($"{section}.communitySecretRef", "SNMP v2c 必须引用 Edge 现场 community 密钥。"));
+                    if (!string.IsNullOrWhiteSpace(value.Snmp.UserName) ||
+                        !string.IsNullOrWhiteSpace(value.Snmp.AuthenticationSecretRef) ||
+                        !string.IsNullOrWhiteSpace(value.Snmp.PrivacySecretRef) ||
+                        !string.IsNullOrWhiteSpace(value.Snmp.AuthenticationProtocol) ||
+                        !string.IsNullOrWhiteSpace(value.Snmp.PrivacyProtocol) ||
+                        !string.IsNullOrWhiteSpace(value.Snmp.ContextName))
+                        found.Add(new AcquisitionValidationError($"{section}.version", "SNMP v2c 不能配置 v3 用户名、认证或隐私密钥。"));
+                }
+                else if (value.Snmp.Version == "v3")
+                {
+                    if (string.IsNullOrWhiteSpace(value.Snmp.UserName) ||
+                        value.Snmp.UserName.Any(char.IsControl) ||
+                        !string.Equals(value.Snmp.UserName, value.Snmp.UserName.Trim(), StringComparison.Ordinal))
+                        found.Add(new AcquisitionValidationError($"{section}.userName", "SNMPv3 必须配置不含控制字符或首尾空格的用户名。"));
+                    if (value.Snmp.SecurityLevel is not ("noAuthNoPriv" or "authNoPriv" or "authPriv"))
+                        found.Add(new AcquisitionValidationError($"{section}.securityLevel", "安全级别必须是 noAuthNoPriv、authNoPriv 或 authPriv。"));
+                    if (!string.IsNullOrWhiteSpace(value.Snmp.CommunitySecretRef))
+                        found.Add(new AcquisitionValidationError($"{section}.communitySecretRef", "SNMP v3 不能配置 community 密钥。"));
+                    if (value.Snmp.SecurityLevel == "noAuthNoPriv")
+                    {
+                        if (!string.IsNullOrWhiteSpace(value.Snmp.AuthenticationProtocol) ||
+                            !string.IsNullOrWhiteSpace(value.Snmp.AuthenticationSecretRef) ||
+                            !string.IsNullOrWhiteSpace(value.Snmp.PrivacyProtocol) ||
+                            !string.IsNullOrWhiteSpace(value.Snmp.PrivacySecretRef))
+                            found.Add(new AcquisitionValidationError($"{section}.securityLevel", "noAuthNoPriv 不能配置认证或隐私算法/密钥。"));
+                    }
+                    else if (value.Snmp.SecurityLevel is "authNoPriv" or "authPriv")
+                    {
+                        if (value.Snmp.AuthenticationProtocol is not ("sha256" or "sha384" or "sha512"))
+                            found.Add(new AcquisitionValidationError($"{section}.authenticationProtocol", "认证算法必须是 SHA-256、SHA-384 或 SHA-512。"));
+                        if (string.IsNullOrWhiteSpace(value.Snmp.AuthenticationSecretRef))
+                            found.Add(new AcquisitionValidationError($"{section}.authenticationSecretRef", "认证级别必须引用认证密钥。"));
+                        if (value.Snmp.SecurityLevel == "authNoPriv" &&
+                            (!string.IsNullOrWhiteSpace(value.Snmp.PrivacyProtocol) ||
+                             !string.IsNullOrWhiteSpace(value.Snmp.PrivacySecretRef)))
+                            found.Add(new AcquisitionValidationError($"{section}.securityLevel", "authNoPriv 不能配置隐私算法或密钥。"));
+                        if (value.Snmp.SecurityLevel == "authPriv")
+                        {
+                            if (value.Snmp.PrivacyProtocol is not ("aes128" or "aes192" or "aes256"))
+                                found.Add(new AcquisitionValidationError($"{section}.privacyProtocol", "隐私算法必须是 AES-128、AES-192 或 AES-256。"));
+                            if (string.IsNullOrWhiteSpace(value.Snmp.PrivacySecretRef))
+                                found.Add(new AcquisitionValidationError($"{section}.privacySecretRef", "authPriv 必须引用隐私密钥。"));
+                        }
+                    }
+                    if (value.Snmp.ContextName?.Any(char.IsControl) == true)
+                        found.Add(new AcquisitionValidationError($"{section}.contextName", "Context Name 不能包含控制字符。"));
+                }
                 break;
         }
     }
@@ -751,6 +1299,10 @@ public static partial class IngestionTaskValidator
         if (!string.Equals(lifecycle.Mode?.Trim(), ProcessExecutionKinds.Discrete, StringComparison.OrdinalIgnoreCase))
             found.Add(new AcquisitionValidationError(
                 "lifecycle.mode", $"过程执行模式必须是 {ProcessExecutionKinds.Discrete}。"));
+        var activeCondition = lifecycle.ActiveCondition?.Trim().ToLowerInvariant();
+        if (!AcquisitionLifecycleActiveConditions.IsSupported(activeCondition))
+            found.Add(new AcquisitionValidationError(
+                "lifecycle.activeCondition", "运行激活条件必须是 equals 或 nonzero。"));
         ValidateLifecycleEventType(lifecycle.StartedEventType, "lifecycle.startedEventType", found);
         ValidateLifecycleEventType(lifecycle.CompletedEventType, "lifecycle.completedEventType", found);
         ValidateLifecycleEventType(lifecycle.StepChangedEventType, "lifecycle.stepChangedEventType", found);
@@ -762,7 +1314,8 @@ public static partial class IngestionTaskValidator
                 "lifecycle.activeContextKey", "离散过程执行必须指定运行激活状态上下文映射。"));
             return;
         }
-        if (string.IsNullOrWhiteSpace(lifecycle.ActiveValue))
+        if (activeCondition == AcquisitionLifecycleActiveConditions.EqualTo &&
+            string.IsNullOrWhiteSpace(lifecycle.ActiveValue))
             found.Add(new AcquisitionValidationError(
                 "lifecycle.activeValue", "运行激活状态值不能为空。"));
         if (contextMappings.All(item => !string.Equals(
@@ -794,15 +1347,16 @@ public static partial class IngestionTaskValidator
             return;
         }
 
-        if (mode != "source") return;
+        if (mode != "source" || !capability.SupportsSourceTimestamp || capability.UsesIntrinsicSourceTimestamp)
+            return;
 
         var timestampEncoding = value.TimestampEncoding?.Trim().ToLowerInvariant();
+        if (capability.Addressing == AcquisitionAddressingKinds.EthernetIpTag &&
+            timestampEncoding == AcquisitionTimestampEncodings.Auto)
+            timestampEncoding = AcquisitionTimestampEncodings.UnixMilliseconds;
         if (!AcquisitionTimestampEncodings.IsSupported(timestampEncoding))
             found.Add(new AcquisitionValidationError(
                 "timestampEncoding", "时间戳编码必须是 auto、iso-8601、unix-s 或 unix-ms。"));
-
-        if (!capability.SupportsSourceTimestamp) return;
-        if (capability.UsesIntrinsicSourceTimestamp) return;
 
         if (string.IsNullOrWhiteSpace(value.TimestampPath))
         {
@@ -823,6 +1377,68 @@ public static partial class IngestionTaskValidator
                 found.Add(new AcquisitionValidationError("timestampPath", melsecError));
             else
                 ValidateRegisterTimestampWidth(point.DataType, timestampEncoding, "timestampPath", found);
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.MelsecMc3EDevice)
+        {
+            if (!AcquisitionSelectors.TryParseMelsecMc3E(
+                    value.TimestampPath.Trim(), dataType: null, family: value.MelsecMc3E?.Family,
+                    out var point, out var melsecMc3EError))
+                found.Add(new AcquisitionValidationError("timestampPath", melsecMc3EError));
+            else
+                ValidateRegisterTimestampWidth(point.DataType, timestampEncoding, "timestampPath", found);
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.SiemensS7Address)
+        {
+            if (!AcquisitionSelectors.TryParseSiemensS7Address(
+                    value.TimestampPath.Trim(), null, null, out var point, out var siemensError))
+                found.Add(new AcquisitionValidationError("timestampPath", siemensError));
+            else
+                ValidateRegisterTimestampWidth(point.DataType, timestampEncoding, "timestampPath", found);
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.EthernetIpTag)
+        {
+            if (timestampEncoding is not (AcquisitionTimestampEncodings.UnixSeconds or AcquisitionTimestampEncodings.UnixMilliseconds))
+                found.Add(new AcquisitionValidationError("timestampEncoding", "EtherNet/IP 设备时间只支持 unix-s 或 unix-ms 数值标签。"));
+            if (!AcquisitionSelectors.TryParseEtherNetIpTag(value.TimestampPath.Trim(), out var tag, out var etherNetIpError))
+                found.Add(new AcquisitionValidationError("timestampPath", etherNetIpError));
+            else
+            {
+                var declaredType = value.ValueMappings
+                    .Where(mapping => AcquisitionSelectors.TryParseEtherNetIpTag(
+                        mapping.SourcePath, out var mappingTag, out _) &&
+                        string.Equals(mappingTag, tag, StringComparison.Ordinal))
+                    .Select(static mapping => mapping.SourceDataType)
+                    .FirstOrDefault();
+                var inferredType = timestampEncoding == AcquisitionTimestampEncodings.UnixSeconds ? "uint32" : "int64";
+                ValidateRegisterTimestampWidth(
+                    declaredType is null or "auto" ? inferredType : declaredType,
+                    timestampEncoding,
+                    "timestampPath",
+                    found);
+            }
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.OmronFinsAddress)
+        {
+            if (!AcquisitionSelectors.TryParseOmronFins(
+                    value.TimestampPath.Trim(), dataType: null, wordOrder: null, out var point, out var finsError))
+                found.Add(new AcquisitionValidationError("timestampPath", finsError));
+            else
+                ValidateRegisterTimestampWidth(point.DataType, timestampEncoding, "timestampPath", found);
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.SnmpOid)
+        {
+            if (!AcquisitionSelectors.TryParseSnmpOid(value.TimestampPath.Trim(), out var point, out var oidError))
+                found.Add(new AcquisitionValidationError("timestampPath", oidError));
+            else
+            {
+                var declaredType = value.ValueMappings
+                    .Where(mapping => AcquisitionSelectors.TryParseSnmpOid(mapping.SourcePath, out var mapped, out _) &&
+                                      string.Equals(mapped.Value, point.Value, StringComparison.Ordinal))
+                    .Select(static mapping => mapping.SourceDataType)
+                    .FirstOrDefault(static type => type is not null and not "auto");
+                if (declaredType is not null && timestampEncoding != AcquisitionTimestampEncodings.Auto)
+                    ValidateRegisterTimestampWidth(declaredType, timestampEncoding, "timestampPath", found);
+            }
         }
     }
 
@@ -867,11 +1483,15 @@ public static partial class IngestionTaskValidator
                 found.Add(new AcquisitionValidationError($"{path}.contextKey", "上下文键格式无效。"));
             else if (!seen.Add(key))
                 found.Add(new AcquisitionValidationError($"{path}.contextKey", "上下文键重复。"));
-            var source = item.SourcePath?.Trim() ?? string.Empty;
+            var source = NormalizeSelector(item.SourcePath, capability, value.MelsecMc3E?.Family);
+            if (capability.Addressing == AcquisitionAddressingKinds.EthernetIpTag)
+                found.Add(new AcquisitionValidationError(
+                    $"{path}.sourcePath",
+                    "EtherNet/IP 当前不支持未声明源数据类型的动态上下文标签；请使用固定上下文或改用已类型化的数据点。"));
             if (string.IsNullOrWhiteSpace(source))
                 found.Add(new AcquisitionValidationError($"{path}.sourcePath", "设备来源不能为空。"));
             else
-                ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found);
+                ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found, value.MelsecMc3E?.Family);
             if (!capability.SupportsPerTopicMapping && !string.IsNullOrWhiteSpace(item.Topic))
                 found.Add(new AcquisitionValidationError(
                     $"{path}.topic", $"{capability.DisplayName} 不支持按主题绑定来源。"));
@@ -891,7 +1511,8 @@ public static partial class IngestionTaskValidator
         string protocol,
         AcquisitionProtocolCapability capability,
         string pathPrefix,
-        List<AcquisitionValidationError> found)
+        List<AcquisitionValidationError> found,
+        string? melsecMc3EFamily = null)
     {
         var result = new List<AcquisitionValueMapping>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -930,18 +1551,33 @@ public static partial class IngestionTaskValidator
                     $"{path}.defaultValue", "缺失时使用默认值必须明确配置默认值。"));
             if (!string.IsNullOrWhiteSpace(raw.QualityPath))
             {
-                if (capability.Addressing == AcquisitionAddressingKinds.NodeId && raw.QualityPath != "$status")
+                var qualitySelector = capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem
+                    ? raw.QualityPath
+                    : raw.QualityPath.Trim();
+                if (capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem)
+                    found.Add(new AcquisitionValidationError(
+                        $"{path}.qualityPath", "MTConnect 质量由观察值的 UNAVAILABLE 状态提供，首期不支持单独的质量 DataItem 路径。"));
+                else if (capability.Addressing == AcquisitionAddressingKinds.EthernetIpTag)
+                    found.Add(new AcquisitionValidationError(
+                        $"{path}.qualityPath", "EtherNet/IP 当前不支持未声明类型的质量标签映射。"));
+                else if (capability.Addressing == AcquisitionAddressingKinds.BacnetObject)
+                    found.Add(new AcquisitionValidationError(
+                        $"{path}.qualityPath", "BACnet/IP 首期不支持额外映射质量属性。"));
+                else if (capability.Addressing == AcquisitionAddressingKinds.NodeId && raw.QualityPath != "$status")
                     found.Add(new AcquisitionValidationError(
                         $"{path}.qualityPath", "OPC UA 质量来源必须使用服务器状态标记 $status。"));
                 else if (raw.QualityPath != "$status")
-                    ValidateSelectorSyntax(capability, raw.QualityPath.Trim(), $"{path}.qualityPath", found);
+                    ValidateSelectorSyntax(
+                        capability, qualitySelector, $"{path}.qualityPath", found, melsecMc3EFamily);
             }
             else if (raw.AcceptedQualityValues.Count > 0)
                 found.Add(new AcquisitionValidationError(
                     $"{path}.qualityPath", "配置可接受质量值时必须指定质量字段来源。"));
 
             var registerAddressing = capability.Addressing is
-                AcquisitionAddressingKinds.ModbusRegister or AcquisitionAddressingKinds.MelsecDevice;
+                AcquisitionAddressingKinds.ModbusRegister or AcquisitionAddressingKinds.MelsecDevice or
+                AcquisitionAddressingKinds.MelsecMc3EDevice or AcquisitionAddressingKinds.SiemensS7Address or AcquisitionAddressingKinds.EthernetIpTag or
+                AcquisitionAddressingKinds.OmronFinsAddress or AcquisitionAddressingKinds.SnmpOid;
             if (!capability.SourceDataTypes.Contains(raw.SourceDataType))
                 found.Add(new AcquisitionValidationError(
                     $"{path}.sourceDataType",
@@ -959,7 +1595,9 @@ public static partial class IngestionTaskValidator
                 SourceDataType = registerAddressing ? raw.SourceDataType : "auto",
                 SourceUnit = CleanOptional(raw.SourceUnit),
                 Topic = capability.SupportsPerTopicMapping ? CleanOptional(raw.Topic) : null,
-                QualityPath = CleanOptional(raw.QualityPath),
+                QualityPath = capability.Addressing is AcquisitionAddressingKinds.MtConnectDataItem or AcquisitionAddressingKinds.BacnetObject
+                    ? null
+                    : CleanOptional(NormalizeSelector(raw.QualityPath, capability, melsecMc3EFamily)),
                 AcceptedQualityValues = raw.AcceptedQualityValues
                     .Where(static item => !string.IsNullOrWhiteSpace(item))
                     .Select(static item => item.Trim())
@@ -969,7 +1607,7 @@ public static partial class IngestionTaskValidator
                 MissingValueBehavior = raw.MissingValueBehavior.Trim().ToLowerInvariant(),
                 DefaultValue = CleanOptional(raw.DefaultValue)
             };
-            mapping = NormalizeAddressing(mapping, protocol, capability, path, found);
+            mapping = NormalizeAddressing(mapping, protocol, capability, path, found, melsecMc3EFamily);
             result.Add(mapping);
         }
 
@@ -981,7 +1619,8 @@ public static partial class IngestionTaskValidator
         string protocol,
         AcquisitionProtocolCapability capability,
         string path,
-        List<AcquisitionValidationError> found)
+        List<AcquisitionValidationError> found,
+        string? melsecMc3EFamily)
     {
         switch (capability.Addressing)
         {
@@ -1050,6 +1689,174 @@ public static partial class IngestionTaskValidator
                     };
                 }
 
+            case AcquisitionAddressingKinds.MelsecMc3EDevice:
+                {
+                    var selector = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseMelsecMc3E(
+                            selector, mapping.SourceDataType, melsecMc3EFamily, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = selector };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatMelsecMc3E(point),
+                        SourceDataType = point.DataType,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = (ushort)Math.Max(1, point.WordCount),
+                        SourceByteLength = null,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = point.BitIndex
+                    };
+                }
+
+            case AcquisitionAddressingKinds.SiemensS7Address:
+                {
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseSiemensS7Address(
+                            source, mapping.SourceDataType, mapping.SourceByteLength, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = source };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = source.ToUpperInvariant(),
+                        SourceDataType = point.DataType,
+                        SourceByteLength = point.DataType == "string"
+                            ? (ushort)(point.ByteCount - 2)
+                            : null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = null
+                    };
+                }
+
+            case AcquisitionAddressingKinds.EthernetIpTag:
+                {
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseEtherNetIpTag(source, out var tag, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = source };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = tag,
+                        SourceByteLength = null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = null
+                    };
+                }
+
+            case AcquisitionAddressingKinds.OmronFinsAddress:
+                {
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseOmronFins(
+                            source, mapping.SourceDataType, mapping.WordOrder, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = source };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatOmronFins(point),
+                        SourceDataType = point.DataType,
+                        SourceByteLength = null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = point.BitIndex,
+                        WordOrder = point.WordOrder
+                    };
+                }
+
+            case AcquisitionAddressingKinds.MtConnectDataItem:
+                {
+                    var selector = mapping.SourcePath ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseMtConnectDataItem(selector, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = selector };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatMtConnectDataItem(point),
+                        SourceDataType = "auto",
+                        SourceByteLength = null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = null
+                    };
+                }
+
+            case AcquisitionAddressingKinds.BacnetObject:
+                {
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseBacnetObject(source, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = source };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatBacnetObject(point),
+                        SourceDataType = "auto",
+                        SourceByteLength = null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = null,
+                        QualityPath = null
+                    };
+                }
+
+            case AcquisitionAddressingKinds.SnmpOid:
+                {
+                    var source = mapping.SourcePath?.Trim() ?? string.Empty;
+                    if (!AcquisitionSelectors.TryParseSnmpOid(source, out var point, out var error))
+                    {
+                        found.Add(new AcquisitionValidationError($"{path}.sourcePath", error));
+                        return mapping with { SourcePath = source };
+                    }
+
+                    return mapping with
+                    {
+                        SourcePath = AcquisitionSelectors.FormatSnmpOid(point),
+                        SourceByteLength = null,
+                        ModbusArea = null,
+                        ModbusAddress = null,
+                        ModbusQuantity = 1,
+                        MelsecDevice = null,
+                        MelsecAddress = null,
+                        BitIndex = null,
+                        ByteOrder = "big-endian",
+                        WordOrder = "high-low"
+                    };
+                }
+
             default:
                 {
                     var source = mapping.SourcePath?.Trim() ?? string.Empty;
@@ -1058,7 +1865,7 @@ public static partial class IngestionTaskValidator
                             $"{path}.sourcePath",
                             capability.Addressing == AcquisitionAddressingKinds.NodeId ? "节点编号不能为空。" : "设备字段路径不能为空。"));
                     else
-                        ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found);
+                        ValidateSelectorSyntax(capability, source, $"{path}.sourcePath", found, melsecMc3EFamily);
                     if (mapping.BitIndex is not null && !capability.SupportsBitAddressing)
                         found.Add(new AcquisitionValidationError(
                             $"{path}.bitIndex", $"{capability.DisplayName} 不支持位提取。"));
@@ -1074,11 +1881,249 @@ public static partial class IngestionTaskValidator
         }
     }
 
+    private static void ValidateEtherNetIpPointTypes(
+        IngestionTask task,
+        IReadOnlyList<AcquisitionValueMapping> mappings,
+        AcquisitionProtocolCapability capability,
+        List<AcquisitionValidationError> found)
+    {
+        if (capability.Addressing != AcquisitionAddressingKinds.EthernetIpTag)
+            return;
+
+        var configuredTags = mappings.Select(static mapping => mapping.SourcePath)
+            .Concat(task.TimestampMode == "source" && !string.IsNullOrWhiteSpace(task.TimestampPath)
+                ? [task.TimestampPath]
+                : [])
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Select(static path => path.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (configuredTags > 256)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"EtherNet/IP 单任务最多读取 256 个不同标签，当前配置 {configuredTags} 个。"));
+
+        foreach (var group in mappings.Select((mapping, index) => (mapping, index))
+                     .GroupBy(item => item.mapping.SourcePath, StringComparer.Ordinal))
+        {
+            var types = group.Select(item => item.mapping.SourceDataType).Distinct(StringComparer.Ordinal).ToArray();
+            if (types.Length <= 1)
+                continue;
+            foreach (var item in group)
+                found.Add(new AcquisitionValidationError(
+                    $"valueMappings[{item.index}].sourceDataType",
+                    $"EtherNet/IP 标签 {group.Key} 在同一任务中不能声明多个源数据类型：{string.Join("、", types)}。"));
+        }
+    }
+
+    private static void ValidateOmronFinsPointLimit(
+        IngestionTask task,
+        string protocol,
+        List<AcquisitionValidationError> found)
+    {
+        if (protocol is not (AcquisitionProtocols.OmronFinsTcp or AcquisitionProtocols.OmronFinsUdp)) return;
+        var protocolName = protocol == AcquisitionProtocols.OmronFinsUdp ? "Omron FINS/UDP" : "Omron FINS/TCP";
+        var declarations = new List<(string Path, string? Selector, string? DataType, string? WordOrder)>();
+        for (var index = 0; index < task.ValueMappings.Count; index++)
+        {
+            var mapping = task.ValueMappings[index];
+            declarations.Add(($"valueMappings[{index}].sourcePath", mapping.SourcePath, mapping.SourceDataType, mapping.WordOrder));
+            declarations.Add(($"valueMappings[{index}].qualityPath", mapping.QualityPath, null, null));
+        }
+        for (var index = 0; index < task.ContextMappings.Count; index++)
+            declarations.Add(($"contextMappings[{index}].sourcePath", task.ContextMappings[index].SourcePath, null, null));
+        if (task.TimestampMode == "source")
+            declarations.Add(("timestampPath", task.TimestampPath, null, null));
+        if (task.ProcessSpecification is { } specification)
+        {
+            declarations.Add(("processSpecification.idPath", specification.IdPath, null, null));
+            declarations.Add(("processSpecification.versionPath", specification.VersionPath, null, null));
+            declarations.Add(("processSpecification.namePath", specification.NamePath, null, null));
+            for (var index = 0; index < specification.ParameterMappings.Count; index++)
+            {
+                var mapping = specification.ParameterMappings[index];
+                declarations.Add(($"processSpecification.parameterMappings[{index}].sourcePath", mapping.SourcePath, mapping.SourceDataType, mapping.WordOrder));
+                declarations.Add(($"processSpecification.parameterMappings[{index}].qualityPath", mapping.QualityPath, null, null));
+            }
+        }
+
+        var distinctSelectors = new HashSet<string>(StringComparer.Ordinal);
+        var pointsByAddress = new Dictionary<string, (AcquisitionSelectors.OmronFinsPoint Point, string Path)>(StringComparer.Ordinal);
+        foreach (var declaration in declarations)
+        {
+            if (string.IsNullOrWhiteSpace(declaration.Selector)) continue;
+            if (!AcquisitionSelectors.TryParseOmronFins(
+                    declaration.Selector, declaration.DataType, declaration.WordOrder, out var point, out _))
+            {
+                distinctSelectors.Add(declaration.Selector.Trim());
+                continue;
+            }
+
+            var canonicalSelector = AcquisitionSelectors.FormatOmronFins(point);
+            distinctSelectors.Add(canonicalSelector);
+            var addressKey = point.BitIndex is { } bit
+                ? $"{point.Area}:{point.Address}:bit:{bit}"
+                : $"{point.Area}:{point.Address}:word";
+            if (pointsByAddress.TryGetValue(addressKey, out var existing) &&
+                (existing.Point.DataType != point.DataType || existing.Point.WordOrder != point.WordOrder))
+            {
+                found.Add(new AcquisitionValidationError(
+                    declaration.Path,
+                    $"{protocolName} 地址 {canonicalSelector} 与 {existing.Path} 的数据类型或多字字序冲突。"));
+            }
+            else
+            {
+                pointsByAddress.TryAdd(addressKey, (point, declaration.Path));
+            }
+        }
+
+        var selectorCount = distinctSelectors.Count;
+        if (selectorCount > 256)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"{protocolName} 单任务最多回读 256 个不同点位，当前配置 {selectorCount} 个。"));
+    }
+
+    private static void ValidateMtConnectPointLimit(
+        IngestionTask task,
+        string protocol,
+        List<AcquisitionValidationError> found)
+    {
+        if (protocol != AcquisitionProtocols.MtConnect) return;
+
+        const int maximumDataItems = 128;
+        const int maximumFilterPathLength = 8 * 1024;
+        var dataItemIds = new HashSet<string>(StringComparer.Ordinal);
+        void AddSelector(string? selector)
+        {
+            if (AcquisitionSelectors.TryParseMtConnectDataItem(selector, out var point, out _))
+                dataItemIds.Add(point.Id);
+        }
+
+        foreach (var mapping in task.ValueMappings)
+            AddSelector(mapping.SourcePath);
+        foreach (var mapping in task.ContextMappings)
+            AddSelector(mapping.SourcePath);
+        if (task.ProcessSpecification is { } specification)
+        {
+            AddSelector(specification.IdPath);
+            AddSelector(specification.VersionPath);
+            AddSelector(specification.NamePath);
+            foreach (var mapping in specification.ParameterMappings)
+                AddSelector(mapping.SourcePath);
+        }
+
+        if (dataItemIds.Count > maximumDataItems)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"MTConnect 单任务最多配置 {maximumDataItems} 个不同 DataItem ID，当前配置 {dataItemIds.Count} 个。"));
+
+        // Keep the generated /current path? filter under the same bound enforced by the Edge transport.
+        var pathExpression = $"//DataItem[{string.Join(" or ", dataItemIds.Select(static id => $"@id='{id}'"))}]";
+        var filterPathLength = "current?path=".Length + Uri.EscapeDataString(pathExpression).Length;
+        if (filterPathLength > maximumFilterPathLength)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"MTConnect DataItem 筛选路径预算不能超过 {maximumFilterPathLength} 个字符。"));
+    }
+
+    private static void ValidateBacnetPointLimit(
+        IngestionTask task,
+        string protocol,
+        List<AcquisitionValidationError> found)
+    {
+        if (protocol is not (AcquisitionProtocols.BacnetIp or AcquisitionProtocols.BacnetMstp)) return;
+        const int maximumObjects = 128;
+        var selectors = new HashSet<string>(
+            task.ValueMappings.Select(static mapping => mapping.SourcePath)
+                .Concat(task.ContextMappings.Select(static mapping => mapping.SourcePath)),
+            StringComparer.Ordinal);
+        if (task.ProcessSpecification is { } specification)
+        {
+            selectors.UnionWith(new string?[]
+            {
+                specification.IdPath,
+                specification.VersionPath,
+                specification.NamePath
+            }.OfType<string>());
+            selectors.UnionWith(specification.ParameterMappings.Select(static mapping => mapping.SourcePath));
+        }
+        var count = selectors
+            .Where(static selector => !string.IsNullOrWhiteSpace(selector))
+            .Select(static selector => selector.Trim())
+            .Count();
+        if (count > maximumObjects)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"BACnet 单任务最多读取 {maximumObjects} 个不同对象，当前配置 {count} 个。"));
+    }
+
+    private static void ValidateSnmpPointLimit(
+        IngestionTask task,
+        string protocol,
+        List<AcquisitionValidationError> found)
+    {
+        if (protocol != AcquisitionProtocols.Snmp) return;
+        var selectors = task.ValueMappings.Select(static mapping => mapping.SourcePath)
+            .Concat(task.ValueMappings.Select(static mapping => mapping.QualityPath))
+            .Concat(task.ContextMappings.Select(static mapping => mapping.SourcePath))
+            .ToList();
+        if (task.TimestampMode == "source") selectors.Add(task.TimestampPath);
+        if (!string.IsNullOrWhiteSpace(task.SequencePath)) selectors.Add(task.SequencePath);
+        if (task.ProcessSpecification is { } specification)
+        {
+            selectors.Add(specification.IdPath);
+            selectors.Add(specification.VersionPath);
+            selectors.Add(specification.NamePath);
+            selectors.AddRange(specification.ParameterMappings.Select(static mapping => mapping.SourcePath));
+            selectors.AddRange(specification.ParameterMappings.Select(static mapping => mapping.QualityPath));
+        }
+
+        var count = selectors.Where(static selector => !string.IsNullOrWhiteSpace(selector))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (count > 128)
+            found.Add(new AcquisitionValidationError(
+                "valueMappings",
+                $"SNMP 单任务最多读取 128 个不同 OID，当前配置 {count} 个。"));
+
+        foreach (var group in task.ValueMappings.Select((mapping, index) => (mapping, index))
+                     .GroupBy(static item => item.mapping.SourcePath, StringComparer.Ordinal))
+        {
+            var types = group.Select(static item => item.mapping.SourceDataType).Distinct(StringComparer.Ordinal).ToArray();
+            if (types.Length <= 1) continue;
+            foreach (var item in group)
+                found.Add(new AcquisitionValidationError(
+                    $"valueMappings[{item.index}].sourceDataType",
+                    $"SNMP OID {group.Key} 在同一任务中不能声明多个源数据类型：{string.Join("、", types)}。"));
+        }
+    }
+
+    private static bool TryParseUnicastIpv4(string host, out IPAddress address)
+    {
+        address = IPAddress.Any;
+        var normalizedHost = host?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedHost) || normalizedHost.Any(char.IsControl) ||
+            !IPAddress.TryParse(normalizedHost, out var parsed) ||
+            !string.Equals(normalizedHost, parsed.ToString(), StringComparison.Ordinal) ||
+            parsed.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+
+        var bytes = parsed.GetAddressBytes();
+        if (IPAddress.IsLoopback(parsed) || parsed.Equals(IPAddress.Any) || parsed.Equals(IPAddress.Broadcast) ||
+            bytes[0] is 0 or >= 224 || bytes[0] == 169 && bytes[1] == 254)
+            return false;
+
+        address = parsed;
+        return true;
+    }
+
     private static void ValidateSelectorSyntax(
         AcquisitionProtocolCapability capability,
         string selector,
         string path,
-        List<AcquisitionValidationError> found)
+        List<AcquisitionValidationError> found,
+        string? melsecMc3EFamily = null)
     {
         switch (capability.Addressing)
         {
@@ -1089,6 +2134,37 @@ public static partial class IngestionTaskValidator
             case AcquisitionAddressingKinds.MelsecDevice:
                 if (!AcquisitionSelectors.TryParseMelsec(selector, out _, out var melsecError))
                     found.Add(new AcquisitionValidationError(path, melsecError));
+                break;
+            case AcquisitionAddressingKinds.MelsecMc3EDevice:
+                if (!AcquisitionSelectors.TryParseMelsecMc3E(
+                        selector, dataType: null, family: melsecMc3EFamily, out _, out var melsecMc3EError))
+                    found.Add(new AcquisitionValidationError(path, melsecMc3EError));
+                break;
+            case AcquisitionAddressingKinds.SiemensS7Address:
+                if (!AcquisitionSelectors.TryParseSiemensS7Address(
+                        selector, dataType: null, sourceByteLength: null, out _, out var siemensError))
+                    found.Add(new AcquisitionValidationError(path, siemensError));
+                break;
+            case AcquisitionAddressingKinds.EthernetIpTag:
+                if (!AcquisitionSelectors.TryParseEtherNetIpTag(selector, out _, out var etherNetIpError))
+                    found.Add(new AcquisitionValidationError(path, etherNetIpError));
+                break;
+            case AcquisitionAddressingKinds.OmronFinsAddress:
+                if (!AcquisitionSelectors.TryParseOmronFins(
+                        selector, dataType: null, wordOrder: null, out _, out var omronFinsError))
+                    found.Add(new AcquisitionValidationError(path, omronFinsError));
+                break;
+            case AcquisitionAddressingKinds.MtConnectDataItem:
+                if (!AcquisitionSelectors.TryParseMtConnectDataItem(selector, out _, out var mtConnectError))
+                    found.Add(new AcquisitionValidationError(path, mtConnectError));
+                break;
+            case AcquisitionAddressingKinds.BacnetObject:
+                if (!AcquisitionSelectors.TryParseBacnetObject(selector, out _, out var bacnetError))
+                    found.Add(new AcquisitionValidationError(path, bacnetError));
+                break;
+            case AcquisitionAddressingKinds.SnmpOid:
+                if (!AcquisitionSelectors.TryParseSnmpOid(selector, out _, out var snmpError))
+                    found.Add(new AcquisitionValidationError(path, snmpError));
                 break;
             case AcquisitionAddressingKinds.NodeId:
                 if (!IsPlausibleNodeId(selector, out var nodeError))
@@ -1101,23 +2177,64 @@ public static partial class IngestionTaskValidator
         }
     }
 
+    private static bool IsValidAcquisitionSerialPortName(string? portName)
+    {
+        var value = portName?.Trim() ?? string.Empty;
+        if (value.Length == 0 || value.Any(char.IsControl))
+            return false;
+
+        if (Regex.IsMatch(
+                value,
+                @"^(?:COM[1-9][0-9]{0,3}|\\\\\.\\COM[1-9][0-9]{0,3})$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return true;
+
+        var segments = value.Split('/');
+        return segments.Length >= 3 && segments[0].Length == 0 && segments[1] == "dev" &&
+               segments.Skip(2).All(static segment => segment.Length > 0 && segment is not ("." or ".."));
+    }
+
     private static AcquisitionProcessSpecificationMapping? NormalizeProcessSpecification(
         AcquisitionProcessSpecificationMapping? processSpecification,
         string protocol,
         AcquisitionProtocolCapability capability,
-        List<AcquisitionValidationError> found)
+        List<AcquisitionValidationError> found,
+        string? melsecMc3EFamily)
     {
         if (processSpecification is null) return null;
+        if (capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem)
+        {
+            found.Add(new AcquisitionValidationError(
+                "processSpecification",
+                "MTConnect 首期不支持设备配方版本识别或参数对象映射。"));
+            return processSpecification;
+        }
+        if (capability.Addressing == AcquisitionAddressingKinds.EthernetIpTag)
+        {
+            found.Add(new AcquisitionValidationError(
+                "processSpecification",
+                "EtherNet/IP 当前不支持源数据类型未显式声明的配方版本字段。"));
+            return processSpecification;
+        }
+        var idPath = capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem
+            ? processSpecification.IdPath ?? string.Empty
+            : processSpecification.IdPath?.Trim() ?? string.Empty;
+        var versionPath = capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem
+            ? processSpecification.VersionPath ?? string.Empty
+            : processSpecification.VersionPath?.Trim() ?? string.Empty;
+        var namePath = capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem
+            ? processSpecification.NamePath
+            : processSpecification.NamePath?.Trim();
         if (string.IsNullOrWhiteSpace(processSpecification.IdPath))
             found.Add(new AcquisitionValidationError("processSpecification.idPath", "配方版本编号来源不能为空。"));
         else
-            ValidateSelectorSyntax(capability, processSpecification.IdPath.Trim(), "processSpecification.idPath", found);
+            ValidateSelectorSyntax(capability, idPath, "processSpecification.idPath", found, melsecMc3EFamily);
         if (string.IsNullOrWhiteSpace(processSpecification.VersionPath))
             found.Add(new AcquisitionValidationError("processSpecification.versionPath", "配方版本号来源不能为空。"));
         else
-            ValidateSelectorSyntax(capability, processSpecification.VersionPath.Trim(), "processSpecification.versionPath", found);
+            ValidateSelectorSyntax(capability, versionPath, "processSpecification.versionPath", found, melsecMc3EFamily);
         if (!string.IsNullOrWhiteSpace(processSpecification.NamePath))
-            ValidateSelectorSyntax(capability, processSpecification.NamePath.Trim(), "processSpecification.namePath", found);
+            ValidateSelectorSyntax(capability, namePath ?? string.Empty, "processSpecification.namePath", found, melsecMc3EFamily);
         var processSpecificationEventType = processSpecification.EventType?.Trim() ?? string.Empty;
         if (!EventTypePattern().IsMatch(processSpecificationEventType))
             found.Add(new AcquisitionValidationError("processSpecification.eventType", "配方版本事件类型格式无效，例如 process.specification.applied。"));
@@ -1127,13 +2244,13 @@ public static partial class IngestionTaskValidator
             ? trimmedParametersPath
             : ".";
         var parameters = NormalizeValueMappings(
-            processSpecification.ParameterMappings, protocol, capability, "processSpecification.parameterMappings", found);
+            processSpecification.ParameterMappings, protocol, capability, "processSpecification.parameterMappings", found, melsecMc3EFamily);
         return processSpecification with
         {
             EventType = processSpecificationEventType,
-            IdPath = processSpecification.IdPath?.Trim() ?? string.Empty,
-            VersionPath = processSpecification.VersionPath?.Trim() ?? string.Empty,
-            NamePath = CleanOptional(processSpecification.NamePath),
+            IdPath = NormalizeSelector(processSpecification.IdPath, capability, melsecMc3EFamily),
+            VersionPath = NormalizeSelector(processSpecification.VersionPath, capability, melsecMc3EFamily),
+            NamePath = CleanOptional(NormalizeSelector(processSpecification.NamePath, capability, melsecMc3EFamily)),
             ParametersPath = parametersPath,
             ParameterMappings = parameters
         };
@@ -1153,6 +2270,35 @@ public static partial class IngestionTaskValidator
         }
 
         return result;
+    }
+
+    private static void ValidateEquipmentContext(
+        IngestionTask value,
+        IReadOnlyDictionary<string, string> staticContext,
+        IReadOnlyList<AcquisitionContextMapping> contextMappings,
+        List<AcquisitionValidationError> found)
+    {
+        var equipmentId = CleanOptional(value.EquipmentId);
+        if (equipmentId is null)
+            return;
+
+        if (staticContext.TryGetValue("equipment_id", out var configuredEquipmentId) &&
+            !string.Equals(configuredEquipmentId, equipmentId, StringComparison.Ordinal))
+        {
+            found.Add(new AcquisitionValidationError(
+                "staticContext.equipment_id",
+                "固定上下文中的设备编号必须与正式 EquipmentId 一致。"));
+        }
+
+        for (var index = 0; index < contextMappings.Count; index++)
+        {
+            if (!string.Equals(contextMappings[index].ContextKey, "equipment_id", StringComparison.Ordinal))
+                continue;
+            found.Add(new AcquisitionValidationError(
+                $"contextMappings[{index}].contextKey",
+                "设置正式 EquipmentId 后，不能再从采集报文动态映射 equipment_id。"));
+            break;
+        }
     }
 
     private static void ValidateAgainstModel(
@@ -1349,6 +2495,17 @@ public static partial class IngestionTaskValidator
             static pair => pair.Value.Trim(),
             StringComparer.OrdinalIgnoreCase);
 
+    private static void AddDuplicateHeaderErrors(
+        IReadOnlyDictionary<string, string> headers,
+        string path,
+        List<AcquisitionValidationError> found)
+    {
+        foreach (var duplicate in headers.Keys
+                     .GroupBy(static name => name.Trim(), StringComparer.OrdinalIgnoreCase)
+                     .Where(static group => group.Count() > 1))
+            found.Add(new AcquisitionValidationError(path, $"请求头名称 {duplicate.Key} 重复（忽略大小写）。"));
+    }
+
     public static bool IsValidMqttTopicFilter(string topic, out string error)
         => MqttTopicFilter.IsValid(topic, out error);
 
@@ -1446,6 +2603,24 @@ public static partial class IngestionTaskValidator
             AddressBase = value.AddressBase.Trim().ToLowerInvariant()
         };
 
+    private static ModbusRtuConnection? NormalizeModbusRtu(ModbusRtuConnection? value)
+        => value is null ? null : value with
+        {
+            PortName = value.PortName.Trim(),
+            Parity = value.Parity.Trim().ToLowerInvariant(),
+            StopBits = value.StopBits.Trim().ToLowerInvariant(),
+            AddressBase = value.AddressBase.Trim().ToLowerInvariant()
+        };
+
+    private static ModbusAsciiConnection? NormalizeModbusAscii(ModbusAsciiConnection? value)
+        => value is null ? null : value with
+        {
+            PortName = value.PortName.Trim(),
+            Parity = value.Parity.Trim().ToLowerInvariant(),
+            StopBits = value.StopBits.Trim().ToLowerInvariant(),
+            AddressBase = value.AddressBase.Trim().ToLowerInvariant()
+        };
+
     private static McA1EConnection? NormalizeMelsecA1E(McA1EConnection? value)
         => value is null ? null : value with
         {
@@ -1454,11 +2629,72 @@ public static partial class IngestionTaskValidator
             WordOrderLayout = value.WordOrderLayout.Trim().ToUpperInvariant()
         };
 
+    private static Mc3EConnection? NormalizeMelsecMc3E(Mc3EConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            Family = value.Family.Trim().ToLowerInvariant()
+        };
+
+    private static SiemensS7Connection? NormalizeSiemensS7(SiemensS7Connection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            CpuType = value.CpuType.Trim()
+        };
+
+    private static EtherNetIpConnection? NormalizeEtherNetIp(EtherNetIpConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            ControllerFamily = value.ControllerFamily.Trim().ToLowerInvariant(),
+            Path = value.Path.Trim()
+        };
+
+    private static OmronFinsTcpConnection? NormalizeOmronFinsTcp(OmronFinsTcpConnection? value)
+        => value is null ? null : value with { Host = value.Host.Trim() };
+
+    private static OmronFinsUdpConnection? NormalizeOmronFinsUdp(OmronFinsUdpConnection? value)
+        => value is null ? null : value with { Host = value.Host.Trim() };
+
+    private static MtConnectConnection? NormalizeMtConnect(MtConnectConnection? value)
+        => value is null ? null : value with
+        {
+            BaseUrl = value.BaseUrl.Trim().TrimEnd('/'),
+            Headers = NormalizeHeaders(value.Headers),
+            HeaderSecretRefs = NormalizeHeaders(value.HeaderSecretRefs)
+        };
+
+    private static BacnetIpConnection? NormalizeBacnetIp(BacnetIpConnection? value)
+        => value is null ? null : value with { Host = value.Host.Trim() };
+
+    private static BacnetMstpConnection? NormalizeBacnetMstp(BacnetMstpConnection? value)
+        => value is null ? null : value with { PortName = value.PortName.Trim() };
+
+    private static SnmpConnection? NormalizeSnmp(SnmpConnection? value)
+        => value is null ? null : value with
+        {
+            Host = value.Host.Trim(),
+            Version = value.Version.Trim().ToLowerInvariant(),
+            BrowseRootOid = AcquisitionSelectors.TryParseSnmpOid(value.BrowseRootOid, out var root, out _)
+                ? AcquisitionSelectors.FormatSnmpOid(root)
+                : value.BrowseRootOid.Trim(),
+            CommunitySecretRef = CleanOptional(value.CommunitySecretRef),
+            UserName = CleanOptional(value.UserName),
+            SecurityLevel = value.SecurityLevel.Trim(),
+            AuthenticationProtocol = CleanOptional(value.AuthenticationProtocol?.Trim().ToLowerInvariant()),
+            AuthenticationSecretRef = CleanOptional(value.AuthenticationSecretRef),
+            PrivacyProtocol = CleanOptional(value.PrivacyProtocol?.Trim().ToLowerInvariant()),
+            PrivacySecretRef = CleanOptional(value.PrivacySecretRef),
+            ContextName = CleanOptional(value.ContextName)
+        };
+
     private static AcquisitionLifecycleMapping? NormalizeLifecycle(AcquisitionLifecycleMapping? value)
         => value is null ? null : value with
         {
             Mode = value.Mode.Trim().ToLowerInvariant(),
             ActiveContextKey = CleanOptional(value.ActiveContextKey),
+            ActiveCondition = value.ActiveCondition?.Trim().ToLowerInvariant() ?? string.Empty,
             ActiveValue = value.ActiveValue?.Trim() ?? string.Empty,
             StartedEventType = value.StartedEventType?.Trim() ?? string.Empty,
             CompletedEventType = value.CompletedEventType?.Trim() ?? string.Empty,
@@ -1472,12 +2708,43 @@ public static partial class IngestionTaskValidator
         var normalized = value?.Trim().ToLowerInvariant();
         if (normalized != AcquisitionTimestampEncodings.Auto)
             return normalized ?? AcquisitionTimestampEncodings.Auto;
-        return capability.Addressing is AcquisitionAddressingKinds.ModbusRegister or AcquisitionAddressingKinds.MelsecDevice
+        if (capability.Addressing == AcquisitionAddressingKinds.SnmpOid)
+            return AcquisitionTimestampEncodings.Auto;
+        return capability.Addressing is AcquisitionAddressingKinds.ModbusRegister or AcquisitionAddressingKinds.MelsecDevice or AcquisitionAddressingKinds.MelsecMc3EDevice or AcquisitionAddressingKinds.SiemensS7Address or AcquisitionAddressingKinds.EthernetIpTag or AcquisitionAddressingKinds.OmronFinsAddress
             ? AcquisitionTimestampEncodings.UnixMilliseconds
             : AcquisitionTimestampEncodings.Iso8601;
     }
 
     private static string NormalizeCode(string? value) => value?.Trim().ToLowerInvariant() ?? string.Empty;
+
+    private static string NormalizeSelector(
+        string? value,
+        AcquisitionProtocolCapability capability,
+        string? melsecMc3EFamily = null)
+    {
+        var selector = capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem
+            ? value ?? string.Empty
+            : value?.Trim() ?? string.Empty;
+        if (capability.Addressing == AcquisitionAddressingKinds.MtConnectDataItem &&
+            AcquisitionSelectors.TryParseMtConnectDataItem(selector, out var mtConnectPoint, out _))
+            return AcquisitionSelectors.FormatMtConnectDataItem(mtConnectPoint);
+        if (capability.Addressing == AcquisitionAddressingKinds.BacnetObject &&
+            AcquisitionSelectors.TryParseBacnetObject(selector, out var bacnetPoint, out _))
+            return AcquisitionSelectors.FormatBacnetObject(bacnetPoint);
+        if (capability.Addressing == AcquisitionAddressingKinds.SnmpOid &&
+            AcquisitionSelectors.TryParseSnmpOid(selector, out var snmpPoint, out _))
+            return AcquisitionSelectors.FormatSnmpOid(snmpPoint);
+        if (capability.Addressing == AcquisitionAddressingKinds.SiemensS7Address)
+            return selector.ToUpperInvariant();
+        if (capability.Addressing == AcquisitionAddressingKinds.MelsecMc3EDevice &&
+            AcquisitionSelectors.TryParseMelsecMc3E(
+                selector, dataType: null, family: melsecMc3EFamily, out var mc3EPoint, out _))
+            return AcquisitionSelectors.FormatMelsecMc3E(mc3EPoint);
+        return capability.Addressing == AcquisitionAddressingKinds.OmronFinsAddress &&
+               AcquisitionSelectors.TryParseOmronFins(selector, null, null, out var point, out _)
+            ? AcquisitionSelectors.FormatOmronFins(point)
+            : selector;
+    }
 
     private static string? CleanOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

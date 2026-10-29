@@ -1,8 +1,11 @@
 
+// Convert acquisition form state without conflating source connections, logical subjects, and machine context.
 import {
   ADDRESSING,
   isModbusBitArea,
   melsecDevice,
+  melsecMc3eSelectorError,
+  normalizeSnmpOid,
   protocolDescriptor,
   registerWordCount,
 } from "./protocolRegistry";
@@ -30,22 +33,43 @@ export function parseModelValue(value) {
   return { id, version: Number(version) || 1 };
 }
 
+function protocolManufacturerFor(protocol) {
+  if (["melsec-a1e", "melsec-mc-3e"].includes(protocol)) return "Mitsubishi";
+  if (protocol === "siemens-s7") return "Siemens";
+  if (protocol === "ethernet-ip") return "Rockwell Automation";
+  if (["omron-fins-tcp", "omron-fins-udp"].includes(protocol)) return "Omron";
+  return "";
+}
+
+function initialTimestampMode(value, protocol) {
+  if (protocol !== "snmp") return value.timestampMode || "source";
+  return value.timestampMode === "source" && normalizeSnmpOid(value.timestampPath)
+    ? "source"
+    : "edge-received";
+}
+
+function defaultDeviceKindForProtocol(protocol) {
+  if (protocol === "mtconnect") return "cnc";
+  if (protocol === "bacnet-ip") return "building-automation";
+  if (protocol === "snmp") return "network-infrastructure";
+  if (protocolManufacturerFor(protocol)) return "plc";
+  return "other";
+}
+
 export function createValueMapping(value = {}, protocol = "http-polling") {
   const descriptor = protocolDescriptor(protocol);
   const base = {
     dataItemCode: value.dataItemCode || "",
     sourcePath: value.sourcePath || "",
     required: value.required !== false,
-    sourceDataType: value.sourceDataType || (descriptor.dataTypes.includes("auto") ? "auto" : "int16"),
+    sourceDataType: value.sourceDataType || descriptor.defaultDataType || (descriptor.dataTypes.includes("auto") ? "auto" : "int16"),
     sourceByteLength: value.sourceByteLength ?? 16,
     sourceUnit: value.sourceUnit || "",
     scale: value.scale ?? 1,
     offset: value.offset ?? 0,
-    qualityPath: value.qualityPath || "",
-    acceptedQualityValues: (value.acceptedQualityValues || []).join(", "),
-    minimum: value.minimum ?? "",
-    maximum: value.maximum ?? "",
-    outOfRangeBehavior: value.outOfRangeBehavior || "reject",
+    qualityPath: [ADDRESSING.mtConnectDataItem, ADDRESSING.snmpOid].includes(descriptor.addressing) ? "" : value.qualityPath || "",
+    acceptedQualityValues: [ADDRESSING.mtConnectDataItem, ADDRESSING.snmpOid].includes(descriptor.addressing)
+      ? "" : (value.acceptedQualityValues || []).join(", "),
     missingValueBehavior: value.missingValueBehavior || "inherit",
     defaultValue: value.defaultValue ?? "",
     modbusArea: value.modbusArea || "holding-register",
@@ -64,6 +88,8 @@ export function createValueMapping(value = {}, protocol = "http-polling") {
 
 export function createIngestionTaskForm(value = {}, version) {
   const protocol = value.protocol || "http-polling";
+  const deviceKind = value.deviceProfile?.kind || defaultDeviceKindForProtocol(protocol);
+  const defaultManufacturer = deviceKind === "plc" ? protocolManufacturerFor(protocol) : "";
   const mappings = (value.valueMappings || []).length
     ? value.valueMappings.map(item => createValueMapping(item, protocol))
     : [createValueMapping({}, protocol)];
@@ -80,8 +106,14 @@ export function createIngestionTaskForm(value = {}, version) {
     protocol,
     dataModel: modelValue(value.dataModelId, value.dataModelVersion),
     source: value.source || "",
+    deviceProfile: {
+      kind: deviceKind,
+      manufacturer: value.deviceProfile?.manufacturer || defaultManufacturer,
+      model: value.deviceProfile?.model || "",
+    },
     subjectType: value.subjectType || "equipment",
     subjectId: value.subjectId || "",
+    equipmentId: value.equipmentId || "",
     httpPolling: {
       baseUrl: value.httpPolling?.baseUrl || "",
       snapshotPath: value.httpPolling?.snapshotPath || "/api/v1/snapshot",
@@ -91,6 +123,14 @@ export function createIngestionTaskForm(value = {}, version) {
       requestBody: value.httpPolling?.requestBody || "",
       headersText: headersToText(value.httpPolling?.headers),
       headerSecretRefsText: headersToText(value.httpPolling?.headerSecretRefs),
+    },
+    mtConnect: {
+      baseUrl: value.mtConnect?.baseUrl || "",
+      deviceNameOrUuid: value.mtConnect?.deviceNameOrUuid || "",
+      pollIntervalMs: value.mtConnect?.pollIntervalMs ?? 1000,
+      maximumResponseBytes: value.mtConnect?.maximumResponseBytes ?? 4194304,
+      headersText: headersToText(value.mtConnect?.headers),
+      headerSecretRefsText: headersToText(value.mtConnect?.headerSecretRefs),
     },
     mqtt: {
       host: value.mqtt?.host || "",
@@ -139,6 +179,28 @@ export function createIngestionTaskForm(value = {}, version) {
       pollIntervalMs: value.modbusTcp?.pollIntervalMs ?? 1000,
       maxMergeGap: value.modbusTcp?.maxMergeGap ?? 8,
     },
+    modbusRtu: {
+      portName: value.modbusRtu?.portName || "",
+      baudRate: value.modbusRtu?.baudRate ?? 9600,
+      dataBits: value.modbusRtu?.dataBits ?? 8,
+      parity: value.modbusRtu?.parity || "even",
+      stopBits: value.modbusRtu?.stopBits || "one",
+      unitId: value.modbusRtu?.unitId ?? 1,
+      addressBase: value.modbusRtu?.addressBase || "zero-based",
+      pollIntervalMs: value.modbusRtu?.pollIntervalMs ?? 1000,
+      maxMergeGap: value.modbusRtu?.maxMergeGap ?? 8,
+    },
+    modbusAscii: {
+      portName: value.modbusAscii?.portName || "",
+      baudRate: value.modbusAscii?.baudRate ?? 9600,
+      dataBits: value.modbusAscii?.dataBits ?? 7,
+      parity: value.modbusAscii?.parity || "even",
+      stopBits: value.modbusAscii?.stopBits || "one",
+      unitId: value.modbusAscii?.unitId ?? 1,
+      addressBase: value.modbusAscii?.addressBase || "zero-based",
+      pollIntervalMs: value.modbusAscii?.pollIntervalMs ?? 1000,
+      maxMergeGap: value.modbusAscii?.maxMergeGap ?? 8,
+    },
     melsecA1E: {
       host: value.melsecA1E?.host || "",
       port: value.melsecA1E?.port ?? 5551,
@@ -149,16 +211,88 @@ export function createIngestionTaskForm(value = {}, version) {
       wordOrderLayout: value.melsecA1E?.wordOrderLayout || "A",
       maxMergeGap: value.melsecA1E?.maxMergeGap ?? 8,
     },
+    melsecMc3E: {
+      host: value.melsecMc3E?.host || "",
+      port: value.melsecMc3E?.port ?? "",
+      family: value.melsecMc3E?.family || "",
+      networkNumber: value.melsecMc3E?.networkNumber ?? 0,
+      pcNumber: value.melsecMc3E?.pcNumber ?? 255,
+      moduleIoNumber: value.melsecMc3E?.moduleIoNumber ?? 1023,
+      stationNumber: value.melsecMc3E?.stationNumber ?? 0,
+      monitoringTimer: value.melsecMc3E?.monitoringTimer ?? 16,
+      pollIntervalMs: value.melsecMc3E?.pollIntervalMs ?? 1000,
+      maxMergeGap: value.melsecMc3E?.maxMergeGap ?? 0,
+    },
+    siemensS7: {
+      host: value.siemensS7?.host || "",
+      port: value.siemensS7?.port ?? 102,
+      cpuType: value.siemensS7?.cpuType || "S71200",
+      rack: value.siemensS7?.rack ?? 0,
+      slot: value.siemensS7?.slot ?? 0,
+      pollIntervalMs: value.siemensS7?.pollIntervalMs ?? 1000,
+      maxMergeGap: value.siemensS7?.maxMergeGap ?? 0,
+    },
+    ethernetIp: {
+      host: value.ethernetIp?.host || "",
+      port: value.ethernetIp?.port ?? 44818,
+      controllerFamily: value.ethernetIp?.controllerFamily || "control-logix",
+      path: value.ethernetIp?.path || "1,0",
+      pollIntervalMs: value.ethernetIp?.pollIntervalMs ?? 1000,
+    },
+    omronFinsTcp: {
+      host: value.omronFinsTcp?.host || "",
+      port: value.omronFinsTcp?.port ?? 9600,
+      pollIntervalMs: value.omronFinsTcp?.pollIntervalMs ?? 1000,
+    },
+    omronFinsUdp: {
+      host: value.omronFinsUdp?.host || "",
+      port: value.omronFinsUdp?.port ?? 9600,
+      clientNodeAddress: value.omronFinsUdp?.clientNodeAddress ?? "",
+      serverNodeAddress: value.omronFinsUdp?.serverNodeAddress ?? "",
+      pollIntervalMs: value.omronFinsUdp?.pollIntervalMs ?? 1000,
+    },
+    bacnetIp: {
+      host: value.bacnetIp?.host || "",
+      port: value.bacnetIp?.port ?? 47808,
+      deviceInstance: value.bacnetIp?.deviceInstance ?? "",
+      pollIntervalMs: value.bacnetIp?.pollIntervalMs ?? 1000,
+    },
+    bacnetMstp: {
+      portName: value.bacnetMstp?.portName || "",
+      baudRate: value.bacnetMstp?.baudRate ?? 38400,
+      localStationAddress: value.bacnetMstp?.localStationAddress ?? "",
+      maxMaster: value.bacnetMstp?.maxMaster ?? 127,
+      maxInfoFrames: value.bacnetMstp?.maxInfoFrames ?? 1,
+      deviceInstance: value.bacnetMstp?.deviceInstance ?? "",
+      pollIntervalMs: value.bacnetMstp?.pollIntervalMs ?? 1000,
+    },
+    snmp: {
+      host: value.snmp?.host || "",
+      port: value.snmp?.port ?? 161,
+      version: value.snmp?.version || "v3",
+      browseRootOid: value.snmp?.browseRootOid || "1.3.6.1.2.1.1",
+      contextName: value.snmp?.contextName || "",
+      communitySecretRef: value.snmp?.communitySecretRef || "",
+      userName: value.snmp?.userName || "",
+      securityLevel: value.snmp?.securityLevel || "authPriv",
+      authenticationProtocol: value.snmp?.authenticationProtocol || "sha256",
+      authenticationSecretRef: value.snmp?.authenticationSecretRef || "",
+      privacyProtocol: value.snmp?.privacyProtocol || "aes128",
+      privacySecretRef: value.snmp?.privacySecretRef || "",
+      pollIntervalMs: value.snmp?.pollIntervalMs ?? 5000,
+    },
     execution: {
       timeoutMs: value.execution?.timeoutMs ?? 10000,
       reconnectDelayMs: value.execution?.reconnectDelayMs ?? 5000,
       sourceIdentityStaleAfterMs: value.execution?.sourceIdentityStaleAfterMs ?? 60000,
       maximumFutureTimestampSkewMs: value.execution?.maximumFutureTimestampSkewMs ?? 300000,
     },
-    timestampMode: value.timestampMode || "source",
-    timestampPath: value.timestampPath || "timestamp",
+    timestampMode: initialTimestampMode(value, protocol),
+    timestampPath: protocol === "snmp" ? value.timestampPath || "" : value.timestampPath || "timestamp",
     timestampEncoding: value.timestampEncoding || "auto",
-    sequencePath: value.sequencePath ?? "",
+    sequencePath: protocol === "snmp"
+      ? normalizeSnmpOid(value.sequencePath) || value.sequencePath || ""
+      : value.sequencePath ?? "",
     sampleEventType: value.sampleEventType || "process.sample",
     staticContextPairs: pairsFromObject(value.staticContext),
     contextMappings: (value.contextMappings || []).map(item => ({
@@ -183,9 +317,9 @@ export function createIngestionTaskForm(value = {}, version) {
         namePath: "", parametersPath: ".", parameterMappings: [],
       },
     lifecycle: value.lifecycle
-      ? { enabled: true, ...value.lifecycle }
+      ? { enabled: true, ...value.lifecycle, activeCondition: value.lifecycle.activeCondition ?? "equals" }
       : {
-        enabled: false, mode: "discrete", activeContextKey: "run_active", activeValue: "1",
+        enabled: false, mode: "discrete", activeContextKey: "run_active", activeCondition: "equals", activeValue: "1",
         startedEventType: "process.execution.started", completedEventType: "process.execution.completed",
         stepChangedEventType: "process.stage_changed",
       },
@@ -194,21 +328,48 @@ export function createIngestionTaskForm(value = {}, version) {
 
 export function applyProtocolChange(form, protocol) {
   const descriptor = protocolDescriptor(protocol);
-  const fallbackType = descriptor.dataTypes.includes("auto") ? "auto" : "int16";
+  const fallbackType = descriptor.defaultDataType || (descriptor.dataTypes.includes("auto") ? "auto" : "int16");
+  const protocolManufacturer = protocolManufacturerFor(protocol);
+  const selectedManufacturer = form.deviceProfile?.manufacturer || "";
+  const knownProtocolManufacturers = ["Mitsubishi", "Siemens", "Rockwell Automation", "Rockwell", "Omron"];
+  const useDefaultProfile = !form.deviceProfile || form.deviceProfile.kind === "other";
+  const deviceProfile = protocol === "snmp" && useDefaultProfile
+    ? { ...form.deviceProfile, kind: "network-infrastructure" }
+    : protocol === "bacnet-ip" && (!form.deviceProfile || form.deviceProfile.kind === "other")
+    ? { ...form.deviceProfile, kind: "building-automation" }
+    : protocol === "mtconnect" && (!form.deviceProfile || form.deviceProfile.kind === "other")
+    ? { ...form.deviceProfile, kind: "cnc" }
+    : protocolManufacturer && useDefaultProfile
+    ? { ...form.deviceProfile, kind: "plc", manufacturer: protocolManufacturer }
+    : protocolManufacturer && form.deviceProfile.kind === "plc" &&
+      (!selectedManufacturer || knownProtocolManufacturers.includes(selectedManufacturer))
+    ? { ...form.deviceProfile, manufacturer: protocolManufacturer }
+    : form.deviceProfile;
   const normalizeRow = row => {
     const next = { ...row };
     if (!descriptor.dataTypes.includes(next.sourceDataType)) next.sourceDataType = fallbackType;
     if (!descriptor.capabilities.bitAddressing) next.bitIndex = "";
     if (!descriptor.capabilities.perTopicMapping) next.topic = "";
+    if ([ADDRESSING.mtConnectDataItem, ADDRESSING.snmpOid].includes(descriptor.addressing)) {
+      next.qualityPath = "";
+      next.acceptedQualityValues = "";
+    }
     return next;
   };
   return {
     ...form,
     protocol,
+    deviceProfile,
     timestampMode: descriptor.capabilities.intrinsicSourceTimestamp
       ? "source"
-      : descriptor.capabilities.sourceTimestamp ? form.timestampMode : "edge-received",
-    sequencePath: descriptor.capabilities.sequencePath ? form.sequencePath : "",
+      : descriptor.capabilities.sourceTimestamp
+        ? protocol === "snmp"
+          ? form.timestampMode === "source" && normalizeSnmpOid(form.timestampPath) ? "source" : "edge-received"
+          : protocol === "ethernet-ip" ? "edge-received" : form.timestampMode
+        : "edge-received",
+    sequencePath: descriptor.capabilities.sequencePath
+      ? protocol === "snmp" ? normalizeSnmpOid(form.sequencePath) || "" : form.sequencePath
+      : "",
     valueMappings: form.valueMappings.map(normalizeRow),
     processSpecification: { ...form.processSpecification, parameterMappings: form.processSpecification.parameterMappings.map(normalizeRow) },
   };
@@ -223,14 +384,14 @@ function mappingPayload(item, descriptor) {
     sourceUnit: item.sourceUnit.trim() || null,
     scale: Number(item.scale),
     offset: Number(item.offset),
-    qualityPath: (item.qualityPath || "").trim() || null,
-    acceptedQualityValues: (item.acceptedQualityValues || "").split(",").map(value => value.trim()).filter(Boolean),
-    minimum: numberOrNull(item.minimum),
-    maximum: numberOrNull(item.maximum),
-    outOfRangeBehavior: item.outOfRangeBehavior || "reject",
+    qualityPath: [ADDRESSING.mtConnectDataItem, ADDRESSING.snmpOid].includes(descriptor.addressing)
+      ? null : (item.qualityPath || "").trim() || null,
+    acceptedQualityValues: [ADDRESSING.mtConnectDataItem, ADDRESSING.snmpOid].includes(descriptor.addressing)
+      ? [] : (item.acceptedQualityValues || "").split(",").map(value => value.trim()).filter(Boolean),
     missingValueBehavior: item.missingValueBehavior || "inherit",
     defaultValue: (item.defaultValue ?? "").trim() || null,
-    bitIndex: descriptor.capabilities.bitAddressing ? bitIndex : null,
+    bitIndex: [ADDRESSING.siemensS7Address, ADDRESSING.melsecMc3EDevice].includes(descriptor.addressing)
+      ? null : descriptor.capabilities.bitAddressing ? bitIndex : null,
     topic: descriptor.capabilities.perTopicMapping ? (item.topic || "").trim() || null : null,
     modbusArea: null,
     modbusAddress: null,
@@ -240,7 +401,11 @@ function mappingPayload(item, descriptor) {
     wordOrder: item.wordOrder,
     melsecDevice: null,
     melsecAddress: null,
-    sourcePath: (item.sourcePath || "").trim(),
+    sourcePath: descriptor.addressing === ADDRESSING.mtConnectDataItem
+      ? (item.sourcePath ?? "")
+      : descriptor.addressing === ADDRESSING.snmpOid
+        ? normalizeSnmpOid(item.sourcePath) || (item.sourcePath || "").trim()
+        : (item.sourcePath || "").trim(),
   };
 
   if (descriptor.addressing === ADDRESSING.modbusRegister) {
@@ -275,6 +440,15 @@ function mappingPayload(item, descriptor) {
     };
   }
 
+  if (descriptor.addressing === ADDRESSING.siemensS7Address) {
+    return {
+      ...base,
+      sourcePath: (item.sourcePath || "").trim().toUpperCase(),
+      sourceByteLength: item.sourceDataType === "string" ? Number(item.sourceByteLength) || null : null,
+      bitIndex: null,
+    };
+  }
+
   return base;
 }
 
@@ -282,6 +456,14 @@ export function toPayload(form) {
   const descriptor = protocolDescriptor(form.protocol);
   const selectedModel = parseModelValue(form.dataModel);
   const capabilities = descriptor.capabilities;
+  const snmpTimestampOid = form.protocol === "snmp" && form.timestampMode === "source"
+    ? normalizeSnmpOid(form.timestampPath)
+    : null;
+  const timestampMode = capabilities.intrinsicSourceTimestamp
+    ? "source"
+    : capabilities.sourceTimestamp
+      ? form.protocol === "snmp" && !snmpTimestampOid ? "edge-received" : form.timestampMode
+      : "edge-received";
   return {
     taskId: form.taskId.trim(),
     version: Number(form.version),
@@ -296,8 +478,14 @@ export function toPayload(form) {
     dataModelId: selectedModel.id,
     dataModelVersion: selectedModel.version,
     source: form.source.trim() || `connector/${form.protocol}/${form.subjectId.trim()}`,
+    deviceProfile: form.deviceProfile?.kind ? {
+      kind: form.deviceProfile.kind,
+      manufacturer: (form.deviceProfile.manufacturer || "").trim() || null,
+      model: (form.deviceProfile.model || "").trim() || null,
+    } : null,
     subjectType: form.subjectType.trim() || "equipment",
     subjectId: form.subjectId.trim(),
+    equipmentId: (form.equipmentId || "").trim() || null,
     httpPolling: {
       baseUrl: form.httpPolling.baseUrl.trim(),
       snapshotPath: form.httpPolling.snapshotPath.trim(),
@@ -308,6 +496,14 @@ export function toPayload(form) {
       headers: headersFromText(form.httpPolling.headersText),
       headerSecretRefs: headersFromText(form.httpPolling.headerSecretRefsText),
     },
+    mtConnect: form.protocol === "mtconnect" ? {
+      baseUrl: form.mtConnect.baseUrl.trim(),
+      deviceNameOrUuid: form.mtConnect.deviceNameOrUuid,
+      pollIntervalMs: Number(form.mtConnect.pollIntervalMs),
+      maximumResponseBytes: Number(form.mtConnect.maximumResponseBytes),
+      headers: headersFromText(form.mtConnect.headersText),
+      headerSecretRefs: headersFromText(form.mtConnect.headerSecretRefsText),
+    } : null,
     mqtt: form.protocol === "mqtt" ? {
       ...form.mqtt,
       port: Number(form.mqtt.port),
@@ -348,6 +544,24 @@ export function toPayload(form) {
       pollIntervalMs: Number(form.modbusTcp.pollIntervalMs),
       maxMergeGap: Number(form.modbusTcp.maxMergeGap),
     } : null,
+    modbusRtu: form.protocol === "modbus-rtu" ? {
+      ...form.modbusRtu,
+      portName: form.modbusRtu.portName.trim(),
+      baudRate: Number(form.modbusRtu.baudRate),
+      dataBits: Number(form.modbusRtu.dataBits),
+      unitId: Number(form.modbusRtu.unitId),
+      pollIntervalMs: Number(form.modbusRtu.pollIntervalMs),
+      maxMergeGap: Number(form.modbusRtu.maxMergeGap),
+    } : null,
+    modbusAscii: form.protocol === "modbus-ascii" ? {
+      ...form.modbusAscii,
+      portName: form.modbusAscii.portName.trim(),
+      baudRate: Number(form.modbusAscii.baudRate),
+      dataBits: Number(form.modbusAscii.dataBits),
+      unitId: Number(form.modbusAscii.unitId),
+      pollIntervalMs: Number(form.modbusAscii.pollIntervalMs),
+      maxMergeGap: Number(form.modbusAscii.maxMergeGap),
+    } : null,
     melsecA1E: form.protocol === "melsec-a1e" ? {
       ...form.melsecA1E,
       port: Number(form.melsecA1E.port),
@@ -356,25 +570,110 @@ export function toPayload(form) {
       monitoringTimer: Number(form.melsecA1E.monitoringTimer),
       maxMergeGap: Number(form.melsecA1E.maxMergeGap),
     } : null,
+    melsecMc3E: form.protocol === "melsec-mc-3e" ? {
+      ...form.melsecMc3E,
+      host: form.melsecMc3E.host.trim(),
+      port: Number(form.melsecMc3E.port),
+      family: form.melsecMc3E.family,
+      networkNumber: Number(form.melsecMc3E.networkNumber),
+      pcNumber: Number(form.melsecMc3E.pcNumber),
+      moduleIoNumber: Number(form.melsecMc3E.moduleIoNumber),
+      stationNumber: Number(form.melsecMc3E.stationNumber),
+      monitoringTimer: Number(form.melsecMc3E.monitoringTimer),
+      pollIntervalMs: Number(form.melsecMc3E.pollIntervalMs),
+      maxMergeGap: Number(form.melsecMc3E.maxMergeGap),
+    } : null,
+    siemensS7: form.protocol === "siemens-s7" ? {
+      ...form.siemensS7,
+      port: Number(form.siemensS7.port),
+      rack: Number(form.siemensS7.rack),
+      slot: Number(form.siemensS7.slot),
+      pollIntervalMs: Number(form.siemensS7.pollIntervalMs),
+      maxMergeGap: Number(form.siemensS7.maxMergeGap),
+    } : null,
+    ethernetIp: form.protocol === "ethernet-ip" ? {
+      ...form.ethernetIp,
+      host: form.ethernetIp.host.trim(),
+      port: Number(form.ethernetIp.port),
+      controllerFamily: form.ethernetIp.controllerFamily,
+      path: form.ethernetIp.controllerFamily === "control-logix" ? form.ethernetIp.path.trim() : "",
+      pollIntervalMs: Number(form.ethernetIp.pollIntervalMs),
+    } : null,
+    omronFinsTcp: form.protocol === "omron-fins-tcp" ? {
+      ...form.omronFinsTcp,
+      host: form.omronFinsTcp.host.trim(),
+      port: Number(form.omronFinsTcp.port),
+      pollIntervalMs: Number(form.omronFinsTcp.pollIntervalMs),
+    } : null,
+    omronFinsUdp: form.protocol === "omron-fins-udp" ? {
+      ...form.omronFinsUdp,
+      host: form.omronFinsUdp.host.trim(),
+      port: Number(form.omronFinsUdp.port),
+      clientNodeAddress: Number(form.omronFinsUdp.clientNodeAddress),
+      serverNodeAddress: Number(form.omronFinsUdp.serverNodeAddress),
+      pollIntervalMs: Number(form.omronFinsUdp.pollIntervalMs),
+    } : null,
+    bacnetIp: form.protocol === "bacnet-ip" ? {
+      ...form.bacnetIp,
+      host: form.bacnetIp.host.trim(),
+      port: Number(form.bacnetIp.port),
+      deviceInstance: Number(form.bacnetIp.deviceInstance),
+      pollIntervalMs: Number(form.bacnetIp.pollIntervalMs),
+    } : null,
+    bacnetMstp: form.protocol === "bacnet-mstp" ? {
+      ...form.bacnetMstp,
+      portName: form.bacnetMstp.portName.trim(),
+      baudRate: Number(form.bacnetMstp.baudRate),
+      localStationAddress: form.bacnetMstp.localStationAddress === ""
+        ? null : Number(form.bacnetMstp.localStationAddress),
+      maxMaster: Number(form.bacnetMstp.maxMaster),
+      maxInfoFrames: Number(form.bacnetMstp.maxInfoFrames),
+      deviceInstance: Number(form.bacnetMstp.deviceInstance),
+      pollIntervalMs: Number(form.bacnetMstp.pollIntervalMs),
+    } : null,
+    snmp: form.protocol === "snmp" ? {
+      host: form.snmp.host.trim(),
+      port: Number(form.snmp.port),
+      version: form.snmp.version,
+      browseRootOid: normalizeSnmpOid(form.snmp.browseRootOid) || form.snmp.browseRootOid.trim(),
+      contextName: form.snmp.version === "v3" ? form.snmp.contextName.trim() || null : null,
+      communitySecretRef: form.snmp.version === "v2c" ? form.snmp.communitySecretRef.trim() : null,
+      userName: form.snmp.version === "v3" ? form.snmp.userName.trim() : null,
+      securityLevel: form.snmp.version === "v3" ? form.snmp.securityLevel : null,
+      authenticationProtocol: form.snmp.version === "v3" && ["authNoPriv", "authPriv"].includes(form.snmp.securityLevel)
+        ? form.snmp.authenticationProtocol : null,
+      authenticationSecretRef: form.snmp.version === "v3" && ["authNoPriv", "authPriv"].includes(form.snmp.securityLevel)
+        ? form.snmp.authenticationSecretRef.trim() : null,
+      privacyProtocol: form.snmp.version === "v3" && form.snmp.securityLevel === "authPriv"
+        ? form.snmp.privacyProtocol : null,
+      privacySecretRef: form.snmp.version === "v3" && form.snmp.securityLevel === "authPriv"
+        ? form.snmp.privacySecretRef.trim() : null,
+      pollIntervalMs: Number(form.snmp.pollIntervalMs),
+    } : null,
     execution: {
       timeoutMs: Number(form.execution.timeoutMs),
       reconnectDelayMs: Number(form.execution.reconnectDelayMs),
       sourceIdentityStaleAfterMs: Number(form.execution.sourceIdentityStaleAfterMs),
       maximumFutureTimestampSkewMs: Number(form.execution.maximumFutureTimestampSkewMs),
     },
-    timestampMode: capabilities.intrinsicSourceTimestamp
-      ? "source"
-      : capabilities.sourceTimestamp ? form.timestampMode : "edge-received",
-    timestampPath: capabilities.intrinsicSourceTimestamp ? "" : form.timestampPath.trim(),
+    timestampMode,
+    timestampPath: capabilities.intrinsicSourceTimestamp
+      ? ""
+      : form.protocol === "snmp" ? timestampMode === "source" ? snmpTimestampOid || "" : "" : form.timestampPath.trim(),
     timestampEncoding: capabilities.sourceTimestamp ? form.timestampEncoding : "auto",
-    sequencePath: capabilities.sequencePath ? form.sequencePath.trim() || null : null,
+    sequencePath: capabilities.sequencePath
+      ? form.protocol === "snmp"
+        ? normalizeSnmpOid(form.sequencePath) || form.sequencePath.trim() || null
+        : form.sequencePath.trim() || null
+      : null,
     sampleEventType: form.sampleEventType.trim(),
     staticContext: objectFromPairs(form.staticContextPairs),
     contextMappings: form.contextMappings
       .filter(item => item.contextKey.trim() || item.sourcePath.trim())
       .map(item => ({
         contextKey: item.contextKey.trim(),
-        sourcePath: item.sourcePath.trim(),
+        sourcePath: descriptor.addressing === ADDRESSING.mtConnectDataItem
+          ? item.sourcePath : item.sourcePath.trim(),
         required: item.required,
         topic: capabilities.perTopicMapping ? (item.topic || "").trim() || null : null,
       })),
@@ -394,7 +693,8 @@ export function toPayload(form) {
     lifecycle: form.lifecycle.enabled ? {
       mode: "discrete",
       activeContextKey: form.lifecycle.activeContextKey || null,
-      activeValue: form.lifecycle.activeValue || "",
+      activeCondition: form.lifecycle.activeCondition ?? "equals",
+      ...(form.lifecycle.activeCondition === "nonzero" ? {} : { activeValue: form.lifecycle.activeValue || "" }),
       startedEventType: form.lifecycle.startedEventType || "process.execution.started",
       completedEventType: form.lifecycle.completedEventType || "process.execution.completed",
       stepChangedEventType: form.lifecycle.stepChangedEventType || "process.stage_changed",
@@ -429,6 +729,8 @@ export function validateIngestionTask(form, context = {}) {
   if (descriptor.capabilities.reconnectDelay &&
       !(Number(form.execution.reconnectDelayMs) >= 100 && Number(form.execution.reconnectDelayMs) <= 300000))
     set("execution.reconnectDelayMs", "重连间隔必须是 100-300000ms。");
+  if (descriptor.addressing === ADDRESSING.snmpOid && form.sequencePath.trim() && !normalizeSnmpOid(form.sequencePath))
+    set("sequencePath", "序号来源必须是有效的数字 OID，例如 1.3.6.1.2.1.1.5.0；不支持 MIB 符号名称。");
   if (form.protocol === "opc-ua" && form.status === "published" && form.opcUa.trustServerCertificate)
     set("opcUa.trustServerCertificate", "自动信任服务器证书只允许用于草稿探查，发布前必须建立信任链。");
   const staleAfter = Number(form.execution.sourceIdentityStaleAfterMs);
@@ -448,15 +750,24 @@ export function validateIngestionTask(form, context = {}) {
         : descriptor.validatePoint(timestampProbeRow(form, descriptor), form) || {};
       const first = Object.values(rowErrors)[0];
       if (first) set("timestampPath", first);
-      if ([ADDRESSING.modbusRegister, ADDRESSING.melsecDevice].includes(descriptor.addressing)) {
+      if ([ADDRESSING.modbusRegister, ADDRESSING.melsecDevice, ADDRESSING.melsecMc3EDevice, ADDRESSING.siemensS7Address, ADDRESSING.ethernetIpTag, ADDRESSING.omronFinsAddress, ADDRESSING.snmpOid].includes(descriptor.addressing)) {
         const timestampRow = timestampProbeRow(form, descriptor);
-        const encoding = form.timestampEncoding === "auto" ? "unix-ms" : form.timestampEncoding;
-        if (encoding === "unix-ms" && !["int64", "uint64"].includes(timestampRow.sourceDataType))
-          set("timestampPath", `unix-ms 时间戳需要 int64 或 uint64 点位，当前为 ${timestampRow.sourceDataType}。`);
-        if (encoding === "unix-s" && !["int32", "uint32", "int64", "uint64"].includes(timestampRow.sourceDataType))
-          set("timestampPath", `unix-s 时间戳需要 32/64 位整数点位，当前为 ${timestampRow.sourceDataType}。`);
-        if (encoding === "iso-8601" && timestampRow.sourceDataType !== "string")
-          set("timestampPath", `iso-8601 时间戳需要 string 点位，当前为 ${timestampRow.sourceDataType}。`);
+        if (descriptor.id === "ethernet-ip") {
+          const mappedTimestamp = form.valueMappings.find(item =>
+            (item.sourcePath || "").trim() === form.timestampPath.trim());
+          if (mappedTimestamp) timestampRow.sourceDataType = mappedTimestamp.sourceDataType;
+        }
+        const shouldValidateTimestampType = descriptor.id !== "snmp" ||
+          (form.timestampEncoding !== "auto" && timestampRow.sourceDataType !== "auto");
+        if (shouldValidateTimestampType) {
+          const encoding = form.timestampEncoding === "auto" ? "unix-ms" : form.timestampEncoding;
+          if (encoding === "unix-ms" && !["int64", "uint64"].includes(timestampRow.sourceDataType))
+            set("timestampPath", `unix-ms 时间戳需要 int64 或 uint64 点位，当前为 ${timestampRow.sourceDataType}。`);
+          if (encoding === "unix-s" && !["int32", "uint32", "int64", "uint64"].includes(timestampRow.sourceDataType))
+            set("timestampPath", `unix-s 时间戳需要 32/64 位整数点位，当前为 ${timestampRow.sourceDataType}。`);
+          if (encoding === "iso-8601" && timestampRow.sourceDataType !== "string")
+            set("timestampPath", `iso-8601 时间戳需要 string 点位，当前为 ${timestampRow.sourceDataType}。`);
+        }
       }
     }
   }
@@ -471,16 +782,14 @@ export function validateIngestionTask(form, context = {}) {
       seenCodes.add(`${prefix}:${row.dataItemCode}`);
       if (!Number.isFinite(Number(row.scale))) set(`${prefix}[${index}].scale`, "换算倍率必须是数字。");
       if (!Number.isFinite(Number(row.offset))) set(`${prefix}[${index}].offset`, "换算偏移必须是数字。");
-      const minimum = numberOrNull(row.minimum);
-      const maximum = numberOrNull(row.maximum);
-      if (minimum !== null && !Number.isFinite(minimum)) set(`${prefix}[${index}].minimum`, "有效下限必须是数字。");
-      if (maximum !== null && !Number.isFinite(maximum)) set(`${prefix}[${index}].maximum`, "有效上限必须是数字。");
-      if (minimum !== null && maximum !== null && minimum > maximum)
-        set(`${prefix}[${index}].maximum`, "有效上限不能小于下限。");
       if ((row.acceptedQualityValues || "").trim() && !(row.qualityPath || "").trim())
         set(`${prefix}[${index}].qualityPath`, "填写允许质量值时必须指定质量字段。");
       if (row.missingValueBehavior === "use-default" && !(row.defaultValue ?? "").trim())
         set(`${prefix}[${index}].defaultValue`, "使用默认值时必须填写默认值。");
+      if (descriptor.addressing === ADDRESSING.melsecMc3EDevice && (row.qualityPath || "").trim()) {
+        const selectorError = melsecMc3eSelectorError(row.qualityPath, null, form.melsecMc3E?.family);
+        if (selectorError) set(`${prefix}[${index}].qualityPath`, selectorError);
+      }
       const rowErrors = descriptor.validatePoint(row, form) || {};
       Object.entries(rowErrors).forEach(([field, message]) => set(`${prefix}[${index}].${field}`, message));
     });
@@ -489,23 +798,85 @@ export function validateIngestionTask(form, context = {}) {
   if (!form.valueMappings.some(item => item.dataItemCode.trim()))
     set("valueMappings", "至少需要配置一个采集点位。");
 
+  if (descriptor.id === "ethernet-ip") {
+    const sourceTypes = new Map();
+    form.valueMappings.forEach((item, index) => {
+      const sourcePath = (item.sourcePath || "").trim();
+      if (sourcePath) {
+        const existingType = sourceTypes.get(sourcePath);
+        if (existingType && existingType !== item.sourceDataType)
+          set(`valueMappings[${index}].sourceDataType`, `同一 EtherNet/IP 标签不能配置多个类型（已配置 ${existingType}）。`);
+        else
+          sourceTypes.set(sourcePath, item.sourceDataType);
+      }
+      if ((item.qualityPath || "").trim())
+        set(`valueMappings[${index}].qualityPath`, "EtherNet/IP 当前不支持未声明数据类型的质量标签映射。");
+    });
+    const configuredTags = new Set(form.valueMappings.map(item => (item.sourcePath || "").trim()).filter(Boolean));
+    if (form.timestampMode === "source" && form.timestampPath.trim()) configuredTags.add(form.timestampPath.trim());
+    if (configuredTags.size > 256)
+      set("valueMappings", `EtherNet/IP 单任务最多读取 256 个不同标签，当前配置 ${configuredTags.size} 个。`);
+  }
+
+  if (descriptor.id === "mtconnect") {
+    const selectors = [
+      ...form.valueMappings.map(item => item.sourcePath),
+      ...form.contextMappings.map(item => item.sourcePath),
+    ].map(value => String(value ?? "")).filter(value => value.length > 0);
+    const ids = [...new Set(selectors)];
+    if (ids.length > 128)
+      set("valueMappings", `MTConnect 单任务最多读取 128 个不同 DataItem ID，当前配置 ${ids.length} 个。`);
+    const pathLength = ids.reduce((length, id) => length + encodeURIComponent(id).length + 18, 0);
+    if (pathLength > 8192)
+      set("valueMappings", "MTConnect 当前过滤路径超过 8 KiB，请减少 DataItem ID 或拆分采集任务。");
+    if (form.processSpecification.enabled)
+      set("processSpecification.enabled", "MTConnect 首期不支持把不同 DataItem 组合成设备配方参数对象，请关闭配方版本识别。");
+  }
+
   form.contextMappings.forEach((item, index) => {
     if (!item.contextKey.trim() && !item.sourcePath.trim()) return;
     if (!CODE_PATTERN.test(item.contextKey.trim().toLowerCase()))
       set(`contextMappings[${index}].contextKey`, "上下文键格式无效。");
     if (!item.sourcePath.trim()) set(`contextMappings[${index}].sourcePath`, "设备来源不能为空。");
+    if (descriptor.id === "ethernet-ip" && item.sourcePath.trim())
+      set(`contextMappings[${index}].sourcePath`, "EtherNet/IP 当前不支持未声明数据类型的动态上下文标签。");
+    if (descriptor.addressing === ADDRESSING.melsecMc3EDevice && item.sourcePath.trim()) {
+      const selectorError = melsecMc3eSelectorError(item.sourcePath, null, form.melsecMc3E?.family);
+      if (selectorError) set(`contextMappings[${index}].sourcePath`, selectorError);
+    }
+    if (descriptor.addressing === ADDRESSING.mtConnectDataItem && item.sourcePath.trim()) {
+      const selectorError = descriptor.validatePoint({ sourcePath: item.sourcePath });
+      if (selectorError.sourcePath) set(`contextMappings[${index}].sourcePath`, selectorError.sourcePath);
+    }
   });
 
   if (form.processSpecification.enabled) {
+    if (descriptor.id === "ethernet-ip")
+      set("processSpecification.idPath", "EtherNet/IP 当前不支持源数据类型未显式声明的配方版本辅助标签。");
     if (!form.processSpecification.idPath.trim()) set("processSpecification.idPath", "配方版本编号来源不能为空。");
     if (!form.processSpecification.versionPath.trim()) set("processSpecification.versionPath", "配方版本号来源不能为空。");
+    if (descriptor.addressing === ADDRESSING.melsecMc3EDevice) {
+      for (const field of ["idPath", "versionPath", "namePath"]) {
+        const selector = (form.processSpecification[field] || "").trim();
+        if (!selector) continue;
+        const selectorError = melsecMc3eSelectorError(selector, null, form.melsecMc3E?.family);
+        if (selectorError) set(`processSpecification.${field}`, selectorError);
+      }
+    }
     if (!EVENT_TYPE_PATTERN.test(form.processSpecification.eventType.trim()))
       set("processSpecification.eventType", "事件类型格式无效，例如 process.specification.applied。");
     validateRows(form.processSpecification.parameterMappings, "processSpecification.parameterMappings");
   }
 
-  if (form.lifecycle.enabled && !(form.lifecycle.activeContextKey || "").trim())
-    set("lifecycle.activeContextKey", "启用过程执行识别时必须指定生产状态来源。");
+  if (form.lifecycle.enabled) {
+    if (!(form.lifecycle.activeContextKey || "").trim())
+      set("lifecycle.activeContextKey", "启用过程执行识别时必须指定生产状态来源。");
+    const activeCondition = form.lifecycle.activeCondition ?? "equals";
+    if (!["equals", "nonzero"].includes(activeCondition))
+      set("lifecycle.activeCondition", "请选择等于指定值或非零生产序号。");
+    if (activeCondition === "equals" && !(form.lifecycle.activeValue || "").trim())
+      set("lifecycle.activeValue", "使用等于指定值时必须填写生产中的取值。");
+  }
 
   if (form.status === "published" && Array.isArray(context.dataItems)) {
     const mapped = new Set(form.valueMappings.map(item => item.dataItemCode));
@@ -541,10 +912,40 @@ function timestampProbeRow(form, descriptor) {
     const [device = "", address = "", dataType = ""] = text.split(":");
     return { melsecDevice: device, melsecAddress: address, sourceDataType: dataType || "uint64", bitIndex: "" };
   }
+  if (descriptor.addressing === ADDRESSING.siemensS7Address) {
+    const address = text.toUpperCase();
+    const suffix = /(?:DB)?([XBWDL])\d+(?:\.([0-7]))?$/.exec(address)?.[1] || "";
+    const bit = /\.([0-7])$/.test(address);
+    const sourceDataType = bit ? "boolean" : ({ W: "uint16", D: "uint32", L: "uint64", B: "byte" }[suffix] || "uint64");
+    return { sourcePath: address, sourceDataType, sourceByteLength: null };
+  }
+  if (descriptor.addressing === ADDRESSING.ethernetIpTag) {
+    const sourceDataType = form.timestampEncoding === "unix-s"
+      ? "int32"
+      : form.timestampEncoding === "iso-8601" ? "string" : "int64";
+    return { sourcePath: text, sourceDataType, sourceByteLength: null };
+  }
+  if (descriptor.addressing === ADDRESSING.omronFinsAddress) {
+    const sourceDataType = text.split(":")[2]?.toLowerCase() || "int64";
+    return { sourcePath: text, sourceDataType, sourceByteLength: null, wordOrder: "high-low" };
+  }
+  if (descriptor.addressing === ADDRESSING.melsecMc3EDevice) {
+    const sourceDataType = text.split(":")[2]?.toLowerCase() ||
+      form.valueMappings.find(row => (row.sourcePath || "").trim() === text)?.sourceDataType || "uint64";
+    return { sourcePath: text, sourceDataType, sourceByteLength: null, wordOrder: "high-low" };
+  }
+  if (descriptor.addressing === ADDRESSING.snmpOid) {
+    const sourcePath = normalizeSnmpOid(text) || text;
+    const mappedTimestamp = form.valueMappings.find(row => normalizeSnmpOid(row.sourcePath) === sourcePath);
+    const sourceDataType = mappedTimestamp?.sourceDataType || (form.timestampEncoding === "auto"
+      ? "auto" : form.timestampEncoding === "iso-8601"
+        ? "string" : form.timestampEncoding === "unix-s" ? "uint32" : "uint64");
+    return { sourcePath, sourceDataType, sourceByteLength: null };
+  }
   return { sourcePath: text };
 }
 
-export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor) {
+export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor, existingMappings = []) {
   const definition = (dataItems || []).find(item => item.code === dataItemCode);
   const patch = { dataItemCode, required: definition ? !definition.nullable : true };
   if (point.topic) patch.topic = point.topic;
@@ -564,6 +965,72 @@ export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor) 
       sourceDataType: dataType || "int16",
     };
   }
+  if (descriptor.addressing === ADDRESSING.siemensS7Address) {
+    const sourcePath = String(point.path || "").trim().toUpperCase();
+    const sourceDataType = normalizeS7ProbeType(point.dataType) || rowTypeFromS7Address(point.path);
+    const existingPoint = existingMappings.find(row => String(row.sourcePath || "").trim().toUpperCase() === sourcePath);
+    return {
+      ...patch,
+      sourcePath,
+      sourceDataType,
+      sourceByteLength: sourceDataType === "string" ? existingPoint?.sourceByteLength || "" : null,
+      sourceUnit: point.unit || "",
+    };
+  }
+  if (descriptor.addressing === ADDRESSING.ethernetIpTag) {
+    const sourcePath = String(point.path || "").trim();
+    const sourceDataType = String(point.dataType || "").trim().toLowerCase();
+    return {
+      ...patch,
+      sourcePath,
+      sourceDataType: descriptor.dataTypes.includes(sourceDataType) ? sourceDataType : descriptor.defaultDataType,
+      sourceUnit: point.unit || "",
+    };
+  }
+  if (descriptor.addressing === ADDRESSING.omronFinsAddress) {
+    const sourcePath = String(point.path || "").trim();
+    const sourceDataType = sourcePath.split(":")[2]?.toLowerCase() || "int16";
+    return {
+      ...patch,
+      sourcePath,
+      sourceDataType: descriptor.dataTypes.includes(sourceDataType) ? sourceDataType : descriptor.defaultDataType,
+      wordOrder: "high-low",
+      sourceUnit: point.unit || "",
+    };
+  }
+  if (descriptor.addressing === ADDRESSING.melsecMc3EDevice) {
+    const sourcePath = String(point.path || "").trim();
+    const embeddedType = sourcePath.split(":")[2]?.toLowerCase();
+    const reportedType = String(point.dataType || "").trim().toLowerCase();
+    const sourceDataType = embeddedType || (descriptor.dataTypes.includes(reportedType) ? reportedType : descriptor.defaultDataType);
+    return { ...patch, sourcePath, sourceDataType, wordOrder: "high-low", sourceUnit: point.unit || "" };
+  }
+  if (descriptor.addressing === ADDRESSING.mtConnectDataItem) {
+    return {
+      ...patch,
+      sourcePath: String(point.path ?? ""),
+      sourceDataType: "auto",
+      sourceUnit: point.unit || "",
+    };
+  }
+  if (descriptor.addressing === ADDRESSING.bacnetObject) {
+    return {
+      ...patch,
+      sourcePath: String(point.path || "").trim().toLowerCase(),
+      sourceDataType: "auto",
+      sourceUnit: point.unit || "",
+    };
+  }
+  if (descriptor.addressing === ADDRESSING.snmpOid) {
+    const sourcePath = normalizeSnmpOid(point.path) || String(point.path || "").trim();
+    const reportedType = String(point.dataType || "").trim().toLowerCase();
+    return {
+      ...patch,
+      sourcePath,
+      sourceDataType: descriptor.dataTypes.includes(reportedType) ? reportedType : "auto",
+      sourceUnit: point.unit || "",
+    };
+  }
   return {
     ...patch,
     sourcePath: point.path,
@@ -572,4 +1039,19 @@ export function patchFromProbePoint(point, dataItemCode, dataItems, descriptor) 
       ? { qualityPath: "$status", acceptedQualityValues: "Good" }
       : {}),
   };
+}
+
+function rowTypeFromS7Address(value) {
+  const address = String(value || "").trim().toUpperCase();
+  if (/\.([0-7])$/.test(address)) return "boolean";
+  const suffix = /(?:DB)?([BWDL])\d+$/.exec(address)?.[1];
+  return ({ B: "byte", W: "uint16", D: "uint32", L: "uint64" })[suffix] || "int16";
+}
+
+function normalizeS7ProbeType(value) {
+  return ({
+    boolean: "boolean", byte: "byte", int16: "int16", uint16: "uint16",
+    int32: "int32", uint32: "uint32", single: "float32", float32: "float32",
+    int64: "int64", uint64: "uint64", double: "float64", float64: "float64", string: "string",
+  })[String(value || "").trim().toLowerCase()] || "";
 }

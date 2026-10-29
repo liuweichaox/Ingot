@@ -1,3 +1,5 @@
+// 将已物化采集任务分解回可复用模板、数据源与绑定契约。
+
 using Ingot.Contracts.ProcessConfiguration;
 
 namespace Ingot.Contracts.Acquisition;
@@ -67,11 +69,23 @@ public static class IngestionTaskDecomposer
             SourceKey = task.Source,
             SubjectType = task.SubjectType,
             SubjectId = task.SubjectId,
+            DeviceProfile = task.DeviceProfile,
             HttpPolling = task.Protocol == AcquisitionProtocols.HttpPolling ? task.HttpPolling : null,
             Mqtt = task.Mqtt,
             OpcUa = task.OpcUa,
             ModbusTcp = task.ModbusTcp,
+            ModbusRtu = task.ModbusRtu,
+            ModbusAscii = task.ModbusAscii,
             MelsecA1E = task.MelsecA1E,
+            MelsecMc3E = task.MelsecMc3E,
+            SiemensS7 = task.SiemensS7,
+            EtherNetIp = task.EtherNetIp,
+            OmronFinsTcp = task.OmronFinsTcp,
+            OmronFinsUdp = task.OmronFinsUdp,
+            MtConnect = task.MtConnect,
+            BacnetIp = task.BacnetIp,
+            BacnetMstp = task.BacnetMstp,
+            Snmp = task.Snmp,
             UpdatedAt = now
         };
         var template = new IngestionTaskTemplate
@@ -107,6 +121,7 @@ public static class IngestionTaskDecomposer
             TemplateVersion = template.Version,
             DataSourceId = source.DataSourceId,
             DataSourceVersion = source.Version,
+            EquipmentId = task.EquipmentId,
             UpdatedAt = now
         };
 

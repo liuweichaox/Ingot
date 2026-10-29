@@ -24,7 +24,7 @@ Data enters process analysis (including process diagnosis) and recipe optimizati
 ## Before connecting a source
 
 1. Enable the optional connector profile using the [deployment guide](deployment.en.md#start-and-stop), assign a stable factory/production-site identity (`SiteId`) and Edge identity, and configure three distinct credentials.
-2. Explicitly allow device hosts in `Acquisition:Security:AllowedHttpHosts` or `AllowedNetworkHosts`. The default lists are empty; starting ConnectorHost alone authorizes no target. For Compose, supply indexed environment entries such as `Acquisition__Security__AllowedNetworkHosts__0=192.168.10.20` in a local override.
+2. Explicitly allow network-device hosts in `Acquisition:Security:AllowedHttpHosts` or `AllowedNetworkHosts`; allow Modbus RTU, ASCII, and BACnet MS/TP serial ports by exact name in `Acquisition:Security:AllowedSerialPorts`. The default lists are empty; starting ConnectorHost alone authorizes no target. For Compose, supply indexed environment entries such as `Acquisition__Security__AllowedNetworkHosts__0=192.168.10.20` or `Acquisition__Security__AllowedSerialPorts__0=/dev/ttyUSB0` in a local override.
 3. Define a process data model, required fields, units, and run/inspection identity before mapping protocol points.
 4. Probe the target Edge, validate real values, publish, and verify the applied version and a complete run with linked inspection.
 
@@ -74,6 +74,30 @@ Before publishing, verify:
 - required points, run boundaries, and context sources exist;
 - standard units match the process model.
 
+The shared topology canvas on acquisition create and edit pages summarizes the Edge, protocol connection, logical subject/equipment unit, and process-variable mappings. It applies to HTTP, MQTT, OPC UA, MTConnect, Modbus TCP, Modbus RTU, Modbus ASCII, MELSEC 1E, MELSEC 3E/SLMP, Siemens S7, EtherNet/IP, Omron FINS/TCP, Omron FINS/UDP, BACnet/IP, BACnet MS/TP, and SNMP. Selecting a node lets users edit the Edge, data ownership, and every connection field registered for the selected driver directly in the property panel. Conditional fields follow protocol selections, and grouped fields can be expanded. Task-level advanced mappings and point conversions remain in the task form. The BACnet/IP and MS/TP canvases display objects found by browsing the configured device's object directory. The SNMP canvas displays points discovered under the configured numeric OID subtree. Both support dragging points onto process variables. MQTT nodes show their subscription topics and allow users to add, edit, or remove each topic's channel code, filter, QoS, payload root, and topic variables. These edits use the task form's shared state and topic validation. After probing, users can drag a device point onto a process variable in the points node, or select a target and then a source point with the keyboard. Point tables also support downloading a driver-specific CSV template, previewing imports, merging or replacing mappings by process variable, and exporting the current list. Imported values still need full task validation and a fresh probe; any mapping or connection change invalidates the previous probe check. This task canvas edits one protocol connection. During creation, users can switch to a general multi-device canvas: the **Add device** button creates a task using the current task's device profile and Edge; users can search the device-type palette by category name; dragging a category into an Edge partition creates an independent task on that Edge; clicking a device-type card, or focusing it and pressing Enter, creates a task for that category on the current Edge (or in the unassigned partition when no current Edge is set). An existing device card can be dragged to another Edge partition, or reassigned with its Edge selector, which also supports keyboard operation. Device category is profile information separate from the communication driver. Each device keeps its own driver, points, and ownership; tasks are edited, probed, and validated independently. Batch save creates a separate draft for each device, which can then be probed and published independently. PLC is the device type; Mitsubishi is a manufacturer and MELSEC is a communication driver. Single-device tasks also support Siemens S7, Rockwell EtherNet/IP, Omron FINS/TCP, Omron FINS/UDP, BACnet/IP, BACnet MS/TP, and SNMP, with connection and point fields shown for each driver.
+
+### Device categories and driver coverage
+
+The general task canvas offers PLC, CNC, industrial robot, DCS, HMI/operator panel, building automation, remote I/O, drives/servos, sensors/transmitters, process instruments, measurement instruments, industrial weighing, energy meters, power distribution/UPS, machine vision, barcode/RFID, environmental monitoring, industrial computers, industrial gateways, network infrastructure, SCADA/MES/host systems, and other categories. Manufacturer and model are optional. The device profile is stored separately from data ownership and the communication driver, and remains with a reusable data source. Manufacturer and model are free-text identification fields, not a verified model-compatibility catalog; they do not filter or validate drivers.
+
+The canvas recommends registered drivers for each category, while leaving other registered drivers selectable. A recommendation describes a common integration path; it does not certify a manufacturer or verify a model. Connectivity depends on the device interface, CPU and network configuration, and driver limits; probe from the target Edge to confirm it.
+
+| Device category | Common registered drivers | Coverage |
+| --- | --- | --- |
+| PLC | Siemens S7, MELSEC 1E/3E, Omron FINS/TCP/UDP, EtherNet/IP, Modbus TCP/RTU/ASCII, OPC UA | Listed drivers are implemented; other brands can connect through a standard interface exposed by the device or a gateway |
+| CNC | MTConnect, OPC UA, Modbus TCP/RTU/ASCII, MQTT, HTTP | MTConnect reads machine data exposed by the CNC; vendor-specific access needs a registered standard interface or gateway |
+| Industrial robots, machine vision, barcode/RFID | EtherNet/IP, OPC UA, Modbus TCP/RTU/ASCII, MQTT, HTTP | Depends on the interface exposed by the device or gateway; vendor-specific robot protocols are not implemented |
+| DCS, HMI, SCADA/MES | OPC UA, Modbus TCP/RTU/ASCII, MQTT, HTTP | Connect through tags, topics, or HTTP interfaces exposed by the device or supervisory system |
+| Industrial computers, gateways | SNMP, HTTP, MQTT, OPC UA, Modbus TCP/RTU/ASCII | Use interfaces exposed by the equipment; SNMP browses and reads only the configured OID subtree |
+| Network infrastructure | SNMP, HTTP, MQTT, OPC UA | SNMP provides bounded read-only browsing and reads under a configured OID subtree; the target Edge must reach the device and pass its allowlist check |
+| Building automation | BACnet/IP, BACnet MS/TP, Modbus TCP/RTU/ASCII, OPC UA, MQTT, HTTP | Both BACnet drivers read only the configured device directory; MS/TP uses an Edge-allowed RS-485 port; BACnet/SC is not supported |
+| Power distribution/UPS | SNMP, Modbus TCP/RTU/ASCII, OPC UA, MQTT, HTTP | Connect through an interface exposed by the equipment; dedicated power-system protocols are not registered acquisition drivers |
+| Remote I/O, drives/servos, sensors, process instruments, measurement, weighing, energy, environmental monitoring | Modbus TCP/RTU/ASCII, OPC UA, MQTT, HTTP | Requires the field device or gateway to expose one of these interfaces |
+
+The 16 registered drivers are HTTP polling, MQTT, OPC UA, MTConnect, Modbus TCP, Modbus RTU, Modbus ASCII, Mitsubishi MELSEC 1E, Mitsubishi MC 3E/SLMP, Siemens S7, Rockwell EtherNet/IP, Omron FINS/TCP, Omron FINS/UDP, BACnet/IP, BACnet MS/TP, and SNMP. PLC is a device category; Mitsubishi is a manufacturer, and MELSEC is a communication driver. A category or manufacturer name does not add a native driver. Actual connectivity still depends on the driver on the target Edge, network admission, and a successful probe against the device.
+
+Real probe results show the latest probe time, source quality and timestamps when supplied, and raw-to-converted point values. Missing source quality or time is shown explicitly. Modbus, MELSEC, Siemens S7, EtherNet/IP, Omron FINS/TCP, and FINS/UDP only read declared points; they do not enumerate unknown addresses. BACnet/IP browses the configured Device Instance by unicast; BACnet MS/TP sends a Who-Is bounded to that instance on the configured local bus. Neither scans other network devices. SNMP browses at most 512 objects under the configured root OID and does not scan a subnet. MQTT points are identified by topic and field path together; a mapping without a topic applies to any subscribed topic.
+
 Edge retains the last successful version. A candidate passes startup health only after producing a decodable snapshot with every required value; a connection or OPC UA subscription alone is not success. A failed version leaves the old one running and reports failure rather than silently switching to unversioned local configuration.
 
 Runtime status reports read attempts, successful device reads, valid snapshots, emitted events, inactive empty snapshots, duplicate suppression, stalled source identity, and the latest error separately. `running` means a valid snapshot was seen recently, not one overloaded success counter.
@@ -90,19 +114,23 @@ An HTTP data path must remain relative to the configured device base address, an
 
 Protocols support different configuration. One capability matrix drives both the UI and publication validation so a field cannot be accepted and then ignored by a driver.
 
-| Capability | HTTP polling | MQTT | OPC UA | Modbus TCP | Mitsubishi 1E |
-|---|---|---|---|---|---|
-| Device-provided sample time | yes | yes | server SourceTimestamp | yes | yes |
-| Sequence field | yes | yes | no | no | no |
-| Connection and operation timeout | yes | yes | yes | yes | yes |
-| Reconnect interval | yes | yes | yes | yes | yes |
-| Process-specification parameter path | yes | yes | no | no | no |
-| Bind point to topic | no | yes | no | no | no |
-| Byte / word order | no | no | no | yes | no |
-| Bit addressing | no | no | no | yes | yes |
-| Probe enumerates points | yes | yes | yes | configured registers only | configured devices only |
+| Capability | HTTP polling | MQTT | OPC UA | MTConnect | Modbus TCP | Modbus RTU | Modbus ASCII | Mitsubishi 1E | Mitsubishi 3E/SLMP | Siemens S7 | Rockwell EtherNet/IP | Omron FINS/TCP | Omron FINS/UDP | BACnet/IP | BACnet MS/TP | SNMP |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Sample event timestamp policy | yes | yes | server SourceTimestamp | Edge receive time | yes | yes | yes | yes | yes | yes | yes | yes | yes | Edge receive time | Edge receive time | Edge receive time by default; optional OID |
+| Sequence field | yes | yes | no | no | no | no | no | no | no | no | no | no | no | no | no | yes |
+| Connection and operation timeout | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| Reconnect interval | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| Process-specification parameter path | yes | yes | no | no | no | no | no | no | no | no | no | no | no | no | no | no |
+| Bind point to topic | no | yes | no | no | no | no | no | no | no | no | no | no | no | no | no | no |
+| Configurable byte / word order | no | no | no | no | yes | yes | yes | no | no | no | no | word order only | word order only | no | no | no |
+| Bit addressing | no | no | no | no | yes | yes | yes | yes | yes | yes | Boolean tags | yes | yes | no | no | no |
+| Probe enumerates points | yes | yes | yes | yes | configured registers only | configured registers only | configured registers only | configured devices only | configured devices only | configured addresses only | configured tags only | configured addresses only | configured addresses only | configured device object directory only | configured device object directory only | configured numeric OID subtree only |
 
-Modbus and MELSEC never blind-scan addresses that the user did not declare.
+Modbus, MELSEC, Siemens S7, EtherNet/IP, Omron FINS/TCP, and FINS/UDP never blind-scan addresses that the user did not declare. BACnet/IP accesses the configured device and Device Instance by unicast. MS/TP bounds Who-Is to the configured instance on its local bus. Both browse only that device's object directory.
+
+SNMP performs bounded browsing only against the target address and root OID selected by the user; it does not scan the subnet and browsing accepts at most 512 objects. Runtime uses GET only for mapped OIDs. SET, Trap, and symbolic MIB names are not supported. SNMPv2c Community accepts only an `env:NAME` secret reference, and SNMPv2c does not encrypt packets. SNMPv3 defaults to `authPriv`, SHA-256, and AES-128; SHA-384/512 and AES-192/256 are available. Every real target still needs to pass the target Edge network allowlist and probe.
+
+The MTConnect CNC driver discovers DataItems through the selected Agent's `/probe` endpoint and reads `/current` at runtime for DataItem IDs mapped in the task. The initial driver supports scalar Samples and Events, and uses Edge receive time. `/current` is a latest-value snapshot and cannot guarantee capture of a transient state between polls. Conditions, compound values, arrays, and a `/sample` sequence cursor are not supported yet. Request paths and the `path` filter follow [MTConnect v2.5 Part 1](https://docs.mtconnect.org/MBSD_MTConnect_Part_1_2-5-0.pdf).
 
 ## Point selectors
 
@@ -117,6 +145,12 @@ Register areas are `holding-register`, `input-register`, `coil`, and `discrete-i
 
 For string points, the fourth segment declares the byte length. Connection configuration defines address origin; when manuals use one-based addresses, Edge converts them before the protocol request.
 
+### Modbus RTU and ASCII
+
+Both serial drivers use the same register point syntax, address base, and read-only mappings. RTU uses 8 data bits and CRC; ASCII uses 7 data bits and LRC. ASCII supports even, odd, or no parity. Its default is 7E1; no parity requires 2 stop bits, while enabled parity requires 1. Match serial settings to the meter or PLC. See the [Modbus Serial Line Protocol and Implementation Guide](https://www.modbus.org/docs/Modbus_over_serial_line_V1.pdf).
+
+Different Unit IDs can share a serial session, but frame mode, baud rate, data bits, parity, and stop bits must match; RTU and ASCII cannot share one physical bus. Platform checks configured tasks before publication, and Edge rejects incompatible active sessions at runtime. These drivers only probe and read mapped registers; they do not scan addresses. Add the exact port name to the Edge `AllowedSerialPorts` allowlist. A Linux container also needs the `/dev/tty*` mapping and process permissions.
+
 ### Mitsubishi MC A-compatible 1E
 
 ```text
@@ -130,9 +164,57 @@ For string points, the fourth segment declares the byte length. Connection confi
 - M / X / Y / B / S / L use bit-unit reads for `boolean`.
 - Reading a bit device as `int16` returns a packed word of consecutive bits.
 
-Adjacent points may be merged into contiguous reads to reduce network round trips. Both Modbus and MELSEC limit the maximum merge gap and do not cross large undeclared address ranges. Set merge distance to zero when diagnosing an individual address.
+### Mitsubishi MC 3E/SLMP
 
-Register-based device time explicitly declares `unix-s`, `unix-ms`, or `iso-8601` encoding. Publication validation checks selector width so a 32-bit Unix-seconds value is not interpreted as milliseconds.
+The first version uses MC 3E Binary over TCP. Enter the SLMP TCP port configured in the target PLC project; there is no TCP default port that applies to all models. CPU family and route parameters are supplied in the connection settings. Q/L and iQ-F use the QnA-compatible 3E field format; iQ-R uses a different device-number and device-code width with corresponding read subcommands. The PLC, Ethernet module, and project configuration must support and enable the corresponding 3E communication.
+
+Points use `<device>:<number>:<type>`, for example `D:100:int16`, `W:1A:uint16`, `X:1A:boolean`, `M:100:boolean`, or `D:100.3:boolean`. The initial device catalog is limited to X, Y, M, L, B, D, and W. With the binary driver, X/Y and B/W numbers are hexadecimal; the other supported devices use decimal. Q/L and iQ-F device-number fields represent 0 through `0xFFFFFF`; iQ-R represents 0 through `0xFFFFFFFF`. These are frame-field limits, not the PLC's actual device range, which depends on the model and its settings. The X/Y hexadecimal rule here is specific to 3E Binary and differs from the octal rule used by 1E.
+
+Probe and runtime read only explicitly configured points using the MC read command `0401`; they do not scan addresses or write to a PLC. Controller family, module, firmware, address range, and port settings affect availability. Match the connection to the PLC project and probe the target device. 3E ASCII, 4E, UDP, tag access, and writes are not supported currently. Check device capabilities and address rules against the [MELSEC SLMP Reference Manual](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080956eng/sh080956engl.pdf), [MELSEC-Q/L Ethernet communication manual](https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080811eng/sh080811engy.pdf), and [FX5 User's Manual (SLMP)](https://dl.mitsubishielectric.com/dl/fa/document/manual/plcf/jy997d56001/jy997d56001k.pdf).
+
+### Siemens S7 ISO-on-TCP
+
+The S7 connection settings include the PLC host, port (default 102), CPU family, rack, slot, and polling interval. Points use absolute PLC addresses, with the data type selected in the mapping: for example, `DB1.DBW0` accepts `int16` / `uint16`, `DB1.DBD0` accepts `int32` / `uint32` / `float32`, `DB1.DBL0` accepts 64-bit integers or `float64`, and `DB1.DBX0.0`, `M0.0`, and `I0.0` represent Boolean bits. `DB1.DBB0` can read a byte or S7 STRING. STRING points require a maximum character length; the current single-read limit is 198 characters. S7 uses big-endian byte order and has no configurable byte-order setting.
+
+The driver reads only declared addresses in DB, input, output, and M areas; it does not browse or scan addresses and does not write to the PLC. Address-gap merging is disabled by default. Set the CPU family, rack, and slot to match the hardware. S7 device time uses a numeric address encoded as Unix seconds or milliseconds. For S7-1200/1500 DB reads, configure PUT/GET access in the CPU security settings and use non-optimized DB access; probe the target device to confirm connectivity and address permissions.
+
+### Rockwell EtherNet/IP
+
+The connection supports ControlLogix / CompactLogix and Micro800. Logix controllers require a direct backplane slot path from `1,0` through `1,31`; Micro800 leaves the path empty. The default port is 44818. Points use case-sensitive symbolic tags such as `Temperature`, `Program:MainProgram.Speed`, `Array[0]`, or `Motor.Status.Running`, with Boolean, 8/16/32/64-bit integer, or 32/64-bit floating-point types selected in the mapping. Strings, UDTs, structures, tag enumeration, and implicit I/O are not supported by this driver.
+
+Probe and runtime only read configured tags. They do not scan or write to the PLC. New tasks default to Edge receive time; to use device time, configure a numeric tag and select Unix seconds or milliseconds. If the same tag is also mapped as a data point, its data type must be compatible. One task can read at most 256 distinct tags, sequentially in configuration order. Dynamic context, quality-path, and process-specification helper tags are currently unsupported because their source types are not declared. Add the connection host to the target Edge `AllowedNetworkHosts` allowlist. Probe the target device to confirm the controller family, path, connectivity, and tag permissions.
+
+### Omron FINS/TCP
+
+The connection uses the PLC host and port (commonly 9600 by default). Points use a memory area and word address, for example `DM:100:int16`, `CIO:100.3:boolean`, or `W:100:uint16`. Supported areas are CIO, WR/W, HR/H, AR/A, and DM. Bytes within a word are fixed to high byte first; multiword numeric values have a configurable word order. Boolean points require a bit offset from 0 to 15.
+
+Probe and runtime only read explicitly configured points; they do not scan, write, or route FINS requests. FINS/TCP availability, memory-area bounds, and the PLC's available connection count depend on the specific model and settings. Probe the target device even after the address syntax validates. EM areas, timers, counters, and text points are not supported currently.
+
+### Omron FINS/UDP
+
+FINS/UDP uses the PLC host and UDP port (default 9600), and requires separate PLC and collector FINS node addresses (1–254); node addresses must match the PLC's FINS network settings. Port and node-address settings are described in the [Omron FINS/UDP reference manual](https://assets.omron.eu/downloads/latest/manual/en/w421_cj1w-etn21_cs1w-etn21_ethernet_units_-_construction_of_applications_operation_manual_en.pdf). It uses the same memory-area point syntax and numeric types as FINS/TCP, and supports direct FINS communication without FINS routing. Probe and runtime send MEMORY AREA READ requests for configured points only; they do not scan addresses or write to the PLC. FINS/UDP availability and node-address configuration vary by PLC model and network setup, so probe from the target Edge after entering the network parameters.
+
+### BACnet/IP
+
+Configure the target device's unicast address, UDP port (default 47808), Device Instance (0-4194302), and polling interval. Probing browses the object directory of that address and Device Instance. It does not send a Who-Is broadcast or discover other devices on the network. The device-instance range is specified in [BACnet Standard Addendum 135-2010ak](https://bacnet.org/wp-content/uploads/sites/4/2022/08/Add-135-2010ak.pdf); the default port is described in the [BACnet Committee BACnet/IP network paper](https://bacnet.org/wp-content/uploads/sites/4/2022/06/Building-Wide-Area-Networks-With-BACnet-Part-2.pdf).
+
+The point selector is `object-type:instance`, for example `analog-input:1`. Mapping defaults to `auto`, which reads the discovered object's scalar `present-value` according to the target process variable type. A task can map at most 128 objects, and browsing accepts at most 512 directory entries. Directory browsing reads the object list only; after mappings are selected, a probe reads current values only for those mapped objects. Runtime only reads mapped `present-value` properties; it does not write properties. The driver targets HVAC, lighting, access-control, and other building-automation equipment that exposes BACnet/IP. BACnet/SC, arrays, and non-scalar property values are not supported in this initial scope. Probe the target device to confirm connectivity and object access.
+
+### BACnet MS/TP
+
+Configure the Edge serial port, baud rate (9600, 19200, 38400, 76800, or 115200), local MS/TP station address (0-127), Max Master, Max Info Frames, target Device Instance, and polling interval. The serial format is 8N1, and the local station address must be unique on the physical bus. Tasks sharing the bus on one Edge must use the same baud rate, local station address, Max Master, and Max Info Frames; different Device Instances can share one Edge session. See [Johnson Controls MS/TP bus guidance](https://docs.johnsoncontrols.com/bas/r/Metasys/en-US/MS/TP-Communications-Bus-Technical-Bulletin/11.0/MS/TP-Bus-overview/Baud-rates-on-the-MS/TP-Bus) for MS/TP baud-rate guidance.
+
+Edge opens only ports explicitly listed in `Acquisition:Security:AllowedSerialPorts`. A Linux container also needs the `/dev/tty*` mapping and ConnectorHost process permissions. Probing sends Who-Is on the configured local MS/TP bus with both Device Instance bounds set to the requested instance and accepts only a matching I-Am response. It stops if multiple devices claim the same instance. Point selectors match BACnet/IP and use `object-type:instance`, for example `analog-input:1`. A task can map at most 128 objects, and browsing accepts at most 512 directory entries. The driver reads the object directory and mapped scalar `present-value` properties only; it does not write properties. BACnet/SC, arrays, and non-scalar values are not supported. Publication checks and Edge runtime both reject incompatible parameters or concurrent use when MS/TP, Modbus RTU/ASCII, or another driver targets the same physical port.
+
+### SNMPv2c/v3
+
+Connection settings include the target host, UDP port (default 161), version, polling interval, and browse-root OID. For SNMPv2c, enter only an `env:NAME` Community secret reference; do not put the Community value in task configuration or CSV. SNMPv3 defaults to `authPriv`, SHA-256, and AES-128. The user name and authentication/privacy credentials use environment secret references. SHA-256/384/512 and AES-128/192/256 are available. Context Name is optional. SNMP has no intrinsic device timestamp and defaults to Edge receive time; if the device exposes a time scalar, source time can be selected with a numeric OID in `timestampPath`. If the device exposes an incrementing sequence value, its numeric OID can be configured in `sequencePath`; leave it empty when unused. The target must be reachable from the Edge, pass its `AllowedNetworkHosts` allowlist, and be probed on the real device.
+
+Points use numeric OIDs such as `1.3.6.1.2.1.1.5.0`. Input may include a leading dot; the saved value is normalized without it. Only numeric arcs are accepted; symbolic MIB names are not supported. Probe browsing is bounded to the user-selected root OID subtree and accepts at most 512 objects. Runtime uses GET only for mapped scalar OIDs. SET, Trap, subnet scanning, and MIB-name resolution are not supported. `auto` parses values according to the process-variable type. For SNMP OctetString values, `auto` preserves valid UTF-8 text and falls back to lowercase hexadecimal for invalid UTF-8 or non-printable control characters such as NUL and SOH; common text whitespace `\t`, `\r`, and `\n` is preserved. An explicit `string` mapping still rejects invalid UTF-8. Counter32/Counter64 map to cumulative `uint32`/`uint64` values; the driver does not calculate rates. Connectivity, credentials, access control, and OID permissions must be confirmed by probing the target from Edge.
+
+Adjacent points may be merged into contiguous reads to reduce network round trips. Modbus and MELSEC limit the maximum merge gap and do not cross large undeclared address ranges. Set merge distance to zero when diagnosing an individual address.
+
+Register-based device time explicitly declares an encoding. Modbus and MELSEC accept `unix-s`, `unix-ms`, or `iso-8601`; Siemens S7 and EtherNet/IP use a numeric address or tag encoded as `unix-s` or `unix-ms`. Publication validation checks selector width so a 32-bit Unix-seconds value is not interpreted as milliseconds.
 
 ## MQTT with multiple topics
 
@@ -158,8 +240,8 @@ Bulk integration of similar equipment uses four objects with separate responsibi
 | Object | What it stores | When it changes |
 |---|---|---|
 | Task template | protocol semantics, process data model, point mappings, run boundaries, and acquisition policy | publish a new version when model semantics or mappings change |
-| Data-source instance | target Edge, equipment identity, actual network address, and secret references | maintain independently for each device |
-| Task binding | selected template version and selected data-source version | create a new version when the combination changes |
+| Data-source instance | target Edge, default acquisition subject, actual network address, and secret references | maintain independently for each source |
+| Task binding | template and source versions, logical subject, and optional physical machine | create a new version when the combination changes |
 | Equipment-ingestion task | deployable unit materialized from a binding, probed, and finally published | validate and publish separately for each device |
 
 A data source and a task binding are therefore not the same configuration. The former answers “which device is connected”; the latter answers “which ingestion template this device uses.” Templates do not support arbitrary inheritance or point overrides; mapping changes create a new template version.
@@ -175,9 +257,23 @@ The four CSV actions are import and export for two different objects, not duplic
 
 Both files are headed UTF-8 CSV, support up to 500 rows per atomic batch, and reject the entire batch if any row is invalid. Import data sources before bindings that reference them. Credential fields store only secret references. Fixed request bodies and ordinary headers are exported with data sources and must not contain credentials. Exports neutralize spreadsheet-formula prefixes so names and other text are not executed by spreadsheet software.
 
+The data-source CSV adds a trailing `deviceProfileJson` column for device category, manufacturer, and model. The legacy ten-column data-source header remains accepted. An empty profile does not change an existing source's driver configuration.
+
 Batch materialization creates drafts only; every device must pass its own real probe before publication.
 
-The template, data source, binding, and final task all retain version provenance. A published version is immutable and changes require a new version. This makes the mapping and connection versions behind each field event auditable instead of losing provenance through copied configuration.
+## Shared connections and logical acquisition groups
+
+Expand the reusable source and template panel in Acquisition Configuration. Select a published source and a template using the same protocol to create a draft for a logical subject. The relationship preview shows the source, Edge, template, subject, and equipment unit. Materialized configurations remain read-only, but can be probed against the real source and published after validation. When logical subjects require different point mappings, select the corresponding template; creating a binding does not infer address offsets.
+
+A binding may supply `subjectType` and `subjectId` together. Old bindings and the legacy eight-column binding CSV continue to use the source's default subject when these fields are absent. Optional `equipmentId` links a task to equipment-level information such as production preparation or tooling installation; logical subjects, equipment units, and task identities remain separate. Deployers define identifier granularity and relationships among logical subjects according to their actual assets and process semantics. The system assumes no controller count or subordinate-equipment structure and does not infer equipment hierarchies from source names, default subjects, or logical subjects. Binding CSV exports include these three new fields; the old header remains accepted on import.
+
+Modbus TCP and Mitsubishi A-compatible 1E tasks share a TCP session for the same normalized host and port. Modbus RTU and ASCII tasks share bus arbitration by normalized serial-port name; serial settings and RTU/ASCII frame mode must match. Unit ID routes each request, so one bus can serve different units serially. Complete snapshot reads and probes execute serially on their session. Each task retains its own point mapping, run boundaries, and execution ID. Batching currently combines points within one task; it does not merge plans across groups or guarantee simultaneous sampling across read blocks. The acquisition page estimates snapshots per minute from published tasks' polling periods on the same endpoint and reports drafts separately. This estimate excludes retries and does not replace on-site checks of device response time and actual scan intervals. Different host aliases are not automatically recognized as the same physical device.
+
+Mitsubishi 1E supports `binary` and `ascii`, matching the device port configuration. A new request with an incompatible protocol or data code on an active endpoint is rejected; stop the related acquisition tasks before changing that setting. Modbus RTU and ASCII open only serial ports listed exactly in `AllowedSerialPorts` and read only configured registers. A Linux container also needs the corresponding `/dev/tty*` mapping and process permissions. The session closes after its last task or probe releases it. Interrupted reads rebuild the session rather than leaving an incomplete serial frame for another task.
+
+HTTP, MQTT, and OPC UA retain their own ingestion mechanisms; shared task sessions are not claimed for these protocols. When reusing an MQTT source, an empty `clientId` generates independent identities from the Edge and task IDs. Explicit client IDs must be unique on the broker. Publication rejects collisions with published tasks on the same Edge; allocate identities consistently across Edges as well.
+
+Discrete activation supports `equals` and `nonzero`. The former compares the configured value; the latter treats zero production counters as idle and finite nonzero values as active. Invalid numeric states report an acquisition error instead of ending a run. Partial runs first observed active at connector startup remain incomplete for recipe recommendation even after a completion event arrives.
 
 ## Value conversion and quality policy
 

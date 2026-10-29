@@ -36,7 +36,7 @@ You can start the system without a field connector. When a reliable field source
 ### How-to guides
 
 - [Data integration](data-connection.en.md): integration identities, points, mappings, and run admission.
-- [Optical lens PLC acquisition demo](optical-lens-demo.en.md): verify the field connector, process data, and 300-second batch boundary with an independent simulator.
+- [Semiconductor wafer etch acquisition demo](semiconductor-demo.en.md): inspect process data, recipe versions, and a 300-second run path with an independent simulator.
 - [Deployment](deployment.en.md): configuration, model services, observability, backup, and upgrades.
 - [Troubleshooting](troubleshooting.en.md): diagnose startup, authorization, data, and recommendation problems by symptom.
 - [Scenario evaluation boundary](rollout.en.md): assess suitability and effects using your own evidence.
