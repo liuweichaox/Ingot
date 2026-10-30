@@ -87,7 +87,6 @@ public sealed class OmronFinsTcpAcquisitionRunner(
                     continue;
                 }
 
-                await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
                 var events = await lifecycle.TrackAndEmitAsync(mapped, task.Lifecycle, connection.PollIntervalMs, sink, ct).ConfigureAwait(false);
                 sourceDeduplicator.Commit(mapped.Sample, observedAt);
                 status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
