@@ -1,6 +1,6 @@
 # 构建并托管 Ingot 双语文档站的静态生产产物。
 
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /src/apps/docs-site
 
 COPY apps/docs-site/package.json apps/docs-site/package-lock.json ./
