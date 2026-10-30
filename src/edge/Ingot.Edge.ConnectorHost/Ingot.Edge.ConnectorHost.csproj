@@ -19,7 +19,7 @@
     <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
     <PackageReference Include="Lextm.SharpSnmpLib" Version="12.5.7" />
     <PackageReference Include="NModbus" Version="3.0.83" />
-    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.156" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="2.0.1" />
     <PackageReference Include="prometheus-net" Version="8.2.1" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
     <PackageReference Include="S7netplus" Version="0.20.0" />
