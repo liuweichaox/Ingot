@@ -1,6 +1,6 @@
 # 构建并托管 Ingot 官网的静态生产产物。
 
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 
 COPY apps/website/package.json apps/website/package-lock.json ./
