@@ -3,7 +3,7 @@ using Ingot.Contracts.ResearchAssets;
 namespace Ingot.Platform.Application.ResearchAssets;
 
 /// <summary>
-/// 受站点范围约束的工艺知识检索端口。实现必须先应用站点过滤，再计算检索排序。
+/// 受站点与配方适用范围约束的工艺知识检索端口。实现必须先应用范围和复核过滤，再计算排序。
 /// </summary>
 public interface IProcessKnowledgeSearch
 {
@@ -16,6 +16,7 @@ public sealed record ProcessKnowledgeSearchRequest
 {
     public required string SiteCode { get; init; }
     public required string Query { get; init; }
+    public string? ProcessSpecificationId { get; init; }
     public string? ProductFamilyCode { get; init; }
     public string? EquipmentId { get; init; }
     public int Limit { get; init; } = 8;

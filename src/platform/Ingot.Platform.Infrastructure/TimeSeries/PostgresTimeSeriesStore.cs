@@ -1,3 +1,4 @@
+// 将生产事件投影到 PostgreSQL/TimescaleDB，并按稳定点位读取时序帧。
 using System.Text.Json;
 using Ingot.Domain.Events;
 using Ingot.Platform.Application.Events;
@@ -135,6 +136,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             filters.Add("frame.subject_id = @subject_id");
             command.Parameters.AddWithValue("subject_id", query.SubjectId.Trim());
         }
+        AddAppliedConfigurationFilter(filters, command, query.AppliedConfiguration);
         if (query.From.HasValue)
         {
             filters.Add("frame.occurred_at >= @from");
@@ -155,9 +157,11 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                     frame.event_id, frame.frame_id, frame.site_id, frame.edge_id, frame.source,
                     frame.subject_type, frame.subject_id, frame.execution_id, frame.phase_code,
                     frame.data_model_id, frame.data_model_version, value.quality_code,
+                    value.quality_evidence_version,
                     value.numeric_value, value.integer_value, value.boolean_value, value.text_value,
                     (SELECT ingest_key.seq FROM event_ingest_keys AS ingest_key
-                     WHERE ingest_key.event_id = frame.event_id) AS source_sequence
+                     WHERE ingest_key.event_id = frame.event_id) AS source_sequence,
+                    frame.configuration_kind, frame.configuration_id, frame.configuration_version
              FROM process_sample_values AS value
              JOIN process_sample_frames AS frame
                ON frame.frame_id = value.frame_id AND frame.occurred_at = value.occurred_at
@@ -187,7 +191,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                 IngestedAt = reader.IsDBNull(7) ? null : new DateTimeOffset(reader.GetDateTime(7)),
                 EventId = reader.GetString(8),
                 IngestId = reader.GetInt64(9),
-                SourceSequence = reader.IsDBNull(24) ? null : reader.GetInt64(24),
+                SourceSequence = reader.IsDBNull(25) ? null : reader.GetInt64(25),
                 SiteId = reader.GetString(10),
                 EdgeId = reader.GetString(11),
                 Source = reader.GetString(12),
@@ -197,11 +201,13 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                 PhaseCode = reader.IsDBNull(16) ? null : reader.GetString(16),
                 DataModelId = reader.GetString(17),
                 DataModelVersion = reader.GetInt32(18),
-                QualityCode = QualityCode(reader.GetInt16(19)),
-                NumericValue = reader.IsDBNull(20) ? null : reader.GetDouble(20),
-                IntegerValue = reader.IsDBNull(21) ? null : reader.GetInt64(21),
-                BooleanValue = reader.IsDBNull(22) ? null : reader.GetBoolean(22),
-                TextValue = reader.IsDBNull(23) ? null : reader.GetString(23)
+                QualityCode = QualityCode(reader.GetInt16(19), reader.GetInt16(20)),
+                QualityEvidenceVersion = reader.GetInt16(20),
+                AppliedConfiguration = ReadAppliedConfiguration(reader, 26, 27, 28),
+                NumericValue = reader.IsDBNull(21) ? null : reader.GetDouble(21),
+                IntegerValue = reader.IsDBNull(22) ? null : reader.GetInt64(22),
+                BooleanValue = reader.IsDBNull(23) ? null : reader.GetBoolean(23),
+                TextValue = reader.IsDBNull(24) ? null : reader.GetString(24)
             });
         }
         return result;
@@ -237,6 +243,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             frameFilters.Add("frame.subject_id = @subject_id");
             command.Parameters.AddWithValue("subject_id", query.SubjectId.Trim());
         }
+        AddAppliedConfigurationFilter(frameFilters, command, query.AppliedConfiguration);
         if (query.From.HasValue)
         {
             frameFilters.Add("frame.occurred_at >= @from");
@@ -283,11 +290,13 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                ORDER BY frame.occurred_at, frame.frame_id
                LIMIT @limit
              )
-             SELECT frame.event_id, frame.frame_id,
+             SELECT frame.event_id, frame.frame_id, frame.edge_id,
                     (SELECT ingest_key.seq FROM event_ingest_keys AS ingest_key
                      WHERE ingest_key.event_id = frame.event_id) AS source_sequence,
                     frame.occurred_at, frame.recorded_at, frame.ingested_at, frame.phase_code,
-                    point.signal_code, value.numeric_value, value.integer_value, value.boolean_value
+                    point.signal_code, value.numeric_value, value.integer_value, value.boolean_value,
+                    value.quality_code, value.quality_evidence_version,
+                    frame.configuration_kind, frame.configuration_id, frame.configuration_version
              FROM selected_frames AS frame
              JOIN process_sample_values AS value
                ON value.frame_id = frame.frame_id AND value.occurred_at = frame.occurred_at
@@ -296,26 +305,30 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
              {valueWhere}
              ORDER BY frame.occurred_at, frame.frame_id, point.signal_code;
              """;
-        var rows = new List<(string EventId, long FrameId, long? Sequence, DateTimeOffset OccurredAt,
-            DateTimeOffset RecordedAt, DateTimeOffset? IngestedAt, string? PhaseCode, string SignalCode, double? Value)>();
+        var rows = new List<(string EventId, long FrameId, string EdgeId, long? Sequence, DateTimeOffset OccurredAt,
+            DateTimeOffset RecordedAt, DateTimeOffset? IngestedAt, string? PhaseCode, string SignalCode,
+            double? Value, string QualityCode, AppliedConfigurationRef? AppliedConfiguration)>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
-            double? value = reader.IsDBNull(8)
-                ? reader.IsDBNull(9)
-                    ? reader.IsDBNull(10) ? null : reader.GetBoolean(10) ? 1d : 0d
-                    : reader.GetInt64(9)
-                : reader.GetDouble(8);
+            double? value = reader.IsDBNull(9)
+                ? reader.IsDBNull(10)
+                    ? reader.IsDBNull(11) ? null : reader.GetBoolean(11) ? 1d : 0d
+                    : reader.GetInt64(10)
+                : reader.GetDouble(9);
             rows.Add((
                 reader.GetString(0),
                 reader.GetInt64(1),
-                reader.IsDBNull(2) ? null : reader.GetInt64(2),
-                new DateTimeOffset(reader.GetDateTime(3)),
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetInt64(3),
                 new DateTimeOffset(reader.GetDateTime(4)),
-                reader.IsDBNull(5) ? null : new DateTimeOffset(reader.GetDateTime(5)),
-                reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.GetString(7),
-                value));
+                new DateTimeOffset(reader.GetDateTime(5)),
+                reader.IsDBNull(6) ? null : new DateTimeOffset(reader.GetDateTime(6)),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetString(8),
+                value,
+                QualityCode(reader.GetInt16(12), reader.GetInt16(13)),
+                ReadAppliedConfiguration(reader, 14, 15, 16)));
         }
         return rows.GroupBy(static row => row.EventId, StringComparer.Ordinal)
             .Select(static group =>
@@ -325,13 +338,19 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                 {
                     EventId = first.EventId,
                     IngestId = first.FrameId,
+                    EdgeId = first.EdgeId,
                     SourceSequence = first.Sequence,
                     OccurredAt = first.OccurredAt,
                     RecordedAt = first.RecordedAt,
                     IngestedAt = first.IngestedAt,
                     PhaseCode = first.PhaseCode,
+                    AppliedConfiguration = first.AppliedConfiguration,
                     NumericValues = group.Where(static row => row.Value.HasValue)
-                        .ToDictionary(static row => row.SignalCode, static row => row.Value!.Value, StringComparer.Ordinal)
+                        .ToDictionary(static row => row.SignalCode, static row => row.Value!.Value, StringComparer.Ordinal),
+                    QualityCodes = group.ToDictionary(
+                        static row => row.SignalCode,
+                        static row => row.QualityCode,
+                        StringComparer.Ordinal)
                 };
             })
             .ToArray();
@@ -447,11 +466,13 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             INSERT INTO process_sample_frames (
               occurred_at, frame_id, event_id, recorded_at, ingested_at,
               site_id, edge_id, source, subject_type, subject_id, execution_id,
-              phase_code, data_model_id, data_model_version)
+              phase_code, data_model_id, data_model_version,
+              configuration_kind, configuration_id, configuration_version)
             VALUES (
               @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
               @site_id, @edge_id, @source, @subject_type, @subject_id, @execution_id,
-              @phase_code, @model_id, @model_version)
+              @phase_code, @model_id, @model_version,
+              @configuration_kind, @configuration_id, @configuration_version)
             ON CONFLICT (event_id, occurred_at) DO NOTHING;
             """,
             connection,
@@ -470,6 +491,12 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         command.Parameters.AddWithValue("phase_code", (object?)sample.PhaseCode ?? DBNull.Value);
         command.Parameters.AddWithValue("model_id", sample.DataModelId);
         command.Parameters.AddWithValue("model_version", sample.DataModelVersion);
+        command.Parameters.Add("configuration_kind", NpgsqlDbType.Text).Value =
+            (object?)sample.AppliedConfiguration?.Kind ?? DBNull.Value;
+        command.Parameters.Add("configuration_id", NpgsqlDbType.Text).Value =
+            (object?)sample.AppliedConfiguration?.Id ?? DBNull.Value;
+        command.Parameters.Add("configuration_version", NpgsqlDbType.Integer).Value =
+            (object?)sample.AppliedConfiguration?.Version ?? DBNull.Value;
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -482,7 +509,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         await using var writer = await connection.BeginBinaryImportAsync(
             """
             COPY process_sample_values (
-              occurred_at, frame_id, point_key, quality_code,
+              occurred_at, frame_id, point_key, quality_code, quality_evidence_version,
               numeric_value, integer_value, boolean_value, text_value)
             FROM STDIN (FORMAT BINARY)
             """,
@@ -494,6 +521,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             await writer.WriteAsync(sample.IngestId, NpgsqlDbType.Bigint, ct).ConfigureAwait(false);
             await writer.WriteAsync(pointKeys[sample.CollectionPointId], NpgsqlDbType.Bigint, ct).ConfigureAwait(false);
             await writer.WriteAsync(QualityCode(sample.QualityCode), NpgsqlDbType.Smallint, ct).ConfigureAwait(false);
+            await writer.WriteAsync(sample.QualityEvidenceVersion, NpgsqlDbType.Smallint, ct).ConfigureAwait(false);
             await WriteNullableAsync(writer, sample.NumericValue, NpgsqlDbType.Double, ct).ConfigureAwait(false);
             await WriteNullableAsync(writer, sample.IntegerValue, NpgsqlDbType.Bigint, ct).ConfigureAwait(false);
             await WriteNullableAsync(writer, sample.BooleanValue, NpgsqlDbType.Boolean, ct).ConfigureAwait(false);
@@ -523,6 +551,14 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(value), value, "未知信号质量码。")
         };
 
+    private static string QualityCode(short value, short evidenceVersion)
+    {
+        var quality = QualityCode(value);
+        if (evidenceVersion == SignalQualityCodes.CurrentEvidenceVersion)
+            return quality;
+        return quality == SignalQualityCodes.Bad ? quality : SignalQualityCodes.Uncertain;
+    }
+
     private static string QualityCode(short value)
         => value switch
         {
@@ -531,6 +567,59 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             2 => SignalQualityCodes.Bad,
             _ => throw new InvalidDataException($"数据库包含未知信号质量码 {value}。")
         };
+
+    private static void AddAppliedConfigurationFilter(
+        ICollection<string> filters,
+        NpgsqlCommand command,
+        AppliedConfigurationRef? configuration)
+    {
+        if (configuration is null)
+            return;
+        if (!IsValidConfigurationKind(configuration.Kind) ||
+            string.IsNullOrWhiteSpace(configuration.Id) ||
+            configuration.Id.Length > 256 ||
+            configuration.Version <= 0)
+        {
+            throw new ArgumentException(
+                "时序查询的 AppliedConfiguration 必须包含合法的类型、编号和正版本号。",
+                nameof(configuration));
+        }
+
+        filters.Add("frame.configuration_kind = @configuration_kind");
+        filters.Add("frame.configuration_id = @configuration_id");
+        filters.Add("frame.configuration_version = @configuration_version");
+        command.Parameters.AddWithValue("configuration_kind", configuration.Kind);
+        command.Parameters.AddWithValue("configuration_id", configuration.Id);
+        command.Parameters.AddWithValue("configuration_version", configuration.Version);
+    }
+
+    private static bool IsValidConfigurationKind(string value)
+    {
+        if (value.Length is 0 or > 128 || !char.IsAsciiLetterLower(value[0]))
+            return false;
+        return value.All(static character =>
+            char.IsAsciiLetterLower(character) || char.IsAsciiDigit(character) || character is '_' or '.' or '-');
+    }
+
+    private static AppliedConfigurationRef? ReadAppliedConfiguration(
+        NpgsqlDataReader reader,
+        int kindOrdinal,
+        int idOrdinal,
+        int versionOrdinal)
+    {
+        var kindIsNull = reader.IsDBNull(kindOrdinal);
+        var idIsNull = reader.IsDBNull(idOrdinal);
+        var versionIsNull = reader.IsDBNull(versionOrdinal);
+        if (kindIsNull && idIsNull && versionIsNull)
+            return null;
+        if (kindIsNull || idIsNull || versionIsNull)
+            throw new InvalidDataException("数据库包含不完整的 AppliedConfiguration 来源。");
+
+        return new AppliedConfigurationRef(
+            reader.GetString(kindOrdinal),
+            reader.GetString(idOrdinal),
+            reader.GetInt32(versionOrdinal));
+    }
 
     public void Dispose() => _initializeLock.Dispose();
 }

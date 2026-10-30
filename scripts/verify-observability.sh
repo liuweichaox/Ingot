@@ -16,9 +16,12 @@ docker run --rm --entrypoint /bin/amtool \
   prom/alertmanager:v0.32.1 \
   check-config /etc/alertmanager/alertmanager.yml
 
-node -e '
-  const fs = require("node:fs");
-  JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-' "$repo_root/deploy/observability/grafana/dashboards/production-overview.json"
+python3 - "$repo_root/deploy/observability/grafana/dashboards/production-overview.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as dashboard_file:
+    json.load(dashboard_file)
+PY
 
 echo "可观测性配置检查通过。"

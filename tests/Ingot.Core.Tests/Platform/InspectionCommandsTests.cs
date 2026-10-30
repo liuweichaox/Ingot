@@ -329,7 +329,7 @@ public sealed class InspectionCommandsTests
         public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default)
             => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default)
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, string? siteId = null, CancellationToken ct = default)
             => throw new NotSupportedException();
 
         public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default)

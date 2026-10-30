@@ -54,8 +54,9 @@ public sealed class InspectionQueries(
         Guid? inspectionRecordId,
         string? executionId,
         int limit,
+        string? siteId = null,
         CancellationToken ct = default)
-        => reviews.QueryAsync(inspectionRecordId, executionId, limit, ct);
+        => reviews.QueryAsync(inspectionRecordId, executionId, limit, siteId, ct);
 
     public Task<IReadOnlyList<InspectionAuditEntry>> QueryAuditAsync(
         Guid? inspectionRecordId,

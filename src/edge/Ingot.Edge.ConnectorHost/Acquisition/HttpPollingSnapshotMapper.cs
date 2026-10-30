@@ -50,10 +50,14 @@ public static class HttpPollingSnapshotMapper
             context["equipment_id"] = options.EquipmentId;
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var valueFlags = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         foreach (var field in options.Fields)
         {
             var source = SourceRoot(snapshot, field.Topic, topicSnapshots);
-            values[field.Code] = ResolveMappedValue(source, field);
+            var mappingFlags = new HashSet<string>(StringComparer.Ordinal);
+            values[field.Code] = ResolveMappedValue(source, field, mappingFlags);
+            if (mappingFlags.Count > 0)
+                valueFlags[field.Code] = mappingFlags;
         }
         var stageField = options.Fields.SingleOrDefault(item => item.Category == "stage");
         if (stageField is not null &&
@@ -64,7 +68,7 @@ public static class HttpPollingSnapshotMapper
                 Convert.ToString(stageValue, CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
-        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, receivedAt);
+        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, receivedAt, valueFlags);
         sampleData["values"] = values;
         if (!string.IsNullOrWhiteSpace(options.SequencePath) &&
             TryResolve(snapshot, options.SequencePath, out var sequence) &&
@@ -94,6 +98,8 @@ public static class HttpPollingSnapshotMapper
                         $"设备快照中的控制参数必须是对象：{options.ProcessSpecification.ParametersPath}。");
                 }
                 var resolvedParameters = new Dictionary<string, object?>(StringComparer.Ordinal);
+                var parameterQualityFlags = new HashSet<string>(StringComparer.Ordinal);
+                var parameterValueFlags = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
                 foreach (var field in options.ProcessSpecification.ParameterFields)
                 {
                     var parameters = aggregateParameters;
@@ -109,7 +115,11 @@ public static class HttpPollingSnapshotMapper
                         }
                     }
 
-                    resolvedParameters[field.Code] = ResolveMappedValue(parameters, field);
+                    var mappingFlags = new HashSet<string>(StringComparer.Ordinal);
+                    resolvedParameters[field.Code] = ResolveMappedValue(parameters, field, mappingFlags);
+                    parameterQualityFlags.UnionWith(mappingFlags);
+                    if (mappingFlags.Count > 0)
+                        parameterValueFlags[field.Code] = mappingFlags;
                 }
                 string? processSpecificationName = null;
                 if (!string.IsNullOrWhiteSpace(options.ProcessSpecification.NamePath) &&
@@ -122,7 +132,11 @@ public static class HttpPollingSnapshotMapper
                 {
                     ["processSpecificationId"] = processSpecificationId,
                     ["processSpecificationVersion"] = ScalarValue(snapshot, options.ProcessSpecification.VersionPath),
-                    ["resolvedParameters"] = resolvedParameters
+                    ["resolvedParameters"] = resolvedParameters,
+                    ["quality"] = AcquisitionSampleMetadata.CreateQuality(
+                        resolvedParameters,
+                        receivedAt,
+                        parameterValueFlags)["quality"]
                 };
                 if (!string.IsNullOrWhiteSpace(processSpecificationName))
                     processSpecificationData["processSpecificationName"] = processSpecificationName;
@@ -135,7 +149,8 @@ public static class HttpPollingSnapshotMapper
                     executionId: null,
                     context: context,
                     data: processSpecificationData,
-                    appliedConfiguration: options.AppliedConfiguration);
+                    appliedConfiguration: options.AppliedConfiguration,
+                    qualityFlags: parameterQualityFlags.Order(StringComparer.Ordinal).ToArray());
             }
         }
 
@@ -148,7 +163,7 @@ public static class HttpPollingSnapshotMapper
             context: context,
             data: sampleData,
             appliedConfiguration: options.AppliedConfiguration,
-            qualityFlags: values.Any(static pair => pair.Value is null) ? ["missing_value"] : []);
+            qualityFlags: QualityFlags(values, valueFlags));
         return new AcquisitionMappingResult(sample, processSpecificationEvent, processSpecificationIdentity);
     }
 
@@ -274,7 +289,10 @@ public static class HttpPollingSnapshotMapper
         }
     }
 
-    private static object? ResolveMappedValue(JsonElement root, ValueFieldMapping field)
+    private static object? ResolveMappedValue(
+        JsonElement root,
+        ValueFieldMapping field,
+        ISet<string>? qualityFlags = null)
     {
         var mapping = new Ingot.Contracts.Acquisition.AcquisitionValueMapping
         {
@@ -299,7 +317,7 @@ public static class HttpPollingSnapshotMapper
             TryResolve(root, field.QualityPath, out var quality) &&
             quality.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
             raw[field.QualityPath] = ScalarText(quality, field.QualityPath);
-        return AcquisitionValuePolicy.Resolve(raw, mapping, field.DataType);
+        return AcquisitionValuePolicy.Resolve(raw, mapping, field.DataType, qualityFlags);
     }
 
     private static bool TryResolve(JsonElement root, string path, out JsonElement value)
@@ -314,5 +332,17 @@ public static class HttpPollingSnapshotMapper
            !topicSnapshots.TryGetValue(topic, out var topicRoot)
             ? string.IsNullOrWhiteSpace(topic) ? aggregate : default
             : topicRoot;
+
+    private static IReadOnlyList<string> QualityFlags(
+        IReadOnlyDictionary<string, object?> values,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> valueFlags)
+    {
+        var flags = new HashSet<string>(StringComparer.Ordinal);
+        if (values.Any(static pair => pair.Value is null))
+            flags.Add("missing_value");
+        foreach (var itemFlags in valueFlags.Values)
+            flags.UnionWith(itemFlags);
+        return flags.Order(StringComparer.Ordinal).ToArray();
+    }
 
 }

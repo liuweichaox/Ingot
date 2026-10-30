@@ -1,4 +1,4 @@
-
+// 将研究资料、来源片段与审核状态持久化到 PostgreSQL，并维护其完整性边界。
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +13,8 @@ namespace Ingot.Platform.Infrastructure.ResearchAssets;
 public sealed class PostgresResearchAssetStore : IResearchAssetStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private enum KnowledgeSourceSort { UpdatedAt, UploadedAt, ReviewedAt }
+
     private readonly NpgsqlDataSource _dataSource;
     private readonly ProcessKnowledgeOptions _options;
 
@@ -531,6 +533,12 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
     public Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default)
         => ReadKnowledgeSourceAsync(sourceId, null, null, ct);
 
+    public Task<KnowledgeSource?> FindKnowledgeSourceByHashAsync(
+        string siteCode,
+        string sha256,
+        CancellationToken ct = default)
+        => GetKnowledgeSourceByHashAsync(sha256, siteCode, ct);
+
     public async Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default)
         => (await ListKnowledgeSourcesPageCoreAsync(null, 200, null, ct).ConfigureAwait(false)).Data;
 
@@ -545,6 +553,37 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         string? cursor,
         CancellationToken ct = default)
         => ListKnowledgeSourcesPageCoreAsync(siteCode, limit, cursor, ct);
+
+    public Task<ResearchAssetPage<KnowledgeSource>> ListReviewedKnowledgeSourcesPageAsync(
+        string siteCode,
+        string? processSpecificationId,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default)
+        => ListKnowledgeSourcesFilteredPageCoreAsync(
+            siteCode,
+            limit,
+            cursor,
+            KnowledgeSourceStatuses.Reviewed,
+            processSpecificationId,
+            filterProcessSpecificationScope: true,
+            KnowledgeSourceSort.ReviewedAt,
+            ct);
+
+    public Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesForManagementPageAsync(
+        string siteCode,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default)
+        => ListKnowledgeSourcesFilteredPageCoreAsync(
+            siteCode,
+            limit,
+            cursor,
+            requiredStatus: null,
+            processSpecificationId: null,
+            filterProcessSpecificationScope: false,
+            KnowledgeSourceSort.UploadedAt,
+            ct);
 
     private async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageCoreAsync(
         string? siteCode,
@@ -581,6 +620,106 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
                 ? EncodeCursor(new AssetCursor(rows[^1].At, rows[^1].Id.ToString(), 0))
                 : null
         };
+    }
+
+    private async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesFilteredPageCoreAsync(
+        string siteCode,
+        int limit,
+        string? cursor,
+        string? requiredStatus,
+        string? processSpecificationId,
+        bool filterProcessSpecificationScope,
+        KnowledgeSourceSort sort,
+        CancellationToken ct)
+    {
+        limit = Math.Clamp(limit, 1, 100);
+        var sortColumn = sort switch
+        {
+            KnowledgeSourceSort.UploadedAt => "uploaded_at",
+            KnowledgeSourceSort.ReviewedAt => "COALESCE(source.reviewed_at, source.updated_at)",
+            _ => "updated_at"
+        };
+        var cursorScope = CreateKnowledgeSourceCursorScope(
+            siteCode, requiredStatus, processSpecificationId, filterProcessSpecificationScope, sort);
+        var cursorValue = DecodeCursor(cursor);
+        Guid? cursorSourceId = null;
+        if (cursorValue is not null)
+        {
+            if (cursorValue.Version != (int)sort
+                || !string.Equals(cursorValue.Scope, cursorScope, StringComparison.Ordinal)
+                || !Guid.TryParse(cursorValue.Key, out var parsedSourceId))
+                throw new ArgumentException("分页 cursor 与知识来源列表查询范围或排序不匹配。", nameof(cursor));
+            cursorSourceId = parsedSourceId;
+        }
+
+        await using var command = _dataSource.CreateCommand($"""
+            SELECT source.source_id, source.{sortColumn}
+            FROM knowledge_sources AS source
+            WHERE source.site_code = @site_code
+              AND (@status IS NULL OR source.status = @status)
+              AND (
+                @filter_scope = false
+                OR NOT EXISTS (
+                    SELECT 1 FROM knowledge_source_context AS context
+                    WHERE context.source_id = source.source_id
+                      AND lower(btrim(context.dimension_code)) = lower(@scope_dimension))
+                OR (
+                    @process_specification_id IS NOT NULL
+                    AND (
+                        SELECT count(*) FROM knowledge_source_context AS context
+                        WHERE context.source_id = source.source_id
+                          AND lower(btrim(context.dimension_code)) = lower(@scope_dimension)) = 1
+                    AND EXISTS (
+                        SELECT 1 FROM knowledge_source_context AS context
+                        WHERE context.source_id = source.source_id
+                          AND lower(btrim(context.dimension_code)) = lower(@scope_dimension)
+                          AND lower(btrim(context.dimension_value)) = lower(@process_specification_id)))
+              )
+              AND (@cursor_at IS NULL OR (source.{sortColumn}, source.source_id) < (@cursor_at, @cursor_id))
+            ORDER BY source.{sortColumn} DESC, source.source_id DESC
+            LIMIT @take;
+            """);
+        AddNullable(command, "site_code", NpgsqlDbType.Text, siteCode);
+        AddNullable(command, "status", NpgsqlDbType.Text, requiredStatus);
+        AddNullable(command, "process_specification_id", NpgsqlDbType.Text, processSpecificationId);
+        AddNullable(command, "scope_dimension", NpgsqlDbType.Text, MechanismKnowledgeService.ProcessSpecificationDimension);
+        command.Parameters.AddWithValue("filter_scope", filterProcessSpecificationScope);
+        AddNullable(command, "cursor_at", NpgsqlDbType.TimestampTz, cursorValue?.SortAt);
+        AddNullable(command, "cursor_id", NpgsqlDbType.Uuid, cursorSourceId);
+        command.Parameters.AddWithValue("take", limit + 1);
+
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        var rows = new List<(Guid Id, DateTimeOffset At)>();
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            rows.Add((reader.GetGuid(0), reader.GetFieldValue<DateTimeOffset>(1)));
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(rows.Count - 1);
+        var sources = await ReadKnowledgeSourcesAsync(rows.Select(static row => row.Id).ToArray(), ct).ConfigureAwait(false);
+        return new ResearchAssetPage<KnowledgeSource>
+        {
+            Data = sources,
+            NextCursor = hasMore && rows.Count > 0
+                ? EncodeCursor(new AssetCursor(rows[^1].At, rows[^1].Id.ToString(), (int)sort, cursorScope))
+                : null
+        };
+    }
+
+    private static string CreateKnowledgeSourceCursorScope(
+        string siteCode,
+        string? requiredStatus,
+        string? processSpecificationId,
+        bool filterProcessSpecificationScope,
+        KnowledgeSourceSort sort)
+    {
+        var scope = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            siteCode,
+            requiredStatus,
+            processSpecificationId,
+            filterProcessSpecificationScope,
+            sort
+        }, JsonOptions);
+        return Convert.ToHexString(SHA256.HashData(scope));
     }
 
     public async Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default)
@@ -911,7 +1050,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
               created_by, created_at, reviewed_by, reviewed_at, extraction_method,
               extractor_version, extraction_confidence, location_kind, page_number,
               sheet_name, cell_range, citation_region, content_hash
-            FROM knowledge_fragments WHERE source_id = @id ORDER BY updated_at DESC LIMIT 500;
+            FROM knowledge_fragments WHERE source_id = @id ORDER BY updated_at DESC;
             """);
         command.Parameters.AddWithValue("id", sourceId);
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -1143,13 +1282,72 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         }
     }
 
-    private sealed record AssetCursor(DateTimeOffset SortAt, string Key, int Version);
+    private sealed record AssetCursor(DateTimeOffset SortAt, string Key, int Version, string? Scope = null);
 
     private async Task<KnowledgeSource?> GetKnowledgeSourceByHashAsync(
         string sha256,
         string siteCode,
         CancellationToken ct)
         => await ReadKnowledgeSourceAsync(null, sha256, siteCode, ct).ConfigureAwait(false);
+
+    private async Task<IReadOnlyList<KnowledgeSource>> ReadKnowledgeSourcesAsync(
+        IReadOnlyList<Guid> sourceIds,
+        CancellationToken ct)
+    {
+        if (sourceIds.Count == 0) return [];
+        var ids = sourceIds.ToArray();
+        var sources = new Dictionary<Guid, KnowledgeSource>(ids.Length);
+        await using (var command = _dataSource.CreateCommand(
+                         """
+                         SELECT source_id, title, source_kind, status, storage_ref, sha256, media_type,
+                           file_name, size_bytes, uploaded_by, uploaded_at, reviewed_by, reviewed_at,
+                           extraction_status, extraction_error, extractor_version, site_code
+                         FROM knowledge_sources
+                         WHERE source_id = ANY(@ids);
+                         """))
+        {
+            command.Parameters.AddWithValue("ids", ids);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var source = ReadKnowledgeSourceMetadata(reader);
+                sources[source.SourceId] = source;
+            }
+        }
+
+        var contexts = new Dictionary<Guid, Dictionary<string, string>>(ids.Length);
+        await using (var command = _dataSource.CreateCommand(
+                         """
+                         SELECT source_id, dimension_code, dimension_value
+                         FROM knowledge_source_context
+                         WHERE source_id = ANY(@ids)
+                         ORDER BY source_id, dimension_code;
+                         """))
+        {
+            command.Parameters.AddWithValue("ids", ids);
+            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+            while (await reader.ReadAsync(ct).ConfigureAwait(false))
+            {
+                var sourceId = reader.GetGuid(0);
+                if (!contexts.TryGetValue(sourceId, out var dimensions))
+                {
+                    dimensions = new Dictionary<string, string>(StringComparer.Ordinal);
+                    contexts.Add(sourceId, dimensions);
+                }
+                dimensions[reader.GetString(1)] = reader.GetString(2);
+            }
+        }
+
+        return ids
+            .Where(sources.ContainsKey)
+            .Select(id => sources[id] with
+            {
+                ContextSelector = contexts.TryGetValue(id, out var dimensions)
+                    ? dimensions
+                    : new Dictionary<string, string>(StringComparer.Ordinal)
+            })
+            .ToArray();
+    }
 
     private async Task<KnowledgeSource?> ReadKnowledgeSourceAsync(
         Guid? sourceId,
@@ -1174,26 +1372,7 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
         await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
         {
             if (!await reader.ReadAsync(ct).ConfigureAwait(false)) return null;
-            value = new KnowledgeSource
-            {
-                SourceId = reader.GetGuid(0),
-                SiteCode = reader.GetString(16),
-                Title = reader.GetString(1),
-                SourceKind = reader.GetString(2),
-                Status = reader.GetString(3),
-                StorageRef = reader.GetString(4),
-                Sha256 = reader.GetString(5),
-                MediaType = reader.GetString(6),
-                FileName = reader.GetString(7),
-                SizeBytes = reader.GetInt64(8),
-                UploadedBy = reader.GetString(9),
-                UploadedAt = reader.GetFieldValue<DateTimeOffset>(10),
-                ReviewedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
-                ReviewedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
-                ExtractionStatus = reader.GetString(13),
-                ExtractionError = reader.IsDBNull(14) ? null : reader.GetString(14),
-                ExtractorVersion = reader.IsDBNull(15) ? null : reader.GetString(15)
-            };
+            value = ReadKnowledgeSourceMetadata(reader);
         }
         await using var context = _dataSource.CreateCommand(
             "SELECT dimension_code, dimension_value FROM knowledge_source_context WHERE source_id = @id ORDER BY dimension_code;");
@@ -1204,6 +1383,28 @@ public sealed class PostgresResearchAssetStore : IResearchAssetStore
             dimensions[contextReader.GetString(0)] = contextReader.GetString(1);
         return value with { ContextSelector = dimensions };
     }
+
+    private static KnowledgeSource ReadKnowledgeSourceMetadata(NpgsqlDataReader reader)
+        => new()
+        {
+            SourceId = reader.GetGuid(0),
+            SiteCode = reader.GetString(16),
+            Title = reader.GetString(1),
+            SourceKind = reader.GetString(2),
+            Status = reader.GetString(3),
+            StorageRef = reader.GetString(4),
+            Sha256 = reader.GetString(5),
+            MediaType = reader.GetString(6),
+            FileName = reader.GetString(7),
+            SizeBytes = reader.GetInt64(8),
+            UploadedBy = reader.GetString(9),
+            UploadedAt = reader.GetFieldValue<DateTimeOffset>(10),
+            ReviewedBy = reader.IsDBNull(11) ? null : reader.GetString(11),
+            ReviewedAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+            ExtractionStatus = reader.GetString(13),
+            ExtractionError = reader.IsDBNull(14) ? null : reader.GetString(14),
+            ExtractorVersion = reader.IsDBNull(15) ? null : reader.GetString(15)
+        };
 
     private async Task<IReadOnlyDictionary<string, string>> ReadFragmentValuesAsync(
         Guid fragmentId,

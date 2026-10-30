@@ -1,4 +1,4 @@
-
+// 将标准过程样本转换为携带逐变量质量码的时序点。
 using System.Globalization;
 using System.Text.Json;
 using Ingot.Contracts.ProcessConfiguration;
@@ -27,6 +27,7 @@ public static class TimeSeriesSampleProjector
         }
 
         var quality = ReadQualityCodes(evt.Data);
+        var hasVersionedQuality = HasVersionedQuality(evt.Data);
         var phaseCode = ProcessAnalysisResolver.ResolveStage(evt.Context, evt.Data, analysis.DataModel);
         var definitions = analysis.DataModel.Acquisition.DataItems
             .ToDictionary(static item => item.Code, StringComparer.Ordinal);
@@ -39,6 +40,11 @@ public static class TimeSeriesSampleProjector
                 continue;
             }
 
+            var sourceQuality = quality.GetValueOrDefault(
+                definition.Code,
+                hasVersionedQuality ? SignalQualityCodes.Good : SignalQualityCodes.Uncertain);
+            if (!hasVersionedQuality && sourceQuality == SignalQualityCodes.Good)
+                sourceQuality = SignalQualityCodes.Uncertain;
             var sample = CreateSample(
                 siteId,
                 edgeId,
@@ -48,7 +54,8 @@ public static class TimeSeriesSampleProjector
                 analysis.DataModel,
                 definition,
                 phaseCode,
-                quality.GetValueOrDefault(definition.Code, SignalQualityCodes.Good),
+                sourceQuality,
+                hasVersionedQuality ? SignalQualityCodes.CurrentEvidenceVersion : (short)0,
                 pair.Value);
             if (sample is not null)
                 result.Add(sample);
@@ -80,6 +87,7 @@ public static class TimeSeriesSampleProjector
         ProcessDataItemDefinition definition,
         string? phaseCode,
         string qualityCode,
+        short qualityEvidenceVersion,
         object? raw)
     {
         double? numericValue = null;
@@ -136,7 +144,9 @@ public static class TimeSeriesSampleProjector
             PhaseCode = phaseCode,
             DataModelId = model.ModelId,
             DataModelVersion = model.Version,
+            AppliedConfiguration = evt.AppliedConfiguration,
             QualityCode = NormalizeQuality(qualityCode),
+            QualityEvidenceVersion = qualityEvidenceVersion,
             NumericValue = numericValue,
             IntegerValue = integerValue,
             BooleanValue = booleanValue,
@@ -149,8 +159,10 @@ public static class TimeSeriesSampleProjector
     {
         if (!data.TryGetValue("quality", out var raw) || !TryReadObject(raw, out var values))
             return new Dictionary<string, string>();
-        return values
-            .Where(static pair => TryReadString(pair.Value, out _))
+        var result = values
+            .Where(static pair => pair.Key is not ("status" or "flags" or "valueFlags" or "receivedAt" or
+                                                   "missingValueCount" or "degradedValueCount") &&
+                                  TryReadString(pair.Value, out _))
             .ToDictionary(
                 static pair => pair.Key,
                 static pair =>
@@ -159,14 +171,58 @@ public static class TimeSeriesSampleProjector
                     return NormalizeQuality(value);
                 },
                 StringComparer.Ordinal);
+        if (values.TryGetValue("valueFlags", out var rawValueFlags) &&
+            TryReadObject(rawValueFlags, out var valueFlags))
+        {
+            foreach (var pair in valueFlags)
+            {
+                if (HasFlags(pair.Value))
+                    result[pair.Key] = MergeQuality(
+                        result.GetValueOrDefault(pair.Key, SignalQualityCodes.Good),
+                        SignalQualityCodes.Uncertain);
+            }
+        }
+        return result;
+    }
+
+    private static bool HasVersionedQuality(IReadOnlyDictionary<string, object?> data)
+    {
+        if (!data.TryGetValue("quality", out var raw) || !TryReadObject(raw, out var quality) ||
+            !quality.TryGetValue("qualityVersion", out var rawVersion) ||
+            !TryReadInt64(rawVersion, out var version) ||
+            version != SignalQualityCodes.CurrentEvidenceVersion)
+        {
+            return false;
+        }
+
+        return quality.TryGetValue("valueFlags", out var rawFlags) && TryReadObject(rawFlags, out _);
+    }
+
+    private static bool HasFlags(object? raw)
+    {
+        if (raw is JsonElement { ValueKind: JsonValueKind.Array } array)
+            return array.GetArrayLength() > 0;
+        return raw is IEnumerable<string> values && values.Any();
     }
 
     private static string NormalizeQuality(string? value)
         => value?.Trim().ToLowerInvariant() switch
         {
+            SignalQualityCodes.Good => SignalQualityCodes.Good,
             SignalQualityCodes.Bad => SignalQualityCodes.Bad,
             SignalQualityCodes.Uncertain => SignalQualityCodes.Uncertain,
-            _ => SignalQualityCodes.Good
+            _ => SignalQualityCodes.Uncertain
+        };
+
+    private static string MergeQuality(string current, string incoming)
+        => QualityRank(incoming) > QualityRank(current) ? incoming : current;
+
+    private static int QualityRank(string value)
+        => value switch
+        {
+            SignalQualityCodes.Bad => 2,
+            SignalQualityCodes.Uncertain => 1,
+            _ => 0
         };
 
     private static string NormalizeIdentity(string value)

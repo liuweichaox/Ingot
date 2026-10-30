@@ -97,7 +97,9 @@ test("Chinese home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化/);
   assert.match(source, /从工艺数据，/);
   assert.match(source, /到有依据的研发决策。/);
-  assert.match(source, /已复核工艺资料片段/);
+  assert.match(source, /引用复核资料/);
+  assert.match(source, /明确配方时只使用站点通用资料和该配方限定资料/);
+  assert.match(source, /返回片段引用/);
   assert.match(source, /片段级引用/);
   for (const stage of ["组织研发记录", "核对运行与质量", "分析工艺差异", "审核配方建议"]) {
     assert.match(source, new RegExp(stage));
@@ -121,7 +123,9 @@ test("English home presents R&D, analysis, and recipe decisions", async () => {
   assert.match(source, /Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis \(including process diagnosis\), and recipe optimization/i);
   assert.match(source, /From process data/);
   assert.match(source, /to evidence-based R&amp;D decisions/);
-  assert.match(source, /reviewed process-document references/i);
+  assert.match(source, /Cite reviewed materials/i);
+  assert.match(source, /With an explicit recipe, search site-wide materials and materials scoped to that recipe/i);
+  assert.match(source, /return fragment citations/i);
   assert.match(source, /Fragment citations/);
   for (const stage of ["Organize research records", "Check runs and quality", "Analyze process differences", "Review recipe recommendations"]) {
     assert.match(source, new RegExp(stage));
@@ -157,6 +161,24 @@ test("both locales link the pilot and troubleshooting with explicit admission bo
     assert.match(text, locale === "zh" ? /至少三条有效运行、两种不同实际配方只是最低门槛/ : /three valid runs and two distinct actual recipes are minimum requirements/i);
     assert.match(text, locale === "zh" ? /Web、API、Worker、数据库/ : /Web app, API, Worker, database/);
     assert.doesNotMatch(text, /下一轮同版本运行自动接续|next same-version run links automatically/i);
-    assert.match(text, locale === "zh" ? /按站点与配方归属管理/ : /by site and recipe/);
+    assert.match(text, locale === "zh" ? /在授权站点内检索已复核资料/ : /Retrieve reviewed materials inside the authorized site/i);
+    assert.match(text, locale === "zh"
+      ? /明确配方时只使用站点通用资料和该配方限定资料/
+      : /With an explicit recipe, search site-wide materials and materials scoped to that recipe/i);
+  }
+});
+
+test("both locales link the simulator demo and real-device integration guide separately", async () => {
+  for (const [pathname, locale, label] of [
+    ["/", "zh", "真实设备接入与驱动范围"],
+    ["/en/", "en", "Field integration and driver coverage"],
+  ]) {
+    const source = await html(pathname);
+    const anchor = source.match(new RegExp(`<a\\b[^>]*href="https://docs\\.ingotstack\\.com/${locale}/data-connection"[^>]*>([\\s\\S]*?)<\\/a>`, "i"));
+    assert.ok(anchor, `Expected the ${locale} field integration guide link`);
+    assert.match(visibleText(anchor[1]), new RegExp(label));
+    const quickPaths = source.match(/<nav\b[^>]*aria-label="(?:快速入口|Quick paths)"[^>]*>([\s\S]*?)<\/nav>/i);
+    assert.ok(quickPaths, `Expected the ${locale} quick-path navigation`);
+    assert.ok(quickPaths[1].includes(anchor[0]), "The field integration guide should stay in the quick-path navigation");
   }
 });

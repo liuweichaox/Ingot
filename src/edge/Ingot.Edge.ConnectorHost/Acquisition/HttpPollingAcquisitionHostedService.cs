@@ -446,7 +446,7 @@ internal sealed class HttpPollingAcquisitionHostedService(
                 var readDurationMs = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted).TotalMilliseconds;
                 status.RecordReadSuccess(key, observedAt, readDurationMs);
                 var mapped = HttpPollingSnapshotMapper.Map(snapshot, options, source, currentProcessSpecification);
-                var deduplication = sourceDeduplicator.Evaluate(
+                var deduplication = sourceDeduplicator.EvaluatePending(
                     mapped.Sample,
                     observedAt,
                     TimeSpan.FromMilliseconds(options.SourceIdentityStaleAfterMs));
@@ -460,8 +460,8 @@ internal sealed class HttpPollingAcquisitionHostedService(
                     await Task.Delay(delay, ct).ConfigureAwait(false);
                     continue;
                 }
-                var events = lifecycle.Track(mapped, options.Lifecycle, options.PollIntervalMs);
-                await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                var events = await lifecycle.TrackAndEmitAsync(mapped, options.Lifecycle, options.PollIntervalMs, sink, ct).ConfigureAwait(false);
+                sourceDeduplicator.Commit(mapped.Sample, observedAt);
                 status.RecordProcessExecutionState(key, lifecycle.IsRunActive);
                 status.RecordEmissionOutcome(
                     key,

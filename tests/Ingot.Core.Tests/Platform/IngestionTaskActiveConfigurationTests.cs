@@ -244,6 +244,19 @@ public sealed class IngestionTaskActiveConfigurationTests
                 string.Equals(taskId, Task.TaskId, StringComparison.Ordinal) && version == Task.Version
                     ? Task
                     : null);
+        public Task<IReadOnlyList<IngestionTaskVersionMetadata>> FindVersionMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<IngestionTaskVersionMetadata>>(
+                references.Select(reference =>
+                    string.Equals(reference.TaskId, Task.TaskId, StringComparison.Ordinal) &&
+                    reference.Version == Task.Version
+                        ? authorizedEdgeIds.Contains(Task.EdgeId)
+                            ? new IngestionTaskVersionMetadata(Task.TaskId, Task.Version, Task.EdgeId, Task.Status, false)
+                            : new IngestionTaskVersionMetadata(reference.TaskId, reference.Version, null, null, true)
+                        : new IngestionTaskVersionMetadata(reference.TaskId, reference.Version, null, null, false))
+                    .ToArray());
         public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
         {
             UpsertCount++;

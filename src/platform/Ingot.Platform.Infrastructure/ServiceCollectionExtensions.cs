@@ -73,6 +73,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ChatConversationApplication>();
 
         services.AddSingleton<EdgeRegistry>();
+        services.AddSingleton<IEdgeSiteDirectory>(provider => provider.GetRequiredService<EdgeRegistry>());
+        services.AddSingleton<IEdgeTaskDeploymentHistoryReader>(provider => provider.GetRequiredService<EdgeRegistry>());
         services.AddSingleton<SystemSiteCatalog>();
 
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
@@ -165,6 +167,7 @@ public static class ServiceCollectionExtensions
         services.AddIngotProcessResearch(configuration);
 
         services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
+        services.AddSingleton<IProcessSampleConfigurationReferenceVerifier, ProcessSampleConfigurationReferenceVerifier>();
         services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
         services.AddSingleton<AcquisitionApplication>();
         services.AddSingleton<IAcquisitionProbeTaskStore, PostgresAcquisitionProbeTaskStore>();

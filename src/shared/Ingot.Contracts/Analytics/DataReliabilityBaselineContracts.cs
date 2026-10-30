@@ -1,4 +1,6 @@
 // 定义数据可靠性基线的站点范围、统计结果和排除原因。
+using Ingot.Contracts.Events;
+
 namespace Ingot.Contracts.Analytics;
 
 public sealed record DataReliabilityBaselineQuery
@@ -8,6 +10,8 @@ public sealed record DataReliabilityBaselineQuery
     public DateTimeOffset? To { get; init; }
     public string? EdgeId { get; init; }
     public string? EquipmentId { get; init; }
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
     public int MaximumRuns { get; init; } = 2000;
 }
 
@@ -75,22 +79,75 @@ public sealed record ReliabilityExclusionCount
     public int RunCount { get; init; }
 }
 
+public sealed record ReliabilityRunImpact
+{
+    public required string ExecutionId { get; init; }
+    public required string EquipmentId { get; init; }
+    public IReadOnlyList<string> EdgeIds { get; init; } = [];
+    public bool HasStarted { get; init; }
+    public bool HasCompleted { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+    public DateTimeOffset? CompletedAt { get; init; }
+    public required string ProcessDataStatus { get; init; }
+    public IReadOnlyList<string> ReasonCodes { get; init; } = [];
+    public IReadOnlyList<ProcessSampleConfigurationEvidence> SampleConfigurationEvidence { get; init; } = [];
+    public IReadOnlyList<ExpectedConfigurationCoverageEvidence> ExpectedConfigurationCoverage { get; init; } = [];
+}
+
+/// <summary>Observed applied-version and mapping evidence overlapping one run; overlap is not causal proof.</summary>
+public sealed record ExpectedConfigurationCoverageEvidence
+{
+    public required string TaskId { get; init; }
+    public int TaskVersion { get; init; }
+    public required string EdgeId { get; init; }
+    public required string ConfigurationHash { get; init; }
+    public required string ConfigurationSource { get; init; }
+    public required string ConfigurationStatus { get; init; }
+    public DateTimeOffset FirstObservedAt { get; init; }
+    public DateTimeOffset LastObservedAt { get; init; }
+    public DateTimeOffset RunOverlapStart { get; init; }
+    public DateTimeOffset RunOverlapEnd { get; init; }
+    public required string SampleEvidenceStatus { get; init; }
+    public int SampleFrameCount { get; init; }
+    public IReadOnlyList<string> RequiredDataItemCodes { get; init; } = [];
+    public IReadOnlyList<string> ObservedDataItemCodes { get; init; } = [];
+    public IReadOnlyList<string> NotObservedRequiredDataItemCodes { get; init; } = [];
+}
+
+public static class ExpectedConfigurationSampleEvidenceStatuses
+{
+    public const string Matched = "matched";
+    public const string NoMatchingFrames = "no-matching-frames";
+    public const string SummarizedUnverifiable = "summarized-unverifiable";
+    public const string UnverifiableTaskVersion = "unverifiable-task-version";
+    public const string ObservationHistoryTruncated = "observation-history-truncated";
+    public const string CoverageResultTruncated = "coverage-result-truncated";
+}
+
 public sealed record DataReliabilityBaseline
 {
     public DateTimeOffset GeneratedAt { get; init; }
+    public string? SiteId { get; init; }
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public string? EdgeId { get; init; }
     public string? EquipmentId { get; init; }
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
     public int MatchingCompletedRunCount { get; init; }
+    public int MatchingObservedRunCount { get; init; }
     public int AnalyzedRunCount { get; init; }
+    public int MissingExecutionRowCount { get; init; }
     public bool Truncated { get; init; }
+    public bool TaskDeploymentObservationHistoryTruncated { get; init; }
+    public bool ExpectedConfigurationCoverageTruncated { get; init; }
     public IReadOnlyList<ReliabilityRate> Rates { get; init; } = [];
     public IReadOnlyList<ContextFieldCoverage> ContextFields { get; init; } = [];
     public IReadOnlyList<ContextFactorSummary> ContextFactors { get; init; } = [];
     public IReadOnlyList<ContextFactorOverlap> ContextFactorOverlaps { get; init; } = [];
     public int UnidentifiableConfoundingCount { get; init; }
     public IReadOnlyList<ReliabilityExclusionCount> Exclusions { get; init; } = [];
+    public IReadOnlyList<ReliabilityRunImpact> RunImpacts { get; init; } = [];
     public int DuplicateTimestampCount { get; init; }
     public int OutOfOrderCount { get; init; }
     public int SequenceGapCount { get; init; }

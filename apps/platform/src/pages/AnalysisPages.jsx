@@ -1,12 +1,14 @@
 
 // 呈现运行对比、候选原因与数据可信度，并在证据不足时阻止结论升级。
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { getJson, postJson } from "../api/http";
-import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { useIsMounted } from "../hooks/useIsMounted";
-import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, EmptyState, EvidenceLevel, Field, Input, Metric, Page, RequestError, Select, StatusBadge, Textarea } from "../ui/components";
-import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, toFiniteNumber, LoadingCard } from "./shared";
+import { formatLocalDateTime, localDateTimeToIso } from "../ui/dateTime";
+import { Alert, Badge, Button, Card, ConclusionBoundary, DataTable, DateTimeField, EmptyState, EvidenceLevel, Field, Input, Metric, Page, Pagination, RequestError, Select, StatusBadge, Textarea } from "../ui/components";
+import { contextFieldLabel, formatTime, formatInteger, formatDuration, objectTypeLabel, toFiniteNumber, LoadingCard, SiteScopeField } from "./shared";
 
 const comparisonFeatureLabels = {
   min: "最小值",
@@ -30,7 +32,92 @@ const readinessBlockingReasonLabels = {
   "outcome-class-missing": "合格或不合格类别样本不足",
   "effective-weight-insufficient": "有效证据权重不足",
   "process-data-unavailable": "部分运行的过程数据不可用",
+  "process-data-degraded": "质量降级的运行已从候选原因计算中排除",
 };
+
+const reliabilityRunReasonDetails = {
+  lifecycle_incomplete: ["运行边界不完整", "核对开始与结束事件是否都已上报；缺少结束事件也可能表示运行仍在进行。"],
+  process_data_incomplete: ["过程数据未达完整标准", "查看运行详情中的过程数据状态与质量提示。"],
+  actual_parameters_missing: ["缺少实际参数回读", "检查配方应用后的设备实际参数是否关联到运行。"],
+  parameter_unit_missing: ["实际参数或单位不完整", "确认实际参数回读存在，且每项都包含单位。"],
+  context_capture_invalid: ["生产上下文捕获无效", "核对上下文捕获状态与现场节点配置。"],
+  minimal_context_missing: ["最小上下文不完整", "确认捕获状态有效，并包含设备编号与运行编号。"],
+  quality_unlinked: ["未关联有效质量结果", "核对检验结果是否关联到该运行。"],
+};
+
+const sampleSourceVerificationDetails = {
+  matched: {
+    label: "平台任务版本与 Edge 一致",
+    tone: "success",
+    detail: "该任务版本存在于当前站点的平台记录中，且记录归属 Edge 与帧报告 Edge 一致。",
+  },
+  "version-not-found": {
+    label: "站点内未找到该任务版本",
+    tone: "warning",
+    detail: "当前站点的平台任务记录中没有这组任务编号和版本。",
+  },
+  "edge-mismatch": {
+    label: "平台记录与帧来源 Edge 不一致",
+    tone: "warning",
+    detail: "当前站点存在该任务版本，但记录归属 Edge 与帧报告 Edge 不同。",
+  },
+  unverifiable: {
+    label: "无法逐版本核对",
+    tone: "neutral",
+    detail: "来源已汇总、帧来源信息不完整，或配置引用不是采集任务版本。",
+  },
+};
+
+const ingestionTaskStatusLabels = {
+  draft: "草稿",
+  published: "已发布",
+  retired: "已停用",
+};
+
+function reliabilityRunActions(reasonCode, run, siteId) {
+  const detailQuery = new URLSearchParams();
+  if (siteId) detailQuery.set("siteId", siteId);
+  const detailHref = tab => {
+    const query = new URLSearchParams(detailQuery);
+    if (tab) query.set("tab", tab);
+    const search = query.toString();
+    return `/process-executions/${encodeURIComponent(run.executionId)}${search ? `?${search}` : ""}`;
+  };
+  const edgeIds = [...new Set((run.edgeIds || []).filter(Boolean))];
+  const actions = [];
+
+  if (reasonCode === "lifecycle_incomplete")
+    actions.push({ href: detailHref("events"), label: "核对本次运行事件" });
+  if (reasonCode === "process_data_incomplete")
+    actions.push({ href: detailHref("curves"), label: "查看本次运行曲线" });
+  if (reasonCode === "quality_unlinked") {
+    const query = new URLSearchParams({ executionId: run.executionId });
+    if (siteId) query.set("siteId", siteId);
+    actions.push({ href: `/inspections?${query}`, label: "打开本次运行检验任务" });
+  }
+
+  if ([
+    "process_data_incomplete",
+    "lifecycle_incomplete",
+    "actual_parameters_missing",
+    "parameter_unit_missing",
+    "context_capture_invalid",
+    "minimal_context_missing",
+  ].includes(reasonCode)) {
+    for (const edgeId of edgeIds) {
+      const query = new URLSearchParams({ edgeId });
+      if (siteId) query.set("siteId", siteId);
+      actions.push({
+        href: `/configuration/ingestion-tasks?${query}#task-configurations`,
+        label: `检查 ${edgeId} 的采集配置`,
+      });
+    }
+  }
+
+  if (!actions.length)
+    actions.push({ href: detailHref(null), label: "查看运行详情" });
+  return actions;
+}
 
 function formatDecimal(value) {
   const numeric = toFiniteNumber(value);
@@ -65,7 +152,7 @@ function MatchingContext({ value }) {
 export function AnalysisReadinessCard({ diagnosis = {} }) {
   const readiness = diagnosis.readiness || { mode: "descriptive-only", blockingReasons: [] };
   return (
-    <Card title="分析就绪度" description="数据不足时只展示描述性事实，不生成候选原因。">
+    <Card title="分析就绪度" description="候选原因只使用过程数据质量完整的运行；数据不足时只展示描述性事实。">
       <div className="grid gap-3 md:grid-cols-3">
         <Metric label="当前模式" value={{
           "descriptive-only": "仅描述性统计",
@@ -92,9 +179,8 @@ export function AnalysisReadinessCard({ diagnosis = {} }) {
 
 export function ExecutionComparisonPage() {
   const [params] = useSearchParams();
-  const requestedSiteId = params.get("siteId") || "";
-  const edges = useApi(requestedSiteId ? "" : "/api/edges", { enabled: !requestedSiteId });
-  const siteId = requestedSiteId || registeredSiteIds(edges.data)[0] || "";
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices, selectSite } = siteScope;
   const isMounted = useIsMounted();
   const [baseline, setBaseline] = useState(params.get("executionId") || "");
   const [candidate, setCandidate] = useState("");
@@ -108,46 +194,106 @@ export function ExecutionComparisonPage() {
   const [executionFilter, setProcessExecutionFilter] = useState("");
   const [additionalConfounders, setAdditionalConfounders] = useState("");
   const [catalogRetryKey, setCatalogRetryKey] = useState(0);
+  const priorSiteId = useRef(params.get("siteId") || "");
+  const siteScopeResolved = useRef(false);
+  const catalogRequestId = useRef(0);
+  const linkedBaselineRequestId = useRef(0);
+  const comparisonRequestId = useRef(0);
+  const comparisonContext = JSON.stringify([siteId, baseline, candidate, comparisonScope, additionalConfounders]);
+  const comparisonContextRef = useRef(comparisonContext);
+  useEffect(() => {
+    comparisonContextRef.current = comparisonContext;
+  }, [comparisonContext]);
+  useEffect(() => {
+    if (siteScope.loading || siteScope.error || siteScope.invalidRequestedSite) return;
+    if (!siteScopeResolved.current) {
+      if (!siteId) return;
+      siteScopeResolved.current = true;
+      priorSiteId.current = siteId;
+      return;
+    }
+    if (priorSiteId.current === siteId) return;
+    priorSiteId.current = siteId;
+    catalogRequestId.current += 1;
+    linkedBaselineRequestId.current += 1;
+    comparisonRequestId.current += 1;
+    setBaseline("");
+    setCandidate("");
+    setResult(null);
+    setLinkedBaseline(null);
+    setProcessExecutions([]);
+    setBusy(false);
+  }, [siteId, siteScope.error, siteScope.invalidRequestedSite, siteScope.loading]);
+  useEffect(() => {
+    comparisonRequestId.current += 1;
+    setResult(null);
+    setError("");
+    setBusy(false);
+  }, [comparisonContext]);
   useEffect(() => {
     const search = executionFilter.trim();
     const query = new URLSearchParams({ status: "completed", limit: "200" });
+    const requestId = ++catalogRequestId.current;
     if (!siteId) {
-      if (!edges.loading) {
+      if (!siteScope.loading) {
         setCatalogLoading(false);
-        setError(edges.error || "还没有登记现场节点。");
+        setError(siteScope.error || (siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : ""));
       }
-      return undefined;
+      return () => {
+        if (catalogRequestId.current === requestId) catalogRequestId.current += 1;
+      };
     }
+    const controller = new AbortController();
     query.set("siteId", siteId);
     if (search) query.set("search", search);
+    setError("");
     setCatalogLoading(true);
-    getJson(`/api/v1/process-executions?${query}`).then(executionPayload => {
-      if (!isMounted()) return;
+    getJson(`/api/v1/process-executions?${query}`, { signal: controller.signal }).then(executionPayload => {
+      if (!isMounted() || catalogRequestId.current !== requestId) return;
       const loadedExecutions = extractRows(executionPayload);
       setProcessExecutions(loadedExecutions);
       if (!baseline && !search && loadedExecutions.length > 0) setBaseline(loadedExecutions[0].executionId);
     }).catch(requestError => {
-      if (!isMounted()) return;
+      if (!isMounted() || requestError?.name === "AbortError" || catalogRequestId.current !== requestId) return;
       setProcessExecutions([]);
       setError(requestError.message || "无法读取可比较的生产运行。");
     }).finally(() => {
-      if (isMounted()) setCatalogLoading(false);
+      if (isMounted() && catalogRequestId.current === requestId) setCatalogLoading(false);
     });
-  }, [catalogRetryKey, edges.error, edges.loading, executionFilter, siteId]);
+    return () => {
+      controller.abort();
+      if (catalogRequestId.current === requestId) catalogRequestId.current += 1;
+    };
+  }, [catalogRetryKey, executionFilter, siteId, siteScope.error, siteScope.invalidRequestedSite, siteScope.loading]);
 
   useEffect(() => {
+    const requestId = ++linkedBaselineRequestId.current;
     if (!baseline || !siteId || executions.some(item => item.executionId === baseline)) {
       setLinkedBaseline(null);
-      return;
+      return () => {
+        if (linkedBaselineRequestId.current === requestId) linkedBaselineRequestId.current += 1;
+      };
     }
-    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(siteId)}&limit=1`)
+    const controller = new AbortController();
+    getJson(`/api/v1/process-executions?executionId=${encodeURIComponent(baseline)}&siteId=${encodeURIComponent(siteId)}&limit=1`, { signal: controller.signal })
       .then(payload => {
-        if (isMounted()) setLinkedBaseline(extractRows(payload)[0] || null);
+        if (isMounted() && linkedBaselineRequestId.current === requestId) {
+          const linked = extractRows(payload)[0] || null;
+          setLinkedBaseline(linked);
+          if (!linked && baseline === params.get("executionId")) setBaseline("");
+        }
       })
       .catch(() => {
-        if (isMounted()) setLinkedBaseline(null);
+        if (isMounted() && linkedBaselineRequestId.current === requestId) {
+          setLinkedBaseline(null);
+          if (baseline === params.get("executionId")) setBaseline("");
+        }
       });
-  }, [baseline, executions, siteId]);
+    return () => {
+      controller.abort();
+      if (linkedBaselineRequestId.current === requestId) linkedBaselineRequestId.current += 1;
+    };
+  }, [baseline, executions, params, siteId]);
 
   const baselineProcessExecution = executions.find(item => item.executionId === baseline) || linkedBaseline;
   const normalizedProcessExecutionFilter = executionFilter.trim().toLowerCase();
@@ -258,7 +404,11 @@ export function ExecutionComparisonPage() {
   }));
   return (
     <Page title="工艺分析" description="比较同类运行的设定和过程曲线，结合数据质量检查实际差异。">
-      <RequestError error={error} onRetry={() => { setError(""); setCatalogRetryKey(value => value + 1); }} />
+      <Card title="分析站点" description="运行比较只使用所选站点的数据；多站点账号需要明确选择，避免默认落到其他现场。">
+        <div className="max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={selectSite} loading={siteScope.loading} /></div>
+      </Card>
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后读取可比较运行。" : "当前账号没有可用站点。"}</Alert>}
+      <RequestError error={siteScope.error || error} onRetry={() => { setError(""); if (siteScope.error) void siteScope.reload(); setCatalogRetryKey(value => value + 1); }} />
       <Card title="对比条件">
         <form className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,.8fr)_minmax(0,1.4fr)_minmax(12rem,.7fr)_minmax(15rem,.8fr)_auto]" onSubmit={compare}>
           <Field label="筛选运行"><Input value={executionFilter} onChange={event => setProcessExecutionFilter(event.target.value)} placeholder={`产品、设备、规范或运行号（${visibleProcessExecutions.length}/${executions.length}）`} /></Field>
@@ -442,19 +592,63 @@ export function ExecutionComparisonPage() {
 }
 
 export function DataQualityPage() {
-  const [params] = useSearchParams();
-  const edges = useApi("/api/edges");
-  const siteId = registeredSiteIds(edges.data)[0] || "";
-  const objectQuery = new URLSearchParams({ limit: "200" });
-  if (params.get("subjectType")) objectQuery.set("subjectType", params.get("subjectType"));
-  if (params.get("subjectId")) objectQuery.set("subjectId", params.get("subjectId"));
+  const [params, setParams] = useSearchParams();
+  const [runImpactPage, setRunImpactPage] = useState(1);
+  const [runImpactPageSize, setRunImpactPageSize] = useState(50);
+  const [selectedImpactReason, setSelectedImpactReason] = useState("");
+  const [objectPage, setObjectPage] = useState(1);
+  const [objectPageSize, setObjectPageSize] = useState(50);
+  const [fromDraft, setFromDraft] = useState(() => formatLocalDateTime(params.get("from")));
+  const [toDraft, setToDraft] = useState(() => formatLocalDateTime(params.get("to")));
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices, selectSite } = siteScope;
+  const fromParam = params.get("from") || "";
+  const toParam = params.get("to") || "";
+  const edgeId = params.get("edgeId") || "";
+  const subjectType = params.get("subjectType")?.trim().toLowerCase() || "";
+  const subjectId = params.get("subjectId")?.trim() || "";
+  const parsedFrom = fromParam ? new Date(fromParam).getTime() : null;
+  const parsedTo = toParam ? new Date(toParam).getTime() : null;
+  const invalidAppliedRange = (fromParam && !Number.isFinite(parsedFrom)) ||
+    (toParam && !Number.isFinite(parsedTo)) ||
+    (parsedFrom != null && parsedTo != null && parsedFrom > parsedTo);
+  const edgeRows = useMemo(
+    () => extractRows(siteScope.edgeResponse.data).filter(edge => !siteId || edge.siteId === siteId),
+    [siteId, siteScope.edgeResponse.data],
+  );
+  const objectQuery = new URLSearchParams({
+    limit: String(objectPageSize),
+    offset: String((objectPage - 1) * objectPageSize),
+  });
+  if (siteId) objectQuery.set("siteId", siteId);
+  if (edgeId) objectQuery.set("edgeId", edgeId);
+  if (fromParam) objectQuery.set("from", fromParam);
+  if (toParam) objectQuery.set("to", toParam);
+  if (subjectType) objectQuery.set("subjectType", subjectType);
+  if (subjectId) objectQuery.set("subjectId", subjectId);
   const baselineQuery = new URLSearchParams({ maximumRuns: "2000" });
-  if ((!params.get("subjectType") || params.get("subjectType") === "equipment") && params.get("subjectId")) {
-    baselineQuery.set("equipmentId", params.get("subjectId"));
+  if (edgeId) baselineQuery.set("edgeId", edgeId);
+  if (fromParam) baselineQuery.set("from", fromParam);
+  if (toParam) baselineQuery.set("to", toParam);
+  if (subjectType === "equipment" && subjectId) {
+    baselineQuery.set("equipmentId", subjectId);
+  } else if (subjectType && subjectId) {
+    baselineQuery.set("subjectType", subjectType);
+    baselineQuery.set("subjectId", subjectId);
   }
   if (siteId) baselineQuery.set("siteId", siteId);
-  const baseline = useApi(siteId ? `/api/v1/data-reliability/baseline?${baselineQuery}` : "", { enabled: Boolean(siteId) });
-  const objects = useApi(`/api/v1/data-objects?${objectQuery}`);
+  const baseline = useApi(siteId && !invalidAppliedRange ? `/api/v1/data-reliability/baseline?${baselineQuery}` : "", { enabled: Boolean(siteId && !invalidAppliedRange) });
+  const objectScopeKey = objectQuery.toString();
+  const tagObjectScope = useCallback(payload => Array.isArray(payload)
+    ? { data: payload, total: payload.length, requestScopeKey: objectScopeKey }
+    : { ...(payload || {}), requestScopeKey: objectScopeKey }, [objectScopeKey]);
+  const objects = useApi(siteId && !invalidAppliedRange ? `/api/v1/data-objects?${objectQuery}` : "", {
+    enabled: Boolean(siteId && !invalidAppliedRange),
+    transform: tagObjectScope,
+  });
+  const objectsMatchCurrentScope = objects.data?.requestScopeKey === objectScopeKey;
+  const objectRows = objectsMatchCurrentScope ? extractRows(objects.data) : [];
+  const objectTotal = objectsMatchCurrentScope ? Number(objects.data?.total ?? objectRows.length) : 0;
   const rates = baseline.data?.rates || [];
   const contexts = Array.from(new Map(
     (baseline.data?.contextFields || []).map(item => [item.field, item]),
@@ -462,8 +656,39 @@ export function DataQualityPage() {
   const contextFactors = baseline.data?.contextFactors || [];
   const factorOverlaps = baseline.data?.contextFactorOverlaps || [];
   const exclusions = baseline.data?.exclusions || [];
-  const objectRows = extractRows(objects.data);
+  const runImpacts = baseline.data?.runImpacts || [];
+  const filteredRunImpacts = selectedImpactReason
+    ? runImpacts.filter(item => item.reasonCodes?.includes(selectedImpactReason))
+    : runImpacts;
+  const impactFilterKey = [siteId, edgeId, fromParam, toParam, subjectType, subjectId].join("|");
+  const rangeDraftDirty = fromDraft !== formatLocalDateTime(fromParam) || toDraft !== formatLocalDateTime(toParam);
+  const draftFromTime = fromDraft ? new Date(fromDraft).getTime() : null;
+  const draftToTime = toDraft ? new Date(toDraft).getTime() : null;
+  const invalidRange = (fromDraft && !Number.isFinite(draftFromTime)) ||
+    (toDraft && !Number.isFinite(draftToTime)) ||
+    (draftFromTime != null && draftToTime != null && draftFromTime > draftToTime);
+  const visibleRunImpacts = filteredRunImpacts.slice(
+    (runImpactPage - 1) * runImpactPageSize,
+    runImpactPage * runImpactPageSize,
+  );
   const rate = code => rates.find(item => item.code === code);
+  const responseFromMs = baseline.data?.from ? new Date(baseline.data.from).getTime() : null;
+  const responseToMs = baseline.data?.to ? new Date(baseline.data.to).getTime() : null;
+  const expectedEquipmentId = subjectType === "equipment" && subjectId ? subjectId : "";
+  const expectedSubjectType = subjectType && subjectType !== "equipment" && subjectId ? subjectType : "";
+  const expectedSubjectId = expectedSubjectType ? subjectId : "";
+  const baselineScopeMatches = Boolean(baseline.data) && baseline.data.siteId === siteId &&
+    (baseline.data.edgeId || "") === edgeId &&
+    (baseline.data.equipmentId || "") === expectedEquipmentId &&
+    (baseline.data.subjectType || "") === expectedSubjectType &&
+    (baseline.data.subjectId || "") === expectedSubjectId &&
+    responseFromMs === parsedFrom && responseToMs === parsedTo;
+  const hasBaselineData = Boolean(baseline.data) && baselineScopeMatches && !invalidAppliedRange;
+  const hasAnalyzedRuns = hasBaselineData && Number(baseline.data?.analyzedRunCount || 0) > 0;
+  const baselineCount = value => hasAnalyzedRuns && value != null ? formatInteger(value) : "—";
+  const rateCountHint = code => hasAnalyzedRuns
+    ? `${formatInteger(rate(code)?.numerator ?? 0)} / ${formatInteger(rate(code)?.denominator ?? 0)} 次运行`
+    : "暂无可评估运行";
   const rateValue = code => {
     const value = rate(code)?.rate;
     return value == null ? "—" : `${Math.round(Number(value) * 100)}%`;
@@ -481,27 +706,157 @@ export function DataQualityPage() {
     confounded: "完全混杂",
     insufficient_levels: "水平不足",
   }[value] || value || "未知");
-  const loading = baseline.loading || objects.loading;
-  const error = baseline.error || objects.error;
+  const loading = siteScope.loading || baseline.loading || objects.loading;
+  const error = siteScope.error || baseline.error || objects.error;
+  useEffect(() => {
+    if (window.location.hash !== "#run-impacts") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("run-impacts")?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [baseline.data?.generatedAt, params]);
+  useEffect(() => {
+    setRunImpactPage(1);
+    setSelectedImpactReason("");
+    setObjectPage(1);
+  }, [impactFilterKey, baseline.data?.generatedAt]);
+  useEffect(() => {
+    setFromDraft(formatLocalDateTime(fromParam));
+    setToDraft(formatLocalDateTime(toParam));
+  }, [fromParam, toParam]);
+  useEffect(() => {
+    if (!siteId || !edgeId || siteScope.edgeResponse.loading || siteScope.edgeResponse.error) return;
+    if (edgeRows.some(edge => edge.edgeId === edgeId)) return;
+    setParams(current => {
+      if (current.get("edgeId") !== edgeId) return current;
+      const next = new URLSearchParams(current);
+      next.delete("edgeId");
+      return next;
+    }, { replace: true });
+  }, [edgeId, edgeRows, setParams, siteId, siteScope.edgeResponse.error, siteScope.edgeResponse.loading]);
+  const applyDateRange = (fromValue, toValue) => {
+    setObjectPage(1);
+    const next = new URLSearchParams(params);
+    const preserveFrom = fromValue === formatLocalDateTime(fromParam) && Number.isFinite(parsedFrom);
+    const preserveTo = toValue === formatLocalDateTime(toParam) && Number.isFinite(parsedTo);
+    const fromIso = preserveFrom ? fromParam : fromValue ? localDateTimeToIso(fromValue) : null;
+    const toIso = preserveTo ? toParam : toValue ? localDateTimeToIso(toValue) : null;
+    if (fromIso) next.set("from", fromIso);
+    else next.delete("from");
+    if (toIso) next.set("to", toIso);
+    else next.delete("to");
+    setParams(next);
+  };
+  const applyQuickRange = hours => {
+    const to = new Date();
+    const from = new Date(to.getTime() - hours * 60 * 60 * 1000);
+    const fromIso = from.toISOString();
+    const toIso = to.toISOString();
+    setFromDraft(formatLocalDateTime(fromIso));
+    setToDraft(formatLocalDateTime(toIso));
+    setObjectPage(1);
+    const next = new URLSearchParams(params);
+    next.set("from", fromIso);
+    next.set("to", toIso);
+    setParams(next);
+  };
+  const clearDateRange = () => {
+    setFromDraft("");
+    setToDraft("");
+    applyDateRange("", "");
+  };
+  const updateSearchParam = (key, value) => {
+    setObjectPage(1);
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
+  };
   return (
     <Page
       title="数据质量"
-      description={params.get("subjectId")
-        ? `检查对象 ${params.get("subjectId")} 的采样是否连续、运行是否完整，以及能否进入下一轮校正。`
-        : "先看采样是否连续、运行是否完整，以及这些运行能否进入下一轮校正。"}
+      description={subjectId
+        ? subjectType === "equipment"
+          ? `检查设备 ${subjectId} 的采样与运行数据是否满足通用基线条件；具体分析和建议仍需单独核验。`
+          : subjectType
+            ? `检查${objectTypeLabel(subjectType)} ${subjectId} 的采样和关联运行；通用基线只统计该对象命中的运行，具体分析和建议仍需单独核验。`
+            : `数据对象列表已筛选到 ${subjectId}；运行可靠性基线按当前站点、节点与事件时间范围汇总。`
+        : "先看采样是否连续、运行是否完整，以及运行是否满足通用数据可靠性基线条件。"}
     >
-      <RequestError error={error} onRetry={() => Promise.all([baseline.reload(), objects.reload()])} />
-      {loading ? <LoadingCard /> : (
+      <RequestError error={error} onRetry={() => siteScope.error ? siteScope.reload() : Promise.all([baseline.reload(), objects.reload()])} />
+      <div className="mb-5 max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={selectSite} loading={siteScope.loading} /></div>
+      {siteId && (
+        <Card title="查询范围" description="对象采样与运行基线共享站点、现场节点和事件时间范围；提供完整对象类型与编号时，运行基线也会限定到对应逻辑对象。时间按浏览器本地时区选择，提交时转换为带时区时间；起止边界均包含。">
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Field label="现场节点">
+              <Select value={edgeId} onChange={event => updateSearchParam("edgeId", event.target.value)}>
+                <option value="">当前站点全部现场节点</option>
+                {edgeRows.map(edge => (
+                  <option key={edge.edgeId} value={edge.edgeId}>
+                    {edge.edgeId}{edge.hostname ? ` · ${edge.hostname}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="开始事件时间">
+              <DateTimeField value={fromDraft} onChange={setFromDraft} aria-label="开始事件时间" />
+            </Field>
+            <Field label="结束事件时间">
+              <DateTimeField value={toDraft} onChange={setToDraft} aria-label="结束事件时间" />
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs text-slate-500">快速范围</span>
+            <Button onClick={() => applyQuickRange(24)}>近 24 小时</Button>
+            <Button onClick={() => applyQuickRange(24 * 7)}>近 7 天</Button>
+            <Button onClick={() => applyQuickRange(24 * 30)}>近 30 天</Button>
+            <Button onClick={clearDateRange}>不限时间</Button>
+            <Button variant="primary" disabled={!rangeDraftDirty || invalidRange} onClick={() => applyDateRange(fromDraft, toDraft)}>
+              应用时间范围
+            </Button>
+          </div>
+          {invalidRange && !invalidAppliedRange && <Alert tone="warning">开始时间不能晚于结束时间；当前查询结果仍对应上一次已应用的范围。</Alert>}
+          {invalidAppliedRange && <Alert tone="danger">URL 中的事件时间范围无效，当前未发送数据查询。请修改时间并应用，或选择“不限时间”。</Alert>}
+          {rangeDraftDirty && !invalidRange && <p className="mt-3 text-xs text-slate-500">时间范围尚未应用；表格仍显示上一次已应用范围的数据。</p>}
+          <p className="mt-3 text-xs text-slate-500">
+            当前已应用：{fromParam ? formatTime(fromParam) : "不限开始时间"} 至 {toParam ? formatTime(toParam) : "不限结束时间"}。按事件发生时间筛选；基线按范围内命中的开始或完成事件选择运行。
+          </p>
+          {subjectType && subjectId && <p className="mt-1 text-xs text-slate-500">对象范围：{objectTypeLabel(subjectType)} · {subjectId}{subjectType === "equipment" ? "（按物理设备编号筛选运行）" : "（按逻辑对象筛选运行）"}</p>}
+        </Card>
+      )}
+      {!siteId && !siteScope.loading ? <EmptyState title={siteChoices.length ? "请选择分析站点" : "当前没有可访问站点"} description={siteScope.invalidRequestedSite ? "URL 中的站点不在当前账号可访问范围内。请选择一个有权访问的站点。" : "数据可靠性基线按单个站点计算。多站点账号需要先选择一个站点。"} /> : loading ? <LoadingCard /> : (
         <div className="space-y-5">
+          {!hasBaselineData ? (
+            <Card title="运行基线暂不可判断">
+              <EmptyState
+                title={invalidAppliedRange ? "时间范围无效" : baseline.error ? "运行基线请求失败" : "运行基线尚不可用"}
+                description={invalidAppliedRange
+                  ? "当前 URL 中的时间范围没有提交到服务端，因此不能判断运行是否满足基线条件。请修正范围并重新应用。"
+                  : baseline.error
+                    ? "没有可用的成功响应，不能把空结果解释为没有基线缺口。请重试基线查询。"
+                    : "尚未收到运行基线结果；当前不能判断是否存在数据质量问题。"}
+                actions={baseline.error ? <Button onClick={() => baseline.reload()}>重试基线查询</Button> : undefined}
+              />
+            </Card>
+          ) : (
+            <>
+          {baseline.error && <Alert tone="warning">本次基线刷新失败；以下内容来自上一次成功查询，不代表本次刷新已完成。</Alert>}
           {baseline.data?.truncated && (
-            <Alert tone="warning">匹配运行超过本次上限；当前基线只分析最近 {formatInteger(baseline.data.analyzedRunCount)} 次运行。</Alert>
+            <Alert tone="warning">
+              匹配运行超过本次上限；按最近事件选取了 {formatInteger((baseline.data.analyzedRunCount ?? 0) + (baseline.data.missingExecutionRowCount ?? 0))} 个运行，其中 {formatInteger(baseline.data.analyzedRunCount)} 个有可用分析记录并计入指标和逐运行清单。
+            </Alert>
           )}
+          {baseline.data && <p className="text-sm leading-6 text-slate-600">
+            本次观察到 {formatInteger(baseline.data.matchingObservedRunCount ?? baseline.data.matchingCompletedRunCount)} 个在查询时间范围内有开始或完成事件的运行，分析 {formatInteger(baseline.data.analyzedRunCount)} 个；其中 {formatInteger(baseline.data.matchingCompletedRunCount)} 个在范围内包含完成事件。缺少开始或完成边界的运行也计入生命周期完整率。
+          </p>}
           <dl className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white xl:grid-cols-4 xl:divide-y-0">
             {[
-              ["过程数据完整率", rateValue("process_data_completeness"), `${rate("process_data_completeness")?.numerator ?? 0} / ${rate("process_data_completeness")?.denominator ?? 0} 次运行`],
-              ["实际参数覆盖率", rateValue("actual_parameter_coverage"), "设备实际回读"],
-              ["最小上下文覆盖率", rateValue("minimal_context_coverage"), "设备与运行身份"],
-              ["运行—质量关联率", rateValue("run_quality_association"), "有效检验结果"],
+              ["过程数据完整率", rateValue("process_data_completeness"), rateCountHint("process_data_completeness")],
+              ["实际参数覆盖率", rateValue("actual_parameter_coverage"), hasAnalyzedRuns ? "设备实际回读" : "暂无可评估运行"],
+              ["最小上下文覆盖率", rateValue("minimal_context_coverage"), hasAnalyzedRuns ? "设备与运行身份" : "暂无可评估运行"],
+              ["运行—质量关联率", rateValue("run_quality_association"), hasAnalyzedRuns ? "有效检验结果" : "暂无可评估运行"],
             ].map(([label, value, hint]) => (
               <div key={label} className="px-4 py-3">
                 <dt className="text-[13px] font-medium text-slate-500">{label}</dt>
@@ -513,11 +868,11 @@ export function DataQualityPage() {
             ))}
           </dl>
           <div className="grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
-            <Card title="能否进入下一轮校正">
+            <Card title="通用基线条件">
               <dl className="mb-4 grid divide-y divide-slate-200 rounded-md border border-slate-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
                 {[
-                  ["准入率", rateValue("analysis_admission"), `${rate("analysis_admission")?.numerator ?? 0} / ${rate("analysis_admission")?.denominator ?? 0} 次运行`],
-                  ["序列缺口", formatInteger(baseline.data?.sequenceGapCount), "已分析运行累计"],
+                  ["条件通过率", rateValue("analysis_admission"), rateCountHint("analysis_admission")],
+                  ["序列缺口", baselineCount(baseline.data?.sequenceGapCount), hasAnalyzedRuns ? "已分析运行累计" : "暂无可评估运行"],
                   ["最大采样空窗", baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs), ""],
                 ].map(([label, value, hint]) => (
                   <div key={label} className="px-4 py-3">
@@ -537,30 +892,316 @@ export function DataQualityPage() {
                 ]}
               />
             </Card>
-            <Card title="排除原因">
+            <Card title="基线条件缺口">
               {exclusions.length ? (
                 <DataTable
                   rows={exclusions}
                   keyField="code"
                   columns={[
-                    { key: "name", label: "原因" },
+                    {
+                      key: "name",
+                      label: "原因",
+                      render: (value, row) => (
+                        <button
+                          type="button"
+                          className="rounded text-left font-medium text-trajectory-700 underline decoration-trajectory-300 underline-offset-2 hover:text-trajectory-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-trajectory-600"
+                          aria-pressed={selectedImpactReason === row.code}
+                          aria-controls="run-impacts"
+                          onClick={() => {
+                            setSelectedImpactReason(current => current === row.code ? "" : row.code);
+                            setRunImpactPage(1);
+                            window.requestAnimationFrame(() => {
+                              document.getElementById("run-impacts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            });
+                          }}
+                        >
+                          {value}<span className="sr-only">：筛选对应运行</span>
+                        </button>
+                      ),
+                    },
                     { key: "runCount", label: "运行数", render: formatInteger },
                   ]}
                 />
-              ) : <EmptyState title="没有准入缺口" description="当前分析范围内的运行全部满足正式准入规则。" />}
+              ) : <EmptyState title={hasAnalyzedRuns ? "未发现基线条件缺口" : "暂无可评估运行"} description={hasAnalyzedRuns ? "本次成功加载并分析的运行均满足通用数据可靠性基线条件；未加载的匹配运行不在此结论内。" : "当前范围没有成功加载的运行样本，因此不能计算基线缺口。"} />}
+              {exclusions.length > 0 && <p className="mt-2 text-xs text-slate-500">选择一项原因可定位到对应运行。</p>}
+            </Card>
+          </div>
+          <div id="run-impacts" className="scroll-mt-5">
+            <Card
+              title="未满足基线条件的运行"
+              description="列表只显示未满足通用数据可靠性基线条件的已分析运行。命中原因本身不证明某项具体分析或配方建议已受影响；请在对应页面复核其准入结果。样本来源与质量汇总该运行本次返回的完整帧集；起止时间只用于筛选运行，因此帧的首末观测时间可能超出所选窗口。应用观察只表示 Edge 心跳报告过某任务版本已应用，区间端点是 Platform 接收时刻，不是精确生效边界；运行时间重叠仅是相关证据，不证明该版本造成缺口。没有应用观察或匹配帧时，状态保持未知；首末采样时间不代表连续覆盖。多项原因可以同时命中。"
+            >
+            {baseline.data?.missingExecutionRowCount > 0 && (
+              <div className="mb-4">
+                <Alert tone="warning">
+                  本次纳入范围的匹配运行中，有 {formatInteger(baseline.data.missingExecutionRowCount)} 个没有可用的运行分析记录，未计入基线或本清单。
+                </Alert>
+              </div>
+            )}
+            {baseline.data?.taskDeploymentObservationHistoryTruncated && (
+              <div className="mb-4">
+                <Alert tone="warning">
+                  任务版本应用观察超过本次查询上限。未列出的运行保持未知，不能据此认为该时段没有应用观察。
+                </Alert>
+              </div>
+            )}
+            {baseline.data?.expectedConfigurationCoverageTruncated && (
+              <div className="mb-4">
+                <Alert tone="warning">
+                  应用观察覆盖详情超过本次响应上限。未显示的映射代码和覆盖结果保持未知。
+                </Alert>
+              </div>
+            )}
+            {selectedImpactReason && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+                <span role="status" aria-live="polite">按“{reliabilityRunReasonDetails[selectedImpactReason]?.[0] || selectedImpactReason}”筛选：{formatInteger(filteredRunImpacts.length)} 个已分析运行</span>
+                <Button onClick={() => { setSelectedImpactReason(""); setRunImpactPage(1); }}>显示全部运行</Button>
+              </div>
+            )}
+            {!selectedImpactReason && <span className="sr-only" role="status" aria-live="polite">显示全部已分析运行。</span>}
+            {filteredRunImpacts.length ? (
+              <>
+                <DataTable
+                  rows={visibleRunImpacts}
+                  keyField="executionId"
+                  columns={[
+                    {
+                      key: "executionId",
+                      label: "运行",
+                      render: value => (
+                        <Link
+                          className="font-medium text-trajectory-700 underline decoration-trajectory-300 underline-offset-2 hover:text-trajectory-900"
+                          to={`/process-executions/${encodeURIComponent(value)}?siteId=${encodeURIComponent(siteId)}`}
+                        >
+                          {value}
+                        </Link>
+                      ),
+                    },
+                    { key: "equipmentId", label: "设备" },
+                    {
+                      key: "startedAt",
+                      label: "开始 / 完成",
+                      sortable: false,
+                      render: (_, row) => (
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <div>{row.hasStarted ? `开始 ${formatTime(row.startedAt)}` : "未记录开始事件"}</div>
+                          <div>{row.hasCompleted ? `完成 ${formatTime(row.completedAt)}` : "未记录完成事件"}</div>
+                        </div>
+                      ),
+                    },
+                    {
+                      key: "processDataStatus",
+                      label: "过程数据",
+                      render: value => <StatusBadge value={value} />,
+                    },
+                    {
+                      key: "sampleConfigurationEvidence",
+                      label: "样本来源与应用观察",
+                      sortable: false,
+                      render: (evidence, run) => {
+                        const groups = evidence || [];
+                        const expectedCoverage = run.expectedConfigurationCoverage || [];
+                        const hasEvidence = groups.length > 0 || expectedCoverage.length > 0;
+                        if (!hasEvidence) return (
+                          <p className="min-w-64 whitespace-normal text-xs leading-5 text-slate-600">
+                            {baseline.data?.taskDeploymentObservationHistoryTruncated
+                              ? "应用观察历史已截断；此运行的来源状态未知。"
+                              : baseline.data?.expectedConfigurationCoverageTruncated
+                                ? "应用观察覆盖详情已截断；此运行的版本与映射来源未知。"
+                                : "没有可核验的样本来源或任务版本应用观察；不能据此判断采集任务是否健康。"}
+                          </p>
+                        );
+                        return (
+                          <div className="min-w-80 space-y-3">
+                            {groups.length === 0 && <p className="text-xs leading-5 text-slate-600">
+                              未返回匹配的已保存采样帧；仅凭这一点无法判断采集任务是否健康。
+                            </p>}
+                            {groups.map((item, index) => {
+                              const summarizedGroupCount = item.summarizedConfigurationGroupCount ?? 0;
+                              const hasConfiguration = item.appliedConfigurationKind &&
+                                item.appliedConfigurationId &&
+                                item.appliedConfigurationVersion != null;
+                              const source = summarizedGroupCount > 0
+                                ? `其余 ${formatInteger(summarizedGroupCount)} 组配置来源（已汇总）`
+                                : hasConfiguration
+                                  ? `${item.appliedConfigurationKind} / ${item.appliedConfigurationId}@v${item.appliedConfigurationVersion}`
+                                  : "来源未知 / 帧未报告配置引用";
+                              const referenceIsVerifiable = summarizedGroupCount === 0 &&
+                                item.appliedConfigurationKind === "ingestion-task" &&
+                                Boolean(item.appliedConfigurationId) &&
+                                Number.isInteger(Number(item.appliedConfigurationVersion)) &&
+                                Number(item.appliedConfigurationVersion) > 0 &&
+                                Boolean(item.sourceEdgeId);
+                              const verificationStatus = referenceIsVerifiable &&
+                                Object.hasOwn(sampleSourceVerificationDetails, item.referenceVerificationStatus)
+                                ? item.referenceVerificationStatus
+                                : "unverifiable";
+                              const verification = sampleSourceVerificationDetails[verificationStatus];
+                              const configurationStatusLabel = ingestionTaskStatusLabels[item.configurationStatus];
+                              return (
+                                <div key={`${source}:${index}`} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                  <div className="font-medium text-slate-800">{source}</div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <span className="text-xs font-medium text-slate-600">帧报告来源/版本核对</span>
+                                    <Badge tone={verification.tone}>{verification.label}</Badge>
+                                  </div>
+                                  <p className="mt-1 text-xs leading-5 text-slate-600">{verification.detail}</p>
+                                  {item.sourceEdgeId && <div className="text-xs leading-5 text-slate-600">帧报告 Edge：{item.sourceEdgeId}</div>}
+                                  {verificationStatus === "matched" && configurationStatusLabel && (
+                                    <div className="text-xs leading-5 text-slate-600">当前平台记录状态：{configurationStatusLabel}</div>
+                                  )}
+                                  <div className="mt-1 text-xs leading-5 text-slate-600">
+                                    {formatInteger(item.sampleFrameCount ?? 0)} 帧 · {formatInteger(item.observedValueCount ?? 0)} 个已保存值
+                                  </div>
+                                  <div className="text-xs leading-5 text-slate-600">
+                                    首末观测：{item.firstOccurredAt ? formatTime(item.firstOccurredAt) : "—"} 至 {item.lastOccurredAt ? formatTime(item.lastOccurredAt) : "—"}
+                                  </div>
+                                  <div className="text-xs leading-5 text-slate-600">
+                                    值质量：好 {formatInteger(item.goodValueCount ?? 0)} · 不确定 {formatInteger(item.uncertainValueCount ?? 0)} · 坏 {formatInteger(item.badValueCount ?? 0)} · 未分类 {formatInteger(item.unclassifiedQualityValueCount ?? 0)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <section className="border-t border-slate-200 pt-2" aria-label={`${run.executionId} 的任务版本应用观察`}>
+                              <h4 className="text-xs font-semibold text-slate-700">运行时段的任务版本应用观察</h4>
+                              {expectedCoverage.length === 0 ? (
+                                <p className="mt-1 text-xs leading-5 text-slate-600">
+                                  {baseline.data?.taskDeploymentObservationHistoryTruncated
+                                    ? "本次应用观察历史已截断；此运行是否有重叠观察仍未知。"
+                                    : baseline.data?.expectedConfigurationCoverageTruncated
+                                      ? "应用观察覆盖详情已截断；此运行的版本与映射来源保持未知。"
+                                      : "没有可核验的 Applied 版本观察；这不代表该运行时段未部署任务或没有采样。"}
+                                </p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {expectedCoverage.map((item, index) => {
+                                    const evidenceStatus = item.sampleEvidenceStatus;
+                                    const sampleEvidenceStatus = {
+                                      matched: { label: "找到该版本样本", tone: "success" },
+                                      "no-matching-frames": { label: "未找到该版本样本", tone: "warning" },
+                                      "summarized-unverifiable": { label: "来源已汇总，无法逐版本核验", tone: "neutral" },
+                                      "unverifiable-task-version": { label: "任务版本归属无法核验", tone: "neutral" },
+                                      "observation-history-truncated": { label: "应用观察历史截断，无法判断", tone: "neutral" },
+                                      "coverage-result-truncated": { label: "映射覆盖详情截断，无法判断", tone: "neutral" },
+                                    }[evidenceStatus] || { label: "样本来源未知", tone: "neutral" };
+                                    const expectedCodes = item.requiredDataItemCodes || [];
+                                    const observedCodes = item.observedDataItemCodes || [];
+                                    const notObservedCodes = item.notObservedRequiredDataItemCodes || [];
+                                    const sourceCodesAreVerifiable = ["matched", "no-matching-frames"].includes(evidenceStatus);
+                                    return (
+                                      <div key={`${item.edgeId}:${item.taskId}:${item.taskVersion}:${index}`} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                        <div className="font-medium text-slate-800">{item.taskId}@v{item.taskVersion} · {item.edgeId}</div>
+                                        <div className="mt-1 text-xs leading-5 text-slate-600">
+                                          Platform 观察：{item.firstObservedAt ? formatTime(item.firstObservedAt) : "—"} 至 {item.lastObservedAt ? formatTime(item.lastObservedAt) : "—"}
+                                        </div>
+                                        <div className="text-xs leading-5 text-slate-600">
+                                          与运行重叠：{item.runOverlapStart ? formatTime(item.runOverlapStart) : "—"} 至 {item.runOverlapEnd ? formatTime(item.runOverlapEnd) : "—"}
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                                          <Badge tone="info">Edge 报告已应用版本</Badge>
+                                          <Badge tone={sampleEvidenceStatus.tone}>{sampleEvidenceStatus.label}</Badge>
+                                          {evidenceStatus === "matched" && <span className="text-xs text-slate-600">{formatInteger(item.sampleFrameCount ?? 0)} 帧</span>}
+                                        </div>
+                                        {sourceCodesAreVerifiable && expectedCodes.length > 0 && (
+                                          <div className="mt-2 text-xs leading-5 text-slate-600">
+                                            <p>必需映射 {expectedCodes.length} 项；该版本样本报告 {observedCodes.length} 项。</p>
+                                            {notObservedCodes.length > 0 && <details className="mt-1">
+                                              <summary className="cursor-pointer font-medium text-amber-800">有 {notObservedCodes.length} 项必需映射未见于该版本返回的样本值</summary>
+                                              <p className="mt-1 break-words">{notObservedCodes.join("、")}</p>
+                                            </details>}
+                                            {evidenceStatus === "matched" && notObservedCodes.length === 0 && <p>该版本返回的样本值包含全部必需映射代码。</p>}
+                                          </div>
+                                        )}
+                                        <p className="mt-2 text-xs leading-5 text-slate-600">
+                                          {evidenceStatus === "no-matching-frames"
+                                            ? "该运行未找到此版本的已保存样本帧；请核对节点采样和运行边界，不能单凭此项归因缺口。"
+                                            : evidenceStatus === "summarized-unverifiable"
+                                              ? "样本来源分组超过逐项明细范围；未观察到的映射代码不能解释为缺失。"
+                                              : evidenceStatus === "unverifiable-task-version"
+                                                ? "平台无法核验此任务版本与运行对象的对应关系；不会列出缺失映射代码。"
+                                                : evidenceStatus === "observation-history-truncated"
+                                                  ? "应用观察超出本次查询结果上限；该版本的样本覆盖状态保持未知。"
+                                                  : evidenceStatus === "coverage-result-truncated"
+                                                    ? "覆盖详情超出本次响应上限；未返回的映射代码和覆盖结果保持未知。"
+                                                : "应用观察与运行时间重叠只提供相关线索；不证明精确生效边界或因果关系。"}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </section>
+                          </div>
+                        );
+                      },
+                    },
+                    {
+                      key: "reasonCodes",
+                      label: "基线缺口与建议处理",
+                      sortable: false,
+                      render: (codes, run) => {
+                        const seenFollowUps = new Set();
+                        return (
+                          <div className="min-w-64 space-y-2">
+                            {(codes || []).map(code => {
+                              const [label, action] = reliabilityRunReasonDetails[code] || [code, "查看运行详情确认具体情况。"];
+                              const followUps = reliabilityRunActions(code, run, siteId).filter(followUp => {
+                                if (seenFollowUps.has(followUp.href)) return false;
+                                seenFollowUps.add(followUp.href);
+                                return true;
+                              });
+                              return (
+                                <div key={code}>
+                                  <Badge tone="warning">{label}</Badge>
+                                  <p className="mt-1 whitespace-normal text-xs leading-5 text-slate-600">{action}</p>
+                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                    {followUps.map(followUp => (
+                                      <Link key={`${code}:${followUp.href}`} className="text-xs font-medium text-trajectory-700 underline decoration-trajectory-300 underline-offset-2 hover:text-trajectory-900" to={followUp.href}>
+                                        {followUp.label}
+                                      </Link>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      },
+                    },
+                  ]}
+                />
+                <Pagination
+                  page={runImpactPage}
+                  pageSize={runImpactPageSize}
+                  total={filteredRunImpacts.length}
+                  onPageChange={setRunImpactPage}
+                  onPageSizeChange={value => { setRunImpactPageSize(value); setRunImpactPage(1); }}
+                />
+              </>
+            ) : (
+              <EmptyState
+                title={selectedImpactReason ? "所选原因没有匹配的已分析运行" : hasAnalyzedRuns ? "未发现基线条件缺口" : "当前范围没有可分析的运行"}
+                description={selectedImpactReason
+                  ? "当前已分析的运行中没有命中此原因；清除原因筛选可查看其他基线缺口。"
+                  : hasAnalyzedRuns
+                    ? "本次成功加载并分析的运行均满足通用数据可靠性基线条件。"
+                    : "当前范围没有成功加载的运行样本；扩大时间或现场节点范围后再查看。"}
+                actions={selectedImpactReason ? <Button onClick={() => { setSelectedImpactReason(""); setRunImpactPage(1); }}>清除原因筛选</Button> : undefined}
+              />
+            )}
             </Card>
           </div>
           <Card title="时间、顺序与上送质量">
             <DataTable
               rows={[
-                { id: "duplicate", name: "重复时间戳", value: formatInteger(baseline.data?.duplicateTimestampCount), definition: "累计被去重的采样" },
-                { id: "order", name: "晚到或乱序", value: formatInteger(baseline.data?.outOfOrderCount), definition: "按摄入顺序检测" },
-                { id: "sequence", name: "源序列缺口", value: formatInteger(baseline.data?.sequenceGapCount), definition: "设备源序号不连续" },
+                { id: "duplicate", name: "重复时间戳", value: baselineCount(baseline.data?.duplicateTimestampCount), definition: "累计被去重的采样" },
+                { id: "order", name: "晚到或乱序", value: baselineCount(baseline.data?.outOfOrderCount), definition: "按摄入顺序检测" },
+                { id: "sequence", name: "源序列缺口", value: baselineCount(baseline.data?.sequenceGapCount), definition: "设备源序号不连续" },
                 { id: "sample-gap", name: "最大采样空窗", value: baseline.data?.maximumSampleGapMs == null ? "—" : formatDuration(baseline.data.maximumSampleGapMs), definition: "相邻有效采样的最大间隔" },
                 { id: "clock", name: "最大设备时钟偏差", value: baseline.data?.maximumAbsoluteSourceClockOffsetMs == null ? "—" : formatDuration(baseline.data.maximumAbsoluteSourceClockOffsetMs), definition: "设备源时间与 Edge 记录时间的绝对差" },
                 { id: "p95", name: "最差运行 P95 上送延迟", value: baseline.data?.worstRunP95PlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.worstRunP95PlatformIngestLatencyMs), definition: "包含离线缓存后的补传" },
                 { id: "latency", name: "最大上送延迟", value: baseline.data?.maximumPlatformIngestLatencyMs == null ? "—" : formatDuration(baseline.data.maximumPlatformIngestLatencyMs), definition: "Edge 记录到 Platform 摄入" },
-                { id: "negative", name: "负上送延迟异常", value: formatInteger(baseline.data?.negativePlatformIngestLatencyCount), definition: "Platform 时间早于 Edge 超过 1 秒" },
+                { id: "negative", name: "负上送延迟异常", value: baselineCount(baseline.data?.negativePlatformIngestLatencyCount), definition: "Platform 时间早于 Edge 超过 1 秒" },
               ]}
               columns={[
                 { key: "name", label: "指标" },
@@ -600,7 +1241,7 @@ export function DataQualityPage() {
                 />
               ) : <EmptyState title="暂无可分层上下文" description="采集到设备、工装或材料批次后，这里会按实际水平汇总。" />}
             </Card>
-            <Card title="因素重叠与混杂" description="重叠度表示实际出现的因素组合占理论组合的比例；完全绑定的因素无法仅凭观察数据拆分影响。" actions={<span className="text-[13px] font-medium text-amber-700">不可辨识混杂 {formatInteger(baseline.data?.unidentifiableConfoundingCount)} 项</span>}>
+            <Card title="因素重叠与混杂" description="重叠度表示实际出现的因素组合占理论组合的比例；完全绑定的因素无法仅凭观察数据拆分影响。" actions={<span className="text-[13px] font-medium text-amber-700">不可辨识混杂 {baselineCount(baseline.data?.unidentifiableConfoundingCount)} 项</span>}>
               <DataTable
                 rows={factorOverlaps}
                 getRowKey={row => `${row.leftField}:${row.rightField}`}
@@ -616,18 +1257,49 @@ export function DataQualityPage() {
             </Card>
             </div>
           </details>
-          <Card title="工业对象采样范围" description="用于定位具体设备的数据量、最近采样和最大间隔。">
-            <DataTable
-              rows={objectRows}
-              getRowKey={row => `${row.subjectType}:${row.subjectId}`}
-              columns={[
-                { key: "subjectType", label: "对象类型", render: objectTypeLabel },
-                { key: "subjectId", label: "对象" },
-                { key: "sampleCount", label: "样本数", render: formatInteger },
-                { key: "maximumSampleGapSeconds", label: "最大采样间隔（秒）", render: value => value == null ? "—" : Number(value).toLocaleString("zh-CN") },
-                { key: "lastSampleAt", label: "最后样本", render: formatTime },
-              ]}
-            />
+            </>
+          )}
+          <Card
+            title={`工业对象采样范围${objects.loading ? "（读取中）" : `（${formatInteger(objectTotal)}）`}`}
+            description="统计结果与上方站点、现场节点和事件时间范围一致；对象筛选作用于此列表，设备编号筛选也会限定运行基线。"
+          >
+            {invalidAppliedRange ? (
+              <EmptyState title="尚未查询对象采样" description="当前时间范围无效，修正范围并应用后才能读取对象数据。" />
+            ) : objects.loading ? (
+              <p className="py-8 text-center text-sm text-slate-500" role="status">正在读取对象采样数据…</p>
+            ) : objects.error ? (
+              <EmptyState
+                title="采样对象暂时无法读取"
+                description="请检查上方的错误信息后重试当前查询。"
+                actions={<Button onClick={() => objects.reload()}>重试对象查询</Button>}
+              />
+            ) : objectRows.length ? (
+              <>
+                <DataTable
+                  rows={objectRows}
+                  getRowKey={row => `${row.subjectType}:${row.subjectId}`}
+                  columns={[
+                    { key: "subjectType", label: "对象类型", render: objectTypeLabel },
+                    { key: "subjectId", label: "对象" },
+                    { key: "sampleCount", label: "样本数", render: formatInteger },
+                    { key: "maximumSampleGapSeconds", label: "最大采样间隔（秒）", render: value => value == null ? "—" : Number(value).toLocaleString("zh-CN") },
+                    { key: "lastSampleAt", label: "最后样本", render: formatTime },
+                  ]}
+                />
+                <Pagination
+                  page={objectPage}
+                  pageSize={objectPageSize}
+                  total={objectTotal}
+                  onPageChange={setObjectPage}
+                  onPageSizeChange={value => { setObjectPageSize(value); setObjectPage(1); }}
+                />
+              </>
+            ) : (
+              <EmptyState
+                title="当前范围没有数据对象"
+                description="调整事件时间、现场节点或对象筛选后重试。"
+              />
+            )}
           </Card>
         </div>
       )}

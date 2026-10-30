@@ -75,9 +75,24 @@ public interface IResearchAssetStore
         string userId,
         CancellationToken ct = default);
     Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default);
+    Task<KnowledgeSource?> FindKnowledgeSourceByHashAsync(
+        string siteCode,
+        string sha256,
+        CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default);
     Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(
         string siteCode, int limit, string? cursor, CancellationToken ct = default);
+    Task<ResearchAssetPage<KnowledgeSource>> ListReviewedKnowledgeSourcesPageAsync(
+        string siteCode,
+        string? processSpecificationId,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default);
+    Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesForManagementPageAsync(
+        string siteCode,
+        int limit,
+        string? cursor,
+        CancellationToken ct = default);
     Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(
         string siteCode,
         CancellationToken ct = default);

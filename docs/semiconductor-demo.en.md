@@ -12,6 +12,12 @@ When the full stack is already running, execute this command from the repository
 pwsh -NoProfile -File scripts/setup-semiconductor-demo.ps1 -SkipBuild
 ```
 
+To restart the simulator, wait for a new complete run, and verify its run boundaries and valid samples:
+
+```powershell
+pwsh -NoProfile -File scripts/setup-semiconductor-demo.ps1 -SkipBuild -WaitForBatch
+```
+
 The script starts `semiconductor-etch-simulator` and `connector-host`, logs in to the platform, and creates or reuses:
 
 - A Modbus TCP simulator endpoint at `semiconductor-etch-simulator:1502`, polled every 500 ms.
@@ -20,10 +26,10 @@ The script starts `semiconductor-etch-simulator` and `connector-host`, logs in t
 - One wafer-etch equipment record and a demo process-kit record.
 - Production context `WAFER-ETCH-DEMO-001` and a process-analysis plan.
 
-To observe a complete simulated run from the beginning, restart the simulator:
+To manually observe a simulated run from the beginning, restart the simulator:
 
 ```powershell
-docker compose -f docker-compose.app.yml --profile semiconductor-demo restart semiconductor-etch-simulator
+docker compose -f docker-compose.app.yml -f docker-compose.demo.local.yml --profile semiconductor-demo restart semiconductor-etch-simulator
 ```
 
 The simulator waits 10 seconds, then runs one 300-second batch:
@@ -40,14 +46,14 @@ These stages and durations only make the demo traces easier to inspect. After a 
 Health checks:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:9100/health
-Invoke-RestMethod http://127.0.0.1:8001/health
+Invoke-RestMethod http://127.0.0.1:9110/health
+Invoke-RestMethod http://127.0.0.1:8003/health
 ```
 
-In the platform, view the published task under “Configuration & Integration → Acquisition Configuration” and collector status under “Configuration & Integration → Edge Nodes”. “Field Operations → Production Runs” and “Process Insight → Process Analysis” show the demonstration data. The script never prints the administrator password or access token.
+In the platform, view the published task under “Configuration & Integration → Acquisition Configuration” and collector status under “Configuration & Integration → Edge Nodes”. “Field Operations → Production Runs” and “Process Insight → Process Analysis” show the demonstration data. `-WaitForBatch` records the current event cursor, restarts the isolated simulator, and accepts only a start and completion event from the same run after that restart; it then confirms complete run boundaries and at least one signal with valid samples. The script never prints the administrator password or access token.
 
 ## Configuration boundary
 
 This demo configures one simulator endpoint and one acquisition task to illustrate the relationship among connection settings, mappings, probing, and run data. Actual projects should create data sources and tasks according to their real network, communication interfaces, equipment assets, and logical subjects. The system does not assume a controller count, equipment hierarchy, or workstation layout.
 
-Pressure, power, gas-flow, and temperature fields in the demo model are synthetic signals. A real deployment must configure drivers, point addresses, units, ranges, timestamps, process parameters, and safety limits from its own equipment documentation and field validation. Do not treat this demo as real wafer-process evidence or a process recipe.
+Pressure, power, gas-flow, and temperature fields in the demo model are synthetic signals. A real deployment must configure drivers, point addresses, data types, units, and timestamps from its own equipment documentation and field validation. Manage process windows and safety limits in mechanism knowledge and process control, outside acquisition-task mappings. Do not treat this demo as real wafer-process evidence or a process recipe.

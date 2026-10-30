@@ -1288,6 +1288,9 @@ public static partial class IngestionTaskValidator
         if (value.Execution.MaximumFutureTimestampSkewMs is < 0 or > 86_400_000)
             found.Add(new AcquisitionValidationError(
                 "execution.maximumFutureTimestampSkewMs", "设备时间戳最大超前量必须为 0-86400000ms。"));
+        if (value.Execution.MaximumValidSnapshotSilenceMs is < 0 or > 86_400_000)
+            found.Add(new AcquisitionValidationError(
+                "execution.maximumValidSnapshotSilenceMs", "有效快照静默时限必须为 0-86400000ms。"));
     }
 
     private static void ValidateLifecycle(

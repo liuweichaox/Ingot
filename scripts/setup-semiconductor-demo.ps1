@@ -68,21 +68,28 @@ function Invoke-JsonApi {
 
 Write-Host "启动半导体晶圆刻蚀模拟服务和 Edge ConnectorHost..."
 $composeArgs = @("compose", "-f", "docker-compose.app.yml")
+$connectorHostPort = 8001
+$simulatorHealthPort = 9100
+if (Test-Path "docker-compose.demo.local.yml") {
+    $composeArgs += @("-f", "docker-compose.demo.local.yml")
+    $connectorHostPort = 8003
+    $simulatorHealthPort = 9110
+}
 if (-not $SkipBuild) {
-    & docker @composeArgs --profile semiconductor-demo up -d --build semiconductor-etch-simulator
+    & docker @composeArgs --profile semiconductor-demo up -d --build --no-deps semiconductor-etch-simulator
     if ($LASTEXITCODE -ne 0) { throw "半导体刻蚀模拟服务启动失败。" }
-    & docker @composeArgs --profile connector-host up -d --build connector-host
+    & docker @composeArgs --profile connector-host up -d --build --no-deps connector-host
 } else {
-    & docker @composeArgs --profile semiconductor-demo up -d semiconductor-etch-simulator
-    & docker @composeArgs --profile connector-host up -d connector-host
+    & docker @composeArgs --profile semiconductor-demo up -d --no-deps semiconductor-etch-simulator
+    & docker @composeArgs --profile connector-host up -d --no-deps connector-host
 }
 if ($LASTEXITCODE -ne 0) { throw "Edge ConnectorHost 启动失败。" }
 
 for ($attempt = 0; $attempt -lt 60; $attempt++) {
     try {
         Invoke-RestMethod "http://127.0.0.1:8000/health" | Out-Null
-        Invoke-RestMethod "http://127.0.0.1:9100/health" | Out-Null
-        Invoke-RestMethod "http://127.0.0.1:8001/health" | Out-Null
+        Invoke-RestMethod "http://127.0.0.1:$simulatorHealthPort/health" | Out-Null
+        Invoke-RestMethod "http://127.0.0.1:$connectorHostPort/health" | Out-Null
         break
     } catch {
         if ($attempt -eq 59) { throw "平台、半导体过程模拟服务或 ConnectorHost 未在等待时间内就绪。" }
@@ -96,26 +103,42 @@ $login = Invoke-JsonApi -Method POST -Path "/api/v1/auth/login" -Body @{
 } -Anonymous
 $script:headers = @{ Authorization = "Bearer $($login.token)" }
 
+# Protect an existing real production context before the seed script writes shared demo resources.
+$existingContexts = Invoke-JsonApi -Method GET -Path "/api/v1/production-contexts?siteId=$siteId&equipmentId=ETCH-DEMO-01&activeOnly=true"
+$activeEquipmentContexts = @($existingContexts.data | Where-Object { $_.equipmentId -eq "ETCH-DEMO-01" })
+$demoContexts = @($activeEquipmentContexts | Where-Object {
+    $_.productFamilyCode -eq "semiconductor-wafer" -and
+    $_.productCode -eq "WAFER-ETCH-DEMO" -and
+    $_.externalBatchRef -eq "WAFER-ETCH-DEMO-001"
+})
+if ($activeEquipmentContexts.Count -gt 0 -and $demoContexts.Count -eq 0) {
+    throw "ETCH-DEMO-01 已有非半导体演示生产上下文；为避免覆盖现有数据，请先为演示配置另选设备编号。"
+}
+if ($demoContexts.Count -gt 1) {
+    throw "ETCH-DEMO-01 存在多个有效演示生产上下文；请先清理重复上下文再运行演示脚本。"
+}
+$script:existingSemiconductorDemoContext = if ($demoContexts.Count -eq 1) { $demoContexts[0] } else { $null }
+
 $processItems = @(
-    @{ code = "chamber.pressure"; name = "腔室压力"; type = "double"; unit = "Pa"; category = "process"; address = 0; sourceType = "float32"; min = 0; max = 101325 },
-    @{ code = "rf.source_power"; name = "射频源功率"; type = "double"; unit = "W"; category = "process"; address = 2; sourceType = "float32"; min = 0; max = 800 },
-    @{ code = "rf.bias_power"; name = "偏置功率"; type = "double"; unit = "W"; category = "process"; address = 4; sourceType = "float32"; min = 0; max = 400 },
-    @{ code = "rf.reflected_power"; name = "反射功率"; type = "double"; unit = "W"; category = "process"; address = 6; sourceType = "float32"; min = 0; max = 100 },
-    @{ code = "gas.cf4_flow"; name = "CF4 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 8; sourceType = "float32"; min = 0; max = 100 },
-    @{ code = "gas.o2_flow"; name = "O2 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 10; sourceType = "float32"; min = 0; max = 50 },
-    @{ code = "gas.ar_flow"; name = "Ar 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 12; sourceType = "float32"; min = 0; max = 150 },
-    @{ code = "wafer.temperature"; name = "晶圆温度"; type = "double"; unit = "°C"; category = "process"; address = 14; sourceType = "float32"; min = -50; max = 100 },
-    @{ code = "chamber.wall_temperature"; name = "腔壁温度"; type = "double"; unit = "°C"; category = "process"; address = 16; sourceType = "float32"; min = 20; max = 120 },
-    @{ code = "coolant.inlet_temperature"; name = "冷却液入口温度"; type = "double"; unit = "°C"; category = "process"; address = 18; sourceType = "float32"; min = 0; max = 35 },
-    @{ code = "coolant.outlet_temperature"; name = "冷却液出口温度"; type = "double"; unit = "°C"; category = "process"; address = 20; sourceType = "float32"; min = 0; max = 50 },
-    @{ code = "coolant.flow"; name = "冷却液流量"; type = "double"; unit = "L/min"; category = "process"; address = 22; sourceType = "float32"; min = 0; max = 20 },
-    @{ code = "plasma.voltage"; name = "等离子体电压"; type = "double"; unit = "V"; category = "process"; address = 24; sourceType = "float32"; min = 0; max = 1000 },
-    @{ code = "plasma.current"; name = "等离子体电流"; type = "double"; unit = "A"; category = "process"; address = 26; sourceType = "float32"; min = 0; max = 10 },
-    @{ code = "endpoint.signal"; name = "终点检测信号"; type = "double"; unit = "ratio"; category = "process"; address = 28; sourceType = "float32"; min = 0; max = 1 },
-    @{ code = "wafer.rotation_speed"; name = "晶圆旋转速度"; type = "double"; unit = "rpm"; category = "process"; address = 30; sourceType = "float32"; min = 0; max = 120 },
-    @{ code = "vacuum.pump_current"; name = "真空泵电流"; type = "double"; unit = "A"; category = "process"; address = 32; sourceType = "float32"; min = 0; max = 50 },
-    @{ code = "environment.temperature"; name = "设备周边温度"; type = "double"; unit = "°C"; category = "process"; address = 34; sourceType = "float32"; min = 15; max = 35 },
-    @{ code = "process.stage"; name = "工艺阶段"; type = "integer"; unit = ""; category = "stage"; address = 82; sourceType = "int16"; min = 0; max = 5 }
+    @{ code = "chamber.pressure"; name = "腔室压力"; type = "double"; unit = "Pa"; category = "process"; address = 0; sourceType = "float32" },
+    @{ code = "rf.source_power"; name = "射频源功率"; type = "double"; unit = "W"; category = "process"; address = 2; sourceType = "float32" },
+    @{ code = "rf.bias_power"; name = "偏置功率"; type = "double"; unit = "W"; category = "process"; address = 4; sourceType = "float32" },
+    @{ code = "rf.reflected_power"; name = "反射功率"; type = "double"; unit = "W"; category = "process"; address = 6; sourceType = "float32" },
+    @{ code = "gas.cf4_flow"; name = "CF4 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 8; sourceType = "float32" },
+    @{ code = "gas.o2_flow"; name = "O2 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 10; sourceType = "float32" },
+    @{ code = "gas.ar_flow"; name = "Ar 气体流量"; type = "double"; unit = "sccm"; category = "process"; address = 12; sourceType = "float32" },
+    @{ code = "wafer.temperature"; name = "晶圆温度"; type = "double"; unit = "°C"; category = "process"; address = 14; sourceType = "float32" },
+    @{ code = "chamber.wall_temperature"; name = "腔壁温度"; type = "double"; unit = "°C"; category = "process"; address = 16; sourceType = "float32" },
+    @{ code = "coolant.inlet_temperature"; name = "冷却液入口温度"; type = "double"; unit = "°C"; category = "process"; address = 18; sourceType = "float32" },
+    @{ code = "coolant.outlet_temperature"; name = "冷却液出口温度"; type = "double"; unit = "°C"; category = "process"; address = 20; sourceType = "float32" },
+    @{ code = "coolant.flow"; name = "冷却液流量"; type = "double"; unit = "L/min"; category = "process"; address = 22; sourceType = "float32" },
+    @{ code = "plasma.voltage"; name = "等离子体电压"; type = "double"; unit = "V"; category = "process"; address = 24; sourceType = "float32" },
+    @{ code = "plasma.current"; name = "等离子体电流"; type = "double"; unit = "A"; category = "process"; address = 26; sourceType = "float32" },
+    @{ code = "endpoint.signal"; name = "终点检测信号"; type = "double"; unit = "ratio"; category = "process"; address = 28; sourceType = "float32" },
+    @{ code = "wafer.rotation_speed"; name = "晶圆旋转速度"; type = "double"; unit = "rpm"; category = "process"; address = 30; sourceType = "float32" },
+    @{ code = "vacuum.pump_current"; name = "真空泵电流"; type = "double"; unit = "A"; category = "process"; address = 32; sourceType = "float32" },
+    @{ code = "environment.temperature"; name = "设备周边温度"; type = "double"; unit = "°C"; category = "process"; address = 34; sourceType = "float32" },
+    @{ code = "process.stage"; name = "工艺阶段"; type = "integer"; unit = ""; category = "stage"; address = 82; sourceType = "int16" }
 )
 
 $recipeItems = @(
@@ -260,23 +283,29 @@ if (@($revision.members).Count -lt 5) { throw "工装总成未达到 5 个配件
 $activeInstallations = Invoke-JsonApi -Method GET -Path "/api/v1/tooling-installations?siteId=$siteId&equipmentId=ETCH-DEMO-01&activeOnly=true"
 $installation = @($activeInstallations.data | Where-Object { $_.assemblyRevisionId -eq $revision.assemblyRevisionId } | Select-Object -First 1)
 if (@($installation).Count -eq 0) {
+    if (@($activeInstallations.data).Count -gt 0 -and $null -eq $script:existingSemiconductorDemoContext) {
+        throw "ETCH-DEMO-01 已安装其他工装且没有半导体演示上下文；为避免替换现场工装，请先为演示配置另选设备编号。"
+    }
     $installation = Invoke-JsonApi -Method POST -Path "/api/v1/tooling-installations:replace" -Body @{
         siteId = $siteId; equipmentId = "ETCH-DEMO-01"; assemblyRevisionId = $revision.assemblyRevisionId
         installedAt = (Get-Date).ToUniversalTime().ToString("o"); source = "device"
     }
 }
 
-$context = Invoke-JsonApi -Method POST -Path "/api/v1/production-contexts:replace" -Body @{
-    siteId = $siteId; equipmentId = "ETCH-DEMO-01"; productFamilyCode = "semiconductor-wafer"; productCode = "WAFER-ETCH-DEMO"
-    processSpecificationId = "wafer-etch-demo-v1"; processSpecificationVersion = "1"
-    toolingInstallationId = $installation.installationId; validFrom = (Get-Date).ToUniversalTime().ToString("o")
-    source = "device"; externalOrderRef = "WAFER-ETCH-DEMO-ORDER"; externalBatchRef = "WAFER-ETCH-DEMO-001"
-    materialLotRef = "SILICON-WAFER-DEMO-LOT"; materialSpecification = "Synthetic semiconductor wafer demo material"
+$context = $script:existingSemiconductorDemoContext
+if ($null -eq $context -or $context.toolingInstallationId -ne $installation.installationId) {
+    $context = Invoke-JsonApi -Method POST -Path "/api/v1/production-contexts:replace" -Body @{
+        siteId = $siteId; equipmentId = "ETCH-DEMO-01"; productFamilyCode = "semiconductor-wafer"; productCode = "WAFER-ETCH-DEMO"
+        processSpecificationId = "wafer-etch-demo-v1"; processSpecificationVersion = "1"
+        toolingInstallationId = $installation.installationId; validFrom = (Get-Date).ToUniversalTime().ToString("o")
+        source = "device"; externalOrderRef = "WAFER-ETCH-DEMO-ORDER"; externalBatchRef = "WAFER-ETCH-DEMO-001"
+        materialLotRef = "SILICON-WAFER-DEMO-LOT"; materialSpecification = "Synthetic semiconductor wafer demo material"
+    }
 }
 
 $valueMappings = @($processItems | ForEach-Object {
     $path = "input-register:$($_.address):$($_.sourceType):big-endian:high-low"
-    @{ dataItemCode = $_.code; sourcePath = $path; required = $true; sourceDataType = $_.sourceType; sourceUnit = $_.unit; minimum = $_.min; maximum = $_.max; outOfRangeBehavior = "reject" }
+    @{ dataItemCode = $_.code; sourcePath = $path; required = $true; sourceDataType = $_.sourceType; sourceUnit = $_.unit }
 })
 $parameterMappings = @($recipeItems | ForEach-Object {
     @{ dataItemCode = $_.code; sourcePath = "holding-register:$($_.address):$($_.sourceType):big-endian:high-low"; required = $true; sourceDataType = $_.sourceType; sourceUnit = $_.unit }
@@ -285,20 +314,13 @@ $existingTasks = Invoke-JsonApi -Method GET -Path "/api/v1/ingestion-tasks"
 $publishedTask = @($existingTasks.data | Where-Object {
     $_.taskId -eq "semiconductor-etch-simulator-001" -and $_.status -eq "published"
 } | Sort-Object version -Descending | Select-Object -First 1)
-$taskVersion = 1
-if (@($publishedTask).Count -gt 0) {
-    $missingParameterUnits = @($publishedTask.processSpecification.parameterMappings | Where-Object {
-        [string]::IsNullOrWhiteSpace($_.sourceUnit)
-    }).Count
-    $taskVersion = [int]$publishedTask.version
-    if ($missingParameterUnits -gt 0) {
-        $maxVersion = @($existingTasks.data | Where-Object { $_.taskId -eq "semiconductor-etch-simulator-001" } | Measure-Object -Property version -Maximum).Maximum
-        $taskVersion = [int]$maxVersion + 1
-    }
-}
+$taskVersions = @($existingTasks.data | Where-Object { $_.taskId -eq "semiconductor-etch-simulator-001" })
+$maxVersion = if ($taskVersions.Count -gt 0) { [int](($taskVersions | Measure-Object -Property version -Maximum).Maximum) } else { 0 }
+$taskVersion = $maxVersion + 1
 $task = [ordered]@{
-    taskId = "semiconductor-etch-simulator-001"; version = $taskVersion; name = "晶圆刻蚀过程采集（演示）"; status = "published"
+    taskId = "semiconductor-etch-simulator-001"; version = $taskVersion; name = "晶圆刻蚀腔体采集（演示）"; status = "published"
     edgeId = $edgeId; protocol = "modbus-tcp"; dataModelId = "semiconductor-wafer-etch"; dataModelVersion = 1
+    deviceProfile = @{ kind = "plc"; manufacturer = ""; model = "" }
     source = "equipment/semiconductor-etch-demo"; subjectType = "equipment"; subjectId = "ETCH-DEMO-01"
     modbusTcp = @{ host = "semiconductor-etch-simulator"; port = 1502; unitId = 1; addressBase = "zero-based"; pollIntervalMs = 500; maxMergeGap = 8 }
     execution = @{ timeoutMs = 5000; reconnectDelayMs = 2000; sourceIdentityStaleAfterMs = 60000; maximumFutureTimestampSkewMs = 300000 }
@@ -312,7 +334,50 @@ $task = [ordered]@{
     processSpecification = @{ eventType = "process.specification.applied"; idPath = "holding-register:160:string:28"; versionPath = "holding-register:176:uint16:big-endian:high-low"; namePath = "holding-register:180:string:28"; parametersPath = "."; parameterMappings = $parameterMappings }
     lifecycle = @{ mode = "discrete"; activeContextKey = "run_active"; activeValue = "true"; startedEventType = "process.execution.started"; completedEventType = "process.execution.completed"; stepChangedEventType = "process.stage_changed" }
 }
-$taskResult = Invoke-JsonApi -Method POST -Path "/api/v1/ingestion-tasks" -Body $task
+$taskResult = $null
+if (@($publishedTask).Count -gt 0) {
+    $currentTask = $publishedTask[0]
+    $currentSignature = @(
+        $currentTask.name, $currentTask.edgeId, $currentTask.protocol, $currentTask.dataModelId, [string]$currentTask.dataModelVersion,
+        $currentTask.deviceProfile.kind, $currentTask.deviceProfile.manufacturer, $currentTask.deviceProfile.model,
+        $currentTask.source, $currentTask.subjectType, $currentTask.subjectId,
+        $currentTask.modbusTcp.host, [string]$currentTask.modbusTcp.port, [string]$currentTask.modbusTcp.unitId,
+        $currentTask.modbusTcp.addressBase, [string]$currentTask.modbusTcp.pollIntervalMs, [string]$currentTask.modbusTcp.maxMergeGap,
+        $currentTask.timestampMode, $currentTask.timestampPath, $currentTask.timestampEncoding,
+        $currentTask.processSpecification.idPath, $currentTask.processSpecification.versionPath,
+        $currentTask.processSpecification.namePath, $currentTask.processSpecification.parametersPath,
+        $currentTask.lifecycle.mode, $currentTask.lifecycle.activeContextKey, $currentTask.lifecycle.activeValue
+    ) -join "`t"
+    $desiredSignature = @(
+        $task.name, $task.edgeId, $task.protocol, $task.dataModelId, [string]$task.dataModelVersion,
+        $task.deviceProfile.kind, $task.deviceProfile.manufacturer, $task.deviceProfile.model,
+        $task.source, $task.subjectType, $task.subjectId,
+        $task.modbusTcp.host, [string]$task.modbusTcp.port, [string]$task.modbusTcp.unitId,
+        $task.modbusTcp.addressBase, [string]$task.modbusTcp.pollIntervalMs, [string]$task.modbusTcp.maxMergeGap,
+        $task.timestampMode, $task.timestampPath, $task.timestampEncoding,
+        $task.processSpecification.idPath, $task.processSpecification.versionPath,
+        $task.processSpecification.namePath, $task.processSpecification.parametersPath,
+        $task.lifecycle.mode, $task.lifecycle.activeContextKey, $task.lifecycle.activeValue
+    ) -join "`t"
+    $currentValueMappingSignature = @($currentTask.valueMappings | ForEach-Object { "$($_.dataItemCode)`t$($_.sourcePath)`t$($_.required)`t$($_.sourceDataType)`t$($_.sourceUnit)" } | Sort-Object) -join "`n"
+    $desiredValueMappingSignature = @($valueMappings | ForEach-Object { "$($_.dataItemCode)`t$($_.sourcePath)`t$($_.required)`t$($_.sourceDataType)`t$($_.sourceUnit)" } | Sort-Object) -join "`n"
+    $currentParameterMappingSignature = @($currentTask.processSpecification.parameterMappings | ForEach-Object { "$($_.dataItemCode)`t$($_.sourcePath)`t$($_.required)`t$($_.sourceDataType)`t$($_.sourceUnit)" } | Sort-Object) -join "`n"
+    $desiredParameterMappingSignature = @($parameterMappings | ForEach-Object { "$($_.dataItemCode)`t$($_.sourcePath)`t$($_.required)`t$($_.sourceDataType)`t$($_.sourceUnit)" } | Sort-Object) -join "`n"
+    $valueMappingsMatch = (@($currentTask.valueMappings).Count -eq $valueMappings.Count) -and ($currentValueMappingSignature -eq $desiredValueMappingSignature)
+    $parameterMappingsMatch = (@($currentTask.processSpecification.parameterMappings).Count -eq $parameterMappings.Count) -and ($currentParameterMappingSignature -eq $desiredParameterMappingSignature)
+    $hasAcquisitionLimits = @($currentTask.valueMappings | Where-Object { $null -ne $_.minimum -or $null -ne $_.maximum }).Count -gt 0
+
+    if ($currentSignature -eq $desiredSignature -and $valueMappingsMatch -and $parameterMappingsMatch -and -not $hasAcquisitionLimits) {
+        $taskResult = $currentTask
+        Write-Host "  采集任务已与演示配置一致，保留现有已发布版本。"
+    } else {
+        $task.version = $taskVersion
+        $taskResult = Invoke-JsonApi -Method POST -Path "/api/v1/ingestion-tasks" -Body $task
+    }
+} else {
+    $task.version = $taskVersion
+    $taskResult = Invoke-JsonApi -Method POST -Path "/api/v1/ingestion-tasks" -Body $task
+}
 if ($taskResult.valueMappings.Count -lt 10) { throw "采集任务未达到 10 个过程参数。" }
 if ($taskResult.processSpecification.parameterMappings.Count -lt 15) { throw "采集任务未达到 15 个配方参数。" }
 
@@ -325,14 +390,54 @@ Write-Host "  合成批次: WAFER-ETCH-DEMO-001 / 300 秒"
 Write-Host "  采集任务: $($taskResult.taskId)@$($taskResult.version) / $($taskResult.status)"
 
 if ($WaitForBatch) {
-    Write-Host "等待一条完整五分钟批次结束（最长 $WaitTimeoutSeconds 秒）..."
-    Start-Sleep -Seconds ([Math]::Min(12, [Math]::Max(1, [int]$envFile["INGOT_DEMO_DEVICE_IDLE_SECONDS"])))
-    $deadline = (Get-Date).ToUniversalTime().AddSeconds($WaitTimeoutSeconds)
+    if ($WaitTimeoutSeconds -lt 1) { throw "WaitTimeoutSeconds 必须大于 0。" }
+    $priorEvents = Invoke-JsonApi -Method GET -Path "/api/v1/events?siteId=$siteId&edgeId=$edgeId&subjectId=ETCH-DEMO-01&limit=1"
+    $afterIngestId = if (@($priorEvents.data).Count -gt 0) { [long]$priorEvents.data[0].ingestId } else { 0L }
+    $runRequestedAt = [DateTimeOffset]::UtcNow
+    Write-Host "重启独立模拟器并等待一条新五分钟批次结束（最长 $WaitTimeoutSeconds 秒）..."
+    & docker @composeArgs --profile semiconductor-demo restart semiconductor-etch-simulator
+    if ($LASTEXITCODE -ne 0) { throw "无法重启半导体刻蚀模拟器，未开始等待新批次。" }
+    $deadline = $runRequestedAt.AddSeconds($WaitTimeoutSeconds)
+    $startedExecutionIds = @()
+    $completedEvent = $null
     do {
-        Start-Sleep -Seconds 10
-        $events = Invoke-JsonApi -Method GET -Path "/api/v1/events?siteId=$siteId&edgeId=$edgeId&subjectId=ETCH-DEMO-01&limit=5"
-        $completed = @($events.data | Where-Object { $_.eventType -eq "process.execution.completed" })
-    } while ($completed.Count -eq 0 -and (Get-Date).ToUniversalTime() -lt $deadline)
-    if ($completed.Count -eq 0) { throw "五分钟批次未在等待时间内产生完成事件。" }
-    Write-Host "已收到过程完成事件；可在 /process-executions、/comparisons 查看曲线和阶段。"
+        $events = Invoke-JsonApi -Method GET -Path "/api/v1/events?siteId=$siteId&edgeId=$edgeId&subjectId=ETCH-DEMO-01&afterIngestId=$afterIngestId&limit=200"
+        foreach ($item in @($events.data)) {
+            $afterIngestId = [Math]::Max([long]$afterIngestId, [long]$item.ingestId)
+            $event = $item.event
+            if (-not $event -or -not $event.executionId) { continue }
+            try {
+                $occurredAt = [DateTimeOffset]::Parse([string]$event.occurredAt, [Globalization.CultureInfo]::InvariantCulture)
+            } catch {
+                continue
+            }
+            if ($occurredAt.ToUniversalTime() -lt $runRequestedAt) { continue }
+            if ($event.eventType -eq "process.execution.started") {
+                if ($startedExecutionIds -notcontains [string]$event.executionId) {
+                    $startedExecutionIds += [string]$event.executionId
+                }
+            } elseif ($event.eventType -eq "process.execution.completed" -and
+                $startedExecutionIds -contains [string]$event.executionId) {
+                $completedEvent = $item
+            }
+        }
+        if (-not $completedEvent -and (Get-Date).ToUniversalTime() -lt $deadline) { Start-Sleep -Seconds 3 }
+    } while (-not $completedEvent -and (Get-Date).ToUniversalTime() -lt $deadline)
+    if (-not $completedEvent) { throw "模拟器重启后未观察到同一新运行的开始与完成事件。" }
+
+    $executionId = [string]$completedEvent.event.executionId
+    $execution = $null
+    do {
+        $executionResult = Invoke-JsonApi -Method GET -Path "/api/v1/process-executions?siteId=$siteId&executionId=$([Uri]::EscapeDataString($executionId))&limit=1"
+        $execution = @($executionResult.data | Where-Object { $_.executionId -eq $executionId } | Select-Object -First 1)
+        if ($execution.Count -gt 0) { $execution = $execution[0] } else { $execution = $null }
+        if (-not $execution -and (Get-Date).ToUniversalTime() -lt $deadline) { Start-Sleep -Seconds 3 }
+    } while (-not $execution -and (Get-Date).ToUniversalTime() -lt $deadline)
+    if (-not $execution -or -not $execution.hasStarted -or -not $execution.hasCompleted -or $execution.sampleCount -lt 1) {
+        throw "新运行边界未完整固化，或没有有效过程样本；请检查节点诊断和数据质量。"
+    }
+    $validSignalCount = @($execution.processDataQuality.signals | Where-Object { $_.validSampleCount -gt 0 }).Count
+    if ($validSignalCount -lt 1) { throw "新运行没有通过质量筛选的有效过程信号；请检查点位映射和采样质量。" }
+    Write-Host "演示链路验证通过：运行 $executionId，$($execution.sampleCount) 条样本，$validSignalCount 个信号含有效样本。"
+    Write-Host "可在 /process-executions、/comparisons 查看本次运行曲线和阶段。"
 }

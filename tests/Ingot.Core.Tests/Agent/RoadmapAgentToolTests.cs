@@ -417,7 +417,7 @@ public sealed class RoadmapAgentToolTests
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<StoreInspectionReviewResult> CreateAsync(CreateInspectionReviewRequest request, string executionId, string reviewedBy, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default) => Task.FromResult<InspectionReview?>(null);
-        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>([]);
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, string? siteId = null, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>([]);
         public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default) => Task.FromResult<IReadOnlyDictionary<Guid, InspectionReview>>(new Dictionary<Guid, InspectionReview>());
         public Task LogAccessAsync(Guid? inspectionRecordId, Guid? attachmentId, string action, string actor, string? detail, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<InspectionAuditEntry>> QueryAuditAsync(Guid? inspectionRecordId, Guid? attachmentId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionAuditEntry>>([]);

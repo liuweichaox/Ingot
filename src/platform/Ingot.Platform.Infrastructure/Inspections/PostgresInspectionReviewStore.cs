@@ -1,4 +1,5 @@
 
+// 在 PostgreSQL 中持久化检验复核和审计事件，并在检索时执行站点过滤。
 using System.Security.Cryptography;
 using System.Text.Json;
 using Ingot.Contracts.Inspections;
@@ -69,6 +70,7 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore
         Guid? inspectionRecordId,
         string? executionId,
         int limit,
+        string? siteId = null,
         CancellationToken ct = default)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
@@ -83,6 +85,18 @@ public sealed class PostgresInspectionReviewStore : IInspectionReviewStore
         {
             predicates.Add("execution_id = @execution_id");
             command.Parameters.AddWithValue("execution_id", executionId.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(siteId))
+        {
+            predicates.Add("""
+                           EXISTS (
+                             SELECT 1
+                             FROM inspection_records record
+                             WHERE record.record_id = inspection_reviews.inspection_record_id
+                               AND record.site_id = @site_id
+                           )
+                           """);
+            command.Parameters.AddWithValue("site_id", siteId.Trim());
         }
         command.CommandText = $"""
                                {SelectColumns}

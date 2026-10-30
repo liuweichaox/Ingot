@@ -159,6 +159,8 @@ public sealed record AcquisitionExecutionOptions
     public int SourceIdentityStaleAfterMs { get; init; } = 60_000;
 
     public int MaximumFutureTimestampSkewMs { get; init; } = 300_000;
+
+    public int MaximumValidSnapshotSilenceMs { get; init; }
 }
 
 public sealed record MqttConnection

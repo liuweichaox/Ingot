@@ -95,6 +95,42 @@ if ! grep -Fq "$canonical_nav_zh" docs/design.md ||
   exit 1
 fi
 
+# README reproduces the workbench navigation; keep its menu ownership aligned with the application shell.
+navigation_marker_counts="$(awk '
+  /id: "evidence"/ { evidence_count++; evidence_line = NR }
+  /id: "insight"/ { insight_count++; insight_line = NR }
+  /id: "optimization"/ { optimization_count++; optimization_line = NR }
+  END {
+    printf "%d %d %d %d %d %d", evidence_count, evidence_line, insight_count, insight_line, optimization_count, optimization_line
+  }
+' apps/platform/src/App.jsx)"
+read -r evidence_count evidence_line insight_count insight_line optimization_count optimization_line <<<"$navigation_marker_counts"
+if [[ "$evidence_count" -ne 1 || "$insight_count" -ne 1 || "$optimization_count" -ne 1 ||
+      "$evidence_line" -ge "$insight_line" || "$insight_line" -ge "$optimization_line" ]]; then
+  echo "Workbench navigation groups must contain one ordered evidence, insight, and optimization marker." >&2
+  exit 1
+fi
+
+evidence_menu="$(sed -n '/id: "evidence"/,/id: "insight"/p' apps/platform/src/App.jsx)"
+insight_menu="$(sed -n '/id: "insight"/,/id: "optimization"/p' apps/platform/src/App.jsx)"
+if [[ -z "$evidence_menu" || -z "$insight_menu" ]]; then
+  echo "Workbench navigation groups could not be extracted from apps/platform/src/App.jsx." >&2
+  exit 1
+fi
+readme_field_ops_zh='现场运行 → 运行记录 / 生产切换 / 工装装卸 / 检验任务 / 质量偏差 / 数据质量'
+readme_insight_zh='工艺洞察 → 工艺分析 / 工艺资料 / 机理知识'
+readme_field_ops_en='Field Operations → Run Records / Production Changeover / Tooling Installation / Inspection Tasks / Quality Deviations / Data Quality'
+readme_insight_en='Process Insight → Process Analysis / Process Materials / Mechanism Knowledge'
+if ! grep -Fq '"/data-quality", "数据质量"' <<<"$evidence_menu" ||
+   grep -Fq '"/data-quality", "数据质量"' <<<"$insight_menu" ||
+   ! grep -Fqx "$readme_field_ops_zh" README.md ||
+   ! grep -Fqx "$readme_insight_zh" README.md ||
+   ! grep -Fqx "$readme_field_ops_en" README.en.md ||
+   ! grep -Fqx "$readme_insight_en" README.en.md; then
+  echo "README.md and README.en.md menu ownership must match the workbench groups in apps/platform/src/App.jsx." >&2
+  exit 1
+fi
+
 canonical_zh='组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化。'
 canonical_en='Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.'
 canonical_category_zh='开源工艺研发与优化系统'

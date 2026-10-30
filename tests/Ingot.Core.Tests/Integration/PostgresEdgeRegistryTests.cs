@@ -53,6 +53,40 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
     }
 
     [LinuxDockerFact]
+    public async Task Heartbeat_RebasesBacklogTimesUsingEdgeReportedAge()
+    {
+        await postgres.EnsureSchemaAsync();
+        var edgeId = $"EDGE-CLOCK-SKEW-{Guid.NewGuid():N}";
+        var receivedAt = DateTimeOffset.UtcNow;
+        var edgeNow = receivedAt.AddHours(4);
+        var delivery = new EdgeDeliveryRuntimeStatus
+        {
+            State = "buffering",
+            ObservedAt = edgeNow,
+            BacklogObservedAt = edgeNow.AddSeconds(-12),
+            BacklogObservationAgeMs = 12_000,
+            OldestPendingEventAt = edgeNow.AddSeconds(-75),
+            PendingEventCount = 7
+        };
+
+        var state = await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
+            edgeId,
+            "SITE-INTEGRATION",
+            null,
+            null,
+            null,
+            receivedAt,
+            delivery);
+
+        Assert.True(state.BacklogStatisticsFresh);
+        Assert.Equal(receivedAt.AddSeconds(-12), state.Delivery!.BacklogObservedAt);
+        Assert.Equal(receivedAt.AddSeconds(-75), state.Delivery.OldestPendingEventAt);
+        var history = await new EdgeRegistry(postgres.DataSource).ListStatusHistoryAsync(edgeId, 1);
+        Assert.Equal(receivedAt.AddSeconds(-12), history[0].BacklogObservedAt);
+        Assert.Equal(7, history[0].PendingEventCount);
+    }
+
+    [LinuxDockerFact]
     public async Task Heartbeat_ShouldBeVisibleAcrossRegistryInstancesWithHistory()
     {
         await postgres.EnsureSchemaAsync();
@@ -83,6 +117,9 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
         var delivery = new EdgeDeliveryRuntimeStatus
         {
             State = "synchronized",
+            ObservedAt = now,
+            BacklogObservedAt = now,
+            BacklogObservationAgeMs = 0,
             PendingEventCount = 3,
             LastAcknowledgedSequence = 41,
             RecoveryCount = 2,
@@ -105,7 +142,12 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             null,
             acquisition with { ValidSnapshotCount = 47, EmittedEventCount = 94 },
             now.AddSeconds(10),
-            delivery with { PendingEventCount = 5 });
+            delivery with
+            {
+                ObservedAt = now.AddSeconds(10),
+                BacklogObservedAt = now.AddSeconds(10),
+                PendingEventCount = 5
+            });
 
         await new EdgeRegistry(postgres.DataSource).HeartbeatAsync(
             edgeId,
@@ -114,7 +156,14 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
             "上送中断",
             acquisition with { ValidSnapshotCount = 48, EmittedEventCount = 96 },
             now.AddSeconds(20),
-            delivery with { State = "blocked", PendingEventCount = 7, LastError = "平台不可达" });
+            delivery with
+            {
+                ObservedAt = now.AddSeconds(20),
+                BacklogObservedAt = now.AddSeconds(20),
+                State = "blocked",
+                PendingEventCount = 7,
+                LastError = "平台不可达"
+            });
 
         var secondReplica = new EdgeRegistry(postgres.DataSource);
         var restored = await secondReplica.FindAsync(edgeId);

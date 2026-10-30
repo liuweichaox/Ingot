@@ -84,7 +84,7 @@ internal sealed class MtConnectAcquisitionRunner : IAcquisitionProtocolRunner
                         normalizedSource,
                         currentProcessSpecification,
                         observedAt);
-                    var deduplication = sourceDeduplicator.Evaluate(
+                    var deduplication = sourceDeduplicator.EvaluatePending(
                         mapped.Sample,
                         observedAt,
                         TimeSpan.FromMilliseconds(task.Execution.SourceIdentityStaleAfterMs));
@@ -99,8 +99,8 @@ internal sealed class MtConnectAcquisitionRunner : IAcquisitionProtocolRunner
                         continue;
                     }
 
-                    var events = lifecycle.Track(mapped, task.Lifecycle, pollDelayMs);
-                    await _sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                    var events = await lifecycle.TrackAndEmitAsync(mapped, task.Lifecycle, pollDelayMs, _sink, ct).ConfigureAwait(false);
+                    sourceDeduplicator.Commit(mapped.Sample, observedAt);
                     _status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
                     _status.RecordEmissionOutcome(configurationKey, events.Count, task.Lifecycle is not null && events.Count == 0);
                     currentProcessSpecification = mapped.ProcessSpecificationIdentity;

@@ -53,6 +53,68 @@ public sealed class PostgresIngestionTaskStoreTests(PostgresIntegrationFixture p
         Assert.Equal(ConfigurationStatuses.Published, stored.Status);
     }
 
+    [LinuxDockerFact]
+    public async Task FindVersionMetadataAsync_ShouldBatchAndRedactOutsideSiteRecords()
+    {
+        await postgres.EnsureSchemaAsync();
+        await EnsureDataModelAsync();
+        var store = new PostgresIngestionTaskStore(postgres.DataSource);
+        var taskId = $"metadata-{Guid.NewGuid():N}";
+        var authorized = Profile($"{taskId}-authorized", 1) with
+        {
+            Status = ConfigurationStatuses.Draft,
+            EdgeId = "EDGE-SITE-A"
+        };
+        var sameSiteOtherEdge = Profile($"{taskId}-mismatch", 1) with
+        {
+            Status = ConfigurationStatuses.Draft,
+            EdgeId = "EDGE-SITE-A-OTHER"
+        };
+        var otherSite = Profile($"{taskId}-other-site", 1) with
+        {
+            Status = ConfigurationStatuses.Draft,
+            EdgeId = "EDGE-SITE-B"
+        };
+        await store.UpsertAsync(authorized);
+        await store.UpsertAsync(sameSiteOtherEdge);
+        await store.UpsertAsync(otherSite);
+
+        var found = await store.FindVersionMetadataAsync(
+        [
+            new(authorized.TaskId, authorized.Version),
+            new(sameSiteOtherEdge.TaskId, sameSiteOtherEdge.Version),
+            new(otherSite.TaskId, otherSite.Version),
+            new($"{taskId}-missing", 7)
+        ],
+        ["EDGE-SITE-A", "EDGE-SITE-A-OTHER"]);
+
+        var authorizedResult = Assert.Single(found, item => item.TaskId == authorized.TaskId);
+        Assert.Equal("EDGE-SITE-A", authorizedResult.AuthorizedEdgeId);
+        Assert.Equal(ConfigurationStatuses.Draft, authorizedResult.AuthorizedStatus);
+        Assert.False(authorizedResult.ExistsOutsideAuthorizedSite);
+
+        var mismatchCandidate = Assert.Single(found, item => item.TaskId == sameSiteOtherEdge.TaskId);
+        Assert.Equal("EDGE-SITE-A-OTHER", mismatchCandidate.AuthorizedEdgeId);
+        Assert.Equal(ConfigurationStatuses.Draft, mismatchCandidate.AuthorizedStatus);
+        Assert.False(mismatchCandidate.ExistsOutsideAuthorizedSite);
+
+        var outsideResult = Assert.Single(found, item => item.TaskId == otherSite.TaskId);
+        Assert.Null(outsideResult.AuthorizedEdgeId);
+        Assert.Null(outsideResult.AuthorizedStatus);
+        Assert.True(outsideResult.ExistsOutsideAuthorizedSite);
+
+        var missingResult = Assert.Single(found, item => item.TaskId == $"{taskId}-missing");
+        Assert.Null(missingResult.AuthorizedEdgeId);
+        Assert.Null(missingResult.AuthorizedStatus);
+        Assert.False(missingResult.ExistsOutsideAuthorizedSite);
+
+        var serialized = System.Text.Json.JsonSerializer.Serialize(found);
+        Assert.DoesNotContain("EDGE-SITE-B", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("Secret", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("baseUrl", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("headersText", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static IngestionTask Profile(string taskId, int version)
         => new()
         {

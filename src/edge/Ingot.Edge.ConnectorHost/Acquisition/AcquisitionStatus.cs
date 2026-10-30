@@ -1,4 +1,4 @@
-
+// 跟踪 Edge 采集任务、部署版本和最近有效快照的运行状态。
 using Ingot.Contracts.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
@@ -402,6 +402,11 @@ public sealed class AcquisitionStatus
         }
         if (deployment is not null)
         {
+            if (_tasks.TryGetValue(configurationKey, out var task))
+                _tasks[configurationKey] = task with
+                {
+                    MaximumValidSnapshotSilenceMs = deployment.Task.Execution.MaximumValidSnapshotSilenceMs
+                };
             _taskIdentities[configurationKey] = new TaskIdentity(
                 deployment.Task.TaskId,
                 deployment.Task.Version,

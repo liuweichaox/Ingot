@@ -33,6 +33,48 @@ export function parseModelValue(value) {
   return { id, version: Number(version) || 1 };
 }
 
+export function hasPointAddress(row, descriptor) {
+  if (descriptor.addressing === ADDRESSING.modbusRegister)
+    return String(row?.modbusAddress ?? "").trim() !== "";
+  if (descriptor.addressing === ADDRESSING.melsecDevice)
+    return String(row?.melsecAddress ?? "").trim() !== "";
+  return String(row?.sourcePath || "").trim() !== "";
+}
+
+export function isValueMappingComplete(form, row, index, dataItems, errors = {}) {
+  const descriptor = protocolDescriptor(form.protocol);
+  const code = String(row?.dataItemCode || "").trim();
+  const definition = dataItems.find(item => item.code === code);
+  if (!code || !definition || !hasPointAddress(row, descriptor)) return false;
+  if (Object.keys(errors).some(path => path.startsWith(`valueMappings[${index}].`))) return false;
+  if (Object.keys(descriptor.validatePoint(row, form) || {}).length > 0) return false;
+  if (descriptor.capabilities.perTopicMapping && row.topic &&
+      !(form.mqtt?.topics || []).some(topic => String(topic.topic || "").trim() === row.topic)) return false;
+  if (definition.unit && !String(row.sourceUnit || "").trim()) return false;
+  if (definition.unit && row.sourceUnit.trim() !== definition.unit && Number(row.scale) === 1 && Number(row.offset) === 0) return false;
+  return true;
+}
+
+export function summarizeValueMappings(form, dataItems = [], errors = {}) {
+  const rows = form?.valueMappings || [];
+  const requiredItems = dataItems.filter(item => !item.nullable);
+  const completeCodes = new Set(rows.filter((row, index) =>
+    isValueMappingComplete(form, row, index, dataItems, errors))
+    .map(row => String(row.dataItemCode || "").trim()));
+  const mappedRequiredCount = requiredItems.filter(item => completeCodes.has(item.code)).length;
+  const completeRowCount = completeCodes.size;
+  const mappingReady = dataItems.length > 0 && (requiredItems.length > 0
+    ? mappedRequiredCount === requiredItems.length
+    : completeRowCount > 0);
+  return {
+    requiredCount: requiredItems.length,
+    mappedRequiredCount,
+    completeRowCount,
+    missingRequiredItems: requiredItems.filter(item => !completeCodes.has(item.code)),
+    mappingReady,
+  };
+}
+
 function protocolManufacturerFor(protocol) {
   if (["melsec-a1e", "melsec-mc-3e"].includes(protocol)) return "Mitsubishi";
   if (protocol === "siemens-s7") return "Siemens";
@@ -286,6 +328,7 @@ export function createIngestionTaskForm(value = {}, version) {
       reconnectDelayMs: value.execution?.reconnectDelayMs ?? 5000,
       sourceIdentityStaleAfterMs: value.execution?.sourceIdentityStaleAfterMs ?? 60000,
       maximumFutureTimestampSkewMs: value.execution?.maximumFutureTimestampSkewMs ?? 300000,
+      maximumValidSnapshotSilenceMs: value.execution?.maximumValidSnapshotSilenceMs ?? 0,
     },
     timestampMode: initialTimestampMode(value, protocol),
     timestampPath: protocol === "snmp" ? value.timestampPath || "" : value.timestampPath || "timestamp",
@@ -655,6 +698,7 @@ export function toPayload(form) {
       reconnectDelayMs: Number(form.execution.reconnectDelayMs),
       sourceIdentityStaleAfterMs: Number(form.execution.sourceIdentityStaleAfterMs),
       maximumFutureTimestampSkewMs: Number(form.execution.maximumFutureTimestampSkewMs),
+      maximumValidSnapshotSilenceMs: Number(form.execution.maximumValidSnapshotSilenceMs),
     },
     timestampMode,
     timestampPath: capabilities.intrinsicSourceTimestamp
@@ -739,6 +783,9 @@ export function validateIngestionTask(form, context = {}) {
   const futureSkew = Number(form.execution.maximumFutureTimestampSkewMs);
   if (!(futureSkew >= 0 && futureSkew <= 86400000))
     set("execution.maximumFutureTimestampSkewMs", "设备时间戳最大超前量必须为 0-86400000ms。");
+  const maximumValidSnapshotSilence = Number(form.execution.maximumValidSnapshotSilenceMs);
+  if (!Number.isInteger(maximumValidSnapshotSilence) || maximumValidSnapshotSilence < 0 || maximumValidSnapshotSilence > 86400000)
+    set("execution.maximumValidSnapshotSilenceMs", "有效快照静默时限必须是 0-86400000ms 的整数。");
 
   if (descriptor.capabilities.sourceTimestamp &&
       !descriptor.capabilities.intrinsicSourceTimestamp &&

@@ -58,7 +58,7 @@ export function isProductionEditorValid(resource, editor) {
 function ProductionReferenceField({ fieldKey, value, required, editor, onChange }) {
   const settings = {
     equipmentId: {
-      endpoint: "/api/v1/data-objects?limit=500",
+      endpoint: `/api/v1/data-objects?limit=500${editor.siteId ? `&siteId=${encodeURIComponent(editor.siteId)}` : ""}`,
       label: "设备",
       filter: row => row.subjectType === "equipment",
       optionValue: row => row.subjectId,
@@ -131,7 +131,7 @@ function ProcessSpecificationReferenceField({ editor, onChange, required }) {
     </Field>
   );
 }
-export function ProductionRecordForm({ resource, editor, editorMode, onChange }) {
+export function ProductionRecordForm({ resource, editor, editorMode, lockedSiteId = "", onChange }) {
   if (resource === productionResources.context) {
     const hasMachine = Boolean(editor.equipmentId);
     const hasProduct = Boolean(editor.productCode?.trim() && editor.productFamilyCode?.trim());
@@ -150,9 +150,10 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
         />
         <Card title="1. 选择站点和生产设备" description="只显示已经通过现场节点上报过数据的设备。">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="站点">
-              <Input required value={editor.siteId || ""} placeholder="例如 SITE-001" onChange={event => {
+            <Field label="站点" hint={lockedSiteId ? "由当前现场范围确定；切换现场请先关闭表单。" : undefined}>
+              <Input required readOnly={Boolean(lockedSiteId)} value={editor.siteId || ""} placeholder="例如 SITE-001" onChange={event => {
                 onChange("siteId", event.target.value);
+                onChange("equipmentId", "");
                 onChange("toolingInstallationId", "");
               }} />
             </Field>
@@ -258,14 +259,18 @@ export function ProductionRecordForm({ resource, editor, editorMode, onChange })
           );
         }
         return (
-          <Field key={key} label={label}>
+          <Field key={key} label={label} hint={key === "siteId" && lockedSiteId ? "由当前现场范围确定；切换现场请先关闭表单。" : undefined}>
             <Input
               aria-label={label}
               required={required}
+              readOnly={key === "siteId" && Boolean(lockedSiteId)}
               type={typeof initial === "number" ? "number" : "text"}
               min={typeof initial === "number" ? 1 : undefined}
               value={editor[key] ?? ""}
-              onChange={event => onChange(key, event.target.value)}
+              onChange={event => {
+                onChange(key, event.target.value);
+                if (key === "siteId") onChange("equipmentId", "");
+              }}
             />
           </Field>
         );

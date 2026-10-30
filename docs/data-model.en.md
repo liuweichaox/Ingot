@@ -14,14 +14,14 @@ Production event / actual execution / inspection facts
   -> execution link -> source outcome -> next observation round
 ```
 
-Next-recipe recommendations, mechanism claims, and conflicts belong to “factory/production site + recipe”; process-knowledge sources belong to a factory/production site. The system takes evidence only from actual executions; recommendations, decisions, execution links, and outcomes are separate append-only records. See “Recipe recommendation architecture constraints” in [System design](design.en.md).
+Next-recipe recommendations, mechanism claims, and conflicts belong to “factory/production site + recipe”; process-knowledge sources are authorized by factory/production site and may have an optional recipe-applicability selector in `knowledge_source_context`. Recipe applicability is not an authorization boundary; source reads still require site access. The system takes evidence only from actual executions; recommendations, decisions, execution links, and outcomes are separate append-only records. See “Recipe recommendation architecture constraints” in [System design](design.en.md).
 
 ## 2. Relation Inventory
 
 | Group | Relations | Formal responsibility |
 | --- | --- | --- |
 | Identity and access | `users`, `user_sessions` | Identity, sessions, and site authorization; never production facts. |
-| Site and acquisition | `platform_edges`, `edge_runtime_status_history`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Versioned Edge, source, and ingestion configuration and state. |
+| Site and acquisition | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Versioned Edge, source, and ingestion configuration and state; deployment observations retain applied versions reported by Edge and the intervals observed by Platform. |
 | Event idempotency and raw facts | `event_ingest_keys`, `production_events`, `collection_points`, `process_sample_frames`, `process_sample_values` | Ingest deduplication ledger, immutable event envelopes, point catalogue, and high-frequency samples. |
 | Execution and derived analysis | `process_execution_boundaries`, `execution_boundary_recompute_jobs`, `execution_analysis_backfill_jobs`, `execution_analysis_recompute_jobs`, `execution_analysis_materializations`, `execution_features`, `execution_phases` | Execution boundaries plus recomputable phases, features, and materialization state. |
 | Process configuration | `process_data_models`, `signal_definitions`, `feature_definitions`, `phase_definitions`, `phase_mappings`, `process_specification_versions`, `scenario_packages`, `process_analysis_plans` | Versioned process semantics, signals/features, specifications, and scenario policy. |
@@ -33,7 +33,11 @@ Next-recipe recommendations, mechanism claims, and conflicts belong to “factor
 | Agent conversations and problem cases | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, case evaluation, and durable chat; no business-write permission. |
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
 
-Training datasets, process-model versions, model evaluations, and drift readings are currently shared R&D assets within a deployment. Process engineers and platform administrators receive role-based read/write access; these are not production tables with implemented factory-level isolation. Recommendations and mechanism claims use `site_code` and `process_specification_id`; knowledge sources use `site_code`, and child records inherit their parent's scope.
+`process_sample_values.quality_code` stores point quality, and `quality_evidence_version` identifies the acquisition contract that justified it. Samples projected before this migration and writes from older Edge versions use version `0` and are read as uncertain; only events with the current contract version can classify an unflagged point as good. Unknown quality values and older formats are never inferred as good or admitted as complete evidence for formal diagnosis or recipe recommendations.
+
+Training datasets, process-model versions, model evaluations, and drift readings are currently shared R&D assets within a deployment. Process engineers and platform administrators receive role-based read/write access; these are not production tables with implemented factory-level isolation. Recommendations and mechanism claims use `site_code` and `process_specification_id`; knowledge sources use `site_code`, and child records inherit their parent's site scope.
+
+Within a site, `knowledge_sources` enforces one record per content SHA-256, with one immutable applicability selector. A source without a `process-specification` selector is site-wide; a source with one applies only to that recipe. Re-uploading cannot widen or rewrite the existing scope. The assistant searches site-wide and matching-recipe sources when recipe context is explicit, and only site-wide sources when it is not.
 
 The recommendation's recipe version is retained in the frozen brief context; relational ownership remains factory/production site + recipe. Adopting a next-run correction does not modify `process_specification_versions`; a significant change is published through a separate revision draft.
 

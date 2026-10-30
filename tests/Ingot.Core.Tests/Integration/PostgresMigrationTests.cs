@@ -114,6 +114,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
             connection);
 
         Assert.True((bool)(await command.ExecuteScalarAsync())!);
+
     }
 
     [LinuxDockerFact]
@@ -488,6 +489,16 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                 SELECT 1 FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'process_sample_values'
                   AND column_name = 'quality_code' AND data_type = 'smallint')
+              AND (SELECT count(*) = 3
+                   FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name = 'process_sample_frames'
+                     AND column_name IN ('configuration_kind', 'configuration_id', 'configuration_version')
+                     AND is_nullable = 'YES')
+              AND EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = 'public.process_sample_frames'::regclass
+                  AND conname = 'ck_process_sample_frames_configuration')
+              AND to_regclass('public.ix_process_sample_frames_configuration') IS NOT NULL
               AND NOT EXISTS (
                 SELECT 1 FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'process_sample_values'
@@ -501,6 +512,61 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
             """,
             connection);
         Assert.True((bool)(await command.ExecuteScalarAsync())!);
+
+        var occurredAt = DateTimeOffset.UtcNow;
+        await using var partialConfiguration = new NpgsqlCommand(
+            """
+            INSERT INTO process_sample_frames (
+              occurred_at, frame_id, event_id, recorded_at, ingested_at,
+              site_id, edge_id, source, subject_type, subject_id,
+              data_model_id, data_model_version,
+              configuration_kind, configuration_id, configuration_version)
+            VALUES (
+              @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
+              'SITE-MIGRATION', 'EDGE-MIGRATION', 'test', 'equipment', 'PRESS-MIGRATION',
+              'model-migration', 1,
+              'ingestion-task', 'task-migration', NULL);
+            """,
+            connection);
+        partialConfiguration.Parameters.AddWithValue("occurred_at", occurredAt);
+        partialConfiguration.Parameters.AddWithValue("recorded_at", occurredAt);
+        partialConfiguration.Parameters.AddWithValue("ingested_at", occurredAt);
+        partialConfiguration.Parameters.AddWithValue(
+            "frame_id",
+            Random.Shared.NextInt64(1_000_000_000, long.MaxValue));
+        partialConfiguration.Parameters.AddWithValue("event_id", Guid.CreateVersion7().ToString());
+        var error = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await partialConfiguration.ExecuteNonQueryAsync();
+        });
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+
+        await using var whitespaceConfiguration = new NpgsqlCommand(
+            """
+            INSERT INTO process_sample_frames (
+              occurred_at, frame_id, event_id, recorded_at, ingested_at,
+              site_id, edge_id, source, subject_type, subject_id,
+              data_model_id, data_model_version,
+              configuration_kind, configuration_id, configuration_version)
+            VALUES (
+              @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
+              'SITE-MIGRATION', 'EDGE-MIGRATION', 'test', 'equipment', 'PRESS-MIGRATION',
+              'model-migration', 1,
+              'ingestion-task', E'\t\r\n', 1);
+            """,
+            connection);
+        whitespaceConfiguration.Parameters.AddWithValue("occurred_at", occurredAt.AddSeconds(1));
+        whitespaceConfiguration.Parameters.AddWithValue("recorded_at", occurredAt.AddSeconds(1));
+        whitespaceConfiguration.Parameters.AddWithValue("ingested_at", occurredAt.AddSeconds(1));
+        whitespaceConfiguration.Parameters.AddWithValue(
+            "frame_id",
+            Random.Shared.NextInt64(1_000_000_000, long.MaxValue));
+        whitespaceConfiguration.Parameters.AddWithValue("event_id", Guid.CreateVersion7().ToString());
+        var whitespaceError = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await whitespaceConfiguration.ExecuteNonQueryAsync();
+        });
+        Assert.Equal(PostgresErrorCodes.CheckViolation, whitespaceError.SqlState);
     }
 
     [LinuxDockerFact]
@@ -600,8 +666,8 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                            @at, @frame_id, @event_id, @at, @at,
                            'SITE-RETENTION', 'EDGE-RETENTION', 'test', 'equipment', 'PRESS-RETENTION', 'retention-model', 1);
                          INSERT INTO process_sample_values (
-                           occurred_at, frame_id, point_key, quality_code, numeric_value)
-                         VALUES (@at, @frame_id, 1, 0, 1.0);
+                           occurred_at, frame_id, point_key, quality_code, quality_evidence_version, numeric_value)
+                         VALUES (@at, @frame_id, 1, 0, 1, 1.0);
                          """,
                          connection))
         {

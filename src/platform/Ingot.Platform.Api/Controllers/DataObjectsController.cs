@@ -1,4 +1,4 @@
-
+// 按授权站点查询生产数据对象，并支持现场节点、对象类型和事件时间边界筛选。
 using Ingot.Contracts.Analytics;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Application.Events;
@@ -15,6 +15,7 @@ public sealed class DataObjectsController(
     [HttpGet]
     public async Task<IActionResult> Query(
         [FromQuery] string? siteId,
+        [FromQuery] string? edgeId,
         [FromQuery] string? subjectType,
         [FromQuery] string? subjectId,
         [FromQuery] DateTimeOffset? from,
@@ -43,6 +44,7 @@ public sealed class DataObjectsController(
         return Ok(await events.QueryDataObjectsAsync(new DataObjectQuery
         {
             SiteId = authorizedSiteId,
+            EdgeId = Normalize(edgeId),
             SubjectType = Normalize(subjectType)?.ToLowerInvariant(),
             SubjectId = Normalize(subjectId),
             From = from?.ToUniversalTime(),

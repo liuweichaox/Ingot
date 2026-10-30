@@ -18,7 +18,9 @@ afterEach(() => {
 function stubExecutions(items) {
   const fetchMock = vi.fn().mockImplementation(url => {
     const path = String(url);
-    const payload = path.includes("/api/edges")
+    const payload = path.includes("/api/v1/auth/me")
+      ? { siteIds: ["SITE-001"] }
+      : path.includes("/api/edges")
       ? [{ edgeId: "edge-01", siteId: "SITE-001" }]
       : path.includes("/process-executions")
         ? { items, total: items.length }
@@ -76,7 +78,7 @@ describe("运行记录需要处理筛选", () => {
     expect(await screen.findByText("没有需要处理的运行")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看全部运行" }));
     expect(await screen.findByText("RUN-OK")).toBeInTheDocument();
-    expect(screen.getByLabelText("当前位置")).toHaveTextContent(/^\/process-executions$/);
+    expect(screen.getByLabelText("当前位置")).toHaveTextContent(/^\/process-executions\?siteId=SITE-001$/);
   });
 
   it("默认不过滤运行", async () => {

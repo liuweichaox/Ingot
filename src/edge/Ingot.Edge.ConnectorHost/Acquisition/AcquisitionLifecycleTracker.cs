@@ -1,6 +1,7 @@
 using System.Globalization;
 using Ingot.Contracts.Acquisition;
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 
 namespace Ingot.Edge.ConnectorHost.Acquisition;
 
@@ -18,6 +19,85 @@ public sealed class AcquisitionLifecycleTracker
     private bool _hasObservedLifecycleState;
 
     public bool IsRunActive => _activeExecutionId is not null;
+
+    public sealed record Snapshot(
+        string? ActiveExecutionId,
+        string? ActiveStep,
+        IReadOnlyDictionary<string, string> ActiveContext,
+        ObjectRef? ActiveSubject,
+        string? ActiveSource,
+        ProductionEvent? LatestProcessSpecificationApplied,
+        long SampleCount,
+        bool ActiveRunStartedWithoutObservedIdle,
+        bool HasObservedLifecycleState);
+
+    public Snapshot CaptureState()
+        => new(
+            _activeExecutionId,
+            _activeStep,
+            _activeContext,
+            _activeSubject,
+            _activeSource,
+            _latestProcessSpecificationApplied,
+            _sampleCount,
+            _activeRunStartedWithoutObservedIdle,
+            _hasObservedLifecycleState);
+
+    public void RestoreState(Snapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _activeExecutionId = snapshot.ActiveExecutionId;
+        _activeStep = snapshot.ActiveStep;
+        _activeContext = snapshot.ActiveContext;
+        _activeSubject = snapshot.ActiveSubject;
+        _activeSource = snapshot.ActiveSource;
+        _latestProcessSpecificationApplied = snapshot.LatestProcessSpecificationApplied;
+        _sampleCount = snapshot.SampleCount;
+        _activeRunStartedWithoutObservedIdle = snapshot.ActiveRunStartedWithoutObservedIdle;
+        _hasObservedLifecycleState = snapshot.HasObservedLifecycleState;
+    }
+
+    public async Task<IReadOnlyList<ProductionEvent>> TrackAndEmitAsync(
+        AcquisitionMappingResult mapped,
+        AcquisitionLifecycleMapping? lifecycle,
+        int pollDelayMs,
+        IEventSink sink,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = CaptureState();
+        try
+        {
+            var events = Track(mapped, lifecycle, pollDelayMs);
+            await sink.EmitBatchAsync(events, cancellationToken).ConfigureAwait(false);
+            return events;
+        }
+        catch
+        {
+            RestoreState(snapshot);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<ProductionEvent>> TrackAndEmitAsync(
+        AcquisitionMappingResult mapped,
+        LifecycleFieldMapping? lifecycle,
+        int pollDelayMs,
+        IEventSink sink,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = CaptureState();
+        try
+        {
+            var events = Track(mapped, lifecycle, pollDelayMs);
+            await sink.EmitBatchAsync(events, cancellationToken).ConfigureAwait(false);
+            return events;
+        }
+        catch
+        {
+            RestoreState(snapshot);
+            throw;
+        }
+    }
 
     public IReadOnlyList<ProductionEvent> Track(
         AcquisitionMappingResult mapped,

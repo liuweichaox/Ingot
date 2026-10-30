@@ -1,7 +1,9 @@
+// 定义检验复核持久化端口及其按站点筛选能力。
 using Ingot.Contracts.Inspections;
 
 namespace Ingot.Platform.Application.Inspections;
 
+/// <summary>提供检验复核记录和审计事件的持久化查询入口。</summary>
 public interface IInspectionReviewStore
 {
     Task InitializeAsync(CancellationToken ct = default);
@@ -18,6 +20,7 @@ public interface IInspectionReviewStore
         Guid? inspectionRecordId,
         string? executionId,
         int limit,
+        string? siteId = null,
         CancellationToken ct = default);
 
     Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(

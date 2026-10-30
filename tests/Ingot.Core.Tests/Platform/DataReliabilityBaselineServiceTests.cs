@@ -61,6 +61,16 @@ public sealed class DataReliabilityBaselineServiceTests
             ],
             InspectionOutcomes = ["PASS"]
         };
+        var sourceEvidence = new ProcessSampleConfigurationEvidence
+        {
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "TASK-01",
+            AppliedConfigurationVersion = 3,
+            SampleFrameCount = 4,
+            ObservedValueCount = 8,
+            GoodValueCount = 7,
+            BadValueCount = 1
+        };
         var bad = new ExecutionComparisonRow
         {
             ExecutionId = "RUN-BAD",
@@ -77,7 +87,8 @@ public sealed class DataReliabilityBaselineServiceTests
             {
                 Status = ProcessDataStatuses.Unavailable,
                 SequenceGapCount = 2
-            }
+            },
+            SampleConfigurationEvidence = [sourceEvidence]
         };
         var service = new DataReliabilityBaselineService(
             new FakeEventStore(completed),
@@ -85,7 +96,8 @@ public sealed class DataReliabilityBaselineServiceTests
             {
                 [good.ExecutionId] = good,
                 [bad.ExecutionId] = bad
-            }));
+            }),
+            new IdentitySampleConfigurationReferenceVerifier());
 
         var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
         {
@@ -119,9 +131,53 @@ public sealed class DataReliabilityBaselineServiceTests
             item.Code == "actual_parameters_missing" && item.RunCount == 1);
         Assert.Contains(baseline.Exclusions, item =>
             item.Code == "context_capture_invalid" && item.RunCount == 1);
+        var impactedRun = Assert.Single(baseline.RunImpacts);
+        Assert.Equal("RUN-BAD", impactedRun.ExecutionId);
+        Assert.Equal(sourceEvidence, Assert.Single(impactedRun.SampleConfigurationEvidence));
         Assert.Contains(
             "不使用配方版本计划值",
             Assert.Single(baseline.Rates, item => item.Code == "actual_parameter_coverage").Definition);
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldAttachVerifiedSourceEvidenceToRunImpacts()
+    {
+        var at = DateTimeOffset.UtcNow;
+        var sourceEvidence = new ProcessSampleConfigurationEvidence
+        {
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "task-01",
+            AppliedConfigurationVersion = 3,
+            SourceEdgeId = "EDGE-01",
+            SampleFrameCount = 2
+        };
+        var row = new ExecutionComparisonRow
+        {
+            ExecutionId = "RUN-01",
+            EquipmentId = "PRESS-01",
+            ProductFamilyCode = "lens",
+            HasStarted = true,
+            HasCompleted = false,
+            LifecycleComplete = false,
+            StartedAt = at.AddMinutes(-1),
+            Context = new Dictionary<string, string>(),
+            ProcessDataQuality = new ProcessDataQualitySummary { Status = ProcessDataStatuses.Degraded },
+            SampleConfigurationEvidence = [sourceEvidence]
+        };
+        var verifier = new MarkingSampleConfigurationReferenceVerifier();
+        var service = new DataReliabilityBaselineService(
+            new FakeEventStore([Completed(1, "RUN-01", at)]),
+            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow> { [row.ExecutionId] = row }),
+            verifier);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery { SiteId = "SITE-001" });
+
+        Assert.Equal("SITE-001", verifier.RequestedSiteId);
+        Assert.Equal(new[] { sourceEvidence }, verifier.ReceivedEvidence);
+        var impact = Assert.Single(baseline.RunImpacts);
+        var verified = Assert.Single(impact.SampleConfigurationEvidence);
+        Assert.Equal(ProcessSampleConfigurationReferenceStatuses.Matched, verified.ReferenceVerificationStatus);
+        Assert.Equal("published", verified.ConfigurationStatus);
     }
 
     [Fact]
@@ -139,7 +195,8 @@ public sealed class DataReliabilityBaselineServiceTests
             Completed(index + 1, row.ExecutionId, row.CompletedAt!.Value)).ToArray();
         var service = new DataReliabilityBaselineService(
             new FakeEventStore(completed),
-            new FakeProcessExecutionService(rows.ToDictionary(static row => row.ExecutionId)));
+            new FakeProcessExecutionService(rows.ToDictionary(static row => row.ExecutionId)),
+            new IdentitySampleConfigurationReferenceVerifier());
 
         var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
         {
@@ -180,7 +237,8 @@ public sealed class DataReliabilityBaselineServiceTests
         };
         var service = new DataReliabilityBaselineService(
             new FakeEventStore(completed),
-            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow>()));
+            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow>()),
+            new IdentitySampleConfigurationReferenceVerifier());
 
         var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
         {
@@ -281,6 +339,39 @@ public sealed class DataReliabilityBaselineServiceTests
             string? siteId = null,
             IReadOnlyList<string>? additionalKnownUnmeasuredConfounders = null)
             => throw new NotSupportedException();
+    }
+
+    private sealed class IdentitySampleConfigurationReferenceVerifier
+        : IProcessSampleConfigurationReferenceVerifier
+    {
+        public Task<IReadOnlyList<ProcessSampleConfigurationEvidence>> VerifyAsync(
+            string siteId,
+            IReadOnlyList<ProcessSampleConfigurationEvidence> evidence,
+            CancellationToken ct = default)
+            => Task.FromResult(evidence);
+    }
+
+    private sealed class MarkingSampleConfigurationReferenceVerifier
+        : IProcessSampleConfigurationReferenceVerifier
+    {
+        public string? RequestedSiteId { get; private set; }
+        public IReadOnlyList<ProcessSampleConfigurationEvidence> ReceivedEvidence { get; private set; } = [];
+
+        public Task<IReadOnlyList<ProcessSampleConfigurationEvidence>> VerifyAsync(
+            string siteId,
+            IReadOnlyList<ProcessSampleConfigurationEvidence> evidence,
+            CancellationToken ct = default)
+        {
+            RequestedSiteId = siteId;
+            ReceivedEvidence = evidence;
+            return Task.FromResult<IReadOnlyList<ProcessSampleConfigurationEvidence>>(evidence
+                .Select(static item => item with
+                {
+                    ReferenceVerificationStatus = ProcessSampleConfigurationReferenceStatuses.Matched,
+                    ConfigurationStatus = "published"
+                })
+                .ToArray());
+        }
     }
 
     private sealed class FakeEventStore(

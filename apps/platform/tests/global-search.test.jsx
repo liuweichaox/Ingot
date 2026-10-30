@@ -38,13 +38,15 @@ describe("功能搜索", () => {
       ["configuration", "配置与接入", "/configuration/process-data-models"],
     ]);
     expect(sections.find(section => section.id === "evidence")?.groups).toEqual([
-      { items: [["/process-executions", "生产运行"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "质量检验"], ["/quality-analysis", "质量偏差"]] },
+      { items: [["/process-executions", "运行记录"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
     ]);
     expect(sections.find(section => section.id === "insight")?.groups).toEqual([
-      { items: [["/comparisons", "工艺分析"], ["/data-quality", "数据质量"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
+      { items: [["/comparisons", "工艺分析"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
     ]);
     expect(sections.find(section => section.id === "configuration")?.groups.map(group => [group.heading, group.items])).toEqual([
-      [undefined, [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析方案"], ["/configuration/inspection-definitions", "检测项目"], ["/configuration/quality-plans", "质量方案"], ["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]]],
+      ["工艺与质量", [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]]],
+      ["现场接入", [["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"]]],
+      ["生产资源", [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]]],
     ]);
     expect(sections.some(section => section.id === "system")).toBe(false);
     expect(sectionsForIdentity({ roles: ["platform.admin"] }).at(-1)?.id).toBe("system");

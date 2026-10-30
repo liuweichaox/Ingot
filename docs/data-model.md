@@ -14,14 +14,14 @@
   -> 实际运行关联 -> 源数据结果 -> 新一轮观察
 ```
 
-下一配方建议、机理声明与冲突按“工厂/生产现场 + 配方”归属，工艺知识来源按工厂/生产现场归属。系统只对真实发生的运行取证；建议、决定、运行关联和结果都是独立的追加记录。约束全文见[系统设计](design.md)的“配方建议架构约束”。
+下一配方建议、机理声明与冲突按“工厂/生产现场 + 配方”归属，工艺知识来源按工厂/生产现场授权，并可在 `knowledge_source_context` 中带可选的配方适用范围。配方适用范围不是授权边界；读取来源仍需站点授权。系统只对真实发生的运行取证；建议、决定、运行关联和结果都是独立的追加记录。约束全文见[系统设计](design.md)的“配方建议架构约束”。
 
 ## 2. 全表职责
 
 | 表组 | 表 | 正式职责 |
 | --- | --- | --- |
 | 身份与访问 | `users`, `user_sessions` | 身份、会话与站点授权；不保存生产事实。 |
-| 站点与接入 | `platform_edges`, `edge_runtime_status_history`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Edge、数据源与采集任务的版本化配置和运行状态。 |
+| 站点与接入 | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Edge、数据源与采集任务的版本化配置和运行状态；任务部署表保留平台实际观察到的 Edge 已应用版本及其观察区间。 |
 | 事件幂等与原始事实 | `event_ingest_keys`, `production_events`, `collection_points`, `process_sample_frames`, `process_sample_values` | 事件接收去重账本、不可变事件信封、点位目录及高频样本事实。 |
 | 执行与分析派生 | `process_execution_boundaries`, `execution_boundary_recompute_jobs`, `execution_analysis_backfill_jobs`, `execution_analysis_recompute_jobs`, `execution_analysis_materializations`, `execution_features`, `execution_phases` | 从原始事件确定执行边界，并记录可重算的阶段、特征与物化状态。 |
 | 工艺配置 | `process_data_models`, `signal_definitions`, `feature_definitions`, `phase_definitions`, `phase_mappings`, `process_specification_versions`, `scenario_packages`, `process_analysis_plans` | 稳定工艺语义、信号/特征、规范和场景策略的版本化定义。 |
@@ -33,9 +33,11 @@
 | Agent 对话与问题案例 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、案例评估和持久对话；不授予业务写权限。 |
 | 操作对象缓存 | `data_object_operation_keys`, `data_object_summaries` | 外部对象的操作幂等键和受限摘要缓存。 |
 
+`process_sample_values.quality_code` 保存点位质量，`quality_evidence_version` 标记生成该质量码的采集契约。迁移前的样本和未写入契约版本的旧版 Edge 写入均为 `0`，读取时按“不确定”处理；只有带当前契约版本的采集事件才能把未标记点位判为良好。未知质量值和旧格式都不会被推断为良好，也不会作为完整数据进入正式追因或配方建议。
+
 训练数据集、工艺模型版本、模型评估和漂移记录目前是部署内共享的研发资产，读写按工艺工程师或平台管理员岗位授权；不能把它们视为已实施工厂级隔离的生产表。建议与机理声明通过 `site_code` 和 `process_specification_id` 归属；知识来源通过 `site_code` 归属，子记录从父记录继承范围。
 
-建议所属配方版本保存在冻结生成条件的上下文中，关系表的归属键仍是工厂/生产现场 + 配方。工程师采用下一轮校正不会修改 `process_specification_versions`；显著变更通过独立修订草稿发布。
+`knowledge_sources` 的同站点内容 SHA-256 唯一；每个哈希只有一个不可变的适用范围选择器。没有 `process-specification` 选择器的来源是站点通用来源；有该选择器的来源只适用于匹配配方。重复上传不能扩大或改写现有范围。助手明确知道配方时只检索站点通用及该配方来源；配方不明确时只检索站点通用来源。建议所属配方版本保存在冻结生成条件的上下文中，关系表的归属键仍是工厂/生产现场 + 配方。工程师采用下一轮校正不会修改 `process_specification_versions`；显著变更通过独立修订草稿发布。
 
 ## 3. 关键迁移与约束
 

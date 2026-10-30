@@ -45,7 +45,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\contract-fixtures\shared-plc-acquisition.json" Link="contract-fixtures\shared-plc-acquisition.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\contract-fixtures\optimizer-suggestion-response.json" Link="contract-fixtures\optimizer-suggestion-response.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\contract-fixtures\optimizer-diagnosis-request.json" Link="contract-fixtures\optimizer-diagnosis-request.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

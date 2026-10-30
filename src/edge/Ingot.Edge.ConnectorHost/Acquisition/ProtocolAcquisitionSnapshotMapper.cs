@@ -44,12 +44,17 @@ public static class ProtocolAcquisitionSnapshotMapper
             context["equipment_id"] = task.EquipmentId;
 
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var valueFlags = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         foreach (var mapping in task.ValueMappings)
         {
+            var mappingFlags = new HashSet<string>(StringComparer.Ordinal);
             values[mapping.DataItemCode] = AcquisitionValuePolicy.Resolve(
                 raw,
                 mapping,
-                dataItems[mapping.DataItemCode].DataType);
+                dataItems[mapping.DataItemCode].DataType,
+                mappingFlags);
+            if (mappingFlags.Count > 0)
+                valueFlags[mapping.DataItemCode] = mappingFlags;
         }
         var stageDefinition = dataItems.Values.SingleOrDefault(item => item.Category == "stage");
         if (stageDefinition is not null &&
@@ -75,18 +80,29 @@ public static class ProtocolAcquisitionSnapshotMapper
                 var definitions = deployment.DataModel.ControlParameters
                     .ToDictionary(item => item.Code, StringComparer.Ordinal);
                 var resolved = new Dictionary<string, object?>(StringComparer.Ordinal);
+                var parameterQualityFlags = new HashSet<string>(StringComparer.Ordinal);
+                var parameterValueFlags = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
                 foreach (var mapping in processSpecification.ParameterMappings)
                 {
+                    var mappingFlags = new HashSet<string>(StringComparer.Ordinal);
                     resolved[mapping.DataItemCode] = AcquisitionValuePolicy.Resolve(
                         raw,
                         mapping,
-                        definitions[mapping.DataItemCode].DataType);
+                        definitions[mapping.DataItemCode].DataType,
+                        mappingFlags);
+                    parameterQualityFlags.UnionWith(mappingFlags);
+                    if (mappingFlags.Count > 0)
+                        parameterValueFlags[mapping.DataItemCode] = mappingFlags;
                 }
                 var data = new Dictionary<string, object?>
                 {
                     ["processSpecificationId"] = processSpecificationId,
                     ["processSpecificationVersion"] = ScalarValue(raw[processSpecification.VersionPath]!),
-                    ["resolvedParameters"] = resolved
+                    ["resolvedParameters"] = resolved,
+                    ["quality"] = AcquisitionSampleMetadata.CreateQuality(
+                        resolved,
+                        occurredAt,
+                        parameterValueFlags)["quality"]
                 };
                 if (!string.IsNullOrWhiteSpace(processSpecification.NamePath) &&
                     raw.TryGetValue(processSpecification.NamePath, out var name) &&
@@ -102,11 +118,15 @@ public static class ProtocolAcquisitionSnapshotMapper
                     executionId: null,
                     context,
                     data,
-                    appliedConfiguration);
+                    appliedConfiguration,
+                    parameterQualityFlags.Order(StringComparer.Ordinal).ToArray());
             }
         }
 
-        var sampleData = AcquisitionSampleMetadata.CreateQuality(values, DateTimeOffset.UtcNow);
+        var sampleData = AcquisitionSampleMetadata.CreateQuality(
+            values,
+            DateTimeOffset.UtcNow,
+            valueFlags);
         sampleData["values"] = values;
         if (!string.IsNullOrWhiteSpace(task.SequencePath) &&
             raw.TryGetValue(task.SequencePath, out var sequence) && sequence is not null)
@@ -122,7 +142,7 @@ public static class ProtocolAcquisitionSnapshotMapper
             context,
             sampleData,
             appliedConfiguration,
-            QualityFlags(values));
+            QualityFlags(values, valueFlags));
         return new AcquisitionMappingResult(sample, processSpecificationApplied, processSpecificationIdentity);
     }
 
@@ -139,7 +159,16 @@ public static class ProtocolAcquisitionSnapshotMapper
             ? Convert.ToInt64(value, CultureInfo.InvariantCulture)
             : value;
 
-    private static IReadOnlyList<string> QualityFlags(IReadOnlyDictionary<string, object?> values)
-        => values.Any(static pair => pair.Value is null) ? ["missing_value"] : [];
+    private static IReadOnlyList<string> QualityFlags(
+        IReadOnlyDictionary<string, object?> values,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> valueFlags)
+    {
+        var flags = new HashSet<string>(StringComparer.Ordinal);
+        if (values.Any(static pair => pair.Value is null))
+            flags.Add("missing_value");
+        foreach (var itemFlags in valueFlags.Values)
+            flags.UnionWith(itemFlags);
+        return flags.Order(StringComparer.Ordinal).ToArray();
+    }
 
 }

@@ -34,10 +34,10 @@ The current Web information architecture balances the decision chain with freque
 
 - **Workbench**: prioritized quality tasks, run status, field status, and R&D progress;
 - **Ingot Chat**: a separate entry for verifying authorized structured facts and reviewed materials;
-- **Field operations**: production runs, production changeover, quality inspection, quality deviations, and tooling installation when a scenario needs tooling traceability;
+- **Field operations**: production runs, production changeover, quality inspection, quality deviations, sampling and run-completeness checks, and tooling installation when a scenario needs tooling traceability;
 - **Process insight**: process analysis, process materials, and mechanism knowledge;
 - **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome freezing;
-- **Configuration and integration**: process variables, analysis plans, inspection definitions, quality plans, acquisition setup, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
+- **Configuration and integration**: process variables, analysis rules, inspection definitions, quality plans, acquisition setup, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
 - **System administration**: users and permissions, system status, logs, raw events, model services, and assistant evaluation for administrators.
 
 Raw events reported by Edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
@@ -146,7 +146,7 @@ Concurrency idempotency and atomic writes remain enforced by database transactio
 - Organize facts, cite sources, explain limits, and suggest next steps.
 - Never compute or invent numerical process settings itself and never turn language probability into an engineering conclusion.
 
-Agent uses two separate evidence paths. Structured production facts such as runs, inspections, configuration, and optimization always come from authorized business tools. Document knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed sources and fragments inside the authorized site. PostgreSQL combines full-text and similarity matching with optional semantic-vector ranking, returning fragment-level source, page or sheet, source SHA, and content hash. When semantic embeddings are disabled, unavailable, or fail for a query, retrieval falls back to keywords. Retrieved material is read-only evidence for an answer; it cannot replace a current production-data query, establish root cause, or modify equipment.
+Agent uses two separate evidence paths. Structured production facts such as runs, inspections, configuration, and optimization always come from authorized business tools. Document knowledge such as SOPs, manuals, reports, and engineering notes is retrieved only from reviewed sources and fragments inside the authorized site. Retrieval first filters by site authorization and review status, then by applicability: with an explicit recipe it includes site-wide material and material scoped to that recipe; without a recipe it includes only site-wide material. PostgreSQL combines full-text and similarity matching with optional semantic-vector ranking, returning fragment-level source, page or sheet, source SHA, and content hash. When semantic embeddings are disabled, unavailable, or fail for a query, retrieval falls back to keywords. Retrieved material is read-only evidence for an answer; it cannot replace a current production-data query, establish root cause, or modify equipment.
 
 ### Web
 
@@ -231,7 +231,7 @@ This section defines mandatory constraints for next-recipe recommendations, mech
 
 ### Ownership and records
 
-The business scope for next-recipe recommendations and mechanism knowledge is “factory/production site + recipe”; process-knowledge sources belong to a factory/production site. The system expresses this scope internally with `SiteId` and the recipe identifier.
+The business scope for next-recipe recommendations and mechanism knowledge is “factory/production site + recipe”; process-knowledge sources are authorized by factory/production site and may optionally have recipe-specific applicability. The system expresses this scope internally with `SiteId` and the recipe identifier. Recipe applicability is not an authorization boundary; site access remains the security boundary for reading sources and fragments.
 
 | Record | Ownership key | Only write path | Mutability |
 | --- | --- | --- | --- |
@@ -240,7 +240,9 @@ The business scope for next-recipe recommendations and mechanism knowledge is �
 | Execution link | decision; actual execution key is globally unique | `ResearchRecipeRecommendationDecisionService` | At most once per decision, recording who linked it |
 | Frozen outcome | decision | `ResearchRecipeRecommendationDecisionService` | At most once per decision, computed from source data, recording who froze it |
 | Mechanism claims and conflicts | site + recipe | `MechanismKnowledgeService` | Content appends by version; status transitions are recorded |
-| Process-knowledge source | site + content SHA-256 | knowledge-source registration | Immutable content; searchable only after review |
+| Process-knowledge source | site + content SHA-256 | knowledge-source registration | Immutable content and applicability scope; searchable only after review |
+
+Within a site, one content hash maps to one source record and one scope selector. A site-wide source can be used with any recipe at that site; a recipe-scoped source applies only to its matching recipe. Re-uploading cannot change an existing source's scope. If the same content is already registered under another scope, upload conflicts so the source can be reviewed or revised first. Searches without recipe context return only site-wide sources; recipe-scoped material is never treated as evidence for another recipe.
 
 ### Invariants
 
@@ -250,7 +252,7 @@ The business scope for next-recipe recommendations and mechanism knowledge is �
 4. **Pending points share the brief**: only accepted or modified decisions with the same site, recipe, and `BriefHash` and without a frozen outcome are sent to Optimizer as pending points.
 5. **One-way decision chain**: recommendation → decision → execution link → outcome is append-only and never moves backward. Expired recommendations accept no new decisions; rejection is terminal; a linked run must belong to the recommendation's site, start after the decision, and fall inside the brief scope.
 6. **Mechanism knowledge stays in scope**: claim variables must come from that recipe's process variables; applicability may use only site, recipe, product, and equipment dimensions; evidence may come only from same-site knowledge sources or fragments, or frozen recommendation outcomes for the same site and recipe; conflicts are recorded only inside one scope.
-7. **Knowledge search is site-scoped**: the assistant must resolve one authorized site before searching process knowledge or return insufficient evidence; the question must identify the site and object.
+7. **Knowledge search follows site and applicability scope**: the assistant must resolve one authorized site before searching process knowledge or return insufficient evidence. With an explicit recipe, search only site-wide sources and sources scoped to that recipe; without one, search only site-wide sources. Applicability does not replace site authorization.
 
 ### Dependency direction
 

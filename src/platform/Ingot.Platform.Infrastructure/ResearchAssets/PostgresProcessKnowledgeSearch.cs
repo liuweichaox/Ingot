@@ -79,6 +79,25 @@ public sealed class PostgresProcessKnowledgeSearch(
               WHERE source.site_code=@site_code
                 AND source.status='reviewed'
                 AND fragment.human_reviewed
+                AND (
+                  NOT EXISTS (
+                    SELECT 1 FROM knowledge_source_context context
+                    WHERE context.source_id=source.source_id
+                      AND lower(btrim(context.dimension_code))='process-specification')
+                  OR (
+                    @process_specification_id IS NOT NULL
+                    AND (
+                      SELECT COUNT(*) FROM knowledge_source_context context
+                      WHERE context.source_id=source.source_id
+                        AND lower(btrim(context.dimension_code))='process-specification') = 1
+                    AND EXISTS (
+                      SELECT 1 FROM knowledge_source_context context
+                      WHERE context.source_id=source.source_id
+                        AND lower(btrim(context.dimension_code))='process-specification'
+                        AND NULLIF(btrim(context.dimension_value), '') IS NOT NULL
+                        AND lower(btrim(context.dimension_value))=lower(btrim(@process_specification_id)))
+                  )
+                )
                 AND (@product_family_code IS NULL OR NOT EXISTS (
                   SELECT 1 FROM knowledge_source_context context
                   WHERE context.source_id=source.source_id AND context.dimension_code='product_family_code') OR EXISTS (
@@ -101,6 +120,7 @@ public sealed class PostgresProcessKnowledgeSearch(
         command.Parameters.AddWithValue("query", request.Query.Trim());
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SiteCode);
         command.Parameters.AddWithValue("site_code", request.SiteCode.Trim());
+        AddNullable(command, "process_specification_id", request.ProcessSpecificationId);
         AddNullable(command, "product_family_code", request.ProductFamilyCode);
         AddNullable(command, "equipment_id", request.EquipmentId);
         command.Parameters.AddWithValue("embedding_model", embedding?.Model ?? "");

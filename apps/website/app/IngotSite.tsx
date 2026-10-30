@@ -29,6 +29,9 @@ const copy = {
     lead: "开源工艺研发与优化系统。组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化。",
     primary: "阅读快速开始",
     secondary: "了解工作方式",
+    demoEntry: "查看采集模拟演示（合成数据）",
+    integrationEntry: "真实设备接入与驱动范围",
+    contributeEntry: "参与代码与文档贡献",
     truth: ["证据可追溯", "原因可验证", "建议可审核", "结论可复用"],
     productKicker: "FROM DATA TO DECISION",
     productTitle: "把研发记录、工艺分析和配方决策放在同一工作流中。",
@@ -61,7 +64,7 @@ const copy = {
     methodB: "工艺追因",
     methodBText: "使用匹配比较、稳健统计、阶段轨迹和上下文分层缩小候选范围。",
     methodC: "引用复核资料",
-    methodCText: "在授权范围内按站点与配方归属管理的已复核工艺资料片段中检索并返回引用；资料用于解释和约束判断，不替代运行、质量记录或工程师决定。",
+    methodCText: "在授权站点内检索已复核资料；明确配方时只使用站点通用资料和该配方限定资料，未明确配方时只使用站点通用资料，并返回片段引用。资料用于解释和约束判断，不替代运行、质量记录或工程师决定。",
     methodD: "审核下一轮校正",
     methodDText: "小校正留在当前配方版本，决定后开始、已完成且符合条件的同版本运行用于关联。显著变更使用建议参数创建修订草稿，保留来源与理由。",
     engineFeatures: ["数据质量", "真实运行", "版本谱系", "片段级引用", "已复核知识", "工程决策"],
@@ -119,6 +122,9 @@ const copy = {
     lead: "Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.",
     primary: "Read the quickstart",
     secondary: "See how it works",
+    demoEntry: "Inspect the simulator demo (synthetic data)",
+    integrationEntry: "Field integration and driver coverage",
+    contributeEntry: "Contribute code or documentation",
     truth: ["Traceable evidence", "Testable causes", "Reviewable recommendations", "Reusable conclusions"],
     productKicker: "FROM DATA TO DECISION",
     productTitle: "Bring research records, process analysis, and recipe decisions into one workflow.",
@@ -151,7 +157,7 @@ const copy = {
     methodB: "Process diagnosis",
     methodBText: "Use matching, robust statistics, stage trajectories, and context stratification to narrow candidates.",
     methodC: "Cite reviewed materials",
-    methodCText: "Retrieve reviewed process materials by site and recipe within authorization and return fragment citations with reviewed process-document references. Materials explain and constrain judgment; they do not replace run or quality records or engineer decisions.",
+    methodCText: "Retrieve reviewed materials inside the authorized site. With an explicit recipe, search site-wide materials and materials scoped to that recipe; without a recipe, search only site-wide materials and return fragment citations. Materials explain and constrain judgment; they do not replace run or quality records or engineer decisions.",
     methodD: "Review the next correction",
     methodDText: "Small corrections stay on the current recipe version; a completed, eligible same-version run started after the decision is used for linkage. Significant changes use proposed settings to create a revision draft with provenance and rationale.",
     engineFeatures: ["Data quality", "Real runs", "Version lineage", "Fragment citations", "Reviewed knowledge", "Engineering decisions"],
@@ -279,6 +285,11 @@ function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
             <a className="button primary" href={`${t.docs}/getting-started`}>{t.primary} <span aria-hidden="true">→</span></a>
             <a className="button quiet" href="#product">{t.secondary} <span aria-hidden="true">↓</span></a>
           </div>
+          <nav className="hero-paths" aria-label={locale === "zh" ? "快速入口" : "Quick paths"}>
+            <a href={`${t.docs}/semiconductor-demo`}>{t.demoEntry} <span aria-hidden="true">↗</span></a>
+            <a href={`${t.docs}/data-connection`}>{t.integrationEntry} <span aria-hidden="true">↗</span></a>
+            <a href={`${github}/blob/main/CONTRIBUTING${locale === "en" ? ".en" : ""}.md`}>{t.contributeEntry} <span aria-hidden="true">↗</span></a>
+          </nav>
         </div>
         <div className="product-frame hero-product">
           <div className="product-frame-bar"><i /><span>INGOT / EVIDENCE LOOP</span></div>

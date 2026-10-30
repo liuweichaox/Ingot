@@ -257,6 +257,29 @@ public sealed class AcquisitionSiteAuthorizationTests
             => System.Threading.Tasks.Task.FromResult<IngestionTask?>(tasks.SingleOrDefault(task =>
                 string.Equals(task.TaskId, taskId, StringComparison.OrdinalIgnoreCase) && task.Version == version));
 
+        public Task<IReadOnlyList<IngestionTaskVersionMetadata>> FindVersionMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+        {
+            var edges = authorizedEdgeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return System.Threading.Tasks.Task.FromResult<IReadOnlyList<IngestionTaskVersionMetadata>>(
+                references.Select(reference =>
+                    {
+                        var task = tasks.SingleOrDefault(item =>
+                            string.Equals(item.TaskId, reference.TaskId, StringComparison.OrdinalIgnoreCase) &&
+                            item.Version == reference.Version);
+                        return task is null
+                            ? new IngestionTaskVersionMetadata(reference.TaskId, reference.Version, null, null, false)
+                            : edges.Contains(task.EdgeId)
+                                ? new IngestionTaskVersionMetadata(
+                                    task.TaskId, task.Version, task.EdgeId, task.Status, false)
+                                : new IngestionTaskVersionMetadata(
+                                    reference.TaskId, reference.Version, null, null, true);
+                    })
+                    .ToArray());
+        }
+
         public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
         {
             UpsertCount++;

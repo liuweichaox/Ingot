@@ -30,6 +30,24 @@ groups:
           summary: Platform Worker heartbeat is stale
           description: The worker host is reachable but its scheduling heartbeat has stopped.
 
+      - alert: IngotFreshnessEvaluationErrors
+        expr: increase(ingot_edge_task_freshness_evaluation_errors_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Edge task freshness maintenance failed
+          description: Evaluation or seven-day retention cleanup failed; check Worker logs and PostgreSQL availability.
+
+      - alert: IngotFreshnessEvaluationStale
+        expr: time() - ingot_edge_task_freshness_last_success_timestamp_seconds > 60
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Edge task freshness evaluation has not completed recently
+          description: The Worker scheduling heartbeat may be healthy while task freshness state is not advancing.
+
       - alert: IngotPostgresUnavailable
         expr: up{job="ingot-postgres"} == 0 or pg_up == 0
         for: 1m

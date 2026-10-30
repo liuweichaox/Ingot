@@ -101,13 +101,13 @@ export function recipeLaunchChecks({ specification, models, tasks, analysisPlans
     acquisitionCheck(specification, model, tasks),
     {
       key: "analysis",
-      title: "过程分析",
+      title: "分析规则",
       ready: analysis.length > 0,
       detail: analysis.length
         ? `${analysis.map(plan => plan.planId).join("、")} 覆盖这版工艺变量。`
-        : "没有引用这版工艺变量、并包含过程曲线的已发布过程分析。",
+        : "没有引用这版工艺变量、并包含过程曲线的已发布分析规则。",
       to: "/configuration/process-analysis-plans",
-      action: "配置过程分析",
+      action: "配置分析规则",
     },
     qualityCheck(specification, qualityPlans, definitions),
   ];

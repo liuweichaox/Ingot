@@ -107,6 +107,17 @@ public class EdgesController(
         return denied ?? Ok(new { data = await registry.ListStatusIntervalsAsync(edgeId, limit, ct).ConfigureAwait(false) });
     }
 
+    [HttpGet("{edgeId}/task-freshness-transitions")]
+    public async Task<IActionResult> TaskFreshnessTransitions(
+        string edgeId, [FromQuery] int limit = 100, CancellationToken ct = default)
+    {
+        var denied = await DeniedEdgeAsync(edgeId, ct).ConfigureAwait(false);
+        return denied ?? Ok(new
+        {
+            data = await registry.ListTaskFreshnessTransitionsAsync(edgeId, limit, ct).ConfigureAwait(false)
+        });
+    }
+
     private async Task<IActionResult?> DeniedEdgeAsync(string edgeId, CancellationToken ct)
     {
         var identity = userResolver.ResolveIdentity(User);

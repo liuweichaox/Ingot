@@ -341,8 +341,10 @@ public sealed class ResearchObservationAssembler(
         }
         if (execution.CompletedAt is null)
             missing.Add("过程执行未完成");
-        if (execution.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable)
-            missing.Add("过程数据不可用");
+        if (execution.ProcessDataQuality.Status != ProcessDataStatuses.Available)
+            missing.Add(execution.ProcessDataQuality.Status == ProcessDataStatuses.Degraded
+                ? "过程数据质量已降级，不满足正式优化准入"
+                : "过程数据不可用或状态未知");
         if (processFeatures.Count == 0)
             missing.Add("没有可用过程特征");
         var contextAdmission = _contextAdmission.Evaluate(context, scenarioPackage);

@@ -108,7 +108,7 @@ public sealed class ModbusTcpAcquisitionRunner(
 
                 var mapped = ProtocolAcquisitionSnapshotMapper.Map(
                     deployment, raw, normalizedSource, currentProcessSpecification, occurredAt);
-                var deduplication = sourceDeduplicator.Evaluate(
+                var deduplication = sourceDeduplicator.EvaluatePending(
                     mapped.Sample,
                     observedAt,
                     TimeSpan.FromMilliseconds(task.Execution.SourceIdentityStaleAfterMs));
@@ -123,8 +123,8 @@ public sealed class ModbusTcpAcquisitionRunner(
                     continue;
                 }
 
-                var events = lifecycle.Track(mapped, task.Lifecycle, connection.PollIntervalMs);
-                await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                var events = await lifecycle.TrackAndEmitAsync(mapped, task.Lifecycle, connection.PollIntervalMs, sink, ct).ConfigureAwait(false);
+                sourceDeduplicator.Commit(mapped.Sample, observedAt);
                 status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
                 status.RecordEmissionOutcome(
                     configurationKey,

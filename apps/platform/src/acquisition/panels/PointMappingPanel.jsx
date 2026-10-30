@@ -1,4 +1,5 @@
 // Edit and validate protocol-specific device points and their process-variable mappings.
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Field, Input, Select } from "../../ui/components";
 import {
   ADDRESSING,
@@ -15,6 +16,10 @@ import {
   registerWordCount,
 } from "../protocolRegistry";
 import { PointMappingCsvPanel } from "../PointMappingCsvPanel";
+import { hasPointAddress, validateIngestionTask } from "../ingestionTaskForm";
+
+const MAPPING_PAGE_SIZE = 50;
+const EMPTY_ROW_ERRORS = [];
 
 export function PointMappingPanel({
   title,
@@ -28,17 +33,225 @@ export function PointMappingPanel({
   form,
   readOnly,
   onChange,
+  focusIncompleteRevision = 0,
+  focusRowRequest = null,
+  onFocusRowComplete,
 }) {
-  const addRow = () => onChange([...rows, blankRow(descriptor)]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [selectedRows, setSelectedRows] = useState(() => new Set());
+  const [expandedIndex, setExpandedIndex] = useState(null);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [pendingFocusRow, setPendingFocusRow] = useState(null);
+  const [pendingIncompleteFocusRevision, setPendingIncompleteFocusRevision] = useState(0);
+  const [focusedRowIndex, setFocusedRowIndex] = useState(null);
+  const pageAfterFilterReset = useRef(null);
+  const clearFiltersAndSetPage = page => {
+    const targetPage = Math.max(0, page);
+    if (search || statusFilter !== "all") {
+      pageAfterFilterReset.current = targetPage;
+      setSearch("");
+      setStatusFilter("all");
+    } else {
+      setCurrentPage(targetPage);
+    }
+  };
+  const addRow = () => {
+    clearFiltersAndSetPage(Math.floor(rows.length / MAPPING_PAGE_SIZE));
+    onChange([...rows, blankRow(descriptor)]);
+  };
   const updateRow = (index, patch) =>
     onChange(rows.map((item, rowIndex) => (rowIndex === index ? { ...item, ...patch } : item)));
-  const removeRow = index => onChange(rows.filter((_item, rowIndex) => rowIndex !== index));
+  const removeRow = index => {
+    onChange(rows.filter((_item, rowIndex) => rowIndex !== index));
+    setSelectedRows(current => new Set([...current].filter(rowIndex => rowIndex !== index)
+      .map(rowIndex => rowIndex > index ? rowIndex - 1 : rowIndex)));
+    setExpandedIndex(null);
+  };
+  const addressKey = descriptor.addressing === ADDRESSING.modbusRegister ? "modbusAddress"
+    : descriptor.addressing === ADDRESSING.melsecDevice ? "melsecAddress" : "sourcePath";
+  const currentValidationErrors = useMemo(
+    () => validateIngestionTask(form, { dataItems: options }).errors,
+    [form, options],
+  );
+  const statusErrors = useMemo(
+    () => ({ ...currentValidationErrors, ...(errors || {}) }),
+    [currentValidationErrors, errors],
+  );
+  const optionsByCode = useMemo(() => new Map(options.map(item => [item.code, item])), [options]);
+  const mappedCodes = useMemo(() => new Set(rows.map(row => row.dataItemCode)), [rows]);
+  const mqttTopics = useMemo(() => new Set((form.mqtt?.topics || [])
+    .map(item => String(item.topic || "").trim())), [form.mqtt?.topics]);
+  const rowErrorsByIndex = useMemo(() => {
+    const rowPathPrefix = `${errorPrefix}[`;
+    const groupedErrors = new Map();
+    for (const [path, message] of Object.entries(statusErrors)) {
+      if (!path.startsWith(rowPathPrefix)) continue;
+      const indexEnd = path.indexOf("].", rowPathPrefix.length);
+      if (indexEnd < 0) continue;
+      const index = Number(path.slice(rowPathPrefix.length, indexEnd));
+      if (!Number.isInteger(index) || index < 0) continue;
+      const rowErrorList = groupedErrors.get(index);
+      if (rowErrorList) rowErrorList.push(message);
+      else groupedErrors.set(index, [message]);
+    }
+    return groupedErrors;
+  }, [errorPrefix, statusErrors]);
+  const sourceLabel = row => descriptor.addressing === ADDRESSING.modbusRegister
+    ? `${row.modbusArea || "寄存器"} ${row.modbusAddress ?? ""}${row.bitIndex === "" || row.bitIndex == null ? "" : `.${row.bitIndex}`}`.trim()
+    : descriptor.addressing === ADDRESSING.melsecDevice
+      ? `${row.melsecDevice || "D"}${row.melsecAddress ?? ""}${row.bitIndex === "" || row.bitIndex == null ? "" : `.${row.bitIndex}`}`
+      : String(row.sourcePath || "").trim();
+  const rowErrors = index => rowErrorsByIndex.get(index) || EMPTY_ROW_ERRORS;
+  const rowComplete = index => {
+    const row = rows[index];
+    const definition = optionsByCode.get(row?.dataItemCode);
+    const topic = String(row?.topic || "").trim();
+    const topicValid = !descriptor.capabilities.perTopicMapping || !topic
+      || mqttTopics.has(topic);
+    const sourceUnit = String(row?.sourceUnit || "").trim();
+    const unitValid = !definition?.unit || (sourceUnit
+      && (sourceUnit === definition.unit || Number(row.scale) !== 1 || Number(row.offset) !== 0));
+    return Boolean(row?.dataItemCode && optionsByCode.has(row.dataItemCode)
+      && hasPointAddress(row, descriptor) && rowErrors(index).length === 0
+      && Object.keys(descriptor.validatePoint(row, form) || {}).length === 0 && topicValid && unitValid);
+  };
+  const missingRequired = useMemo(() => options.filter(item => !item.nullable
+    && !mappedCodes.has(item.code)), [options, mappedCodes]);
+  const query = search.trim().toLowerCase();
+  const visibleRows = useMemo(() => rows.map((row, index) => ({ row, index, complete: rowComplete(index) }))
+    .filter(({ row, index, complete }) => {
+      if (statusFilter === "mapped" && !complete) return false;
+      if (statusFilter === "needs-attention" && complete) return false;
+      if (!query) return true;
+      const target = optionsByCode.get(row.dataItemCode);
+      const searchable = [sourceLabel(row), row.dataItemCode, target?.displayName, row.sourceUnit,
+        row.sourceDataType, row.topic, ...rowErrors(index)].join(" ").toLowerCase();
+      return searchable.includes(query);
+    }), [rows, statusFilter, query, optionsByCode, rowErrorsByIndex, mqttTopics, form, descriptor]);
+  const filteredIndexes = visibleRows.map(item => item.index);
+  const selectedCount = filteredIndexes.filter(index => selectedRows.has(index)).length;
+  const allFilteredSelected = filteredIndexes.length > 0 && selectedCount === filteredIndexes.length;
+  const pageCount = Math.max(1, Math.ceil(visibleRows.length / MAPPING_PAGE_SIZE));
+  const pageStartIndex = currentPage * MAPPING_PAGE_SIZE;
+  const pageEndIndex = Math.min(pageStartIndex + MAPPING_PAGE_SIZE, visibleRows.length);
+  const pageRows = visibleRows.slice(pageStartIndex, pageEndIndex);
+
+  useEffect(() => {
+    if (!focusIncompleteRevision) return;
+    setSearch("");
+    setStatusFilter("needs-attention");
+    setExpandedIndex(null);
+    setPendingIncompleteFocusRevision(focusIncompleteRevision);
+  }, [focusIncompleteRevision]);
+
+  useEffect(() => {
+    if (!focusRowRequest) return;
+    setSearch("");
+    setStatusFilter("all");
+    setPendingFocusRow(focusRowRequest);
+  }, [focusRowRequest]);
+
+  useEffect(() => {
+    const targetPage = pageAfterFilterReset.current;
+    pageAfterFilterReset.current = null;
+    setCurrentPage(targetPage ?? 0);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage(page => Math.min(page, pageCount - 1));
+  }, [pageCount]);
+
+  useEffect(() => {
+    if (!pendingIncompleteFocusRevision || pendingFocusRow || search || statusFilter !== "needs-attention") return;
+    if (!visibleRows.length) {
+      setPendingIncompleteFocusRevision(0);
+      return;
+    }
+    setPendingFocusRow({ index: visibleRows[0].index, revision: pendingIncompleteFocusRevision });
+    setPendingIncompleteFocusRevision(0);
+  }, [pendingFocusRow, pendingIncompleteFocusRevision, search, statusFilter, visibleRows]);
+
+  useEffect(() => {
+    if (!pendingFocusRow) return undefined;
+    const targetPosition = visibleRows.findIndex(item => item.index === pendingFocusRow.index);
+    if (targetPosition < 0) {
+      setPendingFocusRow(null);
+      if (pendingFocusRow.revision !== undefined) onFocusRowComplete?.(pendingFocusRow.revision);
+      return undefined;
+    }
+    const targetPage = Math.floor(targetPosition / MAPPING_PAGE_SIZE);
+    if (targetPage !== currentPage) {
+      setCurrentPage(targetPage);
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.getElementById(`acq-point-mapping-row-${pendingFocusRow.index}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        const field = document.getElementById(`acq-point-mapping-target-${pendingFocusRow.index}`);
+        (field && !field.disabled ? field : row).focus({ preventScroll: true });
+        setFocusedRowIndex(pendingFocusRow.index);
+      }
+      setPendingFocusRow(null);
+      if (pendingFocusRow.revision !== undefined) onFocusRowComplete?.(pendingFocusRow.revision);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentPage, pendingFocusRow, visibleRows, onFocusRowComplete]);
+
+  useEffect(() => setSelectedRows(new Set()), [search, statusFilter]);
+  useEffect(() => setFocusedRowIndex(null), [search, statusFilter]);
+
+  function toggleFilteredSelection() {
+    setSelectedRows(current => {
+      const next = new Set(current);
+      if (allFilteredSelected) filteredIndexes.forEach(index => next.delete(index));
+      else filteredIndexes.forEach(index => next.add(index));
+      return next;
+    });
+  }
+
+  function removeSelectedRows() {
+    onChange(rows.filter((_row, index) => !selectedRows.has(index)));
+    setSelectedRows(new Set());
+    setExpandedIndex(null);
+  }
+
+  async function copySelectedRows() {
+    const selected = rows.map((row, index) => ({ row, index })).filter(item => selectedRows.has(item.index));
+    if (!selected.length) return;
+    const text = [
+      ["平台变量", "设备地址", "设备单位", "数据类型", "倍率", "偏移", "主题"].join("\t"),
+      ...selected.map(({ row }) => [row.dataItemCode, sourceLabel(row), row.sourceUnit || "", row.sourceDataType || "",
+        row.scale ?? "", row.offset ?? "", row.topic || ""].join("\t")),
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyMessage(`已复制 ${selected.length} 行，可粘贴到电子表格。`);
+    } catch {
+      setCopyMessage("无法访问剪贴板；可使用下方 CSV 导出全部映射。 ");
+    }
+  }
+
+  function addMissingRequiredRows() {
+    const firstAddedRowIndex = rows.length;
+    onChange([...rows, ...missingRequired.map(item => ({
+      ...blankRow(descriptor), dataItemCode: item.code, required: true,
+    }))]);
+    setStatusFilter("needs-attention");
+    setSearch("");
+    setExpandedIndex(null);
+    setPendingFocusRow({ index: firstAddedRowIndex });
+  }
 
   return (
     <Card
       title={title}
       description={description}
-      actions={!readOnly ? <Button onClick={addRow}>添加点位</Button> : undefined}
+      actions={!readOnly ? <div className="flex flex-wrap gap-2"><Button onClick={addRow}>添加点位</Button>
+        {missingRequired.length > 0 && <Button onClick={addMissingRequiredRows}>添加缺失的 {missingRequired.length} 个必需变量</Button>}
+      </div> : undefined}
     >
       {errors[errorPrefix] && (
         <p className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{errors[errorPrefix]}</p>
@@ -51,27 +264,114 @@ export function PointMappingPanel({
           form={form}
           readOnly={readOnly}
           createBlankRow={blankRow}
-          onApply={onChange}
+          onApply={nextRows => {
+            onChange(nextRows);
+            setSearch("");
+            setStatusFilter("all");
+            setCurrentPage(0);
+            setSelectedRows(new Set());
+            setExpandedIndex(null);
+          }}
         />
+        {missingRequired.length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          尚缺 {missingRequired.length} 个运行必需变量：{missingRequired.map(item => item.displayName || item.code).join("、")}。这些变量尚未进入下方表格。
+        </p>}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid min-w-64 flex-1 gap-2 sm:grid-cols-[minmax(14rem,1fr)_12rem]">
+            <Field label="搜索映射">
+              <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="地址、变量、单位、主题或错误" />
+            </Field>
+            <Field label="状态">
+              <Select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+                <option value="all">全部</option><option value="mapped">映射完整</option><option value="needs-attention">需补全或修正</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>已筛选 {visibleRows.length}/{rows.length} 行 · 已选 {selectedRows.size} 行（可跨页）</span>
+            <Button variant="ghost" disabled={!filteredIndexes.length} onClick={toggleFilteredSelection}>
+              {allFilteredSelected ? "取消选择筛选结果" : `选择全部筛选结果（${filteredIndexes.length} 行）`}
+            </Button>
+            <Button variant="ghost" disabled={!selectedRows.size} onClick={() => void copySelectedRows()}>复制所选 TSV</Button>
+            {!readOnly && <Button variant="ghost" className="text-rose-700" disabled={!selectedRows.size} onClick={removeSelectedRows}>删除所选 {selectedRows.size || ""}</Button>}
+          </div>
+        </div>
+        {copyMessage && <p role="status" className="text-xs text-slate-500">{copyMessage}</p>}
         {rows.length === 0 && <p className="text-sm text-slate-500">还没有配置点位。</p>}
-        {rows.map((row, index) => (
-          <PointRow
-            key={index}
-            row={row}
-            index={index}
-            descriptor={descriptor}
-            options={options}
-            errors={errors}
-            path={`${errorPrefix}[${index}]`}
-            preview={probe?.mappings?.find(item => item.dataItemCode === row.dataItemCode)}
-            probe={probe}
-            form={form}
-            readOnly={readOnly}
-            removable={rows.length > 1}
-            onChange={patch => updateRow(index, patch)}
-            onRemove={() => removeRow(index)}
-          />
-        ))}
+        {rows.length > 0 && <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr><th className="w-9 px-3 py-2"><span className="sr-only">选择行</span></th><th className="px-3 py-2">平台变量</th>
+                <th className="px-3 py-2">设备来源</th><th className="w-36 px-3 py-2">设备单位</th><th className="w-24 px-3 py-2">倍率</th>
+                <th className="w-24 px-3 py-2">偏移</th><th className="w-36 px-3 py-2">状态与详情</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {pageRows.map(({ row, index, complete }) => {
+                const rowErrorMessages = rowErrors(index);
+                const definition = optionsByCode.get(row.dataItemCode);
+                return <Fragment key={index}>
+                  <tr id={`acq-point-mapping-row-${index}`} tabIndex={-1}
+                    className={`align-top ${focusedRowIndex === index ? "bg-blue-50 ring-2 ring-inset ring-blue-400" : ""}`}>
+                    <td className="px-3 py-2"><input aria-label={`选择第 ${index + 1} 行`} type="checkbox" checked={selectedRows.has(index)}
+                      onChange={event => setSelectedRows(current => { const next = new Set(current); if (event.target.checked) next.add(index); else next.delete(index); return next; })} /></td>
+                    <td className="min-w-48 px-3 py-2">
+                      <Select id={`acq-point-mapping-target-${index}`} value={row.dataItemCode} disabled={readOnly} aria-label={`第 ${index + 1} 行平台变量`}
+                        className="min-w-44" onChange={event => {
+                          const selected = optionsByCode.get(event.target.value);
+                          updateRow(index, { dataItemCode: event.target.value, required: selected ? !selected.nullable : row.required });
+                        }}>
+                        <option value="">请选择变量</option>{options.map(item => <option key={item.code} value={item.code}>{item.displayName || item.code}</option>)}
+                      </Select>
+                      {rowErrorMessages.some(message => message.includes("平台数据项") || message.includes("数据项只能")) &&
+                        <p className="mt-1 text-xs text-rose-700">{rowErrorMessages.find(message => message.includes("平台数据项") || message.includes("数据项只能"))}</p>}
+                    </td>
+                    <td className="min-w-52 px-3 py-2">
+                      <Input value={addressKey === "sourcePath" ? row.sourcePath || "" : row[addressKey] ?? ""} disabled={readOnly}
+                        aria-label={`第 ${index + 1} 行设备来源`} placeholder={descriptor.pointLabel}
+                        onChange={event => updateRow(index, { [addressKey]: event.target.value })} />
+                      {rowErrorMessages.some(message => /路径|地址|来源|OID|标签|选择器|范围/.test(message)) &&
+                        <p className="mt-1 text-xs text-rose-700">{rowErrorMessages.find(message => /路径|地址|来源|OID|标签|选择器|范围/.test(message))}</p>}
+                    </td>
+                    <td className="px-3 py-2"><Input value={row.sourceUnit || ""} disabled={readOnly} aria-label={`第 ${index + 1} 行设备单位`}
+                      placeholder={definition?.unit || "单位"} onChange={event => updateRow(index, { sourceUnit: event.target.value })} />
+                      {definition?.unit && !String(row.sourceUnit || "").trim() && <p className="mt-1 text-xs text-amber-700">发布前需填写 {definition.unit}</p>}
+                      {definition?.unit && row.sourceUnit?.trim() && row.sourceUnit.trim() !== definition.unit && Number(row.scale) === 1 && Number(row.offset) === 0 &&
+                        <p className="mt-1 text-xs text-amber-700">单位不同，请配置倍率或偏移</p>}</td>
+                    <td className="px-3 py-2"><Input type="number" step="any" value={row.scale} disabled={readOnly} aria-label={`第 ${index + 1} 行倍率`}
+                      onChange={event => updateRow(index, { scale: event.target.value })} /></td>
+                    <td className="px-3 py-2"><Input type="number" step="any" value={row.offset} disabled={readOnly} aria-label={`第 ${index + 1} 行偏移`}
+                      onChange={event => updateRow(index, { offset: event.target.value })} /></td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2"><Badge tone={complete ? "success" : "warning"}>{complete ? "映射完整" : rowErrorMessages.length ? `${rowErrorMessages.length} 项错误` : "待补全"}</Badge>
+                        <Button variant="ghost" onClick={() => setExpandedIndex(current => current === index ? null : index)}>
+                          {expandedIndex === index ? "收起" : "详情"}
+                        </Button></div>
+                      {!complete && rowErrorMessages.length > 0 && <p className="mt-1 line-clamp-2 text-xs text-rose-700">{rowErrorMessages[0]}</p>}
+                    </td>
+                  </tr>
+                  {expandedIndex === index && <tr><td colSpan={7} className="bg-slate-50 p-3">
+                    <PointRow row={row} index={index} descriptor={descriptor} options={options} errors={statusErrors}
+                      path={`${errorPrefix}[${index}]`} preview={probe?.mappings?.find(item => item.dataItemCode === row.dataItemCode)}
+                      probe={probe} form={form} readOnly={readOnly} removable={rows.length > 1}
+                      onChange={patch => updateRow(index, patch)} onRemove={() => removeRow(index)} />
+                  </td></tr>}
+                </Fragment>;
+              })}
+              {visibleRows.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-sm text-slate-500">没有符合筛选条件的映射。</td></tr>}
+            </tbody>
+          </table>
+        </div>}
+        {visibleRows.length > 0 && <nav className="flex flex-wrap items-center justify-between gap-2" aria-label="点位映射表分页">
+          <span role="status" aria-live="polite" className="text-xs text-slate-600">
+            每页 50 条 · 第 {currentPage + 1} / {pageCount} 页 · 显示 {pageStartIndex + 1}–{pageEndIndex} / {visibleRows.length} 条筛选结果
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" aria-label="点位映射：上一页" disabled={currentPage === 0}
+              onClick={() => setCurrentPage(page => Math.max(0, page - 1))}>上一页</Button>
+            <Button variant="ghost" aria-label="点位映射：下一页" disabled={currentPage >= pageCount - 1}
+              onClick={() => setCurrentPage(page => Math.min(pageCount - 1, page + 1))}>下一页</Button>
+          </div>
+        </nav>}
       </div>
     </Card>
   );

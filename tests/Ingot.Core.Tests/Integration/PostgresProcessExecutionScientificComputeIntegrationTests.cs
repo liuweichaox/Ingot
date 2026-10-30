@@ -146,11 +146,11 @@ public sealed class PostgresProcessExecutionScientificComputeIntegrationTests(
                   @source, 'equipment', 'PRESS-01', @execution_id, 'scientific-model', 1);
 
                 INSERT INTO process_sample_values (
-                  occurred_at, frame_id, point_key, quality_code, numeric_value)
+                  occurred_at, frame_id, point_key, quality_code, quality_evidence_version, numeric_value)
                 VALUES (
                   @occurred_at, @ingest_id,
                   (SELECT point_key FROM collection_points WHERE collection_point_id = @point_id),
-                  0, @numeric_value);
+                  0, 1, @numeric_value);
                 """,
                 connection);
             command.Parameters.AddWithValue("occurred_at", startedAt.AddSeconds(index).UtcDateTime);

@@ -1,4 +1,4 @@
-
+// 按任务映射执行缺失、质量、类型转换和有效范围策略，供探查与运行采集共用。
 using System.Globalization;
 using Ingot.Contracts.Acquisition;
 
@@ -9,10 +9,11 @@ internal static class AcquisitionValuePolicy
     public static object? Resolve(
         IReadOnlyDictionary<string, object?> raw,
         AcquisitionValueMapping mapping,
-        string targetType)
+        string targetType,
+        ISet<string>? qualityFlags = null)
     {
         if (!raw.TryGetValue(mapping.SourcePath, out var value) || value is null)
-            return Missing(mapping, targetType);
+            return Missing(mapping, targetType, qualityFlags);
 
         if (!string.IsNullOrWhiteSpace(mapping.QualityPath))
         {
@@ -29,20 +30,28 @@ internal static class AcquisitionValuePolicy
                 throw new InvalidDataException(
                     $"采集点位 {mapping.SourcePath} 的质量值 {quality} 不在允许范围内。");
             }
+            ClassifySourceQuality(
+                Convert.ToString(quality, CultureInfo.InvariantCulture) ?? string.Empty,
+                mapping.QualityPath,
+                mapping.AcceptedQualityValues.Count > 0,
+                qualityFlags);
         }
 
-        return ConvertAndBound(value, mapping, targetType);
+        return ConvertAndBound(value, mapping, targetType, qualityFlags);
     }
 
-    public static object? Missing(AcquisitionValueMapping mapping, string targetType)
+    public static object? Missing(
+        AcquisitionValueMapping mapping,
+        string targetType,
+        ISet<string>? qualityFlags = null)
     {
         var behavior = mapping.MissingValueBehavior == "inherit"
             ? mapping.Required ? "reject" : "omit"
             : mapping.MissingValueBehavior;
         return behavior switch
         {
-            "omit" => null,
-            "use-default" => ConvertDefault(mapping, targetType),
+            "omit" => OmitMissingValue(qualityFlags),
+            "use-default" => UseDefault(mapping, targetType, qualityFlags),
             _ => throw new InvalidDataException($"采集源缺少必填数据项：{mapping.SourcePath}。")
         };
     }
@@ -50,7 +59,8 @@ internal static class AcquisitionValuePolicy
     public static object? ConvertAndBound(
         object value,
         AcquisitionValueMapping mapping,
-        string targetType)
+        string targetType,
+        ISet<string>? qualityFlags = null)
     {
         object converted;
         try
@@ -82,11 +92,75 @@ internal static class AcquisitionValuePolicy
         if (!below && !above) return converted;
         return mapping.OutOfRangeBehavior switch
         {
-            "omit" => null,
-            "clamp" => Clamp(converted, numeric, mapping.Minimum, mapping.Maximum),
+            "omit" => OmitOutOfRange(qualityFlags),
+            "clamp" => ClampAndFlag(converted, numeric, mapping.Minimum, mapping.Maximum, qualityFlags),
             _ => throw new InvalidDataException(
                 $"采集点位 {mapping.SourcePath} 的换算值 {numeric:G15} 超出有效范围。")
         };
+    }
+
+    private static object? UseDefault(
+        AcquisitionValueMapping mapping,
+        string targetType,
+        ISet<string>? qualityFlags)
+    {
+        qualityFlags?.Add("default_substituted");
+        return ConvertDefault(mapping, targetType);
+    }
+
+    private static object? OmitMissingValue(ISet<string>? qualityFlags)
+    {
+        qualityFlags?.Add("missing_value");
+        return null;
+    }
+
+    private static void ClassifySourceQuality(
+        string value,
+        string? qualityPath,
+        bool hasExplicitAcceptedValues,
+        ISet<string>? qualityFlags)
+    {
+        var normalized = value.Trim();
+        if (normalized.StartsWith("Good", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("OK", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("valid", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("normal", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (normalized.StartsWith("Uncertain", StringComparison.OrdinalIgnoreCase))
+        {
+            qualityFlags?.Add("source_quality_uncertain");
+            return;
+        }
+
+        if (normalized.StartsWith("Bad", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("invalid", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("error", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("failed", StringComparison.OrdinalIgnoreCase))
+        {
+            qualityFlags?.Add("source_quality_non_good");
+            return;
+        }
+
+        if (!hasExplicitAcceptedValues || string.Equals(qualityPath, "$status", StringComparison.Ordinal))
+            qualityFlags?.Add("source_quality_unclassified");
+    }
+
+    private static object? OmitOutOfRange(ISet<string>? qualityFlags)
+    {
+        qualityFlags?.Add("out_of_range_omitted");
+        return null;
+    }
+
+    private static object ClampAndFlag(
+        object converted,
+        double numeric,
+        double? minimum,
+        double? maximum,
+        ISet<string>? qualityFlags)
+    {
+        qualityFlags?.Add("value_clamped");
+        return Clamp(converted, numeric, minimum, maximum);
     }
 
     private static object ConvertScalar(string value, string targetType)

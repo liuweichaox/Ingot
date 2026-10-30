@@ -250,7 +250,7 @@ public sealed class OpcUaAcquisitionRunner(
                         normalizedSource,
                         currentProcessSpecification,
                         new DateTimeOffset(Interlocked.Read(ref latestTimestampTicks), TimeSpan.Zero));
-                    var deduplication = sourceDeduplicator.Evaluate(
+                    var deduplication = sourceDeduplicator.EvaluatePending(
                         mapped.Sample,
                         observedAt,
                         TimeSpan.FromMilliseconds(deployment.Task.Execution.SourceIdentityStaleAfterMs));
@@ -264,11 +264,13 @@ public sealed class OpcUaAcquisitionRunner(
                             $"设备源身份超过 {deployment.Task.Execution.SourceIdentityStaleAfterMs}ms 未变化。");
                         continue;
                     }
-                    var events = lifecycle.Track(
+                    var events = await lifecycle.TrackAndEmitAsync(
                         mapped,
                         deployment.Task.Lifecycle,
-                        connection.PublishingIntervalMs);
-                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                        connection.PublishingIntervalMs,
+                        sink,
+                        ct).ConfigureAwait(false);
+                    sourceDeduplicator.Commit(mapped.Sample, observedAt);
                     status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
                     status.RecordEmissionOutcome(
                         configurationKey,

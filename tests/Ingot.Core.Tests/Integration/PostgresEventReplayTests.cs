@@ -598,41 +598,56 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             UpdatedAt = now
         });
 
-        var sample = ProductionEvent.Create(
-            "process.sample",
-            now,
-            $"edge/{edgeId}/equipment/PRESS-01",
-            new ObjectRef("equipment", "PRESS-01"),
-            executionId,
-            new Dictionary<string, string>
-            {
-                ["data_model_id"] = modelId,
-                ["data_model_version"] = "1"
-            },
-            new Dictionary<string, object?>
-            {
-                ["values"] = signals.ToDictionary(
-                    static signal => signal.Item1,
-                    static signal => (object?)signal.Value,
-                    StringComparer.Ordinal)
-            }) with
-        { Seq = 1 };
+        ProductionEvent CreateSample(
+            DateTimeOffset occurredAt,
+            string taskId,
+            int version,
+            long sequence,
+            bool includeAppliedConfiguration = true)
+            => ProductionEvent.Create(
+                "process.sample",
+                occurredAt,
+                $"edge/{edgeId}/equipment/PRESS-01",
+                new ObjectRef("equipment", "PRESS-01"),
+                executionId,
+                new Dictionary<string, string>
+                {
+                    ["data_model_id"] = modelId,
+                    ["data_model_version"] = "1",
+                    ["ingestion_task_id"] = taskId,
+                    ["ingestion_task_version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                },
+                new Dictionary<string, object?>
+                {
+                    ["values"] = signals.ToDictionary(
+                        static signal => signal.Item1,
+                        static signal => (object?)signal.Value,
+                        StringComparer.Ordinal)
+                },
+                appliedConfiguration: includeAppliedConfiguration
+                    ? new AppliedConfigurationRef("ingestion-task", taskId, version)
+                    : null) with
+            { Seq = sequence };
+
+        var sample = CreateSample(now, "press-01", 1, 1);
+        var secondSample = CreateSample(now.AddSeconds(1), "press-02", 2, 2);
+        var legacySample = CreateSample(now.AddSeconds(2), "press-03", 1, 3, includeAppliedConfiguration: false);
 
         var first = await store.IngestAsync(new EventBatchRequest
         {
             SiteId = "SITE-SINGLE-SOURCE",
             EdgeId = edgeId,
-            Events = [sample]
+            Events = [sample, secondSample, legacySample]
         });
         var replay = await store.IngestAsync(new EventBatchRequest
         {
             SiteId = "SITE-SINGLE-SOURCE",
             EdgeId = edgeId,
-            Events = [sample]
+            Events = [sample, secondSample, legacySample]
         });
 
-        Assert.Equal(1, first.Accepted);
-        Assert.Equal(1, replay.Duplicates);
+        Assert.Equal(3, first.Accepted);
+        Assert.Equal(3, replay.Duplicates);
         await using var connection = new NpgsqlConnection(postgres.ConnectionString);
         await connection.OpenAsync();
         await using (var command = new NpgsqlCommand(
@@ -665,22 +680,57 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             SiteId = "SITE-SINGLE-SOURCE",
             ExecutionId = executionId
         });
-        Assert.Equal(10, typed.Count);
+        Assert.Equal(30, typed.Count);
         Assert.All(typed, static row => Assert.Equal("SITE-SINGLE-SOURCE", row.SiteId));
         Assert.Empty(await timeSeries.QueryAsync(new TimeSeriesQuery
         {
             SiteId = "SITE-OTHER",
             ExecutionId = executionId
         }));
-        Assert.Equal(601d, typed.Single(static row => row.SignalCode == "sensor.01").NumericValue);
+        Assert.Equal(601d, typed.Single(row => row.EventId == sample.EventId && row.SignalCode == "sensor.01").NumericValue);
+        var firstTaskConfiguration = new AppliedConfigurationRef("ingestion-task", "press-01", 1);
+        var secondTaskConfiguration = new AppliedConfigurationRef("ingestion-task", "press-02", 2);
+        var firstTaskSamples = await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            ExecutionId = executionId,
+            AppliedConfiguration = firstTaskConfiguration
+        });
+        var secondTaskSamples = await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            ExecutionId = executionId,
+            AppliedConfiguration = secondTaskConfiguration
+        });
+        Assert.Equal(10, firstTaskSamples.Count);
+        Assert.All(firstTaskSamples, row => Assert.Equal(sample.EventId, row.EventId));
+        Assert.All(firstTaskSamples, row => Assert.Equal(firstTaskConfiguration, row.AppliedConfiguration));
+        Assert.Equal(10, secondTaskSamples.Count);
+        Assert.All(secondTaskSamples, row => Assert.Equal(secondSample.EventId, row.EventId));
+        Assert.All(secondTaskSamples, row => Assert.Equal(secondTaskConfiguration, row.AppliedConfiguration));
+        var legacyTaskSamples = typed.Where(row => row.EventId == legacySample.EventId).ToArray();
+        Assert.Equal(10, legacyTaskSamples.Length);
+        Assert.All(legacyTaskSamples, static row => Assert.Null(row.AppliedConfiguration));
         var frames = await timeSeries.QueryFramesAsync(new TimeSeriesQuery
         {
             ExecutionId = executionId,
-            Limit = 1
+            Limit = 3
         });
-        var frame = Assert.Single(frames);
+        Assert.Equal(3, frames.Count);
+        var frame = frames.Single(item => item.EventId == sample.EventId);
         Assert.Equal(10, frame.NumericValues.Count);
         Assert.Equal(610d, frame.NumericValues["sensor.10"]);
+        Assert.Equal(firstTaskConfiguration, frame.AppliedConfiguration);
+        var scopedFrames = await timeSeries.QueryFramesAsync(new TimeSeriesQuery
+        {
+            ExecutionId = executionId,
+            AppliedConfiguration = secondTaskConfiguration,
+            Limit = 2
+        });
+        var scopedFrame = Assert.Single(scopedFrames);
+        Assert.Equal(secondSample.EventId, scopedFrame.EventId);
+        Assert.Equal(secondTaskConfiguration, scopedFrame.AppliedConfiguration);
+        Assert.Null(frames.Single(item => item.EventId == legacySample.EventId).AppliedConfiguration);
     }
 
     [LinuxDockerFact]

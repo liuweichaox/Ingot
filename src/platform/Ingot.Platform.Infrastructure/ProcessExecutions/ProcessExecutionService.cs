@@ -515,6 +515,13 @@ public sealed class ProcessExecutionService(
                 "error",
                 "过程执行开始时未找到唯一有效的生产准备和工装装卸记录。"));
         }
+        if (context.GetValueOrDefault("control_parameter_capture_status") == "quality_degraded")
+        {
+            issues.Add(Issue(
+                "control_parameters.quality_degraded",
+                "warning",
+                "实际控制参数包含默认替代、范围修正或非良好源质量；该组参数未用于配方比较。"));
+        }
         return issues;
     }
 
@@ -536,6 +543,8 @@ public sealed class ProcessExecutionService(
         {
             AddActual(context, "actual_process_specification_id", applied.Event.Data.GetValueOrDefault("processSpecificationId"));
             AddActual(context, "actual_process_specification_version", applied.Event.Data.GetValueOrDefault("processSpecificationVersion"));
+            if (applied.Event.QualityFlags.Count > 0)
+                context["control_parameter_capture_status"] = "quality_degraded";
         }
         return context;
     }

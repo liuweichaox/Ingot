@@ -127,6 +127,8 @@ public sealed class DeterministicModelClient : IModelClient
                 Arguments = new Dictionary<string, string?>
                 {
                     ["query"] = question,
+                    ["siteId"] = context?.SiteId,
+                    ["processSpecificationId"] = context?.Kind == "process-specification" ? context.Id : null,
                     ["limit"] = "8"
                 }
             });

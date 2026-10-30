@@ -13,7 +13,9 @@ afterEach(() => {
 function stubWorkbench(executionTotal = 2) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation(url => {
     const path = String(url);
-    const payload = path.includes("/process-executions")
+    const payload = path.includes("/api/v1/auth/me")
+      ? { siteIds: ["SITE-001"] }
+      : path.includes("/process-executions")
       ? { items: [], total: executionTotal }
       : path.includes("/inspection-tasks/summary")
         ? { pending: 2 }
@@ -30,12 +32,12 @@ function stubWorkbench(executionTotal = 2) {
 
 describe("工作台岗位操作", () => {
   it.each([
-    ["检验员", ["quality.inspector"], "质量待办", ["/inspections", "/process-executions?attention=1", "/edges"]],
-    ["质量复核员", ["quality.reviewer"], "质量待办", ["/inspections", "/process-executions?attention=1", "/edges"]],
-    ["工程师", ["process.engineer"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/inspections"]],
-    ["管理员", ["platform.admin"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/edges"]],
-    ["工程与质量兼岗", ["process.engineer", "quality.inspector"], "下一步", ["/configuration/process-specifications", "/process-executions?attention=1", "/inspections"]],
-    ["无特定岗位", [], "下一步", ["/process-executions?attention=1", "/inspections", "/edges"]],
+    ["检验员", ["quality.inspector"], "质量待办", ["/inspections?siteId=SITE-001", "/process-executions?attention=1&siteId=SITE-001", "/edges?siteId=SITE-001"]],
+    ["质量复核员", ["quality.reviewer"], "质量待办", ["/inspections?siteId=SITE-001", "/process-executions?attention=1&siteId=SITE-001", "/edges?siteId=SITE-001"]],
+    ["工程师", ["process.engineer"], "下一步", ["/recipe-adjustments?siteId=SITE-001", "/process-executions?attention=1&siteId=SITE-001", "/inspections?siteId=SITE-001"]],
+    ["管理员", ["platform.admin"], "下一步", ["/recipe-adjustments?siteId=SITE-001", "/process-executions?attention=1&siteId=SITE-001", "/edges?siteId=SITE-001"]],
+    ["工程与质量兼岗", ["process.engineer", "quality.inspector"], "下一步", ["/recipe-adjustments?siteId=SITE-001", "/process-executions?attention=1&siteId=SITE-001", "/inspections?siteId=SITE-001"]],
+    ["无特定岗位", [], "下一步", ["/process-executions?attention=1&siteId=SITE-001", "/inspections?siteId=SITE-001", "/edges?siteId=SITE-001"]],
   ])("为%s提供三个不同入口并保持优先级", async (_name, roles, heading, expectedPaths) => {
     stubWorkbench();
     render(<MemoryRouter><WorkbenchPage identity={{ roles }} /></MemoryRouter>);
@@ -54,6 +56,6 @@ describe("工作台岗位操作", () => {
 
     const card = (await screen.findByRole("heading", { name: "下一步", exact: true })).closest("section");
     expect(within(card).getAllByRole("link").map(link => link.getAttribute("href")))
-      .toEqual(["/configuration/process-specifications", "/process-executions", "/inspections"]);
+      .toEqual(["/recipe-adjustments?siteId=SITE-001", "/process-executions?siteId=SITE-001", "/inspections?siteId=SITE-001"]);
   });
 });

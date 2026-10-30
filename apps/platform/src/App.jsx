@@ -16,7 +16,7 @@ import {
   SignalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
@@ -67,12 +67,12 @@ const sections = [
   },
   {
     id: "evidence", label: "现场运行", icon: CircleStackIcon, path: "/process-executions", groups: [
-      { items: [["/process-executions", "生产运行"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "质量检验"], ["/quality-analysis", "质量偏差"]] },
+      { items: [["/process-executions", "运行记录"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
     ],
   },
   {
     id: "insight", label: "工艺洞察", icon: MagnifyingGlassCircleIcon, path: "/comparisons", groups: [
-      { items: [["/comparisons", "工艺分析"], ["/data-quality", "数据质量"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
+      { items: [["/comparisons", "工艺分析"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
     ],
   },
   {
@@ -82,7 +82,9 @@ const sections = [
   },
   {
     id: "configuration", label: "配置与接入", icon: SignalIcon, path: "/configuration/process-data-models", groups: [
-      { items: [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析方案"], ["/configuration/inspection-definitions", "检测项目"], ["/configuration/quality-plans", "质量方案"], ["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"], ["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
+      { heading: "工艺与质量", items: [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
+      { heading: "现场接入", items: [["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"]] },
+      { heading: "生产资源", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
     ],
   },
 ];
@@ -100,6 +102,17 @@ export const sectionsForIdentity = identity => {
 
 const sectionItems = section => section.groups.flatMap(group => group.items);
 
+function withSiteScope(path, siteId) {
+  if (!siteId || path === "/chat") return path;
+  const [target, hash] = path.split("#", 2);
+  const [pathname, queryString = ""] = target.split("?", 2);
+  const query = new URLSearchParams(queryString);
+  if (!query.has("siteId")) query.set("siteId", siteId);
+  const serializedQuery = query.toString();
+  const suffix = serializedQuery ? `?${serializedQuery}` : "";
+  return `${pathname}${suffix}${hash ? `#${hash}` : ""}`;
+}
+
 const pageDetails = {
   "/workbench": ["工作台", "集中查看待办、生产状态与质量风险"],
   "/chat": ["AI 助手", "与系统内 AI 助手对话"],
@@ -111,15 +124,15 @@ const pageDetails = {
   "/quality-analysis": ["质量偏差", "按产品和配方版本查看哪些结果超出质量范围"],
   "/comparisons": ["工艺分析", "比较可比运行的设定、过程曲线和结果，并检查分析数据质量"],
   "/model-service": ["模型服务", ""],
-  "/data-quality": ["数据质量", "检查采样是否连续、运行是否完整，以及能否进入下一轮校正"],
-  "/configuration/process-analysis-plans": ["分析方案", "规定哪些过程曲线参与比较，以及均值、最小值和最大值"],
+  "/data-quality": ["数据质量", "按现场节点和事件时间范围检查采样、运行及通用数据可靠性条件"],
+  "/configuration/process-analysis-plans": ["分析规则", "规定哪些过程曲线参与比较，以及均值、最小值和最大值"],
   "/configuration/process-data-models": ["工艺变量", "定义过程量和控制参数，供配方版本与现场采集共用"],
   "/configuration/process-specifications": ["配方版本", "维护可发布的配方参数版本和上线条件"],
   "/recipe-adjustments": ["调整与验证", "基于真实运行和质量结果生成、决定并验证下一轮配方调整"],
   "/knowledge/process-materials": ["工艺资料", "管理经过复核、带来源和适用范围的工艺资料"],
   "/knowledge/mechanism": ["机理知识", "管理按站点与配方归属、可复核并带证据的机理知识"],
   "/configuration/ingestion-tasks": ["采集配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
-  "/configuration/inspection-definitions": ["检测项目", "定义要检测的特性、录入类型和判定规则"],
+  "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护可复用物理组件的业务分类；装配位置由工装结构规定"],
   "/configuration/components": ["组件台账", "登记具有独立资产编号和序列号的可更换物理组件"],
@@ -132,19 +145,19 @@ const pageDetails = {
 };
 
 const searchAliases = {
-  "/process-executions": "运行 设备 工件 批次 需要处理 质量异常 追因",
+  "/process-executions": "生产运行 运行 设备 工件 批次 需要处理 质量异常 追因",
   "/events": "运行事件 上报记录 审计",
   "/production/changeover": "生产切换 换产 产品切换 配方切换",
-  "/inspections": "质量任务 质检 检测任务",
+  "/inspections": "质量检验 质量任务 质检 检测任务",
   "/quality-analysis": "质量偏差 不良 异常 超限",
   "/comparisons": "运行对比 工艺分析 条件差异",
-  "/data-quality": "数据质量 完整性 分析准入",
+  "/data-quality": "数据质量 完整性 采样 运行 基线条件",
   "/chat": "AI 助手 证据核对 对话 运行 质量 工艺 记录 分析",
   "/configuration/process-specifications": "配方优化 配方版本 参数版本 工艺规范",
   "/recipe-adjustments": "配方优化 调整 验证 下一轮校正 真实运行 质量结果",
   "/knowledge/process-materials": "工艺知识 工艺资料 文档 来源 复核 引用",
   "/knowledge/mechanism": "工艺知识 机理知识 约束 冲突 证据 适用范围",
-  "/configuration/process-analysis-plans": "分析方案 过程曲线 特征提取",
+  "/configuration/process-analysis-plans": "分析规则 分析方案 过程分析 过程曲线 特征提取",
   "/configuration/inspection-definitions": "检测项目 检验特性 判定规则",
   "/configuration/ingestion-tasks": "采集 PLC 点位映射",
   "/platform-metrics": "平台运行状态 系统状态",
@@ -152,13 +165,13 @@ const searchAliases = {
   "/model-service": "AI 大模型 API key DeepSeek OpenAI Qwen",
 };
 
-const searchEntriesForSections = navigationSections => navigationSections.flatMap(section => sectionItems(section).map(([path, label]) => ({
+const searchEntriesForSections = navigationSections => navigationSections.flatMap(section => section.groups.flatMap(group => group.items.map(([path, label]) => ({
   path,
   label,
   section: section.label,
   description: pageDetails[path]?.[1] || "打开功能页面",
-  aliases: searchAliases[path] || "",
-})));
+  aliases: [pageDetails[path]?.[0], group.heading, searchAliases[path]].filter(Boolean).join(" "),
+}))));
 
 function assistantPathForLocation(location) {
   if (location.pathname === "/chat" || location.pathname.startsWith("/chat/")) return "/chat";
@@ -166,11 +179,12 @@ function assistantPathForLocation(location) {
   const executionId = location.pathname.match(/^\/process-executions\/([^/]+)$/)?.[1]
     || query.get("executionId")
     || query.get("runId");
+  const processSpecificationId = query.get("processSpecificationId") || query.get("recipe");
   const siteId = query.get("siteId");
-  const contextKind = executionId ? "execution" : siteId ? "site" : "page";
-  const contextId = executionId || siteId || location.pathname.replace(/^\/+|\/+$/g, "").replaceAll("/", ".") || "workbench";
+  const contextKind = executionId ? "execution" : processSpecificationId ? "process-specification" : siteId ? "site" : "page";
+  const contextId = executionId || processSpecificationId || siteId || location.pathname.replace(/^\/+|\/+$/g, "").replaceAll("/", ".") || "workbench";
   const contextParams = new URLSearchParams({ contextKind, contextId });
-  if (executionId && siteId) contextParams.set("contextSiteId", siteId);
+  if (siteId) contextParams.set("contextSiteId", siteId);
   return `/chat?${contextParams}`;
 }
 
@@ -180,12 +194,12 @@ function isApplePlatform() {
   return /mac|iphone|ipad|ipod|ios/i.test(platform);
 }
 
-function SidebarSection({ section, activeSectionId, activeNavigationPath, expanded, compact = false, onToggle, onNavigate, chatPath }) {
+function SidebarSection({ section, activeSectionId, activeNavigationPath, expanded, compact = false, onToggle, onNavigate, chatPath, siteId }) {
   const Icon = section.icon;
   const active = section.id === activeSectionId;
   const items = sectionItems(section);
   const hasNestedItems = items.length > 1 || items[0]?.[0] !== section.path || items[0]?.[1] !== section.label;
-  const sectionPath = section.path === "/chat" ? chatPath : section.path;
+  const sectionPath = section.path === "/chat" ? chatPath : withSiteScope(section.path, siteId);
 
   if (compact) {
     return (
@@ -194,6 +208,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
         onClick={onNavigate}
         className={cx("grid h-10 place-items-center rounded-sm text-slate-400 transition hover:bg-white/8 hover:text-white", active && "bg-evidence-500/15 text-evidence-100")}
         aria-label={section.label}
+        aria-current={activeNavigationPath === section.path ? "page" : undefined}
         title={section.label}
       >
         <Icon className="size-5" />
@@ -204,7 +219,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   return (
     <div>
       <div className={cx("flex items-center border-l-2 border-transparent transition", active ? "border-evidence-400 text-white" : section.utility ? "text-slate-200 hover:border-evidence-500/70 hover:text-white" : "text-slate-300 hover:border-white/20 hover:text-white")}>
-        <Link to={sectionPath} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-5">
+        <Link to={sectionPath} onClick={onNavigate} aria-current={!hasNestedItems && activeNavigationPath === section.path ? "page" : undefined} className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-[15px] font-semibold leading-5">
           <Icon className="size-5 shrink-0" />
           <span className="truncate">{section.label}</span>
         </Link>
@@ -229,6 +244,7 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
               activeNavigationPath={activeNavigationPath}
               onNavigate={onNavigate}
               chatPath={chatPath}
+              siteId={siteId}
             />
           ))}
         </div>
@@ -237,18 +253,21 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   );
 }
 
-function SidebarGroup({ group, activeNavigationPath, onNavigate, chatPath }) {
+function SidebarGroup({ group, activeNavigationPath, onNavigate, chatPath, siteId }) {
+  const headingId = useId();
   return (
     <div
       className="grid gap-0.5"
       role={group.heading ? "group" : undefined}
-      aria-label={group.heading || undefined}
+      aria-labelledby={group.heading ? headingId : undefined}
     >
+      {group.heading && <h3 id={headingId} className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">{group.heading}</h3>}
       {group.items.map(([path, label]) => (
         <Link
           key={path}
-          to={path === "/chat" ? chatPath : path}
+          to={path === "/chat" ? chatPath : withSiteScope(path, siteId)}
           onClick={onNavigate}
+          aria-current={path === activeNavigationPath ? "page" : undefined}
           className={cx("flex min-h-9 items-center border-l-2 border-transparent px-3 py-1.5 text-sm font-medium leading-5", path === activeNavigationPath ? "border-evidence-400 bg-white/7 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-100")}
         >
           {label}
@@ -258,7 +277,7 @@ function SidebarGroup({ group, activeNavigationPath, onNavigate, chatPath }) {
   );
 }
 
-function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate, chatPath }) {
+function SidebarNavigation({ navigationSections, activeSectionId, activeNavigationPath, expandedSectionId, compact = false, onToggle, onNavigate, chatPath, siteId }) {
   return (
     <nav className={cx("scrollbar-thin grid flex-1 content-start overflow-y-auto", compact ? "gap-1 p-3" : "gap-1 p-3")} aria-label="主导航">
       {navigationSections.map(item => (
@@ -272,31 +291,41 @@ function SidebarNavigation({ navigationSections, activeSectionId, activeNavigati
           onToggle={onToggle}
           onNavigate={onNavigate}
           chatPath={chatPath}
+          siteId={siteId}
         />
       ))}
     </nav>
   );
 }
 
-export function SystemStatusIndicator() {
-  const { data, loading, error } = useApi("/api/edges", { interval: 30000 });
+export function SystemStatusIndicator({ siteId, identity }) {
+  const siteIds = Array.isArray(identity?.siteIds) ? identity.siteIds : [];
+  const administrator = identity?.roles?.includes("platform.admin") || false;
+  const needsSiteSelection = !siteId && !administrator && siteIds.length !== 1;
+  const diagnosticPage = administrator ? "系统状态" : "现场节点诊断";
+  const statusPath = administrator ? "/platform-metrics" : needsSiteSelection ? "/workbench" : "/edges";
+  const edgeQuery = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
+  const { data, loading, error } = useApi(needsSiteSelection ? "" : `/api/edges${edgeQuery}`, { interval: 30000 });
   const edges = extractRows(data);
   const online = edges.filter(item => edgeStatus(item) === "online").length;
   const needsAttention = edges.filter(item => edgeStatus(item) !== "online").length;
+  const scopeLabel = siteId || (administrator ? "全部可访问站点" : siteIds[0] || "当前站点");
   const presentation = error
-    ? { label: "状态不可用", compactLabel: "!", detail: "平台状态暂时无法读取", dot: "bg-rose-500", text: "text-rose-700", background: "hover:bg-rose-50" }
+    ? { label: "节点状态不可用", compactLabel: "!", detail: `${scopeLabel}的现场节点心跳状态暂时无法读取`, dot: "bg-rose-500", text: "text-rose-700", background: "hover:bg-rose-50" }
+    : needsSiteSelection
+      ? { label: siteIds.length ? "选择站点" : "无可访问站点", compactLabel: "…", detail: siteIds.length ? `选择站点后查看现场节点心跳；采样与上行状态请查看${diagnosticPage}` : "当前账号没有可访问站点，无法读取现场节点心跳", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
     : loading && !data
-      ? { label: "检查中", compactLabel: "…", detail: "正在检查平台和现场节点", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
+      ? { label: "检查中", compactLabel: "…", detail: "正在读取现场节点心跳状态", dot: "bg-slate-400", text: "text-slate-600", background: "hover:bg-slate-50" }
       : edges.length === 0
-        ? { label: "待接入", compactLabel: "0", detail: "平台正常，尚未登记现场节点", dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+        ? { label: "未登记节点", compactLabel: "0", detail: `${scopeLabel}尚无可观察的现场节点，无法判断节点心跳状态`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
         : needsAttention > 0
-          ? { label: `${needsAttention} 项关注`, compactLabel: String(needsAttention), detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
-          : { label: "运行正常", compactLabel: "✓", detail: `平台正常，现场节点 ${online}/${edges.length} 在线`, dot: "bg-emerald-500", text: "text-emerald-700", background: "hover:bg-emerald-50" };
+          ? { label: `${needsAttention} 节点需关注`, compactLabel: String(needsAttention), detail: `${scopeLabel}的现场节点心跳：${online}/${edges.length} 在线；采样与上行状态请查看${diagnosticPage}`, dot: "bg-amber-500", text: "text-amber-700", background: "hover:bg-amber-50" }
+          : { label: "节点在线", compactLabel: "✓", detail: `${scopeLabel}的现场节点心跳：${online}/${edges.length} 在线；采样与上行状态请查看${diagnosticPage}`, dot: "bg-emerald-500", text: "text-emerald-700", background: "hover:bg-emerald-50" };
   return (
     <Link
-      to="/platform-metrics"
+      to={withSiteScope(statusPath, siteId)}
       className={cx("flex shrink-0 items-center gap-2 border-l border-slate-100 px-3 text-sm font-medium sm:px-4", presentation.text, presentation.background)}
-      aria-label={`系统状态：${presentation.detail}`}
+      aria-label={`${administrator ? "系统状态" : "现场节点状态"}：${presentation.detail}`}
       title={presentation.detail}
     >
       <span className={cx("size-2.5 rounded-full ring-4 ring-current/10", presentation.dot)} aria-hidden="true" />
@@ -317,11 +346,18 @@ export default function App({ identity, logout }) {
   const userInitials = displayName.trim().slice(0, 2).toUpperCase();
   const canConfigure = (identity?.roles || []).some(role => role === "process.engineer" || role === "platform.admin");
   const navigationSections = useMemo(() => sectionsForIdentity(identity), [identity]);
-  const globalSearchEntries = useMemo(() => searchEntriesForSections(navigationSections), [navigationSections]);
   const usesAppleShortcut = useMemo(isApplePlatform, []);
   const searchShortcutLabel = usesAppleShortcut ? "⌘ K" : "Ctrl K";
   const isChatWorkspace = location.pathname === "/chat" || location.pathname.startsWith("/chat/");
+  const currentSiteId = useMemo(() => {
+    const query = new URLSearchParams(location.search);
+    return query.get("siteId") || query.get("contextSiteId") || "";
+  }, [location.search]);
   const contextualChatPath = useMemo(() => assistantPathForLocation(location), [location.pathname, location.search]);
+  const globalSearchEntries = useMemo(() => searchEntriesForSections(navigationSections).map(entry => ({
+    ...entry,
+    path: entry.path === "/chat" ? contextualChatPath : withSiteScope(entry.path, currentSiteId),
+  })), [contextualChatPath, currentSiteId, navigationSections]);
 
   useEffect(() => {
     function handleShortcut(event) {
@@ -371,7 +407,7 @@ export default function App({ identity, logout }) {
     <div className="app-canvas min-h-screen text-slate-900">
       <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-coal-800 bg-coal-950 text-white transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
         <div className={cx("flex h-16 shrink-0 items-center border-b border-white/8", sidebarCollapsed ? "justify-center px-3" : "justify-between px-4")}>
-          <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate("/workbench")} aria-label="打开 Ingot 首页">
+          <button className={cx("flex min-w-0 items-center gap-3 text-left", sidebarCollapsed && "justify-center")} onClick={() => navigate(withSiteScope("/workbench", currentSiteId))} aria-label="打开 Ingot 首页">
             <img src="/ingot-mark.svg" alt="" className="size-9 shrink-0" />
             {!sidebarCollapsed && <strong className="text-base leading-5 text-white">Ingot</strong>}
           </button>
@@ -385,6 +421,7 @@ export default function App({ identity, logout }) {
           compact={sidebarCollapsed}
           onToggle={toggleSection}
           chatPath={contextualChatPath}
+          siteId={currentSiteId}
         />
         {sidebarCollapsed && <button type="button" className="mx-3 mb-3 grid h-10 place-items-center rounded-sm text-slate-500 hover:bg-white/8 hover:text-white" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧边栏"><ChevronDoubleRightIcon className="size-4.5" /></button>}
       </aside>
@@ -394,13 +431,13 @@ export default function App({ identity, logout }) {
         <div className="flex min-w-0 flex-1 items-center px-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <nav aria-label="面包屑" className="flex items-center gap-1.5 text-[13px] text-slate-500">
-              <Link to={section.path} className="shrink-0 hover:text-blue-700">{section.label}</Link>
+              <Link to={section.path === "/chat" ? contextualChatPath : withSiteScope(section.path, currentSiteId)} className="shrink-0 hover:text-blue-700">{section.label}</Link>
               <ChevronRightIcon className="size-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate font-medium text-slate-700">{page[0]}</span>
             </nav>
           </div>
         </div>
-        <SystemStatusIndicator />
+        <SystemStatusIndicator siteId={currentSiteId} identity={identity} />
         <button className="flex items-center gap-2 border-l border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50 sm:px-4" onClick={() => setGlobalSearchOpen(true)} aria-label="打开功能搜索" aria-keyshortcuts={usesAppleShortcut ? "Meta+K" : "Control+K"}>
           <MagnifyingGlassIcon className="size-5" /><span className="hidden md:inline">功能搜索</span><kbd className="hidden rounded-sm border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400 xl:inline">{searchShortcutLabel}</kbd>
         </button>
@@ -429,7 +466,7 @@ export default function App({ identity, logout }) {
         </main>
       ) : (
         <div className={cx("pt-16 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
-          <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-7">
+          <main className={cx("mx-auto w-full p-4 sm:p-6 lg:p-7", location.pathname.startsWith("/configuration/ingestion-tasks/") ? "max-w-none" : "max-w-[1600px]")}>
             <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>
         </div>
@@ -439,12 +476,12 @@ export default function App({ identity, logout }) {
         <DialogBackdrop className="fixed inset-0 bg-coal-950/55 backdrop-blur-sm" />
         <DialogPanel className="fixed inset-y-0 left-0 flex w-80 max-w-[88vw] flex-col bg-coal-950 text-white shadow-2xl">
           <div className="flex h-16 items-center justify-between border-b border-white/8 px-4">
-            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate("/workbench"); }}><img src="/ingot-mark.svg" alt="" className="size-8 shrink-0" /><strong className="block">Ingot</strong></button>
+            <button className="flex items-center gap-3 text-left" onClick={() => { setMobileOpen(false); navigate(withSiteScope("/workbench", currentSiteId)); }}><img src="/ingot-mark.svg" alt="" className="size-8 shrink-0" /><strong className="block">Ingot</strong></button>
             <button className="grid size-9 place-items-center rounded-sm text-slate-400 hover:bg-white/8 hover:text-white" onClick={() => setMobileOpen(false)} aria-label="关闭模块导航">
               <XMarkIcon className="size-5" />
             </button>
           </div>
-          <SidebarNavigation navigationSections={navigationSections} activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} chatPath={contextualChatPath} />
+          <SidebarNavigation navigationSections={navigationSections} activeSectionId={section.id} activeNavigationPath={activeNavigationPath} expandedSectionId={expandedSectionId} onToggle={toggleSection} onNavigate={() => setMobileOpen(false)} chatPath={contextualChatPath} siteId={currentSiteId} />
         </DialogPanel>
       </Dialog>
       <GlobalSearchDialog
@@ -459,6 +496,9 @@ export default function App({ identity, logout }) {
 }
 
 export function RequireRole({ identity, roles, children }) {
+  const [searchParams] = useSearchParams();
+  const siteId = searchParams.get("siteId");
+  const workbenchPath = siteId ? `/workbench?siteId=${encodeURIComponent(siteId)}` : "/workbench";
   const allowed = (identity?.roles || []).some(role => roles.includes(role));
   if (allowed) return children;
   return (
@@ -467,19 +507,38 @@ export function RequireRole({ identity, roles, children }) {
         <p className="text-sm font-semibold text-amber-700">权限不足</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-950">当前岗位不能访问此功能</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">该页面仅向平台管理员开放。你仍可继续处理已授权的生产、质量和工艺任务。</p>
-        <LinkButton className="mt-5" to="/workbench">返回工作台</LinkButton>
+        <LinkButton className="mt-5" to={workbenchPath}>返回工作台</LinkButton>
       </div>
     </div>
   );
 }
 
+function legacyRedirectTarget(path, searchParams, extraKeys = []) {
+  const query = new URLSearchParams();
+  for (const key of [...extraKeys, "siteId"]) {
+    const value = searchParams.get(key);
+    if (value) query.set(key, value);
+  }
+  const suffix = query.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
+function LegacyAnalysisRedirect() {
+  const [params] = useSearchParams();
+  const query = new URLSearchParams({ attention: "1" });
+  const siteId = params.get("siteId");
+  if (siteId) query.set("siteId", siteId);
+  return <Navigate to={`/process-executions?${query.toString()}`} replace />;
+}
+
+function LegacyExplorerRedirect() {
+  const [params] = useSearchParams();
+  return <Navigate to={legacyRedirectTarget("/process-executions", params)} replace />;
+}
+
 function LegacyRecipeSuggestionsRedirect() {
   const [params] = useSearchParams();
-  const recipe = params.get("recipe");
-  const version = params.get("version");
-  const target = recipe && version
-    ? `/configuration/process-specifications?recipe=${encodeURIComponent(recipe)}&version=${encodeURIComponent(version)}`
-    : "/configuration/process-specifications";
+  const target = legacyRedirectTarget("/configuration/process-specifications", params, ["recipe", "version"]);
   return <Navigate to={target} replace />;
 }
 
@@ -489,14 +548,14 @@ function AppRoutes({ identity, canConfigure }) {
       <Routes>
         <Route path="/" element={<Navigate to="/workbench" replace />} />
         <Route path="/workbench" element={<WorkbenchPage identity={identity} />} />
-        <Route path="/analysis" element={<Navigate to="/process-executions?attention=1" replace />} />
+        <Route path="/analysis" element={<LegacyAnalysisRedirect />} />
         <Route path="/recipe-suggestions" element={<LegacyRecipeSuggestionsRedirect />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
-        <Route path="/explorer" element={<Navigate to="/process-executions" replace />} />
+        <Route path="/explorer" element={<LegacyExplorerRedirect />} />
         <Route path="/process-executions" element={<ProcessExecutionsPage />} />
-        <Route path="/process-executions/:executionId" element={<ProcessExecutionDetailPage />} />
-        <Route path="/events" element={<EventsPage />} />
+        <Route path="/process-executions/:executionId" element={<ProcessExecutionDetailPage identity={identity} />} />
+        <Route path="/events" element={<RequireRole identity={identity} roles={["platform.admin"]}><EventsPage /></RequireRole>} />
         <Route path="/production/changeover" element={<ProductionSetupPage section="context" canWrite={canConfigure} />} />
         <Route path="/production/tooling-installations" element={<ProductionSetupPage section="installation" canWrite={canConfigure} />} />
         <Route path="/configuration/component-types" element={<ProductionSetupPage section="componentType" canWrite={canConfigure} />} />
@@ -521,7 +580,7 @@ function AppRoutes({ identity, canConfigure }) {
         <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage canWrite={canConfigure} />} />
         <Route path="/edges" element={<EdgesPage />} />
         <Route path="/edges/:edgeId" element={<EdgeDetailPage />} />
-        <Route path="/platform-metrics" element={<MetricsPage />} />
+        <Route path="/platform-metrics" element={<RequireRole identity={identity} roles={["platform.admin"]}><MetricsPage /></RequireRole>} />
         <Route path="/logs" element={<RequireRole identity={identity} roles={["platform.admin"]}><LogsPage /></RequireRole>} />
         <Route path="/identity/users" element={<RequireRole identity={identity} roles={["platform.admin"]}><UsersPage /></RequireRole>} />
         <Route path="*" element={<NotFoundPage />} />

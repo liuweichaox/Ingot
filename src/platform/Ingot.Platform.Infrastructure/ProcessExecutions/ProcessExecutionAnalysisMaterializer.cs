@@ -4,7 +4,9 @@ using System.Text;
 using System.Text.Json;
 using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Domain.Events;
 using Ingot.Platform.Application.ProcessExecutions;
+using Ingot.Platform.Application.TimeSeries;
 using Ingot.Platform.Infrastructure.TimeSeries;
 
 namespace Ingot.Platform.Infrastructure.ProcessExecutions;
@@ -255,4 +257,143 @@ public sealed class ProcessExecutionAnalysisMaterializer(
 
 public sealed record MaterializedProcessExecutionAnalysis(
     WholeProcessExecutionAnalysisResult Analysis,
-    ProcessExecutionAnalysisMaterialization Materialization);
+    ProcessExecutionAnalysisMaterialization Materialization)
+{
+    public IReadOnlyList<ProcessSampleConfigurationEvidence> SampleConfigurationEvidence { get; init; } = [];
+}
+
+// Groups persisted frame evidence without inferring missing values or expected sampling coverage.
+internal static class ProcessSampleConfigurationEvidenceProjector
+{
+    private const int MaximumDetailedConfigurationGroups = 20;
+
+    // QueryAllAsync returns unique frames; keep twenty groups detailed and merge all later groups exactly.
+    public static IReadOnlyList<ProcessSampleConfigurationEvidence> Project(
+        IReadOnlyList<ProcessSampleFrame> frames)
+    {
+        ArgumentNullException.ThrowIfNull(frames);
+        var detailedGroups = new List<ConfigurationEvidenceAccumulator>(MaximumDetailedConfigurationGroups);
+        var summarizedConfigurationGroups = new HashSet<(AppliedConfigurationRef? Configuration, string? EdgeId)>();
+        ConfigurationEvidenceAccumulator? summarized = null;
+        foreach (var frame in frames)
+        {
+            ConfigurationEvidenceAccumulator? detailed = null;
+            for (var index = 0; index < detailedGroups.Count; index++)
+            {
+                if (detailedGroups[index].AppliedConfiguration == frame.AppliedConfiguration &&
+                    string.Equals(detailedGroups[index].SourceEdgeId, frame.EdgeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    detailed = detailedGroups[index];
+                    break;
+                }
+            }
+
+            if (detailed is not null)
+            {
+                detailed.Add(frame);
+                continue;
+            }
+
+            if (detailedGroups.Count < MaximumDetailedConfigurationGroups)
+            {
+                detailed = new ConfigurationEvidenceAccumulator(frame.AppliedConfiguration, frame.EdgeId);
+                detailedGroups.Add(detailed);
+                detailed.Add(frame);
+                continue;
+            }
+
+            summarized ??= new ConfigurationEvidenceAccumulator(null, null);
+            if (summarizedConfigurationGroups.Add((frame.AppliedConfiguration, frame.EdgeId)))
+                summarized.SummarizedConfigurationGroupCount++;
+            summarized.Add(frame);
+        }
+
+        var evidence = detailedGroups.Select(static group => group.ToEvidence()).ToList();
+        if (summarized is not null)
+            evidence.Add(summarized.ToEvidence());
+        return evidence;
+    }
+
+    private sealed class ConfigurationEvidenceAccumulator(
+        AppliedConfigurationRef? appliedConfiguration,
+        string? sourceEdgeId)
+    {
+        public AppliedConfigurationRef? AppliedConfiguration { get; } = appliedConfiguration;
+
+        public string? SourceEdgeId { get; } = sourceEdgeId;
+
+        public int SampleFrameCount { get; private set; }
+
+        public DateTimeOffset? FirstOccurredAt { get; private set; }
+
+        public DateTimeOffset? LastOccurredAt { get; private set; }
+
+        public int ObservedValueCount { get; private set; }
+
+        public int GoodValueCount { get; private set; }
+
+        public int UncertainValueCount { get; private set; }
+
+        public int BadValueCount { get; private set; }
+
+        public int UnclassifiedQualityValueCount { get; private set; }
+
+        private HashSet<string> ObservedDataItemCodes { get; } = new(StringComparer.Ordinal);
+
+        public int SummarizedConfigurationGroupCount { get; set; }
+
+        public void Add(ProcessSampleFrame frame)
+        {
+            SampleFrameCount++;
+            foreach (var code in frame.NumericValues.Keys.Concat(frame.QualityCodes.Keys))
+            {
+                if (!string.IsNullOrWhiteSpace(code))
+                    ObservedDataItemCodes.Add(code);
+            }
+            FirstOccurredAt = !FirstOccurredAt.HasValue || frame.OccurredAt < FirstOccurredAt.Value
+                ? frame.OccurredAt
+                : FirstOccurredAt;
+            LastOccurredAt = !LastOccurredAt.HasValue || frame.OccurredAt > LastOccurredAt.Value
+                ? frame.OccurredAt
+                : LastOccurredAt;
+            foreach (var qualityCode in frame.QualityCodes.Values)
+            {
+                ObservedValueCount++;
+                switch (qualityCode)
+                {
+                    case SignalQualityCodes.Good:
+                        GoodValueCount++;
+                        break;
+                    case SignalQualityCodes.Uncertain:
+                        UncertainValueCount++;
+                        break;
+                    case SignalQualityCodes.Bad:
+                        BadValueCount++;
+                        break;
+                    default:
+                        UnclassifiedQualityValueCount++;
+                        break;
+                }
+            }
+        }
+
+        public ProcessSampleConfigurationEvidence ToEvidence()
+            => new()
+            {
+                AppliedConfigurationKind = AppliedConfiguration?.Kind,
+                AppliedConfigurationId = AppliedConfiguration?.Id,
+                AppliedConfigurationVersion = AppliedConfiguration?.Version,
+                SourceEdgeId = SourceEdgeId,
+                SampleFrameCount = SampleFrameCount,
+                FirstOccurredAt = FirstOccurredAt,
+                LastOccurredAt = LastOccurredAt,
+                ObservedValueCount = ObservedValueCount,
+                GoodValueCount = GoodValueCount,
+                UncertainValueCount = UncertainValueCount,
+                BadValueCount = BadValueCount,
+                UnclassifiedQualityValueCount = UnclassifiedQualityValueCount,
+                ObservedDataItemCodes = ObservedDataItemCodes.Order(StringComparer.Ordinal).ToArray(),
+                SummarizedConfigurationGroupCount = SummarizedConfigurationGroupCount
+            };
+    }
+}

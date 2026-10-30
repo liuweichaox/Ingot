@@ -112,8 +112,7 @@ public sealed class MqttAcquisitionRunner(
                         currentProcessSpecification,
                         topicSnapshots);
 
-                    var events = lifecycle.Track(mapped, deployment.Task.Lifecycle, 0);
-                    await sink.EmitBatchAsync(events, ct).ConfigureAwait(false);
+                    var events = await lifecycle.TrackAndEmitAsync(mapped, deployment.Task.Lifecycle, 0, sink, ct).ConfigureAwait(false);
                     status.RecordProcessExecutionState(configurationKey, lifecycle.IsRunActive);
                     status.RecordEmissionOutcome(
                         configurationKey,

@@ -79,21 +79,23 @@ describe("采集拓扑画布编辑", () => {
       <Routes><Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage />} /></Routes>
     </MemoryRouter>);
 
+    fireEvent.click(await screen.findByRole("tab", { name: "连接" }));
     const probeButton = await screen.findByRole("button", { name: "验证连接" });
     expect(probeButton).toBeEnabled();
     fireEvent.click(probeButton);
     expect(screen.getByRole("button", { name: "读取中…" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("画布 服务地址"), { target: { value: "http://changed.local" } });
+    fireEvent.change(screen.getByLabelText(/服务地址/), { target: { value: "http://changed.local" } });
     await act(async () => resolveProbe(response({ success: true, mappingsValidated: true, message: "旧结果不能用于发布", points: [] })));
     await waitFor(() => expect(screen.getByRole("button", { name: "验证连接" })).toBeEnabled());
     expect(screen.queryByText("旧结果不能用于发布")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发布到现场节点" })).toBeDisabled();
   });
 
-  it("新建设备支持单任务和通用多设备画布", async () => {
+  it("新建设备可从关系画布扩展为多任务工作区", async () => {
     const response = data => new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
     vi.stubGlobal("fetch", vi.fn(url => {
       const path = String(url);
+      if (path.includes("/api/v1/auth/me")) return Promise.resolve(response({ siteIds: ["SITE-001"] }));
       if (path.includes("/api/edges")) return Promise.resolve(response({ data: [{ edgeId: "edge-1" }] }));
       if (path.includes("/process-data-models")) return Promise.resolve(response({ data: [] }));
       if (path.includes("/acquisition-protocols")) return Promise.resolve(response({ protocols: [] }));
@@ -102,11 +104,10 @@ describe("采集拓扑画布编辑", () => {
     render(<MemoryRouter initialEntries={["/configuration/ingestion-tasks/new"]}>
       <Routes><Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage />} /></Routes>
     </MemoryRouter>);
-    const setupOptions = within(screen.getByRole("group", { name: "采集配置方式" }));
-    expect(setupOptions.getByRole("button", { name: "单数据源任务" })).toBeInTheDocument();
-    expect(setupOptions.getAllByRole("button")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "多设备画布" }));
-    expect(await screen.findByRole("region", { name: "多设备采集拓扑画布" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "添加采集设备" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "采集任务节点工作区" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /添加采集任务/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /添加采集任务/ }));
+    expect(await screen.findByText("2 个采集任务")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "逐任务保存 2 个草稿" })).toBeInTheDocument();
   });
 });

@@ -10,11 +10,16 @@ Configuration and integration prepares process semantics and automated acquisiti
 
 ## First use
 
-1. Read [Current status](status.en.md) to understand capabilities, required data, and usage boundaries.
-2. Follow [Getting started](getting-started.en.md) to start the stack, check service health, and sign in.
-3. Follow the [Recipe-optimization pilot guide](pilot.en.md) to verify a published recipe, real runs, and reviewed quality results, then complete a recommendation, engineer decision, actual run, and outcome frozen from that run.
+Choose an entry by objective; you do not need to read every page first:
 
-You can start the system without a field connector. When a reliable field source exists, prefer automated acquisition, semantic mapping, buffering, and replay. The current recommendation flow still requires admitted real-run evidence; a successful installation does not establish data readiness.
+| Objective | Path | Completion signal |
+|---|---|---|
+| Start locally and open the workbench | [Getting started](getting-started.en.md) | Migration succeeds, core services are healthy, and sign-in works; no external-system account or equipment connection is required |
+| Inspect the acquisition path | [Getting started](getting-started.en.md) → [Semiconductor acquisition demo](semiconductor-demo.en.md) | Simulated run data appears in the workbench; all values are synthetic demo data, not real equipment or process results |
+| Evaluate the real-run evidence workflow | [Current status](status.en.md) → [Recipe-optimization pilot guide](pilot.en.md) | Check admission using authorized real runs and reviewed quality outcomes, then record a recommendation and its later outcome |
+| Contribute code or documentation | [Contributing](../CONTRIBUTING.en.md) | Prepare tools for the change area and complete its checks; the full pre-submission gate is in the guide |
+
+Read [Current status](status.en.md) before or after startup to understand implemented capability and data boundaries. You can start the system without a field connector. A healthy deployment does not establish admitted production evidence or show that the system can produce a recommendation.
 
 ## Read by task
 
@@ -22,7 +27,7 @@ You can start the system without a field connector. When a reliable field source
 |---|---|
 | Process and R&D engineers | [Pilot guide](pilot.en.md) → [Analysis and optimization](optimization.en.md) → [Glossary](glossary.en.md) |
 | Integration engineers | [Data integration](data-connection.en.md) → [System design](design.en.md) |
-| Operators | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) → [Troubleshooting](troubleshooting.en.md) |
+| Deployment and operations staff | [Production architecture](production-architecture.en.md) → [Deployment](deployment.en.md) → [Troubleshooting](troubleshooting.en.md) |
 | Contributors | [Contributing](../CONTRIBUTING.en.md) → [System design](design.en.md), [Data model](data-model.en.md) → [Documentation guide](documentation-guide.en.md) |
 
 ## Documentation catalog

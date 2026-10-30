@@ -621,9 +621,34 @@ public sealed class ResearchAssetWorkflowTests
         public Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(int limit, string? cursor, CancellationToken ct = default) => Task.FromResult(new ResearchAssetPage<DatasetQualityValidationReport> { Data = _datasetQualityReports.Take(limit).ToArray() });
         public Task<KnowledgeSource> AddKnowledgeSourceAsync(Stream content, string title, string sourceKind, string fileName, string mediaType, string siteCode, IReadOnlyDictionary<string, string> contextSelector, string userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeSource?> GetKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult(_knowledgeSources.GetValueOrDefault(sourceId));
+        public Task<KnowledgeSource?> FindKnowledgeSourceByHashAsync(string siteCode, string sha256, CancellationToken ct = default) => Task.FromResult(_knowledgeSources.Values.FirstOrDefault(value => string.Equals(value.SiteCode, siteCode, StringComparison.OrdinalIgnoreCase) && string.Equals(value.Sha256, sha256, StringComparison.OrdinalIgnoreCase)));
         public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.ToArray());
         public Task<IReadOnlyList<KnowledgeSource>> ListKnowledgeSourcesAsync(string siteCode, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<KnowledgeSource>>(_knowledgeSources.Values.Where(value => string.Equals(value.SiteCode, siteCode, StringComparison.OrdinalIgnoreCase)).ToArray());
         public async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesPageAsync(string siteCode, int limit, string? cursor, CancellationToken ct = default) => new() { Data = (await ListKnowledgeSourcesAsync(siteCode, ct)).Take(limit).ToArray() };
+        public async Task<ResearchAssetPage<KnowledgeSource>> ListReviewedKnowledgeSourcesPageAsync(string siteCode, string? processSpecificationId, int limit, string? cursor, CancellationToken ct = default)
+        {
+            var sources = await ListKnowledgeSourcesAsync(siteCode, ct);
+            var filtered = sources.Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
+                .Where(source =>
+                {
+                    var scoped = source.ContextSelector.Where(pair => string.Equals(pair.Key.Trim(), MechanismKnowledgeService.ProcessSpecificationDimension, StringComparison.OrdinalIgnoreCase)).Select(static pair => pair.Value).ToArray();
+                    if (scoped.Length == 0) return true;
+                    return scoped.Length == 1 && !string.IsNullOrWhiteSpace(processSpecificationId) && string.Equals(scoped[0].Trim(), processSpecificationId.Trim(), StringComparison.OrdinalIgnoreCase);
+                })
+                .OrderByDescending(static source => source.ReviewedAt)
+                .ThenByDescending(static source => source.SourceId)
+                .Take(limit)
+                .ToArray();
+            return new ResearchAssetPage<KnowledgeSource> { Data = filtered };
+        }
+        public async Task<ResearchAssetPage<KnowledgeSource>> ListKnowledgeSourcesForManagementPageAsync(string siteCode, int limit, string? cursor, CancellationToken ct = default)
+        {
+            var sources = await ListKnowledgeSourcesAsync(siteCode, ct);
+            return new ResearchAssetPage<KnowledgeSource>
+            {
+                Data = sources.OrderByDescending(static source => source.UploadedAt).ThenByDescending(static source => source.SourceId).Take(limit).ToArray()
+            };
+        }
         public Task<Stream?> OpenKnowledgeSourceAsync(Guid sourceId, CancellationToken ct = default) => Task.FromResult<Stream?>(null);
         public Task<KnowledgeSource> SaveKnowledgeSourceMetadataAsync(KnowledgeSource value, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<KnowledgeRecord> SaveKnowledgeRecordAsync(KnowledgeRecord value, CancellationToken ct = default) => throw new NotSupportedException();

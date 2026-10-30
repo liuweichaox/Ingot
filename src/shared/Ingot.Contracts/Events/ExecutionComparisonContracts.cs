@@ -307,6 +307,8 @@ public sealed record ExecutionComparisonRow
 
     public ProcessDataQualitySummary ProcessDataQuality { get; init; } = new();
 
+    public IReadOnlyList<ProcessSampleConfigurationEvidence> SampleConfigurationEvidence { get; init; } = [];
+
     public double EvidenceWeight { get; init; }
 
     public int PhaseCount { get; init; }
@@ -322,6 +324,58 @@ public sealed record ExecutionComparisonRow
     public ProcessExecutionAnalysisMaterialization AnalysisMaterialization { get; init; } = new();
 
     public IReadOnlyList<ExecutionControlParameterValue> ControlParameters { get; init; } = [];
+}
+
+// Summarizes configuration references and quality for values in returned persisted sample frames.
+public sealed record ProcessSampleConfigurationEvidence
+{
+    public string? AppliedConfigurationKind { get; init; }
+
+    public string? AppliedConfigurationId { get; init; }
+
+    public int? AppliedConfigurationVersion { get; init; }
+
+    public string? SourceEdgeId { get; init; }
+
+    // Reference verification confirms a site-scoped catalog record and Edge match; it does not prove deployment or causality.
+    public string ReferenceVerificationStatus { get; init; } =
+        ProcessSampleConfigurationReferenceStatuses.NotEvaluated;
+
+    public string? ConfigurationStatus { get; init; }
+
+    public int SampleFrameCount { get; init; }
+
+    public DateTimeOffset? FirstOccurredAt { get; init; }
+
+    public DateTimeOffset? LastOccurredAt { get; init; }
+
+    public int ObservedValueCount { get; init; }
+
+    public int GoodValueCount { get; init; }
+
+    public int UncertainValueCount { get; init; }
+
+    public int BadValueCount { get; init; }
+
+    public int UnclassifiedQualityValueCount { get; init; }
+
+    public IReadOnlyList<string> ObservedDataItemCodes { get; init; } = [];
+
+    public int SummarizedConfigurationGroupCount { get; init; }
+}
+
+public static class ProcessSampleConfigurationReferenceStatuses
+{
+    // No site-scoped verifier has evaluated this evidence in the current response.
+    public const string NotEvaluated = "not-evaluated";
+    // The exact version record exists in the authorized site and belongs to the reported source Edge.
+    public const string Matched = "matched";
+    // No exact version record exists in the authorized site; this makes no claim about records outside that site.
+    public const string VersionNotFound = "version-not-found";
+    // An exact version record exists on a different Edge that is also authorized for the queried site.
+    public const string EdgeMismatch = "edge-mismatch";
+    // The reference is legacy, summarized, unsupported, outside the Edge scope, or over the batch lookup limit.
+    public const string Unverifiable = "unverifiable";
 }
 
 public sealed record ExecutionControlParameterValue

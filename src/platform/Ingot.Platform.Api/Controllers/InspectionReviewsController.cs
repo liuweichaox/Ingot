@@ -79,18 +79,8 @@ public sealed class InspectionReviewsController(
             return InvalidRequest("必须指定当前身份有权访问的 siteId。");
         if (limit is < 1 or > 500)
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
-        var result = await queries.QueryReviewsAsync(inspectionRecordId, executionId, limit, ct).ConfigureAwait(false);
-        if (authorizedSiteId is not null)
-        {
-            var records = await Task.WhenAll(result.Select(review =>
-                queries.GetRecordAsync(review.InspectionRecordId, ct))).ConfigureAwait(false);
-            var allowedRecordIds = records
-                .Where(record => record is not null && string.Equals(
-                    record.SiteId, authorizedSiteId, StringComparison.OrdinalIgnoreCase))
-                .Select(record => record!.RecordId)
-                .ToHashSet();
-            result = result.Where(review => allowedRecordIds.Contains(review.InspectionRecordId)).ToArray();
-        }
+        var result = await queries.QueryReviewsAsync(
+            inspectionRecordId, executionId, limit, authorizedSiteId, ct).ConfigureAwait(false);
         return Ok(new { data = result, count = result.Count });
     }
 

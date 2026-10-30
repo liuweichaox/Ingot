@@ -1,4 +1,4 @@
-// 接收 Edge 事件并提供经身份和站点授权的有界事件查询。
+// 接收 Edge 事件；原始事件查询仅供管理员审计，摘要按授权站点开放给业务读取角色。
 using Ingot.Contracts.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Errors;
@@ -67,6 +67,7 @@ public sealed class EventsController(
     }
 
     [HttpGet]
+    [Authorize(Roles = PlatformRoles.PlatformAdministrator)]
     public async Task<IActionResult> Query(
         [FromQuery] string? siteId,
         [FromQuery] string? edgeId,
@@ -120,7 +121,52 @@ public sealed class EventsController(
         });
     }
 
+    [HttpGet("summary")]
+    public async Task<IActionResult> QuerySummary(
+        [FromQuery] string? siteId,
+        [FromQuery] string? executionId,
+        [FromQuery] int limit = 50,
+        CancellationToken ct = default)
+    {
+        var siteAccess = ResolveSiteAccess(siteId);
+        if (siteAccess.Denied is not null)
+            return siteAccess.Denied;
+        if (limit is < 1 or > 100)
+            return InvalidRequest("Limit 必须在 1 到 100 之间。");
+
+        var query = new PlatformEventQuery
+        {
+            SiteId = siteAccess.SiteId,
+            ExecutionId = Normalize(executionId),
+            Limit = limit
+        };
+        if (!TryValidateQuery(query, out var error))
+            return InvalidRequest(error);
+
+        var eventsTask = store.QueryAsync(query, ct);
+        var statsTask = store.GetScopeStatsAsync(query, ct);
+        await Task.WhenAll(eventsTask, statsTask).ConfigureAwait(false);
+        var events = await eventsTask.ConfigureAwait(false);
+        var stats = await statsTask.ConfigureAwait(false);
+        return Ok(new PlatformEventSummaryResponse
+        {
+            Data = events.Select(static item => new PlatformEventSummaryItem
+            {
+                IngestId = item.IngestId,
+                Event = new ProductionEventSummary
+                {
+                    EventType = item.Event.EventType,
+                    OccurredAt = item.Event.OccurredAt,
+                    Subject = new EventSummarySubject { Id = item.Event.Subject.Id },
+                    ExecutionId = item.Event.ExecutionId
+                }
+            }).ToArray(),
+            Total = stats.Count
+        });
+    }
+
     [HttpGet("stream")]
+    [Authorize(Roles = PlatformRoles.PlatformAdministrator)]
     public async Task Stream(
         [FromQuery] string? siteId,
         [FromQuery] string? edgeId,
@@ -220,24 +266,27 @@ public sealed class EventsController(
 
 
     private (string? SiteId, IActionResult? Denied) ResolveSiteAccess(
-        string? requestedSiteId,
-        bool requireExplicitForAdministrator = false)
+        string? requestedSiteId)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
             return (null, AuthenticationRequired("需要平台统一认证。"));
+        if (!identity.HasAnyRole(PlatformRoles.QualityRead))
+            return (null, AuthorizationDenied());
 
-        var normalized = requestedSiteId?.Trim();
-        if (!string.IsNullOrWhiteSpace(normalized))
-            return identity.CanAccessSite(normalized)
-                ? (normalized, null)
-                : (null, AuthorizationDenied("当前身份无权访问该站点。", ("siteId", normalized)));
-
-        if (identity.Roles.Contains(PlatformRoles.PlatformAdministrator) && !requireExplicitForAdministrator)
-            return (null, null);
-        if (identity.SiteIds.Count == 1)
-            return (identity.SiteIds.Single(), null);
-        return (null, InvalidRequest("必须指定当前身份有权访问的 siteId。"));
+        var failure = PlatformSiteScope.Resolve(
+            identity,
+            requestedSiteId,
+            allowAllForAdministrator: true,
+            out var authorizedSiteId);
+        return failure switch
+        {
+            SiteScopeFailure.Forbidden =>
+                (null, AuthorizationDenied("当前身份无权访问该站点。", ("siteId", requestedSiteId?.Trim()))),
+            SiteScopeFailure.Missing =>
+                (null, InvalidRequest("必须指定当前身份有权访问的 siteId。")),
+            _ => (authorizedSiteId, null)
+        };
     }
 
 
@@ -298,4 +347,7 @@ public sealed class EventsController(
         }
         return EventQueryContractValidator.TryValidate(query, query.AfterIngestId, out error);
     }
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

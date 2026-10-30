@@ -17,6 +17,7 @@ const components = await readFile(new URL("../src/ui/components.jsx", import.met
 const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
 const acquisitionRegistry = await readFile(new URL("../src/acquisition/protocolRegistry.js", import.meta.url), "utf8");
+const acquisitionCanvasStyles = await readFile(new URL("../src/acquisition/IngestionTaskCanvas.css", import.meta.url), "utf8");
 const acquisitionPage = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
 const acquisitionForm = await readFile(new URL("../src/acquisition/ingestionTaskForm.js", import.meta.url), "utf8");
 const acquisitionPanels = {
@@ -96,17 +97,19 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /id: "investigation", label: "AI 助手", icon: ChatBubbleLeftRightIcon, path: "\/chat", utility: true/);
   assert.doesNotMatch(app, /"追因总览"|"对象目录"|"运行事件"/);
   assert.match(app, /id: "system"[\s\S]*\["\/events", "原始事件"\]/);
-  assert.match(app, /path="\/analysis" element=\{<Navigate to="\/process-executions\?attention=1" replace \/>\}/);
-  assert.match(app, /path="\/explorer" element=\{<Navigate to="\/process-executions" replace \/>\}/);
+  assert.match(app, /path="\/analysis" element=\{<LegacyAnalysisRedirect \/>\}/);
+  assert.match(app, /function LegacyAnalysisRedirect\(\)[\s\S]*const query = new URLSearchParams\(\{ attention: "1" \}\)[\s\S]*const siteId = params\.get\("siteId"\)[\s\S]*query\.set\("siteId", siteId\)[\s\S]*<Navigate to=\{`\/process-executions\?\$\{query\.toString\(\)\}`\} replace \/>/);
+  assert.match(app, /path="\/explorer" element=\{<LegacyExplorerRedirect \/>\}/);
+  assert.match(app, /function LegacyExplorerRedirect\(\)[\s\S]*legacyRedirectTarget\("\/process-executions", params\)/);
   assert.match(app, /const systemSection = \{/);
   assert.match(app, /sectionsForIdentity/);
   assert.match(app, /roles\.includes\("platform\.admin"\)/);
-  assert.match(app, /id: "configuration", label: "配置与接入", icon: SignalIcon, path: "\/configuration\/process-data-models", groups: \[\s*\{ items: \[\["\/configuration\/process-data-models", "工艺变量"\]/);
+  assert.match(app, /id: "configuration", label: "配置与接入", icon: SignalIcon, path: "\/configuration\/process-data-models", groups: \[\s*\{ heading: "工艺与质量", items: \[\["\/configuration\/process-data-models", "工艺变量"\]/);
   assert.doesNotMatch(app, /配置总览|ConfigurationHubPage/);
   assert.match(app, /path="\/configuration" element=\{<Navigate to="\/configuration\/process-data-models" replace \/>\}/);
   assert.match(app, /id: "system"[\s\S]*\["\/identity\/users", "用户权限"\][\s\S]*\["\/model-service", "模型服务"\]/);
   assert.match(app, /\["\/chat", "AI 助手"\]/);
-  assert.match(app, /\["\/process-executions", "生产运行"\], \["\/production\/changeover", "生产切换"\], \["\/production\/tooling-installations", "工装装卸"\]/);
+  assert.match(app, /\["\/process-executions", "运行记录"\], \["\/production\/changeover", "生产切换"\], \["\/production\/tooling-installations", "工装装卸"\]/);
   assert.match(app, /\["\/comparisons", "工艺分析"\]/);
   assert.match(app, /\["\/configuration\/process-specifications", "配方版本"\], \["\/recipe-adjustments", "调整与验证"\]/);
   assert.match(app, /\["\/knowledge\/process-materials", "工艺资料"\], \["\/knowledge\/mechanism", "机理知识"\]/);
@@ -123,7 +126,8 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /function SidebarSection/);
   assert.match(app, /function SidebarGroup/);
   assert.match(app, /role=\{group\.heading \? "group" : undefined\}/);
-  assert.match(app, /aria-label=\{group\.heading \|\| undefined\}/);
+  assert.match(app, /aria-labelledby=\{group\.heading \? headingId : undefined\}/);
+  assert.match(app, /group\.heading && <h3 id=\{headingId\}/);
   assert.doesNotMatch(app, /border-t border-white\/8|border-l border-white\/10/);
   assert.doesNotMatch(app, /group\.heading && <p/);
   assert.match(app, /section\.groups\.map/);
@@ -195,7 +199,7 @@ test("feature search opens a command palette and table columns keep stable uniqu
   assert.match(app, /\["\/platform-metrics", "系统状态"\]/);
   assert.match(app, /\["\/logs", "平台日志"\]/);
   assert.match(app, /"\/production\/changeover": "生产切换 换产 产品切换 配方切换"/);
-  assert.match(app, /"\/inspections": "质量任务 质检 检测任务"/);
+  assert.match(app, /"\/inspections": "质量检验 质量任务 质检 检测任务"/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
 });
 
@@ -203,7 +207,7 @@ test("run records carry the needs-attention filter that replaced the diagnosis o
   assert.match(pages, /export function processExecutionNeedsAttention/);
   assert.match(pages, /<option value="attention">需要处理<\/option>/);
   assert.match(pages, /params\.get\("attention"\) === "1"/);
-  assert.match(pages, /to="\/process-executions\?attention=1"/);
+  assert.match(pages, /to=\{`\/process-executions\?attention=1/);
   assert.doesNotMatch(pages, /to="\/analysis"/);
 });
 
@@ -290,10 +294,11 @@ test("device acquisition has its own page instead of a generic registry drawer",
   assert.match(app, /path="\/configuration\/ingestion-tasks\/:taskId"/);
   assert.match(acquisitionPage, /export function IngestionTaskPage/);
   assert.match(acquisitionPage, /export function IngestionTasksPage/);
-  // Keep the configuration column wide until the viewport can support both panes.
-  assert.match(acquisitionPage, /2xl:grid-cols-\[minmax\(0,1\.55fr\)_minmax\(22rem,1fr\)\]/);
-  assert.match(acquisitionPage, /2xl:row-span-2/);
-  assert.match(acquisitionPage, /2xl:col-start-1/);
+  // Keep the canvas and inspector usable at desktop widths, then stack them on smaller screens.
+  assert.match(acquisitionPage, /className="ingestion-task-editor-page"/);
+  assert.match(acquisitionPage, /id="acq-workbench"/);
+  assert.match(acquisitionCanvasStyles, /grid-template-columns: minmax\(180px, 210px\) minmax\(0, 1fr\) minmax\(320px, 360px\)/);
+  assert.match(acquisitionCanvasStyles, /@media \(max-width: 1199px\)[\s\S]*\.ingestion-task-editor-page \.acq-workbench__layout \{ height: auto; min-height: 560px; \}/);
   assert.match(acquisitionPage, /<DevicePointsPanel/);
 });
 

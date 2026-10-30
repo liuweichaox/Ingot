@@ -1,7 +1,17 @@
 // Share presentation helpers and labels across product pages.
+import { Field, Select } from "../ui/components";
+import { toFiniteNumber } from "../utils/numbers.js";
 export { LoadingCard } from "../ui/components";
 export { toFiniteNumber } from "../utils/numbers.js";
-import { toFiniteNumber } from "../utils/numbers.js";
+
+export function SiteScopeField({ siteId, siteChoices, onChange, loading = false, label = "现场范围", emptyLabel = "选择站点" }) {
+  return <Field label={label}>
+    <Select value={siteId} onChange={event => onChange(event.target.value)} disabled={loading || siteChoices.length === 0}>
+      <option value="">{loading ? "正在读取可访问站点…" : emptyLabel}</option>
+      {siteChoices.map(value => <option key={value} value={value}>{value}</option>)}
+    </Select>
+  </Field>;
+}
 
 export const formatTime = value => value ? new Date(value).toLocaleString("zh-CN") : "—";
 export const formatInteger = value => Number.isFinite(Number(value)) ? Number(value).toLocaleString("zh-CN") : "—";
@@ -37,13 +47,25 @@ export const formatDuration = value => {
   const hours = totalHours % 24;
   return hours ? `${days} 天 ${hours} 小时` : `${days} 天`;
 };
-export const edgeStatus = edge => {
+export const edgeConnectionStatus = edge => {
   if (!edge?.lastSeen) return "unknown";
-  if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state) || edge.delivery?.state === "degraded") return "degraded";
-  return Date.now() - new Date(edge.lastSeen).getTime() <= 30000 ? "online" : "offline";
+  if (Object.prototype.hasOwnProperty.call(edge, "heartbeatFresh")) {
+    return edge.heartbeatFresh === true ? "online" : edge.heartbeatFresh === false ? "offline" : "unknown";
+  }
+  const lastSeenAt = new Date(edge.lastSeen).getTime();
+  const ageMs = Date.now() - lastSeenAt;
+  if (!Number.isFinite(lastSeenAt) || ageMs < 0) return "unknown";
+  return ageMs <= 30000 ? "online" : "offline";
 };
 
-export const countOnlineEdges = rows => rows.filter(row => edgeStatus(row) === "online").length;
+export const edgeStatus = edge => {
+  const connection = edgeConnectionStatus(edge);
+  if (connection !== "online") return connection;
+  if (edge.lastError || ["degraded", "failed"].includes(edge.acquisition?.state) || ["degraded", "blocked"].includes(edge.delivery?.state)) return "degraded";
+  return "online";
+};
+
+export const countOnlineEdges = rows => rows.filter(row => edgeConnectionStatus(row) === "online").length;
 
 const inspectionInputTypeLabels = {
   numeric: "数值",

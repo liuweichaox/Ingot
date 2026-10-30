@@ -217,7 +217,9 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             ON CONFLICT (claim_id) DO UPDATE SET
               current_version = EXCLUDED.current_version,
               status = EXCLUDED.status,
-              updated_at = EXCLUDED.updated_at;
+              updated_at = EXCLUDED.updated_at
+            WHERE mechanism_claims.current_version = EXCLUDED.current_version - 1
+              AND mechanism_claims.status = 'draft';
             """, connection, transaction))
         {
             claim.Parameters.AddWithValue("claim_id", value.ClaimId);
@@ -226,7 +228,11 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             claim.Parameters.AddWithValue("status", value.Status);
             claim.Parameters.AddWithValue("created_at", value.CreatedAt);
             claim.Parameters.AddWithValue("updated_at", value.UpdatedAt);
-            await claim.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (await claim.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+            {
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException("机理声明已进入审核流程或版本已变化，不能保存草稿。");
+            }
         }
         await using (var version = new NpgsqlCommand(
             """
@@ -272,16 +278,37 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         CancellationToken ct = default)
     {
         if (!Guid.TryParse(evidence.ReferenceId, out var referenceId)) return false;
-        var sql = evidence.EvidenceKind switch
+        var sql = evidence.EvidenceKind.Trim().ToLowerInvariant() switch
         {
             "knowledge-source" =>
-                "SELECT EXISTS(SELECT 1 FROM knowledge_sources WHERE source_id=@id AND site_code=@site_code AND sha256=@hash);",
+                """
+                SELECT EXISTS(
+                  SELECT 1 FROM knowledge_sources source
+                  WHERE source.source_id=@id
+                    AND source.site_code=@site_code
+                    AND source.status='reviewed'
+                    AND lower(source.sha256)=lower(@hash)
+                    AND NOT EXISTS (
+                      SELECT 1 FROM knowledge_source_context context
+                      WHERE context.source_id=source.source_id
+                        AND lower(context.dimension_code)='process-specification'
+                        AND lower(context.dimension_value)<>lower(@process_specification_id)));
+                """,
             "knowledge-fragment" =>
                 """
                 SELECT EXISTS(
                   SELECT 1 FROM knowledge_fragments fragment
                   JOIN knowledge_sources source ON source.source_id=fragment.source_id
-                  WHERE fragment.record_id=@id AND source.site_code=@site_code AND fragment.content_hash=@hash);
+                  WHERE fragment.record_id=@id
+                    AND source.site_code=@site_code
+                    AND source.status='reviewed'
+                    AND fragment.human_reviewed
+                    AND lower(COALESCE(fragment.content_hash, ''))=lower(@hash)
+                    AND NOT EXISTS (
+                      SELECT 1 FROM knowledge_source_context context
+                      WHERE context.source_id=source.source_id
+                        AND lower(context.dimension_code)='process-specification'
+                        AND lower(context.dimension_value)<>lower(@process_specification_id)));
                 """,
             "recipe-recommendation-outcome" =>
                 """
@@ -368,7 +395,7 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
         await using (var updateClaim = new NpgsqlCommand(
             """
             UPDATE mechanism_claims SET status = @status, updated_at = @updated_at
-            WHERE claim_id = @claim_id AND current_version = @version;
+            WHERE claim_id = @claim_id AND current_version = @version AND status = 'draft';
             """, connection, transaction))
         {
             updateClaim.Parameters.AddWithValue("claim_id", review.ClaimId);
@@ -376,7 +403,10 @@ public sealed class PostgresMechanismKnowledgeStore : IMechanismKnowledgeStore
             updateClaim.Parameters.AddWithValue("status", targetStatus);
             updateClaim.Parameters.AddWithValue("updated_at", review.ReviewedAt);
             if (await updateClaim.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
+            {
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
                 throw new InvalidOperationException("机理声明版本已变化，不能应用审核结果。");
+            }
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return await ReadClaimAsync(connection, review.ClaimId, review.ClaimVersion, ct).ConfigureAwait(false)

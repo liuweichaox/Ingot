@@ -19,23 +19,20 @@ Report reproducible defects as Issues; ask usage questions in Discussions; repor
 
 ## Development environment
 
-Requirements:
+Choose the smallest environment for your change. A documentation or single-app change does not require installing the entire toolchain first.
 
-- .NET SDK 10;
-- Node.js 22.22+;
-- uv 0.12.5 (using Python 3.12);
-- Docker and Docker Compose.
+| Change area | Minimum tools | Local setup |
+|---|---|---|
+| Markdown, README | Python 3; Bash when running the public-language gate | `python3 scripts/verify-documentation-style.py` |
+| `apps/platform` | Node.js 22.22+, npm | `npm --prefix apps/platform ci` |
+| `apps/website` | Node.js 22.22+, npm | `npm --prefix apps/website ci` |
+| `apps/docs-site` | Node.js 22.22+, npm | `npm --prefix apps/docs-site ci` |
+| .NET services | .NET SDK 10 | `dotnet restore Ingot.sln` |
+| Optimizer | Python 3.12, uv 0.12.5 | `uv sync --project optimizer --extra service --group dev --locked` |
 
-Run these commands from the repository root:
+Run these commands from the repository root. When changing application code, lint the affected app; build the website, docs site, or workbench when changing it to confirm that its pages generate.
 
-```bash
-dotnet restore Ingot.sln
-npm --prefix apps/platform ci
-npm --prefix apps/website ci
-npm --prefix apps/docs-site ci
-uv sync --project optimizer --extra service --group dev --locked
-uv run --project optimizer --locked pytest
-```
+The full pre-submission gate requires .NET SDK 10, Node.js 22.22+, Python 3.12, uv 0.12.5, Docker Compose, and Bash. It verifies all three frontends, .NET, Optimizer, deployment manifests, and architecture and product boundaries. With these tools available, run `./scripts/verify.sh` from the repository root. The gate remains required even when local iteration uses only one app.
 
 ## Engineering principles
 

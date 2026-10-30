@@ -1,3 +1,4 @@
+// 定义采集运行状态契约，并承载 Platform 对心跳接收和观测时刻的补充信息。
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -42,7 +43,8 @@ public sealed record AcquisitionTaskRuntimeStatus(
     string? LastError,
     bool ProcessExecutionActive,
     long StaleSnapshotRejectionCount = 0,
-    long StaleValueRejectionCount = 0);
+    long StaleValueRejectionCount = 0,
+    int? MaximumValidSnapshotSilenceMs = null);
 
 public sealed record AcquisitionDeploymentApplicationStatus(
     string TaskId,
@@ -78,7 +80,9 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     IReadOnlyList<AcquisitionTaskRuntimeStatus> Tasks,
     IReadOnlyList<AcquisitionDeploymentApplicationStatus> Deployments,
     long StaleSnapshotRejectionCount = 0,
-    long StaleValueRejectionCount = 0);
+    long StaleValueRejectionCount = 0,
+    DateTimeOffset? PlatformReceivedAt = null,
+    DateTimeOffset? PlatformObservedAt = null);
 
 public static class AcquisitionDeploymentFingerprint
 {

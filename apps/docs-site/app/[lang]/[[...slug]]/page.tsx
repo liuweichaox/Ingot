@@ -44,6 +44,7 @@ export default async function DocPage({ params }: Props) {
   const alternate = getDoc(lang === "zh" ? "en" : "zh", slug);
 
   const group = groups.find((item) => item.slugs.includes(slug));
+  const websiteHref = lang === "en" ? "https://ingotstack.com/en/" : "https://ingotstack.com/";
 
   return (
     <div className="shell">
@@ -51,7 +52,7 @@ export default async function DocPage({ params }: Props) {
       <header>
         <a className="brand" href={routeFor(lang, "")}><Image src="/brand/ingot-lockup-dark.svg" alt="Ingot" width={142} height={36} priority /></a>
         <Search lang={lang} />
-        <nav aria-label={lang === "zh" ? "站点导航" : "Site navigation"}><a href="https://github.com/liuweichaox/Ingot">GitHub</a><a href="https://ingotstack.com">{lang === "zh" ? "官网" : "Website"}</a>{alternate && <a href={routeFor(alternate.lang, slug)}>{lang === "zh" ? "English" : "中文"}</a>}</nav>
+        <nav aria-label={lang === "zh" ? "站点导航" : "Site navigation"}><a href="https://github.com/liuweichaox/Ingot">GitHub</a><a href={websiteHref}>{lang === "zh" ? "官网" : "Website"}</a>{alternate && <a href={routeFor(alternate.lang, slug)}>{lang === "zh" ? "English" : "中文"}</a>}</nav>
         <details className="mobile-doc-nav">
           <summary>{lang === "zh" ? "目录" : "Menu"}</summary>
           <div>

@@ -3,9 +3,10 @@ import { ArrowPathIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outlin
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { postJson, putJson } from "../api/http";
-import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Page, RequestError, Select, StatusBadge, notify, useConfirmDialog } from "../ui/components";
-import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, countOnlineEdges, LoadingCard } from "./shared";
+import { formatTime, formatInteger, formatBytes, metricTotal, edgeStatus, countOnlineEdges, LoadingCard, SiteScopeField } from "./shared";
 import { formatRoleSummary, formatSiteScope, platformRoleOptions } from "../auth/identityPresentation";
 
 export function formatLiveUptime(milliseconds) {
@@ -411,8 +412,8 @@ export function ModelServiceConfigurationPage() {
 }
 
 export function MetricsPage() {
-  const edgeResponse = useApi("/api/edges", { interval: 10000 });
-  const siteId = registeredSiteIds(edgeResponse.data)[0] || "";
+  const siteScope = useSiteScope({ edgeInterval: 10000 });
+  const { edgeResponse, siteId, siteChoices } = siteScope;
   const siteQuery = siteId ? `siteId=${encodeURIComponent(siteId)}` : "";
   const siteReady = Boolean(siteId);
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
@@ -420,6 +421,7 @@ export function MetricsPage() {
   const qualityResponse = useApi(siteReady ? `/api/v1/inspection-tasks/summary?${siteQuery}` : "", { enabled: siteReady, interval: 10000 });
   const profileResponse = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
   const rows = extractRows(edgeResponse.data);
+  const siteEdgeIds = new Set(rows.filter(row => row.siteId === siteId).map(row => row.edgeId));
   const online = countOnlineEdges(rows);
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;
   const unknown = Math.max(0, rows.length - online - offline);
@@ -428,23 +430,25 @@ export function MetricsPage() {
   const startedAtSeconds = metricTotal(metrics, "process_start_time_seconds");
   const memory = metricTotal(metrics, "process_working_set_bytes");
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
-  const publishedProfiles = extractRows(profileResponse.data).filter(row => row.status === "published").length;
-  const actionRequired = qualityResponse.data?.actionRequired ?? 0;
-  const error = edgeResponse.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
-  const healthy = offline === 0 && unknown === 0 && threadQueue === 0;
+  const publishedProfiles = siteId ? extractRows(profileResponse.data).filter(row => row.status === "published" && siteEdgeIds.has(row.edgeId)).length : null;
+  const actionRequired = siteId ? qualityResponse.data?.actionRequired ?? 0 : null;
+  const error = siteScope.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
+  const healthy = rows.length > 0 && offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="系统状态">
+      <div className="mb-5 max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={siteScope.selectSite} loading={siteScope.loading} /></div>
       <RequestError
         error={error}
-        onRetry={() => Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
+        onRetry={() => siteScope.error ? siteScope.reload() : Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
       />
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后查看该站点的运行、质量任务和采集任务汇总。" : "当前账号没有可访问站点。"}</Alert>}
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
-        {healthy ? "中心服务和现场节点均在正常工作。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
+        {healthy ? "已发现的现场节点均在线，当前后台队列为空。" : rows.length === 0 ? "尚未发现现场节点，不能判断现场运行状态。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="已保存运行" value={formatInteger(executionResponse.data?.total)} hint="可追溯生产运行" />
-        <Metric label="待处理质量任务" value={formatInteger(actionRequired)} hint="录入与复核合计" />
-        <Metric label="已发布采集任务" value={formatInteger(publishedProfiles)} hint="正在向现场下发" />
+        <Metric label="已保存运行" value={siteId ? formatInteger(executionResponse.data?.total) : "—"} hint="所选站点" />
+        <Metric label="待处理质量任务" value={siteId ? formatInteger(actionRequired) : "—"} hint="所选站点的录入与复核" />
+        <Metric label="已发布采集任务" value={siteId ? formatInteger(publishedProfiles) : "—"} hint="所选站点的现场节点" />
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />
       </div>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -459,7 +463,7 @@ export function MetricsPage() {
           { key: "_status", label: "状态", render: (_value, row) => <StatusBadge value={edgeStatus(row)} /> },
           { key: "lastSeen", label: "最后心跳", render: formatTime },
           { key: "lastError", label: "最近问题", render: value => value || "无" },
-          { key: "_action", label: "操作", render: (_value, row) => <Link className="font-medium text-blue-600 hover:text-blue-700" to={`/edges/${encodeURIComponent(row.edgeId)}`}>查看诊断</Link> },
+          { key: "_action", label: "操作", render: (_value, row) => <Link className="font-medium text-blue-600 hover:text-blue-700" to={`/edges/${encodeURIComponent(row.edgeId)}${row.siteId ? `?siteId=${encodeURIComponent(row.siteId)}` : ""}`}>查看诊断</Link> },
         ]} />
       </Card>
     </Page>

@@ -99,9 +99,10 @@ describe("生产界面状态反馈", () => {
       { edgeId: "edge-01", lastSeen: new Date().toISOString() },
     ])));
 
-    render(<MemoryRouter><SystemStatusIndicator /></MemoryRouter>);
+    render(<MemoryRouter><SystemStatusIndicator identity={{ roles: ["platform.admin"] }} /></MemoryRouter>);
 
-    expect(await screen.findByRole("link", { name: "系统状态：平台正常，现场节点 1/1 在线" })).toHaveAttribute("href", "/platform-metrics");
+    expect(await screen.findByRole("link", { name: /系统状态：全部可访问站点的现场节点心跳：1\/1 在线；采样与上行状态请查看系统状态/ }))
+      .toHaveAttribute("href", "/platform-metrics");
   });
 
   it("让空状态承载诊断信息和下一步操作", () => {
@@ -121,6 +122,7 @@ describe("生产界面状态反馈", () => {
   it("在配方版本列表列出缺少的上线依赖并直达修复页面", async () => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(url => {
       const path = String(url);
+      if (path.includes("/api/v1/auth/me")) return Promise.resolve(jsonResponse({ siteIds: ["SITE-001"] }));
       if (path.includes("/process-specifications")) return Promise.resolve(jsonResponse([
         { processSpecificationId: "spec-lens-a", version: 1, name: "镜片配方", dataModelId: "model-lens", dataModelVersion: 1, status: "published", contextSelector: {} },
       ]));
@@ -137,10 +139,10 @@ describe("生产界面状态反馈", () => {
 
     const launchButton = await screen.findByRole("button", { name: "查看 spec-lens-a V1 的上线检查" }, { timeout: 3000 });
     expect(launchButton).toHaveTextContent("缺 3 项");
-    fireEvent.click(launchButton);
+    fireEvent.click(screen.getByRole("button", { name: "查看 spec-lens-a V1 的上线检查" }));
     expect(await screen.findByText("采集配置 press-01 还没有发布。")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "配置采集" })).toHaveAttribute("href", "/configuration/ingestion-tasks");
-    expect(screen.getByRole("link", { name: "配置过程分析" })).toHaveAttribute("href", "/configuration/process-analysis-plans");
+    expect(screen.getByRole("link", { name: "配置分析规则" })).toHaveAttribute("href", "/configuration/process-analysis-plans");
     expect(screen.getByRole("link", { name: "配置质量方案" })).toHaveAttribute("href", "/configuration/quality-plans");
     expect(screen.queryByRole("link", { name: "去做生产切换" })).toBeNull();
   });
@@ -219,6 +221,7 @@ describe("生产界面状态反馈", () => {
     let createdPayload;
     let createdUrl;
     vi.stubGlobal("fetch", vi.fn().mockImplementation((url, options = {}) => {
+      if (String(url).includes("/api/v1/auth/me")) return Promise.resolve(jsonResponse({ siteIds: ["SITE-001"] }));
       if (options.method === "POST") {
         createdUrl = String(url);
         createdPayload = JSON.parse(options.body);
@@ -244,7 +247,13 @@ describe("生产界面状态反馈", () => {
 
     render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole("button", { name: "创建修订草稿" }));
+    const siteScope = await screen.findByLabelText("现场范围");
+    await waitFor(() => expect(siteScope).toBeEnabled());
+    fireEvent.change(siteScope, { target: { value: "SITE-001" } });
+    await waitFor(() => expect(siteScope).toHaveValue("SITE-001"));
+    const createDraft = await screen.findByRole("button", { name: "创建修订草稿" });
+    await waitFor(() => expect(createDraft).toBeEnabled());
+    fireEvent.click(createDraft);
     expect(await screen.findByLabelText("引用运行 RUN-005", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.queryByText("RUN-004")).toBeNull();
     expect(screen.queryByText("RUN-OTHER")).toBeNull();

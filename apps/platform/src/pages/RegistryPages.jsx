@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { createRegistryBusinessForm, RegistryBusinessEditor, registryBusinessPayload, registryBusinessValidation } from "../components/RegistryBusinessEditor";
-import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { recipeLaunchChecks } from "../recipe/launchReadiness";
 import { RecipeVersionProposal } from "../recipe/RecipeVersionProposal";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, LinkButton, Page, RequestError, Select, StatusBadge, Textarea, notify, useConfirmDialog } from "../ui/components";
-import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard } from "./shared";
+import { formatTime, emptyInspectionCharacteristic, inspectionDefinitionForm, inspectionDefinitionPayload, inspectionDefinitionValidation, inspectionInputTypes, LoadingCard, SiteScopeField } from "./shared";
 
 const registryPages = {
   processModels: {
@@ -28,9 +29,9 @@ const registryPages = {
   },
   plans: {
     kind: "analysisPlan",
-    title: "过程分析", description: "规定参与比较的过程曲线，以及均值、最小值和最大值。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
+    title: "分析规则", description: "规定参与比较的过程曲线，以及均值、最小值和最大值。", endpoint: "/api/v1/process-analysis-plans", key: "planId",
     columns: [["planId", "模型"], ["version", "版本"], ["name", "名称"], ["status", "状态"], ["updatedAt", "更新时间"]],
-    createLabel: "创建过程分析",
+    createLabel: "创建分析规则",
     template: { planId: "", version: 1, name: "", description: "", status: "draft", dataModelId: "", dataModelVersion: 1, analysisScope: "production-execution", alignmentMode: "stage-relative", cohortDimension: "", comparisonKeys: ["product_family_code"], contextSelector: {}, signals: [], updatedAt: "" },
     deleteUrl: value => `/api/v1/process-analysis-plans/${encodeURIComponent(value.planId)}/${value.version}`,
   },
@@ -57,6 +58,9 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
   const { data, loading, error, reload } = useApi(definition.endpoint);
   const rows = extractRows(data);
   const isProcessSpecification = definition.kind === "processSpecificationVersion";
+  const adjustmentsFocus = isProcessSpecification && focus === "adjustments";
+  const visibleRows = adjustmentsFocus ? rows.filter(row => row.status === "published") : rows;
+  const siteScope = useSiteScope({ enabled: isProcessSpecification });
   const processModelsResponse = useApi(
     isProcessSpecification ? "/api/v1/process-data-models" : "",
     { enabled: isProcessSpecification },
@@ -77,8 +81,8 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
     qualityPlans: extractRows(qualityPlansResponse.data),
     definitions: extractRows(definitionsResponse.data),
   });
-  const edgesResponse = useApi(isProcessSpecification ? "/api/edges" : "", { enabled: isProcessSpecification });
-  const registeredSiteId = registeredSiteIds(edgesResponse.data)[0] || "";
+  const registeredSiteId = siteScope.siteId;
+  const siteQuery = registeredSiteId ? `?siteId=${encodeURIComponent(registeredSiteId)}` : "";
   const executionsResponse = useApi(
     isProcessSpecification && registeredSiteId
       ? `/api/v1/process-executions?status=completed&limit=200&siteId=${encodeURIComponent(registeredSiteId)}`
@@ -292,17 +296,17 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
           <Button variant="ghost" className="px-2" onClick={() => openMaintain(row)}>
             {!canWrite || isInspectionDefinition || (hasBusinessEditor && row.status !== "draft") ? "查看版本" : "编辑草稿"}
           </Button>
-          {isProcessSpecification && row.status === "published" && (
-            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => setProposalSource(row)}>下一轮校正</Button>
+          {isProcessSpecification && canWrite && row.status === "published" && (
+            <Button variant="ghost" className="px-2 text-trajectory-700" disabled={!registeredSiteId || siteScope.loading} onClick={() => setProposalSource(row)}>下一轮校正</Button>
           )}
           {canWrite && isProcessSpecification && row.status === "published" && (
-            <Button variant="ghost" className="px-2 text-trajectory-700" onClick={() => openNextDraft(row)}>创建修订草稿</Button>
+            <Button variant="ghost" className="px-2 text-trajectory-700" disabled={!siteScope.siteId || siteScope.loading} onClick={() => openNextDraft(row)}>创建修订草稿</Button>
           )}
           {canWrite && !isProcessSpecification && (isInspectionDefinition || row.status !== "draft") && (
             <Button variant="ghost" className="px-2" onClick={() => openNewVersion(row)}>创建修订版本</Button>
           )}
-          {canWrite && !isInspectionDefinition && row.status === "published" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
-          {canWrite && (isInspectionDefinition || row.status === "draft") && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>{isInspectionDefinition ? "删除未引用版本" : "删除草稿"}</Button>}
+          {canWrite && focus !== "adjustments" && !isInspectionDefinition && row.status === "published" && <Button variant="ghost" className="px-2 text-amber-700" onClick={() => retire(row)}>停用</Button>}
+          {canWrite && focus !== "adjustments" && (isInspectionDefinition || row.status === "draft") && <Button variant="ghost" className="px-2 text-rose-700" onClick={() => remove(row)}>{isInspectionDefinition ? "删除未引用版本" : "删除草稿"}</Button>}
         </div>
       ),
     },
@@ -316,19 +320,27 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
       title={pageTitle}
       actions={canWrite && focus !== "adjustments" ? <Button variant="primary" onClick={openCreate}>{definition.createLabel || "创建新版本"}</Button> : undefined}
     >
-      <RequestError error={error} onRetry={reload} />
+      {isProcessSpecification && <div className="mb-5 max-w-md"><SiteScopeField siteId={siteScope.siteId} siteChoices={siteScope.siteChoices} onChange={value => { setNextDraftOpen(false); setNextDraftSource(null); siteScope.selectSite(value); }} loading={siteScope.loading} /></div>}
+      {isProcessSpecification && !siteScope.siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteScope.siteChoices.length ? "请选择站点后查看该站点的运行证据。" : "当前账号没有可访问站点。"}</Alert>}
+      <RequestError error={error || (isProcessSpecification && siteScope.error)} onRetry={() => isProcessSpecification && siteScope.error ? siteScope.reload() : reload()} />
       {!open && editorError && <Alert tone="danger">{editorError}</Alert>}
-      {loading && !data ? <LoadingCard /> : (
-        <Card title={`${pageTitle}（${data?.total ?? rows.length}）`}>
-          {rows.length ? <DataTable
-            rows={rows}
+      {loading && !data ? <LoadingCard /> : !data ? (
+        <EmptyState title={`${pageTitle}暂不可用`} description="尚未成功读取配方版本；请查看上方错误信息后重试。" />
+      ) : (
+        <Card title={`${pageTitle}（${adjustmentsFocus ? visibleRows.length : data?.total ?? rows.length}）`}>
+          {visibleRows.length ? <DataTable
+            rows={visibleRows}
             keyField={definition.key}
             getRowKey={row => `${row[definition.key]}:${row.version ?? 1}`}
             columns={columns}
           /> : <EmptyState
-            title={`还没有${definition.title}`}
-            description={canWrite ? `创建第一个${definition.title}后，即可在后续配置和生产流程中引用。` : "当前岗位只有查看权限，请联系工艺工程师或平台管理员完成配置。"}
-            actions={canWrite && <Button variant="primary" onClick={openCreate}>{definition.createLabel}</Button>}
+            title={adjustmentsFocus ? "暂无可校正的已发布配方版本" : `还没有${definition.title}`}
+            description={adjustmentsFocus
+              ? canWrite ? "先在配方版本页完成发布，再回到这里进行下一轮校正。" : "当前没有可校正的已发布配方版本；如需发布，请联系工艺工程师或平台管理员。"
+              : canWrite ? `创建第一个${definition.title}后，即可在后续配置和生产流程中引用。` : "当前岗位只有查看权限，请联系工艺工程师或平台管理员完成配置。"}
+            actions={canWrite && (adjustmentsFocus
+              ? <LinkButton to={`/configuration/process-specifications${siteQuery}`}>前往配方版本</LinkButton>
+              : <Button variant="primary" onClick={openCreate}>{definition.createLabel}</Button>)}
           />}
         </Card>
       )}
@@ -392,6 +404,7 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
         {proposalSource && (
           <RecipeVersionProposal
             specification={proposalSource}
+            siteId={registeredSiteId}
             canWrite={canWrite}
             onPromote={promoteCorrection}
           />

@@ -1,10 +1,14 @@
+// Exposes structured platform metrics to administrators; the scrape endpoint has separate deployment protection.
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
 
 [ApiController]
 [Route("api/metrics-data")]
+[Authorize(Roles = PlatformRoles.PlatformAdministrator)]
 public class MetricsController : PlatformApiController
 {
     private readonly IHttpClientFactory _httpClientFactory;
@@ -72,4 +76,5 @@ public class MetricsController : PlatformApiController
             }
         });
     }
+
 }

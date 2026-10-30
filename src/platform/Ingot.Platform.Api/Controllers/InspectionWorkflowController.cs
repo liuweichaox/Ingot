@@ -41,6 +41,7 @@ public sealed class InspectionWorkflowController(
     [HttpGet]
     public async Task<IActionResult> Query(
         [FromQuery] string? status = null,
+        [FromQuery] string? executionId = null,
         [FromQuery] int limit = 100,
         [FromQuery] int offset = 0,
         CancellationToken ct = default,
@@ -60,14 +61,36 @@ public sealed class InspectionWorkflowController(
             return InvalidRequest("Limit 必须在 1 到 500 之间。");
         if (offset < 0)
             return InvalidRequest("Offset 不能小于 0。");
+        if (!string.IsNullOrWhiteSpace(executionId) && executionId.Trim().Length > 128)
+            return InvalidRequest("ExecutionId 长度不能超过 128 个字符。");
         var normalizedStatus = status?.Trim().ToLowerInvariant();
         if (normalizedStatus is not (null or "all" or "pending" or "in_progress" or "review_pending" or "completed"))
             return InvalidRequest("Status 不在支持范围内。");
         InspectionTaskPage page;
         try
         {
-            page = await workflow.QueryTaskPageAsync(
-                normalizedStatus, offset, limit, ct, authorizedSiteId).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(executionId))
+            {
+                var task = await workflow.GetTaskAsync(
+                    executionId.Trim(), ct, authorizedSiteId).ConfigureAwait(false);
+                var matchesStatus = task is not null &&
+                    (normalizedStatus is null or "all" || string.Equals(task.Status, normalizedStatus, StringComparison.Ordinal));
+                var data = new List<InspectionTask>();
+                if (matchesStatus && offset == 0 && task is not null)
+                    data.Add(task);
+                page = new InspectionTaskPage
+                {
+                    Data = data,
+                    Total = matchesStatus ? 1 : 0,
+                    Offset = offset,
+                    Limit = limit
+                };
+            }
+            else
+            {
+                page = await workflow.QueryTaskPageAsync(
+                    normalizedStatus, offset, limit, ct, authorizedSiteId).ConfigureAwait(false);
+            }
         }
         catch (InspectionQueryLimitExceededException exception)
         {

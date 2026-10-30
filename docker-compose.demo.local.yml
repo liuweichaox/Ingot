@@ -17,6 +17,9 @@ services:
       - "127.0.0.1:8003:8001"
   semiconductor-etch-simulator:
     container_name: ingot-demo-semiconductor-etch-simulator
+    ports: !override
+      - "127.0.0.1:1510:1502"
+      - "127.0.0.1:9110:9100"
 volumes:
   ingot-postgres-data:
     name: ingot-demo-postgres-data

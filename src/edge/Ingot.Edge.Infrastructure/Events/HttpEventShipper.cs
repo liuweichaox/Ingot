@@ -1,3 +1,4 @@
+// 仅在中心确认后推进本地 outbox；确定性拒绝逐条隔离，不可恢复冲突停止重试。
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -128,8 +129,16 @@ public sealed class HttpEventShipper : IEventShipper
 
                     if (IsDeterministicPayloadRejection(response.StatusCode))
                     {
-                        await IsolateRejectedEventsAsync(http, siteId, edgeId, pending, responseBody, ct)
+                        var blocked = await IsolateRejectedEventsAsync(
+                                http,
+                                siteId,
+                                edgeId,
+                                pending,
+                                responseBody,
+                                ct)
                             .ConfigureAwait(false);
+                        if (blocked)
+                            return;
                         retry = TimeSpan.FromSeconds(1);
                         continue;
                     }
@@ -188,7 +197,7 @@ public sealed class HttpEventShipper : IEventShipper
         }
     }
 
-    private async Task IsolateRejectedEventsAsync(
+    private async Task<bool> IsolateRejectedEventsAsync(
         HttpClient http,
         string siteId,
         string edgeId,
@@ -196,11 +205,25 @@ public sealed class HttpEventShipper : IEventShipper
         string batchError,
         CancellationToken ct)
     {
+        var quarantinedCount = 0;
         foreach (var evt in pending)
         {
+            var stopwatch = Stopwatch.StartNew();
             var request = new EventBatchRequest { SiteId = siteId, EdgeId = edgeId, Events = [evt] };
             using var response = await http.PostAsJsonAsync(
                 PlatformEventRoutes.BatchIngest, request, JsonOptions, ct).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                var reason = $"中心报告不可恢复的 Edge 身份或序号冲突（HTTP 409）：{detail}";
+                _deliveryStatus.RecordBlocked(reason, DateTimeOffset.UtcNow);
+                _logger.LogCritical(
+                    "单条事件重试遇到不可恢复的 Edge 身份或序号冲突，自动重试已停止。EdgeId={EdgeId}, Seq={Seq}, Detail={Detail}",
+                    edgeId,
+                    evt.Seq,
+                    detail);
+                return true;
+            }
             if (IsDeterministicPayloadRejection(response.StatusCode))
             {
                 var detail = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -208,6 +231,7 @@ public sealed class HttpEventShipper : IEventShipper
                     evt.Seq,
                     $"HTTP {(int)response.StatusCode}: {detail}",
                     ct).ConfigureAwait(false);
+                quarantinedCount++;
                 _logger.LogError(
                     "已隔离被中心确定性拒绝的事件：Seq={Seq}, EventId={EventId}, BatchError={BatchError}",
                     evt.Seq,
@@ -229,8 +253,23 @@ public sealed class HttpEventShipper : IEventShipper
             if (result.AckSeq != evt.Seq)
                 throw new InvalidDataException($"单条事件确认序号错误：Ack={result.AckSeq}, Seq={evt.Seq}");
             await _eventLog.MarkShippedAsync(evt.Seq, ct).ConfigureAwait(false);
+            stopwatch.Stop();
+            var shippedAt = DateTimeOffset.UtcNow;
+            _deliveryStatus.RecordSuccess(
+                evt.Seq,
+                1,
+                shippedAt,
+                stopwatch.Elapsed.TotalMilliseconds);
+            RecordEventsShippedMetric(edgeId, 1, stopwatch.Elapsed.TotalMilliseconds);
         }
         await RecordBacklogMetricAsync(ct).ConfigureAwait(false);
+        if (quarantinedCount > 0)
+        {
+            _deliveryStatus.RecordFailure(
+                $"中心拒绝并隔离了 {quarantinedCount} 条事件；请检查 Edge 日志和隔离记录。",
+                DateTimeOffset.UtcNow);
+        }
+        return false;
     }
 
     private static bool IsDeterministicPayloadRejection(HttpStatusCode statusCode)

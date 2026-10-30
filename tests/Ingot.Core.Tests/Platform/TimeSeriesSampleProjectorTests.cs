@@ -48,6 +48,36 @@ public sealed class TimeSeriesSampleProjectorTests
     }
 
     [Fact]
+    public void Project_preserves_only_the_explicit_applied_configuration_reference()
+    {
+        var configuration = new AppliedConfigurationRef("ingestion-task", "press-01", 3);
+        var evt = CreateEvent(new Dictionary<string, object?>
+        {
+            ["temperature"] = 618.5
+        }) with { AppliedConfiguration = configuration };
+
+        var samples = TimeSeriesSampleProjector.Project(
+            "SITE-01",
+            "EDGE-01",
+            45,
+            DateTimeOffset.Parse("2026-07-24T12:00:02Z"),
+            evt,
+            CreateAnalysis());
+        var legacySamples = TimeSeriesSampleProjector.Project(
+            "SITE-01",
+            "EDGE-01",
+            46,
+            DateTimeOffset.Parse("2026-07-24T12:00:03Z"),
+            evt with { AppliedConfiguration = null },
+            CreateAnalysis());
+
+        Assert.NotEmpty(samples);
+        Assert.All(samples, sample => Assert.Equal(configuration, sample.AppliedConfiguration));
+        Assert.NotEmpty(legacySamples);
+        Assert.All(legacySamples, static sample => Assert.Null(sample.AppliedConfiguration));
+    }
+
+    [Fact]
     public void Project_ignores_null_values_without_losing_other_measurements()
     {
         var evt = CreateEvent(new Dictionary<string, object?>

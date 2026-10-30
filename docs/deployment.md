@@ -67,6 +67,12 @@ Edge 与诊断令牌至少为 24 个字符，彼此不同，且不能包含 `cha
 
 参考 Compose 将应用和数据库端口绑定到回环地址。远程使用前配置 TLS 入口，并将 `Cors:AllowedOrigins` 配置为实际 Web origin；内置 API 值为 `http://localhost:3000`。OIDC 还需配置允许 origin 与精确回调 URI。
 
+### 采样与事件保留
+
+- `INGOT_EVENT_RETENTION_DAYS` 默认是 `0`，表示关闭 Platform Worker 的时序保留清理。设为正数后，Worker 启动后立即并每 24 小时尝试删除早于保留期限的完整分块，范围包括 `process_sample_values`、`process_sample_frames` 和 `production_events`；该设置作用于当前 Platform 数据库中的所有现场。
+- `INGOT_EVENT_KEY_RETENTION_DAYS` 默认是 `0`，表示事件去重键不自动清理。设为正数后，Worker 启动后立即并每 24 小时分批删除过期的 `event_ingest_keys`，且实际保留期至少为 30 天。应覆盖 Edge 最长补传窗口，并尽量不短于事件保留期；否则较旧事件补传时可能无法去重。
+- 启用前先确认留存要求、备份和恢复演练。当前没有按现场豁免、业务引用固定或清理影响预览；时序保留是物理删除，不能仅凭“已有备份”推断在线运行、分析或证据仍可读取。
+
 ### OIDC 身份提供方
 
 OIDC 模式使用 Authorization Code + PKCE，前端是不持有客户端密钥的公共客户端。至少配置：
@@ -194,6 +200,7 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 按实际启用的能力监控；Edge、设备与采集指标适用于已接入现场的部署：
 
 - Edge 最后心跳、配置期望/应用版本和错误；
+- Worker 采集静默评估耗时分布、每轮处理的节点/任务数、状态转移、失败次数和最近成功时间；
 - 每个设备连接状态、采样时间和积压；
 - 事件重复、乱序、最大间隙和补传延迟；
 - 运行完整、实际参数、上下文和检验关联覆盖；

@@ -1,3 +1,4 @@
+# 每周检查 .NET、前端、容器基础镜像和 GitHub Actions 依赖更新。
 version: 2
 updates:
   - package-ecosystem: nuget
@@ -31,6 +32,25 @@ updates:
     groups:
       docs-site:
         patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /apps/platform
+      - /deploy
+      - /deploy/docker
+      - /optimizer
+      - /src/edge/Ingot.Edge.ConnectorHost
+      - /src/platform/Ingot.Platform.Api
+      - /src/platform/Ingot.Platform.Migrator
+      - /src/platform/Ingot.Platform.Worker
+      - /tools/semiconductor-etch-simulator
+    schedule:
+      interval: weekly
+    groups:
+      shared-base-images:
+        patterns: ["*"]
+        group-by: dependency-name
 
   - package-ecosystem: github-actions
     directory: /

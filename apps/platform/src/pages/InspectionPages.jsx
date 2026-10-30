@@ -6,10 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { getBlob, getJson, postForm, postJson } from "../api/http";
 import { qualityOutcomeTraces } from "../charts/chartAdapters";
-import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { useIsMounted } from "../hooks/useIsMounted";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Field, Input, Metric, Pagination, Page, RequestError, Select, StatusBadge, Textarea, WorkflowGuide, notify } from "../ui/components";
-import { formatTime, LoadingCard, uuidv7 } from "./shared";
+import { formatTime, LoadingCard, SiteScopeField, uuidv7 } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
 function groupQuality(rows, keySelector) {
@@ -81,12 +82,18 @@ function InspectionAttachmentPreview({ attachment }) {
 
 export function InspectionsPage() {
   const inspectionPageSize = 50;
-  const [taskStatus, setTaskStatus] = useState("pending");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedExecutionId = (searchParams.get("executionId") || "").trim();
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices } = siteScope;
+  const [taskStatus, setTaskStatus] = useState(requestedExecutionId ? "all" : "pending");
   const [taskPage, setTaskPage] = useState(1);
   const [recordPage, setRecordPage] = useState(1);
-  const tasks = useApi(`/api/v1/inspection-tasks?status=${taskStatus}&limit=${inspectionPageSize}&offset=${(taskPage - 1) * inspectionPageSize}`);
-  const taskSummary = useApi("/api/v1/inspection-tasks/summary");
-  const records = useApi(`/api/v1/inspection-records?limit=${inspectionPageSize}&offset=${(recordPage - 1) * inspectionPageSize}`);
+  const siteQuery = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
+  const executionQuery = requestedExecutionId ? `&executionId=${encodeURIComponent(requestedExecutionId)}` : "";
+  const tasks = useApi(siteId ? `/api/v1/inspection-tasks?status=${taskStatus}&limit=${inspectionPageSize}&offset=${(taskPage - 1) * inspectionPageSize}${executionQuery}${siteQuery}` : "", { enabled: Boolean(siteId) });
+  const taskSummary = useApi(siteId && !requestedExecutionId ? `/api/v1/inspection-tasks/summary?siteId=${encodeURIComponent(siteId)}` : "", { enabled: Boolean(siteId && !requestedExecutionId) });
+  const records = useApi(siteId ? `/api/v1/inspection-records?limit=${inspectionPageSize}&offset=${(recordPage - 1) * inspectionPageSize}${executionQuery}${siteQuery}` : "", { enabled: Boolean(siteId) });
   const definitions = useApi("/api/v1/inspection-definitions");
   const [entryOpen, setEntryOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -96,8 +103,18 @@ export function InspectionsPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [form, setForm] = useState({ outputItemId: "", executionId: "", definitionKey: "", outcome: "PASS", notes: "", measurements: {}, file: null });
+  const [form, setForm] = useState({ outputItemId: "", executionId: requestedExecutionId, definitionKey: "", outcome: "PASS", notes: "", measurements: {}, file: null });
   const [review, setReview] = useState({ decision: "CONFIRMED", notes: "" });
+  useEffect(() => {
+    setTaskStatus(requestedExecutionId ? "all" : "pending");
+    setTaskPage(1);
+    setRecordPage(1);
+    setEntryOpen(false);
+    setReviewOpen(false);
+    setTaskTarget(null);
+    setReviewTarget(null);
+    setForm(current => ({ ...current, executionId: requestedExecutionId }));
+  }, [requestedExecutionId]);
   const definitionRows = extractRows(definitions.data);
   const selectedDefinition = definitionRows.find(item => `${item.code}:${item.version}` === form.definitionKey);
   const requiredCharacteristics = (selectedDefinition?.characteristics || []).filter(item => item.required);
@@ -116,12 +133,42 @@ export function InspectionsPage() {
     ? definitionRows.filter(item => taskTarget.missingDefinitionCodes?.includes(item.code))
     : definitionRows;
 
+  function changeSite(value) {
+    setEntryOpen(false);
+    setReviewOpen(false);
+    setTaskPage(1);
+    setRecordPage(1);
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      if (value) next.set("siteId", value);
+      else next.delete("siteId");
+      if (value !== siteId) next.delete("executionId");
+      return next;
+    }, { replace: true });
+    if (value !== siteId) setTaskStatus("pending");
+  }
+
+  function clearExecutionFilter() {
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      next.delete("executionId");
+      return next;
+    }, { replace: true });
+    setTaskStatus("pending");
+    setTaskPage(1);
+    setRecordPage(1);
+  }
+
   function openTask(task = null) {
+    if (!task?.siteId && !siteId) {
+      setActionError("创建检测记录前请先选择一个有权访问的站点。");
+      return;
+    }
     const firstDefinition = definitionRows.find(item => item.code === task?.missingDefinitionCodes?.[0]) || definitionRows[0];
     setTaskTarget(task);
     setForm({
       outputItemId: task?.outputItemId || "",
-      executionId: task?.executionId || "",
+      executionId: task?.executionId || requestedExecutionId,
       definitionKey: firstDefinition ? `${firstDefinition.code}:${firstDefinition.version}` : "",
       outcome: "PASS",
       notes: "",
@@ -163,7 +210,8 @@ export function InspectionsPage() {
       if (form.file) {
         const upload = new FormData();
         upload.append("file", form.file);
-        if (taskTarget?.siteId) upload.append("siteId", taskTarget.siteId);
+        const recordSiteId = taskTarget?.siteId || siteId;
+        if (recordSiteId) upload.append("siteId", recordSiteId);
         attachments.push(await postForm("/api/v1/inspection-attachments", upload));
       }
       const measurements = (selectedDefinition.characteristics || []).map(characteristic => {
@@ -186,7 +234,7 @@ export function InspectionsPage() {
       }).filter(Boolean);
       const now = new Date().toISOString();
       await postJson("/api/v1/inspection-records", {
-        siteId: taskTarget?.siteId || "",
+        siteId: taskTarget?.siteId || siteId,
         recordId: uuidv7(),
         outputItemId: form.outputItemId.trim() || null,
         executionId: form.executionId.trim(),
@@ -248,12 +296,19 @@ export function InspectionsPage() {
   }
 
   return (
-    <Page title="检验任务" actions={<Button onClick={() => openTask()}>补录检测记录</Button>}>
+    <Page title="检验任务" actions={<Button disabled={!siteId || siteScope.loading} onClick={() => openTask()}>补录检测记录</Button>}>
+      <div className="mb-5 max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={changeSite} loading={siteScope.loading} /></div>
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后查看任务或补录检测结果。" : "当前账号没有可用站点。"}</Alert>}
       <RequestError
-        error={tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)}
-        onRetry={() => Promise.all([tasks.reload(), taskSummary.reload(), records.reload(), definitions.reload()])}
+        error={siteScope.error || tasks.error || taskSummary.error || records.error || definitions.error || (!entryOpen && !reviewOpen && actionError)}
+        onRetry={() => siteScope.error ? siteScope.reload() : Promise.all([tasks.reload(), taskSummary.reload(), records.reload(), definitions.reload()])}
       />
-      <section className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0" aria-label="检验任务摘要">
+      {siteId ? <>
+      {requestedExecutionId && <Alert tone="info" title="已限定到本次运行">
+        <div className="flex flex-wrap items-center justify-between gap-2"><span>任务队列与检测记录仅显示运行 {requestedExecutionId}。</span>
+          <Button variant="ghost" onClick={clearExecutionFilter}>查看本站点全部</Button></div>
+      </Alert>}
+      {!requestedExecutionId && <section className="grid grid-cols-2 divide-x divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0" aria-label="检验任务摘要">
         {[
           ["需要处理", taskSummary.data?.actionRequired ?? "—", "录入与复核"],
           ["待录入", taskSummary.data?.pending ?? "—", "等待检测结果"],
@@ -268,7 +323,7 @@ export function InspectionsPage() {
             </div>
           </div>
         ))}
-      </section>
+      </section>}
       <TabGroup>
         <TabList className="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1">
           <Tab className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 outline-none data-selected:bg-white data-selected:text-blue-700">任务队列</Tab>
@@ -295,7 +350,7 @@ export function InspectionsPage() {
                 </Select>
               )}
             >
-              <DataTable
+              {extractRows(tasks.data).length ? <DataTable
                 rows={extractRows(tasks.data)}
                 getRowKey={row => `${row.executionId}:${row.inspectionPlanId}:${row.inspectionPlanVersion}`}
                 columns={[
@@ -314,7 +369,11 @@ export function InspectionsPage() {
                       </Button>,
                   },
                 ]}
-              />
+              /> : <EmptyState
+                title={requestedExecutionId ? "本次运行没有匹配的检验任务" : "当前没有检验任务"}
+                description={requestedExecutionId ? "当前站点和运行范围内没有待检或已完成任务；可以查看本运行检测记录，或清除运行筛选。" : "当前站点没有符合所选状态的检验任务。"}
+                actions={requestedExecutionId ? <Button onClick={clearExecutionFilter}>查看本站点全部任务</Button> : undefined}
+              />}
               <Pagination
                 page={taskPage}
                 pageSize={inspectionPageSize}
@@ -325,7 +384,7 @@ export function InspectionsPage() {
           </TabPanel>
           <TabPanel>
             <Card title={`检测记录（${records.data?.total ?? extractRows(records.data).length}）`}>
-              <DataTable
+              {extractRows(records.data).length ? <DataTable
                 rows={extractRows(records.data)}
                 keyField="recordId"
                 columns={[
@@ -342,7 +401,10 @@ export function InspectionsPage() {
                     </Button>,
                   },
                 ]}
-              />
+              /> : <EmptyState
+                title={requestedExecutionId ? "本次运行尚无检测记录" : "当前没有检测记录"}
+                description={requestedExecutionId ? "完成本次运行的检验任务后，结果会显示在这里。" : "已录入的检验记录会按当前站点显示在这里。"}
+              />}
               <Pagination
                 page={recordPage}
                 pageSize={inspectionPageSize}
@@ -353,6 +415,7 @@ export function InspectionsPage() {
           </TabPanel>
         </TabPanels>
       </TabGroup>
+      </> : siteScope.loading ? <LoadingCard /> : <EmptyState title={siteChoices.length ? "请选择检验站点" : "当前没有可访问站点"} description={siteScope.invalidRequestedSite ? "URL 中的站点不在当前账号可访问范围内。" : "检验任务和记录按站点隔离；先选择一个站点后再查看或补录。"} />}
       <Drawer
         open={entryOpen}
         onClose={() => setEntryOpen(false)}
@@ -516,8 +579,8 @@ function evaluateMeasurement(value, characteristic) {
 }
 
 export function QualityAnalysisPage() {
-  const edges = useApi("/api/edges");
-  const siteId = registeredSiteIds(edges.data)[0] || "";
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices, selectSite } = siteScope;
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState({
     productFamilyCode: "",
@@ -562,22 +625,24 @@ export function QualityAnalysisPage() {
   return (
     <Page title="质量偏差" description="按产品和配方版本查看哪些结果超出质量范围。过程曲线的差异在运行对比里看。">
       <Card title="分析范围">
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={search}>
+        <form className="grid gap-3 md:grid-cols-[minmax(12rem,.8fr)_1fr_1fr_1fr_auto]" onSubmit={search}>
+          <SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={selectSite} loading={siteScope.loading} />
           <Field label="产品系列"><Input value={filters.productFamilyCode} onChange={event => setFilters({ ...filters, productFamilyCode: event.target.value })} /></Field>
           <Field label="对象类型"><Input value={filters.subjectType} onChange={event => setFilters({ ...filters, subjectType: event.target.value })} /></Field>
           <Field label="对象 ID"><Input value={filters.subjectId} onChange={event => setFilters({ ...filters, subjectId: event.target.value })} /></Field>
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />分析</Button>
         </form>
       </Card>
-      <RequestError error={error} onRetry={reload} />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <RequestError error={siteScope.error || error} onRetry={() => siteScope.error ? siteScope.reload() : reload()} />
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后查看质量结果。" : "当前账号没有可用站点。"}</Alert>}
+      {siteId && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric label="有效检测记录" value={records.length} />
         <Metric label="合格" value={summary.pass} hint={ratio(summary.pass, records.length)} />
         <Metric label="不合格" value={summary.fail} hint={ratio(summary.fail, records.length)} />
         <Metric label="待确认" value={summary.inconclusive} hint={ratio(summary.inconclusive, records.length)} />
         <Metric label="原始附件" value={summary.attachments} />
-      </div>
-      {loading && !data ? <LoadingCard /> : (
+      </div>}
+      {siteId && (loading && !data ? <LoadingCard /> : (
         <>
           <div className="grid gap-5 xl:grid-cols-2">
             <Card title="按产品系列">
@@ -607,7 +672,7 @@ export function QualityAnalysisPage() {
             ]} />
           </Card>
         </>
-      )}
+      ))}
     </Page>
   );
 }

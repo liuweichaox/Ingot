@@ -1209,7 +1209,7 @@ public sealed class QualityWorkflowTests
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<StoreInspectionReviewResult> CreateAsync(CreateInspectionReviewRequest request, string executionId, string reviewedBy, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<InspectionReview?> GetAsync(Guid reviewId, CancellationToken ct = default) => Task.FromResult(_latest.Values.FirstOrDefault(item => item.ReviewId == reviewId));
-        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>(_latest.Values.ToArray());
+        public Task<IReadOnlyList<InspectionReview>> QueryAsync(Guid? inspectionRecordId, string? executionId, int limit, string? siteId = null, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<InspectionReview>>(_latest.Values.ToArray());
         public Task<IReadOnlyDictionary<Guid, InspectionReview>> GetLatestByInspectionRecordIdsAsync(IReadOnlyCollection<Guid> inspectionRecordIds, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyDictionary<Guid, InspectionReview>>(_latest.Where(pair => inspectionRecordIds.Contains(pair.Key)).ToDictionary());
         public Task LogAccessAsync(Guid? inspectionRecordId, Guid? attachmentId, string action, string actor, string? detail, CancellationToken ct = default) => Task.CompletedTask;

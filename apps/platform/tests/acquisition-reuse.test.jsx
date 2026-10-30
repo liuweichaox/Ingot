@@ -48,7 +48,7 @@ describe("复用数据源建立采集任务", () => {
       onChanged={vi.fn()}
     /></MemoryRouter>);
 
-    expect(screen.getAllByText(/同端点已发布 2 个任务，按配置周期预计约 240 份快照\/分钟/)).toHaveLength(2);
+    expect(screen.getAllByText(/同端点已发布 2 个任务，按配置周期预计约 240 份快照\/分钟/)).toHaveLength(1);
   });
 
   it("显示旧绑定的默认对象和每个任务的生产设备单元", () => {
@@ -197,6 +197,7 @@ describe("绑定草稿现场验证", () => {
     expect(screen.getByLabelText(/生产设备单元编号/)).toHaveValue("EQUIP-01");
     const publish = screen.getByRole("button", { name: "发布任务绑定" });
     expect(publish).toBeDisabled();
+    fireEvent.click(screen.getByRole("tab", { name: "连接" }));
     fireEvent.click(screen.getByRole("button", { name: "验证连接" }));
     expect(await screen.findByText("点位校验失败")).toBeInTheDocument();
     expect(publish).toBeDisabled();
@@ -257,8 +258,8 @@ describe("过程执行激活条件", () => {
       <Routes><Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage />} /></Routes>
     </MemoryRouter>);
 
-    expect(await screen.findByDisplayValue("生产序号")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("高级采集与运行识别"));
+    expect(await screen.findByLabelText("配置名称")).toHaveValue("生产序号");
+    fireEvent.click(screen.getByRole("tab", { name: "高级" }));
     const condition = screen.getByLabelText(/运行激活条件/);
     expect(condition).toHaveValue("equals");
     expect(screen.getByLabelText(/生产中的取值/)).toHaveValue("1");

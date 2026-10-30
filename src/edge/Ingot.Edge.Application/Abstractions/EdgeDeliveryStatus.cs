@@ -1,11 +1,16 @@
+// 汇总 Edge outbox 统计和事件上送结果，供心跳报告使用。
+using System.Diagnostics;
 using Ingot.Contracts.Edge;
 
 namespace Ingot.Edge.Application.Abstractions;
 
+/// <summary>保留 outbox 最近一次成功统计和事件上送结果。</summary>
 public sealed class EdgeDeliveryStatus
 {
     private readonly object _gate = new();
     private long _pendingEventCount;
+    private DateTimeOffset? _backlogObservedAt;
+    private long? _backlogObservedTimestamp;
     private DateTimeOffset? _oldestPendingEventAt;
     private long? _backlogCapacityRows;
     private long? _localStorageBytes;
@@ -25,31 +30,43 @@ public sealed class EdgeDeliveryStatus
     {
         lock (_gate)
         {
-            var capacityUsed = _backlogCapacityRows > 0
+            var now = DateTimeOffset.UtcNow;
+            var backlogObservationAge = _backlogObservedTimestamp.HasValue
+                ? Stopwatch.GetElapsedTime(_backlogObservedTimestamp.Value)
+                : (TimeSpan?)null;
+            var backlogObserved = backlogObservationAge.HasValue && backlogObservationAge.Value >= TimeSpan.Zero
+                && backlogObservationAge.Value <= TimeSpan.FromSeconds(30);
+            var shipmentAge = _lastSuccessfulShipmentAt.HasValue ? now - _lastSuccessfulShipmentAt.Value : (TimeSpan?)null;
+            var shipmentRateFresh = shipmentAge.HasValue && shipmentAge.Value >= TimeSpan.Zero
+                && shipmentAge.Value <= TimeSpan.FromSeconds(30)
+                && _consecutiveFailures == 0 && _blockedReason is null;
+            var capacityUsed = backlogObserved && _backlogCapacityRows > 0
                 ? _pendingEventCount * 100d / _backlogCapacityRows.Value
-                : 0;
+                : (double?)null;
             var state = _blockedReason is not null
                 ? "blocked"
                 : _consecutiveFailures > 0 || capacityUsed >= 80
                 ? "degraded"
-                : _pendingEventCount > 0
+                : backlogObserved && _pendingEventCount > 0
                     ? "buffering"
-                    : _lastSuccessfulShipmentAt.HasValue
+                    : backlogObserved && _lastSuccessfulShipmentAt.HasValue
                         ? "synchronized"
                         : "starting";
             return new EdgeDeliveryRuntimeStatus
             {
                 State = state,
-                ObservedAt = DateTimeOffset.UtcNow,
+                ObservedAt = now,
+                BacklogObservedAt = _backlogObservedAt,
+                BacklogObservationAgeMs = backlogObservationAge?.TotalMilliseconds,
                 PendingEventCount = _pendingEventCount,
                 OldestPendingEventAt = _oldestPendingEventAt,
                 BacklogCapacityRows = _backlogCapacityRows,
-                BacklogCapacityUsedPercent = _backlogCapacityRows > 0
+                BacklogCapacityUsedPercent = backlogObserved && _backlogCapacityRows > 0
                     ? _pendingEventCount * 100d / _backlogCapacityRows.Value
                     : null,
                 LocalStorageBytes = _localStorageBytes,
                 ShipmentRatePerSecond = _shipmentRatePerSecond,
-                EstimatedDrainSeconds = _shipmentRatePerSecond > 0
+                EstimatedDrainSeconds = backlogObserved && _pendingEventCount > 0 && shipmentRateFresh && _shipmentRatePerSecond > 0
                     ? _pendingEventCount / _shipmentRatePerSecond.Value
                     : null,
                 LastAcknowledgedSequence = _lastAcknowledgedSequence,
@@ -67,7 +84,14 @@ public sealed class EdgeDeliveryStatus
     public void RecordBacklog(long count)
     {
         lock (_gate)
+        {
             _pendingEventCount = Math.Max(0, count);
+            _backlogObservedAt = DateTimeOffset.UtcNow;
+            _backlogObservedTimestamp = Stopwatch.GetTimestamp();
+            _oldestPendingEventAt = null;
+            _backlogCapacityRows = null;
+            _localStorageBytes = null;
+        }
     }
 
     public void RecordBacklog(EventLogPendingStatistics statistics)
@@ -75,6 +99,8 @@ public sealed class EdgeDeliveryStatus
         lock (_gate)
         {
             _pendingEventCount = Math.Max(0, statistics.Count);
+            _backlogObservedAt = DateTimeOffset.UtcNow;
+            _backlogObservedTimestamp = Stopwatch.GetTimestamp();
             _oldestPendingEventAt = statistics.OldestRecordedAt;
             _backlogCapacityRows = statistics.CapacityRows;
             _localStorageBytes = statistics.StorageBytes;

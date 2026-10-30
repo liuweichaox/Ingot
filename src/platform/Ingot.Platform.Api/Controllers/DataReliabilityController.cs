@@ -22,6 +22,8 @@ public sealed class DataReliabilityController(
         [FromQuery] DateTimeOffset? to,
         [FromQuery] string? edgeId,
         [FromQuery] string? equipmentId,
+        [FromQuery] string? subjectType,
+        [FromQuery] string? subjectId,
         [FromQuery] int maximumRuns = 2000,
         CancellationToken ct = default,
         [FromQuery] string? siteId = null)
@@ -40,6 +42,8 @@ public sealed class DataReliabilityController(
             return InvalidRequest("开始时间不能晚于结束时间。");
         if (maximumRuns is < 1 or > 2000)
             return InvalidRequest("MaximumRuns 必须在 1 到 2000 之间。");
+        if (string.IsNullOrWhiteSpace(subjectType) != string.IsNullOrWhiteSpace(subjectId))
+            return InvalidRequest("subjectType 与 subjectId 必须同时提供。");
 
         try
         {
@@ -48,8 +52,10 @@ public sealed class DataReliabilityController(
                 SiteId = authorizedSiteId,
                 From = from?.ToUniversalTime(),
                 To = to?.ToUniversalTime(),
-                EdgeId = edgeId,
-                EquipmentId = equipmentId,
+                EdgeId = Normalize(edgeId),
+                EquipmentId = Normalize(equipmentId),
+                SubjectType = Normalize(subjectType)?.ToLowerInvariant(),
+                SubjectId = Normalize(subjectId),
                 MaximumRuns = maximumRuns
             }, ct).ConfigureAwait(false));
         }
@@ -66,4 +72,7 @@ public sealed class DataReliabilityController(
             return UnprocessableRequest(exception.Message);
         }
     }
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -2,6 +2,7 @@
 
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
+using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessConfiguration;
@@ -13,7 +14,11 @@ namespace Ingot.Platform.Infrastructure.Analytics;
 public sealed class DataReliabilityBaselineService(
     IPlatformEventStore events,
     IExecutionComparisonService executions,
-    ResearchContextAdmissionEvaluator? contextAdmission = null) : IDataReliabilityBaselineService
+    IProcessSampleConfigurationReferenceVerifier sampleConfigurationReferenceVerifier,
+    ResearchContextAdmissionEvaluator? contextAdmission = null,
+    IEdgeTaskDeploymentHistoryReader? taskDeploymentHistory = null,
+    IEdgeSiteDirectory? edgeSites = null,
+    IIngestionTaskStore? ingestionTasks = null) : IDataReliabilityBaselineService
 {
     private readonly ResearchContextAdmissionEvaluator _contextAdmission =
         contextAdmission ?? new ResearchContextAdmissionEvaluator();
@@ -21,6 +26,7 @@ public sealed class DataReliabilityBaselineService(
     private static readonly string[] ContextFieldsToTrack =
     [
         "context_capture_status",
+        "control_parameter_capture_status",
         "equipment_id",
         "execution_id",
         "product_family_code",
@@ -53,8 +59,23 @@ public sealed class DataReliabilityBaselineService(
         ("material_lot_ref", "材料批次")
     ];
 
+    private static readonly (string Code, string Name)[] AdmissionExclusionReasons =
+    [
+        ("lifecycle_incomplete", "运行生命周期不完整"),
+        ("process_data_incomplete", "过程数据未达到完整标准"),
+        ("actual_parameters_missing", "缺少设备实际参数回读"),
+        ("parameter_unit_missing", "实际参数或单位不完整"),
+        ("context_capture_invalid", "生产上下文捕获失败"),
+        ("minimal_context_missing", "最小上下文快照不完整"),
+        ("quality_unlinked", "没有关联有效质量结果")
+    ];
+
     private const int MaximumFactorLevels = 50;
     private const int MaximumScannedEvents = 50_000;
+    private const int MaximumExpectedCoverageItems = 2_000;
+    private const int MaximumExpectedCoverageCodesPerKind = 500;
+    private const int MaximumExpectedCoverageCodesTotal = 100_000;
+    private const int MaximumCoverageCandidateComparisons = 250_000;
 
     public async Task<DataReliabilityBaseline> CalculateAsync(
         DataReliabilityBaselineQuery query,
@@ -65,23 +86,36 @@ public sealed class DataReliabilityBaselineService(
             throw new ArgumentException("数据可靠性基线必须指定站点。", nameof(query));
         if (query.From > query.To)
             throw new ArgumentException("开始时间不能晚于结束时间。", nameof(query));
+        var generatedAt = DateTimeOffset.UtcNow;
         var maximumRuns = Math.Clamp(query.MaximumRuns, 1, 2000);
-        var completedEvents = await QueryAllAsync(new PlatformEventQuery
+        var scopedQuery = new PlatformEventQuery
         {
             SiteId = Normalize(query.SiteId),
-            EventType = "process.execution.completed",
             EdgeId = Normalize(query.EdgeId),
             EquipmentId = Normalize(query.EquipmentId),
+            SubjectType = Normalize(query.SubjectType)?.ToLowerInvariant(),
+            SubjectId = Normalize(query.SubjectId),
             From = query.From,
             To = query.To
-        }, ct).ConfigureAwait(false);
-        var matchingIds = completedEvents
+        };
+        var lifecycleEvents = await Task.WhenAll(
+                QueryAllAsync(scopedQuery with { EventType = "process.execution.started" }, ct),
+                QueryAllAsync(scopedQuery with { EventType = "process.execution.completed" }, ct))
+            .ConfigureAwait(false);
+        var completedEvents = lifecycleEvents[1];
+        var matchingIds = lifecycleEvents
+            .SelectMany(static items => items)
             .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
             .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
             .Select(static group => group.OrderByDescending(static item => item.Event.OccurredAt).First())
             .OrderByDescending(static item => item.Event.OccurredAt)
             .Select(static item => item.Event.ExecutionId!)
             .ToArray();
+        var completedIds = completedEvents
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
+            .Select(static item => item.Event.ExecutionId!)
+            .Distinct(StringComparer.Ordinal)
+            .ToHashSet(StringComparer.Ordinal);
         var selectedIds = matchingIds.Take(maximumRuns).ToArray();
         var executionMap = await executions.GetProcessExecutionsAsync(
             selectedIds, ct, Normalize(query.SiteId)).ConfigureAwait(false);
@@ -89,6 +123,47 @@ public sealed class DataReliabilityBaselineService(
             .Where(executionMap.ContainsKey)
             .Select(id => executionMap[id])
             .ToArray();
+        var evaluatedRows = rows
+            .Select(row => (Row: row, ReasonCodes: AdmissionExclusionCodes(row)))
+            .ToArray();
+        var impactedRows = evaluatedRows
+            .Where(static item => item.ReasonCodes.Count > 0)
+            .ToArray();
+        var reportedConfigurationEvidence = impactedRows
+            .SelectMany(static item => item.Row.SampleConfigurationEvidence)
+            .ToArray();
+        var verifiedConfigurationEvidence = await sampleConfigurationReferenceVerifier.VerifyAsync(
+                scopedQuery.SiteId!, reportedConfigurationEvidence, ct)
+            .ConfigureAwait(false);
+        if (verifiedConfigurationEvidence.Count != reportedConfigurationEvidence.Length)
+            throw new InvalidOperationException("采样来源核验结果与输入证据数量不一致。");
+
+        var runImpacts = new List<ReliabilityRunImpact>(impactedRows.Length);
+        var evidenceCursor = 0;
+        foreach (var item in impactedRows)
+        {
+            var sourceCount = item.Row.SampleConfigurationEvidence.Count;
+            var verifiedForRun = new ProcessSampleConfigurationEvidence[sourceCount];
+            for (var index = 0; index < sourceCount; index++)
+                verifiedForRun[index] = verifiedConfigurationEvidence[evidenceCursor++];
+            runImpacts.Add(new ReliabilityRunImpact
+            {
+                ExecutionId = item.Row.ExecutionId,
+                EquipmentId = item.Row.EquipmentId,
+                EdgeIds = item.Row.EdgeIds,
+                HasStarted = item.Row.HasStarted,
+                HasCompleted = item.Row.HasCompleted,
+                StartedAt = item.Row.HasStarted ? item.Row.StartedAt : null,
+                CompletedAt = item.Row.HasCompleted ? item.Row.CompletedAt : null,
+                ProcessDataStatus = item.Row.ProcessDataQuality.Status,
+                ReasonCodes = item.ReasonCodes,
+                SampleConfigurationEvidence = verifiedForRun
+            });
+        }
+        var coverageProjection = await ProjectExpectedConfigurationCoverageAsync(
+                runImpacts, query, generatedAt, ct)
+            .ConfigureAwait(false);
+        runImpacts = coverageProjection.RunImpacts;
 
         var denominator = rows.Length;
         var lifecycleComplete = rows.Count(static row => row.LifecycleComplete);
@@ -102,36 +177,36 @@ public sealed class DataReliabilityBaselineService(
             _contextAdmission.Evaluate(row.Context, null).Admitted);
         var minimalContext = rows.Count(HasMinimalContext);
         var qualityLinked = rows.Count(static row => row.InspectionOutcomes.Count > 0);
-        var eligible = rows.Count(row =>
-            row.LifecycleComplete &&
-            row.ProcessDataQuality.Status == ProcessDataStatuses.Available &&
-            HasActualParameters(row) &&
-            HasCompleteActualParameterUnits(row) &&
-            HasMinimalContext(row) &&
-            row.InspectionOutcomes.Count > 0);
+        var eligible = evaluatedRows.Count(static item => item.ReasonCodes.Count == 0);
 
-        var exclusions = new[]
-        {
-            Exclusion("lifecycle_incomplete", "运行生命周期不完整", rows.Count(static row => !row.LifecycleComplete)),
-            Exclusion("process_data_incomplete", "过程数据未达到完整标准", denominator - processComplete),
-            Exclusion("actual_parameters_missing", "缺少设备实际参数回读", denominator - actualParameters),
-            Exclusion("parameter_unit_missing", "实际参数单位不完整", denominator - parameterUnits),
-            Exclusion("context_capture_invalid", "生产上下文捕获失败", denominator - contextIntegrity),
-            Exclusion("minimal_context_missing", "最小上下文快照不完整", denominator - minimalContext),
-            Exclusion("quality_unlinked", "没有关联有效质量结果", denominator - qualityLinked)
-        }.Where(static item => item.RunCount > 0).ToArray();
+        var reasonCounts = evaluatedRows
+            .SelectMany(static item => item.ReasonCodes)
+            .GroupBy(static code => code, StringComparer.Ordinal)
+            .ToDictionary(static group => group.Key, static group => group.Count(), StringComparer.Ordinal);
+        var exclusions = AdmissionExclusionReasons
+            .Select(reason => Exclusion(
+                reason.Code,
+                reason.Name,
+                reasonCounts.GetValueOrDefault(reason.Code)))
+            .Where(static item => item.RunCount > 0)
+            .ToArray();
 
         var factorSummaries = BuildFactorSummaries(rows);
         var factorOverlaps = BuildFactorOverlaps(rows);
         return new DataReliabilityBaseline
         {
-            GeneratedAt = DateTimeOffset.UtcNow,
+            GeneratedAt = generatedAt,
+            SiteId = Normalize(query.SiteId),
             From = query.From,
             To = query.To,
             EdgeId = Normalize(query.EdgeId),
             EquipmentId = Normalize(query.EquipmentId),
-            MatchingCompletedRunCount = matchingIds.Length,
+            SubjectType = Normalize(query.SubjectType)?.ToLowerInvariant(),
+            SubjectId = Normalize(query.SubjectId),
+            MatchingCompletedRunCount = completedIds.Count,
+            MatchingObservedRunCount = matchingIds.Length,
             AnalyzedRunCount = denominator,
+            MissingExecutionRowCount = selectedIds.Length - rows.Length,
             Truncated = matchingIds.Length > maximumRuns,
             Rates =
             [
@@ -151,8 +226,8 @@ public sealed class DataReliabilityBaselineService(
                     "上下文捕获有效且同时包含设备编号与运行编号的运行 / 已分析运行。"),
                 Rate("run_quality_association", "运行—质量关联率", qualityLinked, denominator,
                     "至少关联一条有效检验结果的运行 / 已分析运行。"),
-                Rate("analysis_admission", "正式分析准入率", eligible, denominator,
-                    "生命周期、过程数据、实际参数、单位、最小上下文和质量关联全部通过的运行 / 已分析运行。")
+                Rate("analysis_admission", "通用基线条件通过率", eligible, denominator,
+                    "生命周期、过程数据、实际参数、单位、最小上下文和质量关联全部满足通用数据可靠性基线要求的运行 / 已分析运行；具体分析仍有各自的证据要求。")
             ],
             ContextFields = ContextFieldsToTrack.Select(field =>
             {
@@ -171,6 +246,9 @@ public sealed class DataReliabilityBaselineService(
             UnidentifiableConfoundingCount = factorOverlaps.Count(static item =>
                 item.Identifiability == "confounded"),
             Exclusions = exclusions,
+            RunImpacts = runImpacts,
+            TaskDeploymentObservationHistoryTruncated = coverageProjection.HistoryTruncated,
+            ExpectedConfigurationCoverageTruncated = coverageProjection.ResultTruncated,
             DuplicateTimestampCount = rows.Sum(static row => row.ProcessDataQuality.DuplicateTimestampCount),
             OutOfOrderCount = rows.Sum(static row => row.ProcessDataQuality.OutOfOrderCount),
             SequenceGapCount = rows.Sum(static row => row.ProcessDataQuality.SequenceGapCount),
@@ -184,6 +262,353 @@ public sealed class DataReliabilityBaselineService(
             NegativePlatformIngestLatencyCount = rows.Sum(static row =>
                 row.ProcessDataQuality.NegativePlatformIngestLatencyCount)
         };
+    }
+
+    // Joins receipt-bounded applied-version observations to runs and detailed sample groups without asserting causality.
+    private async Task<CoverageProjection> ProjectExpectedConfigurationCoverageAsync(
+        List<ReliabilityRunImpact> runImpacts,
+        DataReliabilityBaselineQuery query,
+        DateTimeOffset generatedAt,
+        CancellationToken ct)
+    {
+        if (runImpacts.Count == 0 || taskDeploymentHistory is null || edgeSites is null || ingestionTasks is null)
+            return new CoverageProjection(runImpacts, false, false);
+
+        var siteId = Normalize(query.SiteId)!;
+        var authorizedEdgeIds = await edgeSites.ListEdgeIdsAsync(siteId, ct).ConfigureAwait(false);
+        if (authorizedEdgeIds.Count == 0)
+            return new CoverageProjection(runImpacts, false, false);
+
+        var runSpans = new Dictionary<string, RunTimeSpan>(StringComparer.Ordinal);
+        foreach (var impact in runImpacts)
+        {
+            if (ResolveRunTimeSpan(impact, query.To, generatedAt) is { } span)
+                runSpans[impact.ExecutionId] = span;
+        }
+        if (runSpans.Count == 0)
+            return new CoverageProjection(runImpacts, false, false);
+
+        var scopedEdgeIds = runImpacts
+            .SelectMany(static impact => impact.EdgeIds)
+            .Where(edgeId => !string.IsNullOrWhiteSpace(edgeId) && authorizedEdgeIds.Contains(edgeId))
+            .Select(static edgeId => edgeId.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (scopedEdgeIds.Length == 0)
+            return new CoverageProjection(runImpacts, false, false);
+
+        var from = runSpans.Values.Min(static span => span.Start);
+        var to = runSpans.Values.Max(static span => span.End);
+        var observationResult = await taskDeploymentHistory.FindOverlappingAsync(
+                siteId, scopedEdgeIds, from, to, ct)
+            .ConfigureAwait(false);
+        var historyTruncated = observationResult.Truncated;
+        var observationsByEdge = observationResult.Observations
+            .Where(item => authorizedEdgeIds.Contains(item.EdgeId))
+            .GroupBy(static item => item.EdgeId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        var candidates = new List<RunObservationCandidate>(Math.Min(
+            MaximumExpectedCoverageItems, observationResult.Observations.Count));
+        var candidateComparisons = 0;
+        var resultTruncated = false;
+        foreach (var impact in runImpacts)
+        {
+            if (!runSpans.TryGetValue(impact.ExecutionId, out var span))
+                continue;
+            var stop = false;
+            foreach (var edgeId in impact.EdgeIds
+                         .Where(edgeId => !string.IsNullOrWhiteSpace(edgeId) && authorizedEdgeIds.Contains(edgeId))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!observationsByEdge.TryGetValue(edgeId, out var edgeObservations))
+                    continue;
+                foreach (var observation in edgeObservations)
+                {
+                    candidateComparisons++;
+                    if (candidateComparisons > MaximumCoverageCandidateComparisons)
+                    {
+                        resultTruncated = true;
+                        stop = true;
+                        break;
+                    }
+                    var observationEnd = observation.ClosedObservedAt ?? observation.LastObservedAt;
+                    if (observation.FirstObservedAt > span.End || observationEnd < span.Start)
+                        continue;
+                    if (candidates.Count == MaximumExpectedCoverageItems)
+                    {
+                        resultTruncated = true;
+                        stop = true;
+                        break;
+                    }
+                    candidates.Add(new RunObservationCandidate(
+                        impact,
+                        observation,
+                        observation.FirstObservedAt > span.Start ? observation.FirstObservedAt : span.Start,
+                        observationEnd < span.End ? observationEnd : span.End));
+                }
+                if (stop)
+                    break;
+            }
+            if (stop)
+                break;
+        }
+
+        if (candidates.Count == 0)
+            return new CoverageProjection(runImpacts, historyTruncated, resultTruncated);
+
+        var references = candidates
+            .Select(static candidate => new IngestionTaskVersionReference(
+                candidate.Observation.TaskId, candidate.Observation.TaskVersion))
+            .Distinct()
+            .ToArray();
+        var versionMetadata = await ingestionTasks.FindCoverageMetadataAsync(
+                references, scopedEdgeIds, ct)
+            .ConfigureAwait(false);
+        var metadataByVersion = versionMetadata
+            .GroupBy(static item => new TaskVersionKey(item.TaskId, item.Version))
+            .ToDictionary(static group => group.Key, static group => group.First());
+
+        var expectedByExecution = new Dictionary<string, List<ExpectedConfigurationCoverageEvidence>>(StringComparer.Ordinal);
+        var emittedItemCount = 0;
+        var emittedCodeCount = 0;
+        foreach (var candidate in candidates)
+        {
+            var observation = candidate.Observation;
+            var key = new TaskVersionKey(observation.TaskId, observation.TaskVersion);
+            var hasMetadata = metadataByVersion.TryGetValue(key, out var metadata);
+            var metadataEdgeMatches = hasMetadata && metadata!.AuthorizedEdgeId is not null &&
+                                      authorizedEdgeIds.Contains(metadata.AuthorizedEdgeId) &&
+                                      string.Equals(metadata.AuthorizedEdgeId, observation.EdgeId,
+                                          StringComparison.OrdinalIgnoreCase);
+            var subjectMatch = metadataEdgeMatches
+                ? MatchRunSubject(metadata!, candidate.Impact)
+                : SubjectMatch.Unknown;
+            if (subjectMatch == SubjectMatch.Mismatch)
+                continue;
+
+            var metadataVerified = metadataEdgeMatches && subjectMatch == SubjectMatch.Match;
+            var coverage = BuildCoverageEvidence(candidate, metadataVerified ? metadata : null,
+                candidate.Impact.SampleConfigurationEvidence, historyTruncated);
+            if (coverage.SampleEvidenceStatus ==
+                ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated)
+                resultTruncated = true;
+
+            var rowCodes = coverage.RequiredDataItemCodes.Count +
+                           coverage.ObservedDataItemCodes.Count +
+                           coverage.NotObservedRequiredDataItemCodes.Count;
+            if (!historyTruncated && metadataVerified &&
+                (metadata!.RequiredDataItemCodesTruncated || rowCodes > MaximumExpectedCoverageCodesPerKind * 3 ||
+                 emittedCodeCount + rowCodes > MaximumExpectedCoverageCodesTotal))
+            {
+                coverage = coverage with
+                {
+                    SampleEvidenceStatus = ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated,
+                    SampleFrameCount = 0,
+                    RequiredDataItemCodes = [],
+                    ObservedDataItemCodes = [],
+                    NotObservedRequiredDataItemCodes = []
+                };
+                resultTruncated = true;
+                rowCodes = 0;
+            }
+
+            if (emittedItemCount >= MaximumExpectedCoverageItems)
+            {
+                resultTruncated = true;
+                break;
+            }
+            emittedItemCount++;
+            emittedCodeCount += rowCodes;
+            if (!expectedByExecution.TryGetValue(candidate.Impact.ExecutionId, out var runEvidence))
+            {
+                runEvidence = [];
+                expectedByExecution.Add(candidate.Impact.ExecutionId, runEvidence);
+            }
+            runEvidence.Add(coverage);
+        }
+
+        var enriched = runImpacts.Select(impact => expectedByExecution.TryGetValue(
+                impact.ExecutionId, out var evidence)
+            ? impact with
+            {
+                ExpectedConfigurationCoverage = evidence
+                    .OrderBy(static item => item.FirstObservedAt)
+                    .ThenBy(static item => item.EdgeId, StringComparer.Ordinal)
+                    .ThenBy(static item => item.TaskId, StringComparer.Ordinal)
+                    .ThenBy(static item => item.TaskVersion)
+                    .ToArray()
+            }
+            : impact).ToList();
+        return new CoverageProjection(enriched, historyTruncated, resultTruncated);
+    }
+
+    private static ExpectedConfigurationCoverageEvidence BuildCoverageEvidence(
+        RunObservationCandidate candidate,
+        IngestionTaskCoverageMetadata? metadata,
+        IReadOnlyList<ProcessSampleConfigurationEvidence> sampleEvidence,
+        bool historyTruncated)
+    {
+        var observation = candidate.Observation;
+        var requiredCodes = metadata?.RequiredDataItemCodes ?? [];
+        var exactEvidence = sampleEvidence.Where(item =>
+                string.Equals(item.AppliedConfigurationKind, "ingestion-task", StringComparison.Ordinal) &&
+                string.Equals(item.AppliedConfigurationId, observation.TaskId, StringComparison.OrdinalIgnoreCase) &&
+                item.AppliedConfigurationVersion == observation.TaskVersion &&
+                string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase) &&
+                item.SummarizedConfigurationGroupCount == 0)
+            .ToArray();
+        var verifiedExactEvidence = exactEvidence.Where(static item =>
+                string.Equals(item.ReferenceVerificationStatus,
+                    ProcessSampleConfigurationReferenceStatuses.Matched, StringComparison.Ordinal))
+            .ToArray();
+        var rawExactEvidenceExists = sampleEvidence.Any(item =>
+            string.Equals(item.AppliedConfigurationKind, "ingestion-task", StringComparison.Ordinal) &&
+            string.Equals(item.AppliedConfigurationId, observation.TaskId, StringComparison.OrdinalIgnoreCase) &&
+            item.AppliedConfigurationVersion == observation.TaskVersion &&
+            string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase));
+
+        var observedCodes = new HashSet<string>(StringComparer.Ordinal);
+        var observedCodesTruncated = false;
+        long frameCount = 0;
+        foreach (var item in verifiedExactEvidence)
+        {
+            frameCount += Math.Max(0, item.SampleFrameCount);
+            foreach (var code in item.ObservedDataItemCodes)
+            {
+                if (string.IsNullOrWhiteSpace(code))
+                    continue;
+                observedCodes.Add(code);
+                if (observedCodes.Count > MaximumExpectedCoverageCodesPerKind)
+                {
+                    observedCodesTruncated = true;
+                    break;
+                }
+            }
+            if (observedCodesTruncated)
+                break;
+        }
+
+        var hasSummarizedEvidence = sampleEvidence.Any(static item => item.SummarizedConfigurationGroupCount > 0);
+        var hasUnattributableEvidence = sampleEvidence.Any(item =>
+            item.SampleFrameCount > 0 &&
+            string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase) &&
+            (string.IsNullOrWhiteSpace(item.AppliedConfigurationKind) ||
+             string.IsNullOrWhiteSpace(item.AppliedConfigurationId) ||
+             item.AppliedConfigurationVersion is null));
+        var status = historyTruncated
+            ? ExpectedConfigurationSampleEvidenceStatuses.ObservationHistoryTruncated
+            : metadata is null
+                ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
+                : metadata.RequiredDataItemCodesTruncated || observedCodesTruncated
+                    ? ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
+                    : verifiedExactEvidence.Length > 0
+                        ? ExpectedConfigurationSampleEvidenceStatuses.Matched
+                        : rawExactEvidenceExists || hasUnattributableEvidence
+                            ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
+                            : hasSummarizedEvidence
+                                ? ExpectedConfigurationSampleEvidenceStatuses.SummarizedUnverifiable
+                                : ExpectedConfigurationSampleEvidenceStatuses.NoMatchingFrames;
+
+        IReadOnlyList<string> required = status is ExpectedConfigurationSampleEvidenceStatuses.ObservationHistoryTruncated or
+            ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion or
+            ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
+            ? []
+            : requiredCodes;
+        IReadOnlyList<string> observed = status == ExpectedConfigurationSampleEvidenceStatuses.Matched
+            ? observedCodes.Order(StringComparer.Ordinal).ToArray()
+            : [];
+        IReadOnlyList<string> notObserved = status == ExpectedConfigurationSampleEvidenceStatuses.Matched
+            ? required.Except(observed, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+            : status == ExpectedConfigurationSampleEvidenceStatuses.NoMatchingFrames
+                ? required
+                : [];
+        var includeCounts = status == ExpectedConfigurationSampleEvidenceStatuses.Matched;
+
+        return new ExpectedConfigurationCoverageEvidence
+        {
+            TaskId = observation.TaskId,
+            TaskVersion = observation.TaskVersion,
+            EdgeId = observation.EdgeId,
+            ConfigurationHash = observation.ConfigurationHash,
+            ConfigurationSource = observation.ConfigurationSource,
+            ConfigurationStatus = metadata?.AuthorizedStatus ?? "unknown",
+            FirstObservedAt = observation.FirstObservedAt,
+            LastObservedAt = observation.LastObservedAt,
+            RunOverlapStart = candidate.OverlapStart,
+            RunOverlapEnd = candidate.OverlapEnd,
+            SampleEvidenceStatus = status,
+            SampleFrameCount = includeCounts && frameCount <= int.MaxValue ? (int)frameCount : 0,
+            RequiredDataItemCodes = required,
+            ObservedDataItemCodes = observed,
+            NotObservedRequiredDataItemCodes = notObserved
+        };
+    }
+
+    private static SubjectMatch MatchRunSubject(
+        IngestionTaskCoverageMetadata metadata,
+        ReliabilityRunImpact impact)
+    {
+        var expectedType = Normalize(metadata.SubjectType);
+        var expectedId = Normalize(metadata.SubjectId);
+        var runType = Normalize(impact.SubjectType);
+        var runId = Normalize(impact.SubjectId);
+        if (string.Equals(expectedType, "equipment", StringComparison.OrdinalIgnoreCase))
+        {
+            runType ??= "equipment";
+            runId ??= Normalize(impact.EquipmentId);
+        }
+        if (expectedType is null || expectedId is null || runType is null || runId is null)
+            return SubjectMatch.Unknown;
+        return string.Equals(expectedType, runType, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(expectedId, runId, StringComparison.OrdinalIgnoreCase)
+            ? SubjectMatch.Match
+            : SubjectMatch.Mismatch;
+    }
+
+    private static RunTimeSpan? ResolveRunTimeSpan(
+        ReliabilityRunImpact impact,
+        DateTimeOffset? queryTo,
+        DateTimeOffset generatedAt)
+    {
+        var start = impact.StartedAt ?? impact.CompletedAt;
+        if (!start.HasValue || start.Value == default)
+            return null;
+        var end = impact.CompletedAt ?? (impact.HasStarted ? queryTo ?? generatedAt : start.Value);
+        return end < start.Value ? null : new RunTimeSpan(start.Value, end);
+    }
+
+    private sealed record RunObservationCandidate(
+        ReliabilityRunImpact Impact,
+        EdgeTaskDeploymentObservation Observation,
+        DateTimeOffset OverlapStart,
+        DateTimeOffset OverlapEnd);
+
+    private sealed record RunTimeSpan(DateTimeOffset Start, DateTimeOffset End);
+
+    private sealed record CoverageProjection(
+        List<ReliabilityRunImpact> RunImpacts,
+        bool HistoryTruncated,
+        bool ResultTruncated);
+
+    private enum SubjectMatch
+    {
+        Match,
+        Mismatch,
+        Unknown
+    }
+
+    private readonly record struct TaskVersionKey
+    {
+        public string TaskId { get; }
+
+        public int Version { get; }
+
+        public TaskVersionKey(string taskId, int version)
+        {
+            TaskId = taskId.Trim().ToLowerInvariant();
+            Version = version;
+        }
     }
 
     private static double? Maximum(IEnumerable<double?> values)
@@ -224,6 +649,26 @@ public sealed class DataReliabilityBaselineService(
 
     private static bool HasActualParameters(ExecutionComparisonRow row)
         => row.ControlParameters.Count > 0;
+
+    private IReadOnlyList<string> AdmissionExclusionCodes(ExecutionComparisonRow row)
+    {
+        var reasons = new List<string>(AdmissionExclusionReasons.Length);
+        if (!row.LifecycleComplete)
+            reasons.Add("lifecycle_incomplete");
+        if (row.ProcessDataQuality.Status != ProcessDataStatuses.Available)
+            reasons.Add("process_data_incomplete");
+        if (!HasActualParameters(row))
+            reasons.Add("actual_parameters_missing");
+        if (!HasCompleteActualParameterUnits(row))
+            reasons.Add("parameter_unit_missing");
+        if (!_contextAdmission.Evaluate(row.Context, null).Admitted)
+            reasons.Add("context_capture_invalid");
+        if (!HasMinimalContext(row))
+            reasons.Add("minimal_context_missing");
+        if (row.InspectionOutcomes.Count == 0)
+            reasons.Add("quality_unlinked");
+        return reasons;
+    }
 
     private static bool HasCompleteActualParameterUnits(ExecutionComparisonRow row)
         => HasActualParameters(row) &&

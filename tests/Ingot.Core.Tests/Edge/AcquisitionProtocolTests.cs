@@ -11,14 +11,33 @@ namespace Ingot.Core.Tests.Edge;
 
 public sealed class AcquisitionProtocolTests
 {
-    [Theory]
-    [InlineData(AcquisitionProtocols.HttpPolling)]
-    [InlineData(AcquisitionProtocols.Mqtt)]
-    [InlineData(AcquisitionProtocols.OpcUa)]
-    [InlineData(AcquisitionProtocols.ModbusTcp)]
-    [InlineData(AcquisitionProtocols.MelsecA1E)]
-    public void SupportedProtocols_AreDeclaredByTheSharedContract(string protocol)
-        => Assert.True(AcquisitionProtocols.IsSupported(protocol));
+    [Fact]
+    public void SupportedProtocols_AreDeclaredByTheSharedContract()
+    {
+        var protocols = new[]
+        {
+            AcquisitionProtocols.HttpPolling,
+            AcquisitionProtocols.Mqtt,
+            AcquisitionProtocols.OpcUa,
+            AcquisitionProtocols.MtConnect,
+            AcquisitionProtocols.ModbusTcp,
+            AcquisitionProtocols.ModbusRtu,
+            AcquisitionProtocols.ModbusAscii,
+            AcquisitionProtocols.MelsecA1E,
+            AcquisitionProtocols.MelsecMc3E,
+            AcquisitionProtocols.SiemensS7,
+            AcquisitionProtocols.EtherNetIp,
+            AcquisitionProtocols.OmronFinsTcp,
+            AcquisitionProtocols.OmronFinsUdp,
+            AcquisitionProtocols.BacnetIp,
+            AcquisitionProtocols.BacnetMstp,
+            AcquisitionProtocols.Snmp
+        };
+
+        Assert.Equal(16, protocols.Length);
+        Assert.All(protocols, protocol => Assert.True(AcquisitionProtocols.IsSupported(protocol), protocol));
+        Assert.False(AcquisitionProtocols.IsSupported("unregistered-protocol"));
+    }
 
     [Fact]
     public void SecretResolver_ReadsOnlyExplicitEnvironmentReferences()

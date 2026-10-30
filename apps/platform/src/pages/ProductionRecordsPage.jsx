@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { deleteJson, postJson } from "../api/http";
 import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { Alert, Button, Card, DataTable, Drawer, EmptyState, Pagination, Page, RequestError, StatusBadge, WorkflowGuide, notify, useConfirmDialog } from "../ui/components";
-import { formatTime, LoadingCard } from "./shared";
+import { formatTime, LoadingCard, SiteScopeField } from "./shared";
 import { ProductionRecordForm, createProductionEditor, isProductionEditorValid, parseProductionEditor } from "./ProductionRecordForm";
 import { productionConditionLabels, productionResources } from "./manufacturingResources";
 
@@ -35,12 +36,23 @@ function ProductionAttributeSummary({ value }) {
 
 export function ProductionRecordsPage({ section, canWrite = true }) {
   const resource = productionResources[section];
-  const [siteId, setSiteId] = useState("");
-  const listEndpoint = ["context", "installation"].includes(section) && siteId.trim()
-    ? `${resource.endpoint}?siteId=${encodeURIComponent(siteId.trim())}`
+  const needsSiteScope = ["context", "installation"].includes(section);
+  const siteScope = useSiteScope({ enabled: needsSiteScope, allowAllSites: needsSiteScope });
+  const { siteId, selectSite } = siteScope;
+  const [knownAdminSiteIds, setKnownAdminSiteIds] = useState([]);
+  const siteQuery = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
+  const listEndpoint = needsSiteScope
+    ? siteId ? `${resource.endpoint}${siteQuery}` : siteScope.administrator ? resource.endpoint : ""
     : resource.endpoint;
-  const { data, loading, error, reload } = useApi(listEndpoint);
+  const { data, loading, error, reload } = useApi(listEndpoint, {
+    enabled: !needsSiteScope || Boolean(siteId) || siteScope.administrator,
+  });
   const rows = extractRows(data);
+  const siteChoices = [...new Set([
+    ...siteScope.siteChoices,
+    ...knownAdminSiteIds,
+    ...(siteScope.administrator ? rows.map(row => row.siteId).filter(Boolean) : []),
+  ])].sort((left, right) => left.localeCompare(right));
   const [open, setOpen] = useState(false);
   const [editor, setEditor] = useState({});
   const [editorBase, setEditorBase] = useState({});
@@ -53,10 +65,22 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
   const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
   const editorValid = isProductionEditorValid(resource, editor);
   const activeRows = rows.filter(row => section === "context" ? !row.validTo : section === "installation" ? !row.removedAt : false);
+  const canStartWrites = canWrite && (!needsSiteScope || Boolean(siteId) || siteScope.administrator);
+  const requestError = siteScope.error || error;
+
+  useEffect(() => {
+    if (!needsSiteScope || !siteScope.administrator) return;
+    const discoveredSiteIds = [...siteScope.siteChoices, ...rows.map(row => row.siteId).filter(Boolean)];
+    if (discoveredSiteIds.length === 0) return;
+    setKnownAdminSiteIds(current => {
+      const next = [...new Set([...current, ...discoveredSiteIds])].sort((left, right) => left.localeCompare(right));
+      return current.length === next.length && current.every((value, index) => value === next[index]) ? current : next;
+    });
+  }, [needsSiteScope, rows, siteScope.administrator, siteScope.siteChoices]);
 
   useEffect(() => {
     setPage(1);
-  }, [section]);
+  }, [section, siteId]);
 
   useEffect(() => {
     const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -86,6 +110,10 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
     setActionError("");
     setOpen(true);
   }
+
+  const lockedSiteId = needsSiteScope
+    ? editorMode === "create" ? siteId : editorBase.siteId || ""
+    : "";
 
   async function save() {
     setSaving(true);
@@ -204,25 +232,24 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
   ];
 
   return (
-    <Page title={resource.title} actions={canWrite && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
-      <RequestError error={error} onRetry={reload} />
+    <Page title={resource.title} actions={canStartWrites && section !== "context" ? <Button variant="primary" onClick={() => openEditor()}>{resource.createLabel}</Button> : undefined}>
+      {needsSiteScope && <div className="mb-5 max-w-md"><SiteScopeField
+        siteId={siteId}
+        siteChoices={siteChoices}
+        onChange={selectSite}
+        loading={siteScope.loading}
+        label={siteScope.administrator ? "现场范围（未选择时显示全部可访问记录）" : "现场范围"}
+        emptyLabel={siteScope.administrator ? "全部可访问现场" : "选择站点"}
+      /></div>}
+      <RequestError error={requestError} onRetry={() => siteScope.error ? siteScope.reload() : reload()} />
       {!open && actionError && <Alert tone="danger">{actionError}</Alert>}
-      {loading && !data ? <LoadingCard /> : (
+      {needsSiteScope && !siteId && !siteScope.administrator && !siteScope.loading ? (
+        <EmptyState
+          title={siteChoices.length ? "请选择生产现场" : "当前没有可访问站点"}
+          description={siteScope.invalidRequestedSite ? "URL 中的站点不在当前账号可访问范围内。请选择一个有权访问的站点。" : siteChoices.length ? "生产切换与工装装卸记录按站点隔离；选择现场后再查看记录或开始配置。" : "当前账号没有可用于生产切换或工装装卸的站点。"}
+        />
+      ) : siteScope.loading || loading && !data ? <LoadingCard /> : (
         <>
-          {["context", "installation"].includes(section) && (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="w-full sm:w-64">
-                <label className="mb-1.5 block text-sm font-medium text-slate-700" htmlFor={`${section}-site-filter`}>站点</label>
-                <input
-                  id={`${section}-site-filter`}
-                  className="block min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-trajectory-500 focus:ring-2 focus:ring-trajectory-100"
-                  value={siteId}
-                  placeholder="输入 SiteId 筛选记录"
-                  onChange={event => setSiteId(event.target.value)}
-                />
-              </div>
-            </div>
-          )}
           {section === "context" && (
             <>
               <WorkflowGuide
@@ -239,8 +266,10 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
                 description={activeRows.length ? `${activeRows.length} 台设备已准备好开始新运行` : "目前没有正在生效的生产配置"}
                 actions={(
                   <div className="flex flex-wrap items-center gap-2">
-                    {activeRows.length > 0 && <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100" to="/process-executions">查看运行记录</Link>}
-                    {canWrite && <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方版本" : "开始配置"}</Button>}
+                    {activeRows.length > 0 && (siteId || !siteScope.administrator
+                      ? <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100" to={`/process-executions${siteQuery}`}>查看运行记录</Link>
+                      : <span className="px-3 py-2 text-sm text-slate-500">选择具体现场后查看运行记录</span>)}
+                    {canStartWrites && <Button variant="primary" onClick={() => openEditor()}>{activeRows.length ? "切换产品或配方版本" : "开始配置"}</Button>}
                   </div>
                 )}
               >
@@ -326,6 +355,7 @@ export function ProductionRecordsPage({ section, canWrite = true }) {
           resource={resource}
           editor={editor}
           editorMode={editorMode}
+          lockedSiteId={lockedSiteId}
           onChange={(key, value) => setEditor(current => ({ ...current, [key]: value }))}
         />
       </Drawer>

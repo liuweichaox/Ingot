@@ -8,11 +8,12 @@ using Ingot.Platform.Application.TimeSeries;
 
 namespace Ingot.Platform.Application.ProcessExecutions;
 
+/// <summary>按采样质量、信号覆盖和生命周期边界计算单次过程运行的分析证据。</summary>
 public sealed class ProcessExecutionAnalysisEngine(
     IFeatureDefinitionRegistry? featureDefinitions = null)
 {
     public static readonly string AlgorithmVersion =
-        $"stage-relative-v6+{ProcessExecutionAnalysisThresholds.ComputeFingerprint()}";
+        $"stage-relative-v7+{ProcessExecutionAnalysisThresholds.ComputeFingerprint()}";
     private readonly IFeatureDefinitionRegistry _featureDefinitions =
         featureDefinitions ?? new BuiltInFeatureDefinitionRegistry();
 
@@ -87,6 +88,12 @@ public sealed class ProcessExecutionAnalysisEngine(
                 Coverage = samples.Length == 0 ? 0 : valid / (double)samples.Length
             };
         }).ToArray();
+        var selectedSignalCodes = selections
+            .Select(static selection => selection.DataItemCode)
+            .ToHashSet(StringComparer.Ordinal);
+        var nonGoodQualityValueCount = samples.Sum(sample => sample.QualityCodes.Count(value =>
+            selectedSignalCodes.Contains(value.Key) &&
+            !string.Equals(value.Value, SignalQualityCodes.Good, StringComparison.OrdinalIgnoreCase)));
 
         var issues = new List<string>();
         var status = ProcessDataStatuses.Available;
@@ -128,6 +135,11 @@ public sealed class ProcessExecutionAnalysisEngine(
         {
             status = Degrade(status);
             issues.Add($"信号 {signal.Code} 有效覆盖率为 {signal.Coverage:P1}。");
+        }
+        if (nonGoodQualityValueCount > 0)
+        {
+            status = Degrade(status);
+            issues.Add($"发现 {nonGoodQualityValueCount} 个已选过程点位质量非良好、来源质量未分类或经过替代处理；相关运行已降级。");
         }
         if (phaseAnalysis.Issues.Count > 0)
         {

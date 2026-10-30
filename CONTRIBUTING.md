@@ -19,23 +19,20 @@ Ingot 接受代码、设备适配、算法、获授权的公开回放数据、�
 
 ## 开发环境
 
-要求：
+按本次改动选择最小环境。只改文档或单个应用时，不需要先安装整套开发工具。
 
-- .NET SDK 10；
-- Node.js 22.22+；
-- uv 0.12.5（使用 Python 3.12）；
-- Docker 与 Docker Compose。
+| 改动范围 | 最少工具 | 本地准备 |
+|---|---|---|
+| Markdown、README | Python 3；运行公开用语门禁时还需 Bash | `python3 scripts/verify-documentation-style.py` |
+| `apps/platform` | Node.js 22.22+、npm | `npm --prefix apps/platform ci` |
+| `apps/website` | Node.js 22.22+、npm | `npm --prefix apps/website ci` |
+| `apps/docs-site` | Node.js 22.22+、npm | `npm --prefix apps/docs-site ci` |
+| .NET 服务 | .NET SDK 10 | `dotnet restore Ingot.sln` |
+| Optimizer | Python 3.12、uv 0.12.5 | `uv sync --project optimizer --extra service --group dev --locked` |
 
-以下命令在仓库根目录执行：
+以上命令在仓库根目录执行。修改应用代码时，在对应应用运行 lint；文档站页面、网站或工作台改动应构建对应应用，确认页面能够生成。
 
-```bash
-dotnet restore Ingot.sln
-npm --prefix apps/platform ci
-npm --prefix apps/website ci
-npm --prefix apps/docs-site ci
-uv sync --project optimizer --extra service --group dev --locked
-uv run --project optimizer --locked pytest
-```
+提交前的完整门禁需要 .NET SDK 10、Node.js 22.22+、Python 3.12、uv 0.12.5、Docker Compose 和 Bash。它会验证三个前端、.NET、Optimizer、部署清单及架构和产品边界；准备好这些工具后，在仓库根目录运行 `./scripts/verify.sh`。门禁要求不因本地迭代只安装单个应用而改变。
 
 ## 工程原则
 

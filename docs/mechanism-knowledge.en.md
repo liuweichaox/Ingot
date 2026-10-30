@@ -26,7 +26,9 @@ Each recommendation freezes the knowledge versions, source hashes, and applicabi
 
 ## Sources, Review, and Conflict Resolution
 
-When ingesting a source, retain its original location, license or usage authorization, factory/production site, and process scope. Extraction only establishes that text was obtained. Reviewers still check units, conditions, citation locations, and content hashes against the original. Source and fragment review do not replace evidence review for a mechanism claim.
+When ingesting a source, retain its original location, license or usage authorization, and factory/production site. A source can be site-wide or scoped to one recipe. Site access is the authorization boundary; the recipe selector expresses applicability only. Site-wide material can be used with any recipe at the site, while recipe-scoped material cannot be used with another recipe. Extraction only establishes that text was obtained. Reviewers still check units, conditions, citation locations, and content hashes against the original. Source and fragment review do not replace evidence review for a mechanism claim.
+
+The same content hash is registered only once per site, with one immutable scope selector. Re-uploading cannot change that scope. If the same content is already registered under another scope, the system rejects reuse and asks the user to review the existing source or submit revised content. To share material across recipes, register it as site-wide on its first upload.
 
 A claim should state variables and units, applicability dimensions, evidence level, expected signature (the predicted direction or shape of the effect), and falsification conditions, with supporting or refuting evidence links. Status and version retain review conclusions. Retrieval rank is not a reason to raise confidence, and engineering experience should not automatically be labeled validated.
 
@@ -34,7 +36,7 @@ When claims disagree, link both claim identifiers and versions and record the co
 
 ## Knowledge Retrieval
 
-Document knowledge reaches Ingot Chat through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard factory/production-site and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
+Document knowledge reaches Ingot Chat through source ingestion and fragment extraction, human review, keyword and optional semantic indexing, hard site-authorization and applicability filtering, hybrid ranking, and fragment-level citation. Only reviewed sources and human-reviewed fragments are retrievable. With an explicit recipe, search includes site-wide sources and sources scoped to that recipe; without recipe context, search includes only site-wide sources. Retrieval scope never expands site authorization. Results retain the source record, page or sheet, source SHA, and content hash so an engineer can return to the original material and detect content changes.
 
 The semantic index is rebuildable derived state. It does not change review status or become formal business evidence. Embeddings are disabled by default. When enabled, they reuse the protected model-service configuration and require an OpenAI-compatible `/embeddings` endpoint. If that service is unavailable or a query embedding fails, the system falls back to PostgreSQL keyword retrieval without relaxing authorization or review gates.
 

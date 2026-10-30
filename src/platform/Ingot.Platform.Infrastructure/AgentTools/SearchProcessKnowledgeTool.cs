@@ -1,4 +1,5 @@
 
+// 按授权站点、配方适用范围和人工复核状态检索可引用的工艺知识。
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ingot.Agent;
@@ -11,7 +12,8 @@ namespace Ingot.Platform.Infrastructure.AgentTools;
 
 public sealed partial class SearchProcessKnowledgeTool(
     IResearchAssetStore store,
-    IProcessKnowledgeSearch? search = null) : IAnalysisTool
+    IProcessKnowledgeSearch? search = null,
+    RecipeKnowledgeScopeReader? recipeScopes = null) : IAnalysisTool
 {
     public AnalysisToolDefinition Definition { get; } = new()
     {
@@ -19,7 +21,7 @@ public sealed partial class SearchProcessKnowledgeTool(
         Version = "1.0.0",
         EntryPoint = ProductEntryPoints.Chat,
         Purpose = RunPurposes.ReadOnlyAnalysis,
-        Description = "检索指定站点已经过现场人员复核的工艺文档、表格、图片说明和现场记录。只查询，不修改数据。",
+        Description = "检索指定站点已经过现场人员复核的工艺文档、表格、图片说明和现场记录。未指定配方时仅检索站点通用资料；只有用户或当前页面明确给出配方时才检索该配方适用资料。只查询，不修改数据。",
         InputSchema = JsonSerializer.SerializeToElement(new
         {
             type = "object",
@@ -28,6 +30,7 @@ public sealed partial class SearchProcessKnowledgeTool(
             {
                 query = new { type = "string", minLength = 1, maxLength = 500 },
                 siteId = new { type = "string", minLength = 1, maxLength = 128 },
+                processSpecificationId = new { type = "string", minLength = 1, maxLength = 120 },
                 productFamilyCode = new { type = "string", maxLength = 120 },
                 equipmentId = new { type = "string", maxLength = 120 },
                 limit = new { type = "integer", minimum = 1, maximum = 20 }
@@ -45,6 +48,13 @@ public sealed partial class SearchProcessKnowledgeTool(
             throw new ArgumentException("请提供要检索的工艺问题。", nameof(call));
         call.Arguments.TryGetValue("productFamilyCode", out var productFamilyCode);
         call.Arguments.TryGetValue("equipmentId", out var equipmentId);
+        call.Arguments.TryGetValue("processSpecificationId", out var requestedProcessSpecificationId);
+        var pageContext = context.Request.PageContext;
+        var pageProcessSpecificationId = string.Equals(
+                pageContext?.Kind, "process-specification", StringComparison.OrdinalIgnoreCase)
+            ? pageContext?.Id
+            : null;
+        var processSpecificationId = NullIfBlank(pageProcessSpecificationId) ?? NullIfBlank(requestedProcessSpecificationId);
         var limit = call.Arguments.TryGetValue("limit", out var limitText) &&
                     int.TryParse(limitText, out var parsedLimit)
             ? Math.Clamp(parsedLimit, 1, 20)
@@ -62,15 +72,33 @@ public sealed partial class SearchProcessKnowledgeTool(
         }
         catch (UnauthorizedAccessException)
         {
-            return Insufficient(query, "当前用户无权访问该站点的工艺知识。", productFamilyCode, equipmentId);
+            return Insufficient(query, "当前用户无权访问该站点的工艺知识。", productFamilyCode, equipmentId,
+                processSpecificationId);
+        }
+
+        if (processSpecificationId is not null)
+        {
+            if (recipeScopes is null)
+                return Insufficient(query, "当前无法核实指定配方；未检索配方限定资料。", productFamilyCode,
+                    equipmentId, processSpecificationId, siteId);
+            try
+            {
+                await recipeScopes.ReadAsync(siteId, processSpecificationId, ct).ConfigureAwait(false);
+            }
+            catch (ResearchAssetRuleException exception)
+            {
+                return Insufficient(query, exception.Message, productFamilyCode, equipmentId,
+                    processSpecificationId, siteId);
+            }
         }
 
         var result = search is null
-            ? await SearchFallbackAsync(siteId, query, productFamilyCode, equipmentId, limit, ct).ConfigureAwait(false)
+            ? await SearchFallbackAsync(siteId, processSpecificationId, query, productFamilyCode, equipmentId, limit, ct).ConfigureAwait(false)
             : await search.SearchAsync(new ProcessKnowledgeSearchRequest
             {
                 SiteCode = siteId,
                 Query = query.Trim(),
+                ProcessSpecificationId = processSpecificationId,
                 ProductFamilyCode = NullIfBlank(productFamilyCode),
                 EquipmentId = NullIfBlank(equipmentId),
                 Limit = limit
@@ -103,6 +131,7 @@ public sealed partial class SearchProcessKnowledgeTool(
                 appliedContext = new
                 {
                     siteId,
+                    processSpecificationId,
                     productFamilyCode = NullIfBlank(productFamilyCode),
                     equipmentId = NullIfBlank(equipmentId)
                 },
@@ -137,6 +166,7 @@ public sealed partial class SearchProcessKnowledgeTool(
 
     private async Task<ProcessKnowledgeSearchResult> SearchFallbackAsync(
         string siteId,
+        string? processSpecificationId,
         string query,
         string? productFamilyCode,
         string? equipmentId,
@@ -146,6 +176,7 @@ public sealed partial class SearchProcessKnowledgeTool(
         var terms = BuildTerms(query);
         var sources = (await store.ListKnowledgeSourcesAsync(siteId, ct).ConfigureAwait(false))
             .Where(static source => source.Status == KnowledgeSourceStatuses.Reviewed)
+            .Where(source => MatchesProcessSpecificationScope(source.ContextSelector, processSpecificationId))
             .Where(source => MatchesContext(source.ContextSelector, "product_family_code", productFamilyCode))
             .Where(source => MatchesContext(source.ContextSelector, "equipment_id", equipmentId))
             .ToArray();
@@ -179,7 +210,9 @@ public sealed partial class SearchProcessKnowledgeTool(
         string query,
         string limitation,
         string? productFamilyCode,
-        string? equipmentId)
+        string? equipmentId,
+        string? processSpecificationId = null,
+        string? siteId = null)
         => new()
         {
             Tool = Definition.Name,
@@ -189,6 +222,8 @@ public sealed partial class SearchProcessKnowledgeTool(
                 query = query.Trim(),
                 appliedContext = new
                 {
+                    siteId,
+                    processSpecificationId,
                     productFamilyCode = NullIfBlank(productFamilyCode),
                     equipmentId = NullIfBlank(equipmentId)
                 },
@@ -207,6 +242,27 @@ public sealed partial class SearchProcessKnowledgeTool(
             return true;
         return !context.TryGetValue(key, out var value) ||
                string.Equals(value, requested.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesProcessSpecificationScope(
+        IReadOnlyDictionary<string, string> context,
+        string? requestedProcessSpecificationId)
+    {
+        var scopedValues = context
+            .Where(pair => string.Equals(
+                pair.Key.Trim(),
+                MechanismKnowledgeService.ProcessSpecificationDimension,
+                StringComparison.OrdinalIgnoreCase))
+            .Select(static pair => pair.Value)
+            .ToArray();
+        if (scopedValues.Length == 0)
+            return true;
+        if (scopedValues.Length != 1 || string.IsNullOrWhiteSpace(scopedValues[0]))
+            return false;
+
+        return !string.IsNullOrWhiteSpace(requestedProcessSpecificationId) &&
+               string.Equals(scopedValues[0].Trim(), requestedProcessSpecificationId.Trim(),
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static double Score(

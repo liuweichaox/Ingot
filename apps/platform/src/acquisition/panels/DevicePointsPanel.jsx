@@ -1,5 +1,5 @@
 // Present edge-side probe results and conversion evidence before a task can be published.
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Input, Select } from "../../ui/components";
 import { PROBE_MODE } from "../protocolRegistry";
 
@@ -32,17 +32,45 @@ export function DevicePointsPanel({
   allowProbe = !readOnly,
   advisories,
   publishChecklist,
+  focusPointRequest = null,
+  onFocusPointComplete,
   onProbe,
   onMapPoint,
 }) {
   const [search, setSearch] = useState("");
   const [selections, setSelections] = useState({});
+  const [pendingFocusPoint, setPendingFocusPoint] = useState(null);
+  const [focusedPointKey, setFocusedPointKey] = useState("");
   const readiness = descriptor.probeReadiness(form);
   const edgeMissing = !form.edgeId;
-  const points = (probe?.points || []).filter(point =>
+  const points = useMemo(() => (probe?.points || []).filter(point =>
     !search.trim() || `${point.name} ${point.path} ${point.topic || ""} ${Object.values(point.metadata || {}).join(" ")}`
-      .toLowerCase().includes(search.trim().toLowerCase()));
-  const pointKey = point => `${descriptor.id === "mqtt" ? point.topic || "" : ""}\u001f${point.path}`;
+      .toLowerCase().includes(search.trim().toLowerCase())), [probe?.points, search]);
+  const pointKey = useCallback(point => `${descriptor.id === "mqtt" ? point.topic || "" : ""}\u001f${point.path}`, [descriptor.id]);
+  useEffect(() => {
+    if (!focusPointRequest) return;
+    setSearch("");
+    setPendingFocusPoint(focusPointRequest);
+  }, [focusPointRequest]);
+
+  useEffect(() => {
+    if (!pendingFocusPoint) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const key = pointKey(pendingFocusPoint);
+      const row = document.getElementById(`acq-device-point-${encodeURIComponent(key)}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+        const field = row.querySelector("select");
+        (field && !field.disabled ? field : row).focus({ preventScroll: true });
+        setFocusedPointKey(key);
+      }
+      setPendingFocusPoint(null);
+      onFocusPointComplete?.(pendingFocusPoint.revision);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [onFocusPointComplete, pendingFocusPoint, pointKey, points]);
+
+  useEffect(() => setFocusedPointKey(""), [search]);
   const mappedPaths = new Set(form.valueMappings
     .filter(item => item.sourcePath)
     .map(item => pointKey({ topic: item.topic, path: item.sourcePath })));
@@ -160,8 +188,12 @@ export function DevicePointsPanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {points.map(point => (
-                  <tr key={pointKey(point)} className={isPointMapped(point) ? "bg-emerald-50/40" : undefined}>
+                {points.map(point => {
+                  const key = pointKey(point);
+                  const focused = focusedPointKey === key;
+                  return (
+                  <tr key={key} id={`acq-device-point-${encodeURIComponent(key)}`} tabIndex={-1}
+                    className={`${isPointMapped(point) ? "bg-emerald-50/40" : ""} ${focused ? "bg-blue-50 outline outline-2 outline-blue-400" : ""}`}>
                     <td className="px-3 py-2">
                       <p className="font-medium text-slate-700">{point.name}</p>
                       <code className="text-xs text-slate-500">{point.path}</code>
@@ -197,10 +229,10 @@ export function DevicePointsPanel({
                       {readOnly ? "—" : (
                         <div className="flex gap-2">
                           <Select
-                            value={selections[pointKey(point)] || ""}
+                            value={selections[key] || ""}
                             disabled={point.metadata?.supported === "false"}
                             aria-label={`映射 ${point.topic ? `${point.topic} / ` : ""}${point.path}`}
-                            onChange={event => setSelections(value => ({ ...value, [pointKey(point)]: event.target.value }))}
+                            onChange={event => setSelections(value => ({ ...value, [key]: event.target.value }))}
                           >
                             <option value="">选择变量</option>
                             {dataItems.map(item => (
@@ -210,8 +242,8 @@ export function DevicePointsPanel({
                             ))}
                           </Select>
                           <Button
-                            disabled={point.metadata?.supported === "false" || !selections[pointKey(point)]}
-                            onClick={() => onMapPoint(point, selections[pointKey(point)])}
+                            disabled={point.metadata?.supported === "false" || !selections[key]}
+                            onClick={() => onMapPoint(point, selections[key])}
                           >
                             映射
                           </Button>
@@ -219,7 +251,7 @@ export function DevicePointsPanel({
                       )}
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>

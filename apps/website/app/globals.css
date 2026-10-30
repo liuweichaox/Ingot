@@ -142,6 +142,9 @@ html:lang(zh-CN) .hero h1 span { text-wrap: balance; }
 }
 .hero-lead { max-width: 540px; margin: 22px 0 0; color: var(--paper-muted); font-size: 17px; line-height: 1.7; }
 .button-row { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 32px; }
+.hero-paths { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 17px; color: var(--paper-muted); font-size: 12px; }
+.hero-paths a { text-decoration-color: rgba(232, 241, 237, .35); text-underline-offset: 3px; }
+.hero-paths a:hover, .hero-paths a:focus-visible { color: var(--paper); text-decoration-color: currentColor; }
 .button {
   display: inline-flex;
   align-items: center;

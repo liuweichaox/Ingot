@@ -67,6 +67,12 @@ Edge and diagnostics tokens must contain at least 24 characters, must differ, an
 
 The reference Compose binds application and database ports to loopback. Before remote use, configure TLS ingress and the actual Web origin in `Cors:AllowedOrigins`; the bundled API value is `http://localhost:3000`. OIDC additionally requires its allowed origins and exact callback URIs.
 
+### Sample and event retention
+
+- `INGOT_EVENT_RETENTION_DAYS` defaults to `0`, which disables Platform Worker's time-series retention cleanup. A positive value makes the Worker try at startup and every 24 hours to remove complete chunks older than the retention window from `process_sample_values`, `process_sample_frames`, and `production_events`. It applies to every site in the current Platform database.
+- `INGOT_EVENT_KEY_RETENTION_DAYS` defaults to `0`, which keeps event deduplication keys indefinitely. A positive value makes the Worker delete expired `event_ingest_keys` in batches at startup and every 24 hours; the effective retention is at least 30 days. Cover the longest Edge replay window and, where practical, keep it no shorter than event retention. Otherwise, replaying older events may no longer be deduplicated.
+- Before enabling either setting, confirm retention requirements, backups, and restore exercises. There is no per-site exclusion, business-reference pinning, or cleanup impact preview. Time-series retention physically deletes data; a backup alone does not prove that online runs, analyses, or evidence remain readable.
+
 ### OIDC identity provider
 
 OIDC mode uses Authorization Code + PKCE. The frontend is a public client and never holds a client secret. Configure at least:
@@ -191,6 +197,7 @@ Platform starts without Optimizer. An Optimizer outage pauses new numerical reco
 Monitor the capabilities actually enabled; Edge, equipment, and acquisition metrics apply to field-connected deployments:
 
 - Edge heartbeat, desired/applied configuration versions, and errors;
+- freshness evaluation duration, edges and tasks evaluated per pass, state transitions, failures, and last-success time for the Worker;
 - connection state, sample time, and backlog per equipment;
 - event duplicates, disorder, maximum gaps, and replay delay;
 - run completeness and actual-setting, context, and inspection linkage coverage;

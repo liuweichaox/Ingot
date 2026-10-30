@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["dockerfile"],
+  "ignorePaths": ["tools/semiconductor-etch-simulator/Dockerfile"],
+  "packageRules": [
+    {
+      "matchManagers": ["dockerfile"],
+      "matchDepTypes": ["stage"],
+      "enabled": false
+    }
+  ]
+}

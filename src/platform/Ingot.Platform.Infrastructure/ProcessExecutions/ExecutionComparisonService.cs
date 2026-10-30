@@ -279,12 +279,19 @@ public sealed class ExecutionComparisonService(
                 row.ProcessDataQuality.Status == ProcessDataStatuses.Degraded),
             UnavailableProcessExecutionCount = rows.Count(static row =>
                 row.ProcessDataQuality.Status == ProcessDataStatuses.Unavailable),
-            EffectiveProcessExecutionWeight = rows.Skip(1).Sum(static row => row.EvidenceWeight)
+            EffectiveProcessExecutionWeight = rows[0].ProcessDataQuality.Status == ProcessDataStatuses.Available
+                ? rows.Skip(1)
+                    .Where(static row => row.ProcessDataQuality.Status == ProcessDataStatuses.Available)
+                    .Sum(static row => row.EvidenceWeight)
+                : 0
         };
+        var diagnosticRows = rows[0].ProcessDataQuality.Status == ProcessDataStatuses.Available
+            ? rows.Where(static row => row.ProcessDataQuality.Status == ProcessDataStatuses.Available).ToArray()
+            : [];
         var effectiveWeight = acceptance.EffectiveProcessExecutionWeight;
         var diagnosis = await EnrichDiagnosisAsync(
-            rows,
-            _diagnosisEngine.Analyze(rows),
+            diagnosticRows,
+            _diagnosisEngine.Analyze(diagnosticRows),
             optimizerClient,
             ct).ConfigureAwait(false);
         diagnosis = ApplyTransparencyPolicy(
@@ -295,7 +302,7 @@ public sealed class ExecutionComparisonService(
                 additionalKnownUnmeasuredConfounders));
         comparisonMetrics?.Observe(diagnosis.Readiness);
         var signalComparisons = BuildSignalComparisons(rows[0], rows.Skip(1).ToArray());
-        var qualityAssociations = BuildQualityAssociations(rows);
+        var qualityAssociations = BuildQualityAssociations(diagnosticRows);
         var investigation = _investigationBuilder.Build(
             rows[0],
             rows.Skip(1).ToArray(),
@@ -342,6 +349,8 @@ public sealed class ExecutionComparisonService(
             reasons.Add("effective-weight-insufficient");
         if (acceptance.UnavailableProcessExecutionCount > 0)
             reasons.Add("process-data-unavailable");
+        if (acceptance.DegradedProcessExecutionCount > 0)
+            reasons.Add("process-data-degraded");
 
         var mode = reasons.Any(reason => reason is
                 "quality-outcomes-missing" or "outcome-class-missing" or "effective-weight-insufficient")
@@ -808,6 +817,7 @@ public sealed class ExecutionComparisonService(
             SampleCount = sampleCountOverride ?? wholeProcessExecution.Quality.SampleCount,
             ExpectedSampleCount = 0,
             ProcessDataQuality = wholeProcessExecution.Quality,
+            SampleConfigurationEvidence = materialized.SampleConfigurationEvidence,
             EvidenceWeight = wholeProcessExecution.Quality.Status switch
             {
                 ProcessDataStatuses.Available => 1d,
@@ -877,7 +887,10 @@ public sealed class ExecutionComparisonService(
                 SourceMaxIngestId = source.MaxIngestId,
                 SourceEventCount = source.EventCount,
                 SourceContentHash = source.ContentHash
-            });
+            })
+        {
+            SampleConfigurationEvidence = ProcessSampleConfigurationEvidenceProjector.Project(samples)
+        };
     }
 
     private static IReadOnlyList<ExecutionControlParameterValue> BuildControlParameterValues(
@@ -892,6 +905,7 @@ public sealed class ExecutionComparisonService(
             .ThenByDescending(static row => row.IngestId)
             .FirstOrDefault();
         if (applied is not null &&
+            applied.Event.QualityFlags.Count == 0 &&
             applied.Event.Data.TryGetValue("resolvedParameters", out var raw) &&
             TryReadObject(raw, out var actual))
         {
@@ -1041,6 +1055,8 @@ public sealed class ExecutionComparisonService(
         {
             AddActualContext(context, "actual_process_specification_id", applied.Event.Data.GetValueOrDefault("processSpecificationId"));
             AddActualContext(context, "actual_process_specification_version", applied.Event.Data.GetValueOrDefault("processSpecificationVersion"));
+            if (applied.Event.QualityFlags.Count > 0)
+                context["control_parameter_capture_status"] = "quality_degraded";
         }
         return context;
     }

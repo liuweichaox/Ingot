@@ -1,14 +1,15 @@
 
 // 呈现生产运行、过程曲线和比较入口；页面只编排受权 API 数据，不在客户端推断工艺因果。
 import { ArrowRightIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { getJson } from "../api/http";
 import { processCurveTraces } from "../charts/chartAdapters";
-import { extractRows, registeredSiteIds, useApi } from "../hooks/useApi";
+import { extractRows, useApi } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import { useProcessCurves } from "../hooks/useProcessCurves";
 import { Alert, Badge, Button, Card, DataTable, EmptyState, Field, Input, LinkButton, Metric, Pagination, Page, RequestError, Select, StatusBadge, cx } from "../ui/components";
-import { formatTime, formatInteger, formatMeasurementValue, formatDuration, countOnlineEdges, eventTypeLabel, LoadingCard } from "./shared";
+import { formatTime, formatInteger, formatMeasurementValue, formatDuration, countOnlineEdges, eventTypeLabel, LoadingCard, SiteScopeField } from "./shared";
 import PlotlyChart from "../components/PlotlyChart";
 
 const runIssueSeverityRank = {
@@ -36,36 +37,47 @@ export function mergeRunIssues(dataIssues = [], processDataQualityIssues = []) {
   return Array.from(issuesByMessage.values());
 }
 
-export function WorkbenchPage({ identity }) {
-  const [retryKey, setRetryKey] = useState(0);
-  const [state, setState] = useState({
-    loading: true,
-    error: "",
+function emptyWorkbenchState(siteId = "", loading = true, error = "", edges = []) {
+  return {
+    siteId,
+    loading,
+    error,
     executions: [],
     executionTotal: 0,
     executionOverview: {},
     summary: {},
     events: [],
-    edges: [],
+    edges,
     contexts: [],
-  });
+  };
+}
+
+export function WorkbenchPage({ identity }) {
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices, selectSite } = siteScope;
+  const [retryKey, setRetryKey] = useState(0);
+  const [state, setState] = useState(() => emptyWorkbenchState());
   useEffect(() => {
+    if (siteScope.loading) return undefined;
     let alive = true;
+    const siteEdges = extractRows(siteScope.edgeResponse.data).filter(edge => !siteId || edge.siteId === siteId);
     (async () => {
       try {
-        const edges = await getJson("/api/edges");
-        const siteId = registeredSiteIds(edges)[0] || "";
+        if (!siteId) {
+          setState(emptyWorkbenchState("", false, siteScope.error || "", siteEdges));
+          return;
+        }
+        setState(emptyWorkbenchState(siteId, true, "", siteEdges));
         const siteQuery = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
-        const [executions, summary, events, contexts] = siteId
-          ? await Promise.all([
-            getJson(`/api/v1/process-executions?limit=8${siteQuery}`),
-            getJson(`/api/v1/inspection-tasks/summary?siteId=${encodeURIComponent(siteId)}`),
-            getJson(`/api/v1/events?limit=20${siteQuery}`),
-            getJson(`/api/v1/production-contexts?siteId=${encodeURIComponent(siteId)}`),
-          ])
-          : [{ items: [], total: 0 }, {}, { items: [] }, { data: [] }];
+        const [executions, summary, events, contexts] = await Promise.all([
+          getJson(`/api/v1/process-executions?limit=8${siteQuery}`),
+          getJson(`/api/v1/inspection-tasks/summary?siteId=${encodeURIComponent(siteId)}`),
+          getJson(`/api/v1/events/summary?limit=20${siteQuery}`),
+          getJson(`/api/v1/production-contexts?siteId=${encodeURIComponent(siteId)}`),
+        ]);
         if (!alive) return;
         setState({
+          siteId,
           loading: false,
           error: "",
           executions: extractRows(executions),
@@ -73,52 +85,63 @@ export function WorkbenchPage({ identity }) {
           executionOverview: executions.overview || {},
           summary,
           events: extractRows(events),
-          edges: extractRows(edges),
+          edges: siteEdges,
           contexts: extractRows(contexts),
         });
       } catch (error) {
-        if (alive) setState(current => ({ ...current, loading: false, error: error.message }));
+        if (alive) setState(emptyWorkbenchState(siteId, false, error.message, siteEdges));
       }
     })();
     return () => { alive = false; };
-  }, [retryKey]);
+  }, [retryKey, siteId, siteScope.edgeResponse.data, siteScope.error, siteScope.loading]);
 
-  const activeProcessExecutions = state.executionOverview.activeCount
-    ?? state.executions.filter(item => item.status === "active" || !item.completedAt).length;
-  const onlineEdges = countOnlineEdges(state.edges);
-  const pendingInspections = state.summary.pending ?? state.summary.pendingCount ?? 0;
+  const currentState = state.siteId === siteId
+    ? state
+    : emptyWorkbenchState(siteId, Boolean(siteId));
+  const hasLoadError = Boolean(siteScope.error || currentState.error);
+  const activeProcessExecutions = currentState.executionOverview.activeCount
+    ?? currentState.executions.filter(item => item.status === "active" || !item.completedAt).length;
+  const onlineEdges = countOnlineEdges(currentState.edges);
+  const pendingInspections = currentState.summary.pending ?? currentState.summary.pendingCount ?? 0;
+  const siteQuery = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
   const roles = identity?.roles || [];
   const isQualityRole = roles.some(role => role === "quality.inspector" || role === "quality.reviewer");
   const isEngineeringRole = roles.some(role => role === "process.engineer" || role === "platform.admin");
   const isAdministrator = roles.includes("platform.admin");
-  const hasProductionFoundation = state.edges.length > 0 && state.contexts.length > 0 && state.executionTotal > 0;
+  const hasProductionFoundation = currentState.contexts.length > 0 && currentState.executionTotal > 0;
   const qualityAction = {
       title: pendingInspections ? `处理 ${pendingInspections} 个质量待办` : "质量任务已处理",
       description: pendingInspections ? "优先完成检测录入和复核。" : "当前没有待录入或待复核任务。",
-      to: "/inspections",
+      to: `/inspections${siteQuery}`,
       tone: pendingInspections ? "border-l-amber-500" : "border-l-emerald-500",
       action: pendingInspections ? "去处理" : "查看记录",
     };
   const platformAction = {
-      title: `${onlineEdges}/${state.edges.length} 个现场节点在线`,
-      description: onlineEdges === state.edges.length && state.edges.length ? "设备采集与数据上行正常。" : "检查离线节点或尚未接入的设备。",
-      to: "/edges",
-      tone: onlineEdges === state.edges.length && state.edges.length ? "border-l-emerald-500" : "border-l-rose-500",
+      title: `${onlineEdges}/${currentState.edges.length} 个现场节点在线`,
+      description: currentState.edges.length === 0
+        ? "尚未登记现场节点，可从采集配置开始接入。"
+        : onlineEdges === currentState.edges.length
+          ? "现场节点心跳均在线；请在节点诊断中确认采样和数据上行。"
+          : "检查离线节点或尚未接入的设备。",
+      to: `/edges${siteQuery}`,
+      tone: currentState.edges.length === 0
+        ? "border-l-amber-500"
+        : onlineEdges === currentState.edges.length ? "border-l-emerald-500" : "border-l-rose-500",
       action: "查看状态",
     };
   const analysisAction = {
-    title: state.executionTotal > 1 ? "从生产运行开始工艺分析" : "积累可比较的生产运行",
-    description: state.executionTotal > 1 ? "选择异常或偏离运行，系统自动核对同类条件。" : "至少需要两次运行，才能形成有意义的同类对比。",
-    to: state.executionTotal > 1 ? "/process-executions?attention=1" : "/process-executions",
-    tone: state.executionTotal > 1 ? "border-l-blue-500" : "border-l-amber-500",
-    action: state.executionTotal > 1 ? "开始分析" : "查看运行",
+    title: currentState.executionTotal > 1 ? "从生产运行开始工艺分析" : "积累可比较的生产运行",
+    description: currentState.executionTotal > 1 ? "选择异常或偏离运行，系统自动核对同类条件。" : "至少需要两次运行，才能形成有意义的同类对比。",
+    to: `${currentState.executionTotal > 1 ? "/process-executions?attention=1" : "/process-executions"}${siteId ? `${currentState.executionTotal > 1 ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : ""}`,
+    tone: currentState.executionTotal > 1 ? "border-l-blue-500" : "border-l-amber-500",
+    action: currentState.executionTotal > 1 ? "开始分析" : "查看运行",
   };
   const recipeAction = {
     title: "看已发布配方的下一轮校正",
     description: "小校正留在当前版本。显著变更再创建修订草稿。",
-    to: "/configuration/process-specifications",
+    to: `/recipe-adjustments${siteQuery}`,
     tone: "border-l-blue-500",
-    action: "打开配方版本",
+    action: "查看可校正版本",
   };
   const dailyActions = isQualityRole && !isEngineeringRole
     ? [qualityAction, analysisAction, platformAction]
@@ -130,7 +153,7 @@ export function WorkbenchPage({ identity }) {
   const overviewItems = [
     {
       label: "已记录运行",
-      value: state.executionTotal,
+      value: currentState.executionTotal,
       detail: activeProcessExecutions ? `${activeProcessExecutions} 个正在进行` : "当前无进行中运行",
       indicator: activeProcessExecutions ? "bg-trajectory-600" : "bg-slate-400",
     },
@@ -142,19 +165,26 @@ export function WorkbenchPage({ identity }) {
     },
     {
       label: "现场节点",
-      value: `${onlineEdges}/${state.edges.length}`,
-      detail: state.edges.length === 0 ? "尚未登记节点" : onlineEdges === state.edges.length ? "数据上行正常" : "需要检查节点状态",
-      indicator: onlineEdges === state.edges.length && state.edges.length ? "bg-emerald-600" : state.edges.length ? "bg-rose-600" : "bg-slate-400",
+      value: `${onlineEdges}/${currentState.edges.length}`,
+      detail: currentState.edges.length === 0
+        ? "尚未登记节点"
+        : onlineEdges === currentState.edges.length
+          ? "节点心跳均在线；采样和上行需在诊断中核验"
+          : "有离线节点；请查看节点诊断",
+      indicator: onlineEdges === currentState.edges.length && currentState.edges.length ? "bg-emerald-600" : currentState.edges.length ? "bg-rose-600" : "bg-slate-400",
     },
   ];
   return (
     <Page
       title="工作台"
       description="把运行、质量和现场状态汇总为今天需要处理的工程任务。"
-      actions={<Link to="/process-executions?attention=1" className="inline-flex min-h-10 items-center gap-2 rounded-md border border-evidence-600 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 transition hover:bg-evidence-400">查看需要处理的运行<ArrowRightIcon className="size-4" /></Link>}
+      actions={<Link to={`/process-executions?attention=1${siteId ? `&siteId=${encodeURIComponent(siteId)}` : ""}`} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-evidence-600 bg-evidence-500 px-4 py-2 text-sm font-semibold text-coal-950 transition hover:bg-evidence-400">查看需要处理的运行<ArrowRightIcon className="size-4" /></Link>}
     >
-      <RequestError error={state.error} onRetry={() => setRetryKey(value => value + 1)} />
-      {state.loading ? <LoadingCard /> : (
+      <div className="mb-5 max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={selectSite} loading={siteScope.loading} /></div>
+      {siteScope.invalidRequestedSite && <Alert tone="warning">URL 中的站点不在当前账号可访问范围内。</Alert>}
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteChoices.length ? "请选择站点后查看现场运行概览。" : "当前账号没有可用站点。"}</Alert>}
+      <RequestError error={siteScope.error || currentState.error} onRetry={() => { void siteScope.reload(); setRetryKey(value => value + 1); }} />
+      {siteScope.loading || currentState.loading ? <LoadingCard /> : !siteId ? <EmptyState title="尚未加载站点运行数据" description="选择一个有权访问的站点后，工作台会加载该站点的运行、质检和上下文摘要。" /> : hasLoadError ? <EmptyState title="工作台数据暂不可用" description="当前站点的数据没有完整加载，请查看上方错误信息并重试。" /> : (
         <div className="flex flex-col gap-5">
           <section className="overflow-hidden rounded-md border border-slate-300 bg-white" aria-label="运行概览">
             <header className="flex flex-col gap-3 border-b border-slate-200 border-t-[3px] border-t-coal-900 px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
@@ -189,12 +219,12 @@ export function WorkbenchPage({ identity }) {
                 {[
                   ["/configuration/process-data-models", "发布工艺变量和配方版本"],
                   ["/configuration/ingestion-tasks", "配置采集"],
-                  ["/configuration/process-analysis-plans", "发布过程分析"],
+                  ["/configuration/process-analysis-plans", "发布分析规则"],
                   ["/configuration/quality-plans", "发布质量方案"],
                   ["/production/changeover", "完成生产切换"],
                 ].map(([to, label], index) => (
                   <li key={to}>
-                    <Link to={to} className="group flex min-h-20 gap-3 px-4 py-3 text-sm text-slate-800 transition hover:bg-white/60">
+                    <Link to={`${to}${siteQuery}`} className="group flex min-h-20 gap-3 px-4 py-3 text-sm text-slate-800 transition hover:bg-white/60">
                       <span className="data-value text-evidence-600">0{index + 1}</span>
                       <span className="font-medium leading-5 group-hover:text-trajectory-700">{label}</span>
                     </Link>
@@ -211,11 +241,11 @@ export function WorkbenchPage({ identity }) {
                   <h2 id="recent-executions-title" className="mt-1 text-base font-semibold text-slate-950">最近生产运行</h2>
                   <p className="mt-1 text-[13px] leading-5 text-slate-500">优先查看质量异常、数据不可用和仍在进行的运行。</p>
                 </div>
-                <Link className="shrink-0 text-sm font-semibold text-trajectory-700 hover:text-trajectory-600" to="/process-executions">查看全部</Link>
+                <Link className="shrink-0 text-sm font-semibold text-trajectory-700 hover:text-trajectory-600" to={`/process-executions${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`}>查看全部</Link>
               </header>
               <div className="p-5">
                 <DataTable
-                  rows={state.executions}
+                  rows={currentState.executions}
                   keyField="executionId"
                   columns={[
                     { key: "executionId", label: "运行号", render: (value, row) => <Link className="font-mono text-sm font-semibold text-trajectory-700 hover:text-trajectory-600" to={`/process-executions/${encodeURIComponent(value)}?siteId=${encodeURIComponent(row.siteId || "")}`}>{value}</Link> },
@@ -256,13 +286,13 @@ export function WorkbenchPage({ identity }) {
                   <p className="mt-1 text-[13px] leading-5 text-slate-500">来自现场和质量流程的最近记录。</p>
                 </header>
                 <div className="divide-y divide-slate-200 px-5">
-                  {state.events.slice(0, 5).map(item => (
+                  {currentState.events.slice(0, 5).map(item => (
                     <div key={item.ingestId} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3 first:pt-4 last:pb-4">
                       <div className="min-w-0"><Badge tone={item.event?.eventType?.startsWith("alarm.") ? "danger" : "neutral"}>{eventTypeLabel(item.event?.eventType)}</Badge><p className="mt-1 truncate text-xs text-slate-500">{item.event?.subject?.id || item.event?.executionId || "—"}</p></div>
                       <span className="font-mono text-xs text-slate-400">#{item.ingestId}</span>
                     </div>
                   ))}
-                  {!state.events.length && <div className="py-4"><EmptyState /></div>}
+                  {!currentState.events.length && <div className="py-4"><EmptyState /></div>}
                 </div>
               </section>
             </aside>
@@ -298,8 +328,9 @@ export function ProcessExecutionsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [query, setQuery] = useState(() => makeProcessExecutionQuery(filters, 1, 50));
-  const edgeResponse = useApi("/api/edges");
-  const siteId = registeredSiteIds(edgeResponse.data)[0] || "";
+  const siteScope = useSiteScope();
+  const { siteId, siteChoices, selectSite, edgeResponse } = siteScope;
+  const priorSiteId = useRef(siteId);
   const { data, loading, error, reload } = useApi(
     siteId ? `/api/v1/process-executions?${query}&siteId=${encodeURIComponent(siteId)}` : "",
     { enabled: Boolean(siteId) },
@@ -311,23 +342,30 @@ export function ProcessExecutionsPage() {
   const showingEmptyState = Boolean(data) && rows.length === 0;
   const ingestionResponse = useApi("/api/v1/ingestion-tasks", { enabled: showingEmptyState && !attentionOnly });
   const hasAppliedFilters = appliedFilters.status !== "all" || Object.entries(appliedFilters).some(([key, value]) => key !== "status" && value.trim());
-  const edgeRows = extractRows(edgeResponse.data);
+  const edgeRows = extractRows(edgeResponse.data).filter(edge => !siteId || edge.siteId === siteId);
   const onlineEdges = countOnlineEdges(edgeRows);
   const publishedIngestionTasks = extractRows(ingestionResponse.data).filter(item => item.status === "published").length;
   const edgeSummary = edgeResponse.error ? "检查失败" : edgeResponse.loading ? "检查中" : `${onlineEdges}/${edgeRows.length} 在线`;
   const ingestionSummary = ingestionResponse.error ? "检查失败" : ingestionResponse.loading ? "检查中" : publishedIngestionTasks;
+  useEffect(() => {
+    if (priorSiteId.current === siteId) return;
+    priorSiteId.current = siteId;
+    setPage(1);
+    setQuery(makeProcessExecutionQuery(appliedFilters, 1, pageSize));
+  }, [appliedFilters, pageSize, siteId]);
   function resetFilters() {
     const cleared = { status: "all", equipmentId: "", edgeId: "", externalBatchRef: "", outputItemId: "", executionId: "" };
     setFilters(cleared);
     setAppliedFilters(cleared);
     setPage(1);
     setQuery(makeProcessExecutionQuery(cleared, 1, pageSize));
-    if (params.size) navigate("/process-executions", { replace: true });
+    if (params.size) navigate(siteId ? `/process-executions?siteId=${encodeURIComponent(siteId)}` : "/process-executions", { replace: true });
   }
   return (
     <Page title="运行记录">
       <Card title="筛选条件">
-        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[140px_repeat(5,minmax(0,1fr))_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeProcessExecutionQuery(filters, 1, pageSize)); }}>
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(10rem,.8fr)_140px_repeat(5,minmax(0,1fr))_auto]" onSubmit={event => { event.preventDefault(); setAppliedFilters(filters); setPage(1); setQuery(makeProcessExecutionQuery(filters, 1, pageSize)); }}>
+          <SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={selectSite} loading={siteScope.loading} />
           <Field label="状态"><Select value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="all">全部</option><option value="attention">需要处理</option><option value="active">进行中</option><option value="completed">已完成</option></Select></Field>
           <div className={cx("gap-3 md:col-span-2 md:grid-cols-2 xl:contents", advancedFiltersOpen ? "grid" : "hidden xl:contents")}>
             <Field label="现场节点"><Input value={filters.edgeId} onChange={event => setFilters({ ...filters, edgeId: event.target.value })} placeholder="现场节点编号" /></Field>
@@ -340,8 +378,8 @@ export function ProcessExecutionsPage() {
           <Button className="self-end" variant="primary" type="submit"><MagnifyingGlassIcon className="size-4" />查询</Button>
         </form>
       </Card>
-      <RequestError error={edgeResponse.error || error} onRetry={edgeResponse.error ? edgeResponse.reload : reload} />
-      {(edgeResponse.loading && !siteId) || (loading && !data) ? <LoadingCard /> : (
+      <RequestError error={siteScope.error || error} onRetry={siteScope.error ? siteScope.reload : reload} />
+      {!siteId && !siteScope.loading ? <EmptyState title={siteChoices.length ? "请选择现场站点" : "当前没有可访问站点"} description={siteScope.invalidRequestedSite ? "URL 中的站点不在当前账号可访问范围内。" : "运行记录按站点隔离，请先选择一个站点。"} /> : siteScope.loading || loading && !data ? <LoadingCard /> : (
         <Card
           title={attentionOnly ? "需要处理的运行" : "生产运行"}
           description={attentionOnly ? `共 ${total} 条。质量不合格、结论不确定或过程数据不可用的已完成运行，点进详情后可做运行对比或下一轮校正。` : `共 ${total} 条`}
@@ -408,7 +446,7 @@ export function ProcessExecutionsPage() {
   );
 }
 
-export function ProcessExecutionDetailPage() {
+export function ProcessExecutionDetailPage({ identity }) {
   const { executionId = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedSignalCodes, setSelectedSignalCodes] = useState([]);
@@ -416,10 +454,13 @@ export function ProcessExecutionDetailPage() {
   const encodedId = encodeURIComponent(executionId);
   const siteId = searchParams.get("siteId") || "";
   const encodedSiteId = encodeURIComponent(siteId);
+  const siteQuery = siteId ? `&siteId=${encodedSiteId}` : "";
+  const inspectionQuery = new URLSearchParams({ executionId });
+  if (siteId) inspectionQuery.set("siteId", siteId);
   const executionResponse = useApi(`/api/v1/process-executions?executionId=${encodedId}&siteId=${encodedSiteId}&limit=1`);
   const analysisResponse = useApi(`/api/v1/process-executions/${encodedId}/analysis?siteId=${encodedSiteId}`);
-  const eventResponse = useApi(`/api/v1/events?executionId=${encodedId}&siteId=${encodedSiteId}&limit=30`);
-  const inspectionResponse = useApi(`/api/v1/inspection-records?executionId=${encodedId}&limit=50`);
+  const eventResponse = useApi(`/api/v1/events/summary?executionId=${encodedId}&siteId=${encodedSiteId}&limit=30`);
+  const inspectionResponse = useApi(`/api/v1/inspection-records?executionId=${encodedId}&siteId=${encodedSiteId}&limit=50`);
   const execution = extractRows(executionResponse.data)[0];
   const analysis = analysisResponse.data;
   const events = extractRows(eventResponse.data);
@@ -478,6 +519,7 @@ export function ProcessExecutionDetailPage() {
     : `${formatInteger(execution?.sampleCount)} 条`;
   const runIssues = mergeRunIssues(execution?.dataIssues, dataQuality?.issues);
   const needsAttention = runIssues.length > 0 || ["FAIL", "FAILED"].includes(String(execution?.qualityStatus || "").toUpperCase());
+  const canViewAllEvents = (identity?.roles || []).includes("platform.admin");
 
   function selectTab(tab) {
     const next = new URLSearchParams(searchParams);
@@ -500,12 +542,12 @@ export function ProcessExecutionDetailPage() {
         : undefined}
       actions={(
         <>
-          <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to="/process-executions">返回运行记录</Link>
-          <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/events?executionId=${encodedId}`}>查看全部事件</Link>
-          <LinkButton to={`/comparisons?executionId=${encodedId}`}>历史对比</LinkButton>
+          <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/process-executions${siteId ? `?siteId=${encodedSiteId}` : ""}`}>返回运行记录</Link>
+          {canViewAllEvents && <Link className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/events?executionId=${encodedId}${siteQuery}`}>查看全部事件</Link>}
+          <LinkButton to={`/comparisons?executionId=${encodedId}${siteQuery}`}>历史对比</LinkButton>
           <LinkButton to={execution?.processSpecificationId && execution?.processSpecificationVersion
-            ? `/configuration/process-specifications?recipe=${encodeURIComponent(execution.processSpecificationId)}&version=${encodeURIComponent(execution.processSpecificationVersion)}`
-            : "/configuration/process-specifications"}>下一轮校正</LinkButton>
+            ? `/configuration/process-specifications?recipe=${encodeURIComponent(execution.processSpecificationId)}&version=${encodeURIComponent(execution.processSpecificationVersion)}${siteQuery}`
+            : `/configuration/process-specifications${siteId ? `?siteId=${encodedSiteId}` : ""}`}>下一轮校正</LinkButton>
         </>
       )}
     >
@@ -644,7 +686,7 @@ export function ProcessExecutionDetailPage() {
             <div className="space-y-5" role="tabpanel">
               <Card title="过程曲线">
                 {analysisResponse.loading && !analysis ? <LoadingCard /> : analysisResponse.error ? <Alert tone="danger">{analysisResponse.error}</Alert> : !availableSignals.length ? (
-                  <EmptyState title="尚无可用信号" description="发布过程分析并采集有效过程值后即可查看。" />
+                  <EmptyState title="尚无可用信号" description="发布分析规则并采集有效过程值后即可查看。" />
                 ) : (
                   <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]">
                     <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -720,7 +762,7 @@ export function ProcessExecutionDetailPage() {
             <Card
               title="质量记录"
               description={inspections.length ? `已关联 ${inspections.length} 条检测记录` : "尚未产生与本次运行关联的检测记录"}
-              actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/inspections">进入质量任务</Link>}
+              actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to={`/inspections?${inspectionQuery.toString()}`}>查看本次运行的检验任务</Link>}
             >
               {inspectionResponse.loading && !inspectionResponse.data ? <LoadingCard /> : inspections.length ? (
                 <DataTable
@@ -769,7 +811,7 @@ export function ProcessExecutionDetailPage() {
             <Card
               title="最近事件"
               description={`显示最近 ${events.length} 条，完整历史共 ${eventResponse.data?.total ?? events.length} 条`}
-              actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to={`/events?executionId=${encodedId}`}>查看完整事件</Link>}
+              actions={canViewAllEvents && <Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to={`/events?executionId=${encodedId}${siteQuery}`}>查看完整事件</Link>}
             >
               <div className="space-y-3">
                 {events.slice(0, 10).map(item => (

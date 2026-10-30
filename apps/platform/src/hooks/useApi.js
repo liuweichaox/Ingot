@@ -4,10 +4,14 @@ import { getJson } from "../api/http";
 
 const identity = value => value;
 
+// Keep data and errors scoped to the exact request so a site switch never flashes a previous site's response.
 export function useApi(url, { enabled = true, interval = 0, transform = identity } = {}) {
   const [data, setData] = useState(null);
+  const [dataUrl, setDataUrl] = useState(null);
+  const [settledUrl, setSettledUrl] = useState(null);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
+  const [errorUrl, setErrorUrl] = useState(null);
   const mounted = useRef(false);
   const requestIdRef = useRef(0);
   const controllerRef = useRef(null);
@@ -34,15 +38,21 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
       if (mounted.current && requestId === requestIdRef.current) {
         dataRef.current = result;
         setData(result);
+        setDataUrl(url);
         setError("");
+        setErrorUrl(null);
       }
     } catch (requestError) {
       if (requestError?.name !== "AbortError" && mounted.current && requestId === requestIdRef.current) {
         setError(requestError.message);
+        setErrorUrl(url);
       }
     } finally {
       if (controllerRef.current === controller) controllerRef.current = null;
-      if (mounted.current && requestId === requestIdRef.current) setLoading(false);
+      if (mounted.current && requestId === requestIdRef.current) {
+        setSettledUrl(url);
+        setLoading(false);
+      }
     }
   }, [enabled, url]);
 
@@ -52,6 +62,7 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
     dataRef.current = null;
     setData(null);
     setError("");
+    setErrorUrl(null);
     setLoading(Boolean(enabled && url));
     void load();
     const timer = interval && enabled && url ? window.setInterval(load, interval) : null;
@@ -64,7 +75,19 @@ export function useApi(url, { enabled = true, interval = 0, transform = identity
     };
   }, [enabled, interval, load, url]);
 
-  return { data, setData, loading, error, reload: load };
+  const setCurrentData = useCallback(value => {
+    setData(value);
+    setDataUrl(url);
+    setSettledUrl(url);
+  }, [url]);
+  const requestEnabled = Boolean(enabled && url);
+  return {
+    data: requestEnabled && dataUrl === url ? data : null,
+    setData: setCurrentData,
+    loading: requestEnabled && (loading || settledUrl !== url),
+    error: requestEnabled && errorUrl === url ? error : "",
+    reload: load,
+  };
 }
 
 export function extractRows(payload) {

@@ -76,6 +76,15 @@ The repository claims only code, automated tests, and reproducible software beha
 
 ## Getting started
 
+Choose an entry by objective:
+
+| Objective | Path | Completion signal |
+|---|---|---|
+| Start locally | [Getting started](docs/getting-started.en.md) | Migration succeeds, services are healthy, and sign-in works; no external-system account or equipment connection is required |
+| Inspect the acquisition demo | [Getting started](docs/getting-started.en.md) → [Semiconductor acquisition demo](docs/semiconductor-demo.en.md) | Observe synthetic run data move through the Modbus simulator into the workbench; this does not validate real equipment interoperability or field benefit |
+| Evaluate the real-evidence workflow | [Current status](docs/status.en.md) → [Pilot guide](docs/pilot.en.md) | Check data admission using authorized real runs and reviewed quality outcomes |
+| Contribute | [Contributing](CONTRIBUTING.en.md) | Install tools for the change area and verify it; the full gate is in the guide |
+
 ### Prerequisites
 
 Trying the full stack requires Git, Docker Engine or Docker Desktop, and Docker Compose v2. That path does not require a local .NET, Node.js, or Python install.
@@ -110,11 +119,11 @@ The system proposes the next recipe inside safety boundaries and observed covera
 
 ```text
 Workbench
-Ingot Chat (separate investigation entry)
-Field Operations → Production Runs / Changeover / Quality Inspection / Quality Deviations / Optional Tooling
+AI Assistant (Ingot Chat, separate investigation entry)
+Field Operations → Run Records / Production Changeover / Tooling Installation / Inspection Tasks / Quality Deviations / Data Quality
 Process Insight → Process Analysis / Process Materials / Mechanism Knowledge
 Recipe Optimization → Recipe Versions / Adjustment & Validation
-Configuration & Integration → Process, quality, acquisition, Edge, and optional tooling setup
+Configuration & Integration → Process & Quality / Field Integration / Production Resources
 System Administration → Users, status, logs, raw events, and model services
 ```
 

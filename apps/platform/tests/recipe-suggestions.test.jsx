@@ -1,6 +1,7 @@
 // 验证已发布配方版本上的下一轮校正：生成条件来自该版本，采用不产生新版本，显著变更交给修订草稿。
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipeVersionProposal } from "../src/recipe/RecipeVersionProposal";
 
@@ -93,7 +94,7 @@ function routes(overrides = {}) {
 function renderProposal(overrides, onPromote = vi.fn()) {
   const fetchMock = routes(overrides);
   vi.stubGlobal("fetch", fetchMock);
-  render(<RecipeVersionProposal specification={specification} onPromote={onPromote} />);
+  render(<MemoryRouter><RecipeVersionProposal specification={specification} siteId="SITE-001" onPromote={onPromote} /></MemoryRouter>);
   return { fetchMock, onPromote };
 }
 
