@@ -176,6 +176,7 @@ export function StatusBadge({ value, label }) {
     "waiting-execution-boundary": "等待过程执行边界",
     applying: "应用中",
     rollback: "已保留旧版本",
+    removing: "停止并移除中",
     draft: "草稿",
     running: "运行中",
     uploaded: "已上传",
@@ -214,7 +215,7 @@ export function StatusBadge({ value, label }) {
     ? "success"
     : ["fail", "failed", "offline", "rejected", "falsified", "error", "suspended", "rollback-required", "unavailable", "cancelled", "missing", "invalid", "disconnected", "blocked", "forbidden", "not_analyzable"].includes(normalized)
       ? "danger"
-      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
+      : ["pending", "buffering", "validating", "waiting-execution-boundary", "applying", "rollback", "removing", "draft", "starting", "running", "uploaded", "dirty", "degraded", "collecting", "in_progress", "review_pending", "queued", "completed_with_errors", "incomplete", "cancelling", "proposed", "investigating", "planned", "warning", "concluded", "withdrawn", "rolled-back", "maintenance", "candidate", "modified", "recorded"].includes(normalized)
         ? "warning"
         : "neutral";
   return <Badge tone={tone}>{label ?? labels[normalized] ?? String(value ?? "待上报")}</Badge>;

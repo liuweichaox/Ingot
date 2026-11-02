@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { SystemStatusIndicator } from "../src/App";
 import { mergeRunIssues } from "../src/pages/OperationsPages";
-import { PlatformUptimeMetric } from "../src/pages/AdministrationPages";
+import { LogsPage, PlatformUptimeMetric } from "../src/pages/AdministrationPages";
 import { ProductionRecordsPage } from "../src/pages/ProductionRecordsPage";
 import { isProductionEditorValid } from "../src/pages/ProductionRecordForm";
 import { productionResources } from "../src/pages/manufacturingResources";
@@ -26,6 +26,25 @@ function jsonResponse(payload) {
 }
 
 describe("生产界面状态反馈", () => {
+  it("日志页面标明现场节点范围，并用节点名称辅助选择", async () => {
+    const requests = [];
+    vi.stubGlobal("fetch", vi.fn((url, options = {}) => {
+      const requestUrl = new URL(String(url), "http://localhost");
+      requests.push(requestUrl);
+      if (requestUrl.pathname === "/api/edges")
+        return Promise.resolve(jsonResponse([{ edgeId: "edge-01", hostname: "一号压机" }]));
+      return Promise.resolve(jsonResponse({ data: [], total: 0 }));
+    }));
+
+    render(<MemoryRouter><LogsPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "现场节点日志" })).toBeInTheDocument();
+    const edgeSelect = screen.getByLabelText("现场节点");
+    expect(await within(edgeSelect).findByRole("option", { name: "一号压机 · edge-01" })).toBeInTheDocument();
+    fireEvent.change(edgeSelect, { target: { value: "edge-01" } });
+    await waitFor(() => expect(requests.some(request => request.pathname === "/api/edges/edge-01/logs")).toBe(true));
+  });
+
   it("每秒刷新平台运行时间而不等待指标轮询", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(10_000));

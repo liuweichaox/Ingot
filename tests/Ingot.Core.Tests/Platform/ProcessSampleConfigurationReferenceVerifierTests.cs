@@ -167,5 +167,11 @@ public sealed class ProcessSampleConfigurationReferenceVerifierTests
             LastMetadata = result;
             return Task.FromResult<IReadOnlyList<IngestionTaskVersionMetadata>>(result);
         }
+
+        public Task<IReadOnlyList<IngestionTaskCoverageMetadata>> FindCoverageMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

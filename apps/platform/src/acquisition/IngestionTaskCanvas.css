@@ -294,6 +294,7 @@
 .acq-canvas__actions button:hover:not(:disabled), .acq-canvas__actions button:focus-visible { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; outline: 0; }
 .acq-canvas__actions button:disabled { color: #a8b2c1; cursor: not-allowed; }
 .acq-canvas__actions .acq-canvas__resource-toggle.is-active { border-color: #a5b4fc; background: #eef2ff; color: #4338ca; }
+.acq-canvas__actions .acq-canvas__node-actions { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
 .acq-canvas__mapping-search { display: flex; min-width: 150px; max-width: 290px; height: 29px; flex: 1 1 185px; align-items: center; gap: 6px; border: 1px solid #dbe3ee; border-radius: 7px; background: #fff; padding: 0 7px; color: #94a3b8; }
 .acq-canvas__mapping-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #334155; font-size: 10px; }
 .acq-canvas__mapping-filter { display: flex; height: 29px; align-items: center; gap: 5px; color: #64748b; font-size: 9px; white-space: nowrap; }

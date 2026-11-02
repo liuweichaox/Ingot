@@ -111,6 +111,16 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             filters.Add("frame.site_id = @site_id");
             command.Parameters.AddWithValue("site_id", query.SiteId.Trim());
         }
+        if (!string.IsNullOrWhiteSpace(query.EdgeId))
+        {
+            filters.Add("frame.edge_id = @edge_id");
+            command.Parameters.AddWithValue("edge_id", query.EdgeId.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(query.EventId))
+        {
+            filters.Add("frame.event_id = @event_id");
+            command.Parameters.AddWithValue("event_id", query.EventId.Trim());
+        }
         if (!string.IsNullOrWhiteSpace(query.CollectionPointId))
         {
             filters.Add("point.collection_point_id = @collection_point_id");
@@ -149,6 +159,9 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         }
         command.Parameters.AddWithValue("limit", limit);
         var where = filters.Count == 0 ? "" : $"WHERE {string.Join(" AND ", filters)}";
+        var orderBy = query.OrderByIngestedAtDescending
+            ? "frame.ingested_at DESC, frame.frame_id DESC, point.signal_code"
+            : "frame.occurred_at, frame.frame_id, point.signal_code";
         command.CommandText =
             $"""
              SELECT point.collection_point_id, point.signal_code,
@@ -172,7 +185,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
               AND definition.data_model_version = frame.data_model_version
               AND definition.signal_code = point.signal_code
              {where}
-             ORDER BY frame.occurred_at, frame.frame_id, point.signal_code
+             ORDER BY {orderBy}
              LIMIT @limit;
              """;
         var result = new List<SignalSample>();
@@ -228,6 +241,16 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
             frameFilters.Add("frame.site_id = @site_id");
             command.Parameters.AddWithValue("site_id", query.SiteId.Trim());
         }
+        if (!string.IsNullOrWhiteSpace(query.EdgeId))
+        {
+            frameFilters.Add("frame.edge_id = @edge_id");
+            command.Parameters.AddWithValue("edge_id", query.EdgeId.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(query.EventId))
+        {
+            frameFilters.Add("frame.event_id = @event_id");
+            command.Parameters.AddWithValue("event_id", query.EventId.Trim());
+        }
         if (!string.IsNullOrWhiteSpace(query.ExecutionId))
         {
             frameFilters.Add("frame.execution_id = @execution_id");
@@ -274,11 +297,16 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
         }
         var frameWhere = frameFilters.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", frameFilters)}";
         var valueWhere = valueFilters.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", valueFilters)}";
+        var frameOrderBy = query.OrderByIngestedAtDescending
+            ? "frame.ingested_at DESC, frame.frame_id DESC"
+            : "frame.occurred_at, frame.frame_id";
         var valueExists = valueFilters.Count == 0
-            ? string.Empty
+            ? $"{(frameFilters.Count == 0 ? "WHERE" : "AND")} EXISTS (SELECT 1 FROM process_sample_values AS value "
+              + "WHERE value.frame_id = frame.frame_id AND value.occurred_at = frame.occurred_at)"
             : $"{(frameFilters.Count == 0 ? "WHERE" : "AND")} EXISTS (SELECT 1 FROM process_sample_values AS value "
               + "JOIN collection_points AS point ON point.point_key = value.point_key "
-              + $"WHERE value.frame_id = frame.frame_id {string.Concat(valueFilters.Select(filter => $" AND {filter}"))})";
+              + $"WHERE value.frame_id = frame.frame_id AND value.occurred_at = frame.occurred_at "
+              + $"{string.Concat(valueFilters.Select(filter => $" AND {filter}"))})";
         command.Parameters.AddWithValue("limit", limit);
         command.CommandText =
             $"""
@@ -287,7 +315,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
                FROM process_sample_frames AS frame
                {frameWhere}
                {valueExists}
-               ORDER BY frame.occurred_at, frame.frame_id
+               ORDER BY {frameOrderBy}
                LIMIT @limit
              )
              SELECT frame.event_id, frame.frame_id, frame.edge_id,
@@ -303,7 +331,7 @@ public sealed class PostgresTimeSeriesStore : ITimeSeriesStore, IDisposable
              JOIN collection_points AS point
                ON point.point_key = value.point_key
              {valueWhere}
-             ORDER BY frame.occurred_at, frame.frame_id, point.signal_code;
+             ORDER BY {frameOrderBy}, point.signal_code;
              """;
         var rows = new List<(string EventId, long FrameId, string EdgeId, long? Sequence, DateTimeOffset OccurredAt,
             DateTimeOffset RecordedAt, DateTimeOffset? IngestedAt, string? PhaseCode, string SignalCode,

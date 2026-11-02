@@ -1,6 +1,7 @@
 // 验证平台组件 PlatformAuthorization 的成功、拒绝和安全边界。
 
 using System.Reflection;
+using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,5 +38,25 @@ public sealed class PlatformAuthorizationTests
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.Equal(allowed.OrderBy(static value => value), anonymous.OrderBy(static value => value));
+    }
+
+    [Fact]
+    public void RawEventQueries_AreAdministratorOnly_AndSummaryHasNoAdminOnlyRole()
+    {
+        foreach (var actionName in new[] { nameof(EventsController.Query), nameof(EventsController.Stream) })
+        {
+            var action = typeof(EventsController).GetMethod(actionName);
+            Assert.NotNull(action);
+            var authorization = action!.GetCustomAttribute<AuthorizeAttribute>();
+            Assert.NotNull(authorization);
+            Assert.Equal(PlatformRoles.PlatformAdministrator, authorization!.Roles);
+        }
+
+        var summary = typeof(EventsController).GetMethod(nameof(EventsController.QuerySummary));
+        Assert.NotNull(summary);
+        var summaryRoles = summary!.GetCustomAttributes<AuthorizeAttribute>()
+            .SelectMany(static attribute => (attribute.Roles ?? string.Empty).Split(
+                ',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+        Assert.DoesNotContain(PlatformRoles.PlatformAdministrator, summaryRoles);
     }
 }

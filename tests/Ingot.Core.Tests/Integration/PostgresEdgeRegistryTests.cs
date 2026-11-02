@@ -57,7 +57,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
     {
         await postgres.EnsureSchemaAsync();
         var edgeId = $"EDGE-CLOCK-SKEW-{Guid.NewGuid():N}";
-        var receivedAt = DateTimeOffset.UtcNow;
+        var receivedAt = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / 10 * 10, TimeSpan.Zero);
         var edgeNow = receivedAt.AddHours(4);
         var delivery = new EdgeDeliveryRuntimeStatus
         {
@@ -91,7 +91,7 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
     {
         await postgres.EnsureSchemaAsync();
         var edgeId = $"EDGE-{Guid.NewGuid():N}";
-        var now = DateTimeOffset.UtcNow;
+        var now = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / 10 * 10, TimeSpan.Zero);
         var acquisition = new EdgeAcquisitionRuntimeStatus(
             Enabled: true,
             State: "running",
@@ -188,5 +188,69 @@ public sealed class PostgresEdgeRegistryTests(PostgresIntegrationFixture postgre
         Assert.Equal(84, synchronizedInterval.StartingEmittedEventCount);
         Assert.Equal(94, synchronizedInterval.EndingEmittedEventCount);
         Assert.Equal(5, synchronizedInterval.MaximumPendingEventCount);
+    }
+
+    [LinuxDockerFact]
+    public async Task DeploymentObservation_RequiresACompleteSnapshotToConfirmTaskRemoval()
+    {
+        await postgres.EnsureSchemaAsync();
+        var edgeId = $"EDGE-DEPLOYMENT-SNAPSHOT-{Guid.NewGuid():N}";
+        var firstReceipt = new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / 10 * 10, TimeSpan.Zero)
+            .AddSeconds(-10);
+        var registry = new EdgeRegistry(postgres.DataSource);
+        var applied = new AcquisitionDeploymentApplicationStatus(
+            "task-a", 1, "hash-1", 1, "hash-1", AcquisitionApplicationStates.Applied,
+            firstReceipt, firstReceipt, null);
+
+        static EdgeAcquisitionRuntimeStatus Report(
+            DateTimeOffset reportedAt,
+            string? desiredSetHash,
+            IReadOnlyList<AcquisitionDeploymentApplicationStatus> deployments)
+            => new(
+                Enabled: true,
+                State: "running",
+                ReportedAt: reportedAt,
+                ConfigurationSource: AcquisitionConfigurationSources.Platform,
+                DesiredConfigurationSetHash: desiredSetHash,
+                AppliedConfigurationSetHash: "applied-set",
+                LastAttemptAt: reportedAt,
+                LastReadSuccessAt: reportedAt,
+                LastValidSnapshotAt: reportedAt,
+                ReadSuccessCount: 1,
+                ValidSnapshotCount: 1,
+                EmittedEventCount: 1,
+                DuplicateSuppressionCount: 0,
+                InactiveSnapshotCount: 0,
+                SourceIdentityStallCount: 0,
+                LastReadDurationMs: 1,
+                ObservedIntervalMs: 1000,
+                ActiveProcessSpecification: null,
+                LastError: null,
+                Tasks: [],
+                Deployments: deployments);
+
+        await registry.HeartbeatAsync(
+            edgeId, "SITE-INTEGRATION", "http://edge.local", null,
+            Report(firstReceipt, "desired-set", [applied]), firstReceipt);
+        await registry.HeartbeatAsync(
+            edgeId, "SITE-INTEGRATION", null, null,
+            Report(firstReceipt.AddSeconds(5), null, []), firstReceipt.AddSeconds(5));
+
+        var afterIncompleteSnapshot = await registry.FindOverlappingAsync(
+            "SITE-INTEGRATION", [edgeId], firstReceipt, firstReceipt.AddSeconds(10));
+        var stillObserved = Assert.Single(afterIncompleteSnapshot.Observations);
+        Assert.Null(stillObserved.ClosedObservedAt);
+        Assert.Equal(firstReceipt, stillObserved.LastObservedAt);
+
+        await registry.HeartbeatAsync(
+            edgeId, "SITE-INTEGRATION", null, null,
+            Report(firstReceipt.AddSeconds(10), "empty-set", []), firstReceipt.AddSeconds(10));
+
+        var afterCompleteSnapshot = await registry.FindOverlappingAsync(
+            "SITE-INTEGRATION", [edgeId], firstReceipt.AddSeconds(1), firstReceipt.AddSeconds(20));
+        Assert.Empty(afterCompleteSnapshot.Observations);
+        var confirmedHistory = await registry.FindOverlappingAsync(
+            "SITE-INTEGRATION", [edgeId], firstReceipt.AddSeconds(-1), firstReceipt);
+        Assert.Equal(firstReceipt, Assert.Single(confirmedHistory.Observations).ClosedObservedAt);
     }
 }

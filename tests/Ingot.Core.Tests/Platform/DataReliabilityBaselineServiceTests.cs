@@ -1,9 +1,11 @@
 // 验证平台组件 DataReliabilityBaselineService 的成功、拒绝和安全边界。
 
 using System.Text.Json;
+using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
 using Ingot.Domain.Events;
+using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Infrastructure.Analytics;
 using Ingot.Platform.Infrastructure.Events;
@@ -181,6 +183,302 @@ public sealed class DataReliabilityBaselineServiceTests
     }
 
     [Fact]
+    public async Task CalculateAsync_ShouldCompareAppliedVersionCoverageUsingPlatformReceiptTimes()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var startReceivedAt = now.AddMinutes(-8);
+        var completedReceivedAt = now.AddMinutes(-4);
+        var deviceStartedAt = now.AddDays(-20);
+        var deviceCompletedAt = deviceStartedAt.AddMinutes(10);
+        var sample = ReceiptTimeSampleEvidence(
+            now.AddMinutes(-6), now.AddMinutes(-5.5), deviceStartedAt.AddMinutes(5));
+        var history = new RecordingDeploymentHistory([ReceiptTimeObservation(now)]);
+        var eventStore = new FakeEventStore(
+        [
+            Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, startReceivedAt),
+            Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceCompletedAt, completedReceivedAt)
+        ]);
+        var service = ReceiptTimeCoverageService(
+            [
+                Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, startReceivedAt),
+                Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceCompletedAt, completedReceivedAt)
+            ],
+            sample,
+            history,
+            eventStore);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001"
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        var coverage = Assert.Single(run.ExpectedConfigurationCoverage);
+        Assert.Equal(startReceivedAt, run.StartedPlatformIngestedAt);
+        Assert.Equal(completedReceivedAt, run.CompletedPlatformIngestedAt);
+        Assert.Equal(startReceivedAt, history.From);
+        Assert.Equal(completedReceivedAt, history.To);
+        Assert.Equal(ExpectedConfigurationSampleEvidenceStatuses.Matched, coverage.SampleEvidenceStatus);
+        Assert.Equal(new[] { "temperature.actual" }, coverage.RequiredDataItemCodes);
+        Assert.Equal(new[] { "temperature.actual" }, coverage.ObservedDataItemCodes);
+        Assert.Empty(coverage.NotObservedRequiredDataItemCodes);
+        Assert.Equal(now.AddMinutes(-7), coverage.RunOverlapStart);
+        Assert.Equal(now.AddMinutes(-4.5), coverage.RunOverlapEnd);
+        Assert.Equal(2, eventStore.Queries.Count);
+        Assert.DoesNotContain(eventStore.Queries, static query => query.ExecutionIds is not null);
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldRecoverRunStartReceiptBeforeTheSelectedEventTimeRange()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var deviceStartedAt = now.AddMinutes(-20);
+        var deviceCompletedAt = now.AddMinutes(-5);
+        var startReceivedAt = now.AddMinutes(-18);
+        var completedReceivedAt = now.AddMinutes(-4);
+        var history = new RecordingDeploymentHistory([ReceiptTimeObservation(now)]);
+        var eventStore = new FakeEventStore(
+        [
+            Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, startReceivedAt),
+            Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceCompletedAt, completedReceivedAt)
+        ]);
+        var service = ReceiptTimeCoverageService(
+            [
+                Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, startReceivedAt),
+                Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceCompletedAt, completedReceivedAt)
+            ],
+            ReceiptTimeSampleEvidence(
+                now.AddMinutes(-6), now.AddMinutes(-5.5), deviceStartedAt.AddMinutes(15)),
+            history,
+            eventStore);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = now.AddMinutes(-8),
+            To = now
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        var coverage = Assert.Single(run.ExpectedConfigurationCoverage);
+        Assert.Equal(startReceivedAt, run.StartedPlatformIngestedAt);
+        Assert.Equal(completedReceivedAt, run.CompletedPlatformIngestedAt);
+        Assert.Equal(startReceivedAt, history.From);
+        Assert.Equal(completedReceivedAt, history.To);
+        Assert.Equal(ExpectedConfigurationSampleEvidenceStatuses.Matched, coverage.SampleEvidenceStatus);
+        var recoveryQueries = eventStore.Queries.Where(static query => query.ExecutionIds is not null).ToArray();
+        Assert.Equal(2, recoveryQueries.Length);
+        Assert.All(recoveryQueries, query =>
+        {
+            Assert.Equal(new[] { "RUN-RECEIPT" }, query.ExecutionIds);
+            Assert.Null(query.From);
+            Assert.Null(query.To);
+        });
+        Assert.Equal(
+            new[] { "process.execution.completed", "process.execution.started" },
+            recoveryQueries
+                .Select(static query => query.EventType)
+                .OrderBy(static type => type, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldRecoverEarliestAndLatestBoundaryWhenRangeContainsPartialDuplicates()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var queryFrom = now.AddMinutes(-40);
+        var reportEnd = now.AddMinutes(-10);
+        var earliestStartReceipt = now.AddMinutes(-58);
+        var inRangeStartReceipt = now.AddMinutes(-29);
+        var inRangeCompletionReceipt = now.AddMinutes(-18);
+        var latestCompletionReceipt = now.AddMinutes(-12);
+        PlatformProductionEvent[] lifecycleEvents =
+        [
+            Lifecycle("process.execution.started", 1, "RUN-RECEIPT", now.AddMinutes(-60), earliestStartReceipt),
+            Lifecycle("process.execution.started", 2, "RUN-RECEIPT", now.AddMinutes(-30), inRangeStartReceipt),
+            Lifecycle("process.execution.completed", 3, "RUN-RECEIPT", now.AddMinutes(-20), inRangeCompletionReceipt),
+            Lifecycle("process.execution.completed", 4, "RUN-RECEIPT", now.AddMinutes(-5), latestCompletionReceipt)
+        ];
+        var eventStore = new FakeEventStore(lifecycleEvents);
+        var history = new RecordingDeploymentHistory([
+            new EdgeTaskDeploymentObservation
+            {
+                EdgeId = "EDGE-01",
+                TaskId = "TASK-01",
+                TaskVersion = 3,
+                ConfigurationHash = "hash-3",
+                ConfigurationSource = "Platform",
+                FirstObservedAt = now.AddMinutes(-22),
+                LastObservedAt = now.AddMinutes(-15),
+                ClosedObservedAt = now.AddMinutes(-14)
+            }
+        ]);
+        var service = ReceiptTimeCoverageService(
+            lifecycleEvents,
+            ReceiptTimeSampleEvidence(
+                now.AddMinutes(-20), now.AddMinutes(-18.5), now.AddMinutes(-25)),
+            history,
+            eventStore);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = queryFrom,
+            To = reportEnd
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        Assert.Equal(earliestStartReceipt, run.StartedPlatformIngestedAt);
+        Assert.Equal(latestCompletionReceipt, run.CompletedPlatformIngestedAt);
+        Assert.Equal(earliestStartReceipt, history.From);
+        Assert.Equal(latestCompletionReceipt, history.To);
+        var coverage = Assert.Single(run.ExpectedConfigurationCoverage);
+        Assert.Equal(ExpectedConfigurationSampleEvidenceStatuses.Matched, coverage.SampleEvidenceStatus);
+        var recoveryQueries = eventStore.Queries.Where(static query => query.ExecutionIds is not null).ToArray();
+        Assert.Equal(2, recoveryQueries.Length);
+        Assert.All(recoveryQueries, query =>
+        {
+            Assert.Equal(new[] { "RUN-RECEIPT" }, query.ExecutionIds);
+            Assert.Null(query.From);
+            Assert.Null(query.To);
+        });
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldKeepSampleCoverageUnknownWhenReceiptRangeCrossesObservation()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var deviceStartedAt = now.AddDays(-20);
+        var service = ReceiptTimeCoverageService(
+            [
+                Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt,
+                    now.AddMinutes(-8)),
+                Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceStartedAt.AddMinutes(10),
+                    now.AddMinutes(-4))
+            ],
+            ReceiptTimeSampleEvidence(now.AddMinutes(-6), now.AddMinutes(-4), deviceStartedAt.AddMinutes(5)),
+            new RecordingDeploymentHistory([ReceiptTimeObservation(now)]));
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = now.AddDays(-30),
+            To = now
+        });
+
+        var coverage = Assert.Single(Assert.Single(baseline.RunImpacts).ExpectedConfigurationCoverage);
+        Assert.Equal(
+            ExpectedConfigurationSampleEvidenceStatuses.UnverifiableSampleTimeRange,
+            coverage.SampleEvidenceStatus);
+        Assert.Empty(coverage.RequiredDataItemCodes);
+        Assert.Empty(coverage.ObservedDataItemCodes);
+        Assert.Empty(coverage.NotObservedRequiredDataItemCodes);
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldBoundOpenRunCoverageToTheReportEnd()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reportEnd = now.AddMinutes(-10);
+        var deviceStartedAt = now.AddDays(-20);
+        var history = new RecordingDeploymentHistory([
+            new EdgeTaskDeploymentObservation
+            {
+                EdgeId = "EDGE-01",
+                TaskId = "TASK-01",
+                TaskVersion = 3,
+                ConfigurationHash = "hash-3",
+                ConfigurationSource = "Platform",
+                FirstObservedAt = reportEnd.AddMinutes(1),
+                LastObservedAt = reportEnd.AddMinutes(4)
+            }
+        ]);
+        var service = ReceiptTimeCoverageService(
+            [Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, reportEnd.AddMinutes(-5))],
+            ReceiptTimeSampleEvidence(
+                reportEnd.AddMinutes(1), reportEnd.AddMinutes(2), deviceStartedAt.AddMinutes(5)),
+            history);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = now.AddDays(-30),
+            To = reportEnd
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        Assert.False(run.HasCompleted);
+        Assert.Empty(run.ExpectedConfigurationCoverage);
+        Assert.Equal(reportEnd, history.To);
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldBoundCompletedRunCoverageToTheReportEnd()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var reportEnd = now.AddMinutes(-10);
+        var deviceStartedAt = now.AddDays(-20);
+        var history = new RecordingDeploymentHistory([
+            new EdgeTaskDeploymentObservation
+            {
+                EdgeId = "EDGE-01",
+                TaskId = "TASK-01",
+                TaskVersion = 3,
+                ConfigurationHash = "hash-3",
+                ConfigurationSource = "Platform",
+                FirstObservedAt = reportEnd.AddMinutes(1),
+                LastObservedAt = reportEnd.AddMinutes(4)
+            }
+        ]);
+        var service = ReceiptTimeCoverageService(
+            [
+                Lifecycle("process.execution.started", 1, "RUN-RECEIPT", deviceStartedAt, reportEnd.AddMinutes(-5)),
+                Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceStartedAt.AddMinutes(10), reportEnd.AddMinutes(5))
+            ],
+            ReceiptTimeSampleEvidence(
+                reportEnd.AddMinutes(1), reportEnd.AddMinutes(2), deviceStartedAt.AddMinutes(5)),
+            history);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = now.AddDays(-30),
+            To = reportEnd
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        Assert.True(run.HasCompleted);
+        Assert.Empty(run.ExpectedConfigurationCoverage);
+        Assert.Equal(reportEnd, history.To);
+    }
+
+    [Fact]
+    public async Task CalculateAsync_ShouldNotInferCoverageWhenLifecycleReceiptBoundaryIsMissing()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var deviceStartedAt = now.AddDays(-20);
+        var history = new RecordingDeploymentHistory([ReceiptTimeObservation(now)]);
+        var service = ReceiptTimeCoverageService(
+            [
+                Lifecycle("process.execution.completed", 2, "RUN-RECEIPT", deviceStartedAt.AddMinutes(10),
+                    now.AddMinutes(-4))
+            ],
+            ReceiptTimeSampleEvidence(now.AddMinutes(-6), now.AddMinutes(-5), deviceStartedAt.AddMinutes(5)),
+            history);
+
+        var baseline = await service.CalculateAsync(new DataReliabilityBaselineQuery
+        {
+            SiteId = "SITE-001",
+            From = now.AddDays(-30),
+            To = now
+        });
+
+        var run = Assert.Single(baseline.RunImpacts);
+        Assert.Null(run.StartedPlatformIngestedAt);
+        Assert.Empty(run.ExpectedConfigurationCoverage);
+        Assert.Equal(0, history.CallCount);
+    }
+
+    [Fact]
     public async Task CalculateAsync_ShouldExposeStrataAndDetectConfoundedFactors()
     {
         var now = DateTimeOffset.UtcNow;
@@ -260,15 +558,27 @@ public sealed class DataReliabilityBaselineServiceTests
         string subjectType = "equipment",
         string subjectId = "PRESS-01",
         string? equipmentId = "PRESS-01")
+        => Lifecycle("process.execution.completed", ingestId, executionId, at, at,
+            subjectType, subjectId, equipmentId);
+
+    private static PlatformProductionEvent Lifecycle(
+        string eventType,
+        long ingestId,
+        string executionId,
+        DateTimeOffset occurredAt,
+        DateTimeOffset ingestedAt,
+        string subjectType = "equipment",
+        string subjectId = "PRESS-01",
+        string? equipmentId = "PRESS-01")
         => new()
         {
             IngestId = ingestId,
             SiteId = "SITE-001",
             EdgeId = "EDGE-001",
-            IngestedAt = at,
+            IngestedAt = ingestedAt,
             Event = ProductionEvent.Create(
-                "process.execution.completed",
-                at,
+                eventType,
+                occurredAt,
                 "edge/EDGE-001/equipment/PRESS-01",
                 new ObjectRef(subjectType, subjectId),
                 executionId,
@@ -277,6 +587,81 @@ public sealed class DataReliabilityBaselineServiceTests
                 Seq = ingestId
             }
         };
+
+    private static ProcessSampleConfigurationEvidence ReceiptTimeSampleEvidence(
+        DateTimeOffset firstIngestedAt,
+        DateTimeOffset lastIngestedAt,
+        DateTimeOffset deviceOccurredAt)
+        => new()
+        {
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "TASK-01",
+            AppliedConfigurationVersion = 3,
+            SourceEdgeId = "EDGE-01",
+            SampleFrameCount = 2,
+            FirstOccurredAt = deviceOccurredAt,
+            LastOccurredAt = deviceOccurredAt.AddSeconds(30),
+            FirstPlatformIngestedAt = firstIngestedAt,
+            LastPlatformIngestedAt = lastIngestedAt,
+            HasCompletePlatformIngestedAt = true,
+            ObservedDataItemCodes = ["temperature.actual"]
+        };
+
+    private static EdgeTaskDeploymentObservation ReceiptTimeObservation(DateTimeOffset now)
+        => new()
+        {
+            EdgeId = "EDGE-01",
+            TaskId = "TASK-01",
+            TaskVersion = 3,
+            ConfigurationHash = "hash-3",
+            ConfigurationSource = "Platform",
+            FirstObservedAt = now.AddMinutes(-7),
+            LastObservedAt = now.AddMinutes(-5),
+            ClosedObservedAt = now.AddMinutes(-4.5)
+        };
+
+    private static DataReliabilityBaselineService ReceiptTimeCoverageService(
+        IReadOnlyList<PlatformProductionEvent> lifecycleEvents,
+        ProcessSampleConfigurationEvidence sample,
+        RecordingDeploymentHistory history,
+        FakeEventStore? eventStore = null)
+    {
+        var row = new ExecutionComparisonRow
+        {
+            ExecutionId = "RUN-RECEIPT",
+            EquipmentId = "PRESS-01",
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            EdgeIds = ["EDGE-01"],
+            ProductFamilyCode = "lens",
+            StartedAt = lifecycleEvents.FirstOrDefault(static item =>
+                item.Event.EventType == "process.execution.started")?.Event.OccurredAt ?? DateTimeOffset.UnixEpoch,
+            CompletedAt = lifecycleEvents.FirstOrDefault(static item =>
+                item.Event.EventType == "process.execution.completed")?.Event.OccurredAt,
+            HasStarted = true,
+            HasCompleted = lifecycleEvents.Any(static item =>
+                item.Event.EventType == "process.execution.completed"),
+            LifecycleComplete = lifecycleEvents.Any(static item =>
+                item.Event.EventType == "process.execution.completed"),
+            Context = new Dictionary<string, string>(),
+            ProcessDataQuality = new ProcessDataQualitySummary { Status = ProcessDataStatuses.Degraded },
+            SampleConfigurationEvidence = [sample]
+        };
+        return new DataReliabilityBaselineService(
+            eventStore ?? new FakeEventStore(lifecycleEvents),
+            new FakeProcessExecutionService(new Dictionary<string, ExecutionComparisonRow>
+            {
+                [row.ExecutionId] = row
+            }),
+            new MarkingSampleConfigurationReferenceVerifier(),
+            taskDeploymentHistory: history,
+            edgeSites: new FixedEdgeSiteDirectory(new HashSet<string>(["EDGE-01"], StringComparer.OrdinalIgnoreCase)),
+            ingestionTasks: new FixedCoverageTaskStore([
+                new IngestionTaskCoverageMetadata(
+                    "TASK-01", 3, "EDGE-01", "published", "equipment", "PRESS-01",
+                    ["temperature.actual"], false, false)
+            ]));
+    }
 
     private static ExecutionComparisonRow FactorRow(
         string executionId,
@@ -377,6 +762,8 @@ public sealed class DataReliabilityBaselineServiceTests
     private sealed class FakeEventStore(
         IReadOnlyList<PlatformProductionEvent> rows) : IPlatformEventStore
     {
+        public List<PlatformEventQuery> Queries { get; } = [];
+
         public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<EventBatchResponse> IngestAsync(EventBatchRequest request, CancellationToken ct = default)
@@ -385,15 +772,22 @@ public sealed class DataReliabilityBaselineServiceTests
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
             PlatformEventQuery query,
             CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
+        {
+            Queries.Add(query);
+            return Task.FromResult<IReadOnlyList<PlatformProductionEvent>>(rows
                 .Where(row => string.IsNullOrWhiteSpace(query.SiteId) || row.SiteId == query.SiteId)
                 .Where(row => query.EventType is null || row.Event.EventType == query.EventType)
+                .Where(row => query.ExecutionIds is null || query.ExecutionIds.Contains(
+                    row.Event.ExecutionId ?? "", StringComparer.Ordinal))
+                .Where(row => !query.From.HasValue || row.Event.OccurredAt >= query.From.Value)
+                .Where(row => !query.To.HasValue || row.Event.OccurredAt <= query.To.Value)
                 .Where(row => string.IsNullOrWhiteSpace(query.EquipmentId) ||
                               PhysicalEquipmentIdentity.Resolve(row.Event) == query.EquipmentId.Trim())
                 .Where(row => !query.AfterIngestId.HasValue || row.IngestId > query.AfterIngestId)
                 .OrderBy(static row => row.IngestId)
                 .Take(query.Limit)
                 .ToArray());
+        }
 
         public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
             IReadOnlyCollection<string> executionIds,
@@ -431,5 +825,59 @@ public sealed class DataReliabilityBaselineServiceTests
 
         public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
             => Task.FromResult(new DataObjectPage { Limit = query.Limit, Offset = query.Offset });
+    }
+
+    private sealed class FixedEdgeSiteDirectory(IReadOnlySet<string> edgeIds) : IEdgeSiteDirectory
+    {
+        public Task<IReadOnlySet<string>> ListEdgeIdsAsync(string siteId, CancellationToken ct = default)
+            => Task.FromResult(edgeIds);
+    }
+
+    private sealed class RecordingDeploymentHistory(
+        IReadOnlyList<EdgeTaskDeploymentObservation> observations) : IEdgeTaskDeploymentHistoryReader
+    {
+        public DateTimeOffset? From { get; private set; }
+        public DateTimeOffset? To { get; private set; }
+        public int CallCount { get; private set; }
+
+        public Task<EdgeTaskDeploymentObservationQueryResult> FindOverlappingAsync(
+            string siteId,
+            IReadOnlyCollection<string> edgeIds,
+            DateTimeOffset from,
+            DateTimeOffset to,
+            CancellationToken ct = default)
+        {
+            CallCount++;
+            From = from;
+            To = to;
+            return Task.FromResult(new EdgeTaskDeploymentObservationQueryResult(observations, false));
+        }
+    }
+
+    private sealed class FixedCoverageTaskStore(
+        IReadOnlyList<IngestionTaskCoverageMetadata> coverageMetadata) : IIngestionTaskStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IngestionTask>> ListAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<IngestionTask>> ListPublishedForEdgeAsync(string edgeId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IngestionTask?> GetAsync(string taskId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<IngestionTaskVersionMetadata>> FindVersionMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<IngestionTaskCoverageMetadata>> FindCoverageMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+            => Task.FromResult(coverageMetadata);
+        public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IngestionTask> PublishExclusiveAsync(IngestionTask published, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<bool> DeleteAsync(string taskId, int version, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

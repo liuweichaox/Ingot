@@ -479,10 +479,10 @@ export function LogsPage() {
   const endpoint = edgeId ? `/api/edges/${encodeURIComponent(edgeId)}/logs?pageSize=200${level ? `&level=${level}` : ""}` : null;
   const logs = useApi(endpoint, { enabled: Boolean(edgeId), interval: 5000 });
   return (
-    <Page title="平台日志">
+    <Page title="现场节点日志">
       <Card title="查询条件">
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="现场节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.edgeId}</option>)}</Select></Field>
+          <Field label="现场节点"><Select value={edgeId} onChange={event => setEdgeId(event.target.value)}><option value="">选择节点</option>{edgeRows.map(row => <option key={row.edgeId} value={row.edgeId}>{row.hostname ? `${row.hostname} · ${row.edgeId}` : row.edgeId}</option>)}</Select></Field>
           <Field label="级别"><Select value={level} onChange={event => setLevel(event.target.value)}><option value="">全部</option><option value="Information">信息</option><option value="Warning">警告</option><option value="Error">错误</option></Select></Field>
         </div>
       </Card>
@@ -501,7 +501,7 @@ export function LogsPage() {
                 { key: "message", label: "消息" },
               ]}
             />
-          : <EmptyState title="请选择边缘节点" description="选择后日志会自动加载并持续更新。" />}
+          : <EmptyState title="请选择现场节点" description="选择现场节点后，日志会自动加载并持续更新。" />}
       </Card>
     </Page>
   );

@@ -205,6 +205,18 @@ public sealed class EventsControllerTests
         Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
     }
 
+    [Fact]
+    public async Task QuerySummary_AllowsProcessEngineerWithinAssignedSite()
+    {
+        var store = new StubPlatformEventStore([]);
+        var controller = CreateController(store, Options.Create(new PlatformEventOptions { RequireToken = false }));
+
+        var action = await controller.QuerySummary(null, null, 50, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(action);
+        Assert.Equal(1, store.QueryCalls);
+    }
+
     private static PlatformProductionEvent Row(
         long ingestId,
         string eventType,

@@ -1,5 +1,11 @@
 // Classify batch draft write outcomes before deciding whether a retry is safe.
 
+export function getRetryableIngestionDraftKeys(entries) {
+  return entries
+    .filter(entry => entry.error && entry.failureKind === "request" && !entry.verificationRequired)
+    .map(entry => entry.key);
+}
+
 export function classifyIngestionDraftWriteOutcome({
   expectedFingerprint,
   storedFingerprint = "",

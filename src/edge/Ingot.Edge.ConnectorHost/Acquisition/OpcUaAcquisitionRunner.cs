@@ -282,7 +282,8 @@ public sealed class OpcUaAcquisitionRunner(
                         configurationKey,
                         observedAt,
                         currentProcessSpecification,
-                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null,
+                        lifecycle.EmittedSampleEventId);
                     receivedValidSnapshot = true;
                 }
                 if (!ct.IsCancellationRequested)

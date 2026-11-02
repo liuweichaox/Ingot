@@ -94,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddSingleton<PlatformEventApplication>();
+        services.AddSingleton<IngestionTaskSampleReceiptQuery>();
         services.AddHostedService<EventStoreInitializerHostedService>();
 
         services.Configure<ChatDataAccessOptions>(configuration.GetSection("ChatDataAccess"));

@@ -13,6 +13,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
     private const int MaximumDeploymentObservationRows = 40_000;
     private const int MaximumDeploymentObservationEdges = 2_000;
     private const double MaximumTrustedDeploymentReportAgeMs = 30_000;
+    private static readonly TimeSpan MaximumDeploymentObservationGap = TimeSpan.FromMinutes(2);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<IReadOnlyCollection<EdgeState>> ListAsync(
@@ -86,18 +87,18 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
                    history.edge_applied_at_hint, history.last_deployment_state
             FROM edge_task_deployment_observations AS history
             INNER JOIN platform_edges AS edge ON edge.edge_id = history.edge_id
-            WHERE edge.site_id = $1
-              AND history.edge_id = ANY($2::text[])
-              AND history.first_observed_at <= $4
-              AND COALESCE(history.closed_observed_at, history.last_observed_at) >= $3
+            WHERE edge.site_id = @site_id
+              AND history.edge_id = ANY(@edge_ids::text[])
+              AND history.first_observed_at <= @to
+              AND COALESCE(history.closed_observed_at, history.last_observed_at) >= @from
             ORDER BY history.first_observed_at, history.edge_id, history.task_id, history.observation_id
-            LIMIT $5
+            LIMIT @limit
             """;
-        command.Parameters.AddWithValue(NormalizeSiteId(siteId));
+        command.Parameters.AddWithValue("site_id", NormalizeSiteId(siteId));
         command.Parameters.Add("edge_ids", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = scopedEdgeIds;
-        command.Parameters.AddWithValue(from);
-        command.Parameters.AddWithValue(to);
-        command.Parameters.AddWithValue(MaximumDeploymentObservationRows + 1);
+        command.Parameters.AddWithValue("from", from);
+        command.Parameters.AddWithValue("to", to);
+        command.Parameters.AddWithValue("limit", MaximumDeploymentObservationRows + 1);
 
         var observations = new List<EdgeTaskDeploymentObservation>(MaximumDeploymentObservationRows);
         var truncated = false;
@@ -698,6 +699,8 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
         var active = await LoadActiveTaskDeploymentObservationsAsync(
                 connection, transaction, edgeId, ct)
             .ConfigureAwait(false);
+        if (active.Values.Any(item => receivedAt < item.LastObservedAt))
+            return;
         var deployments = acquisition.Deployments;
         IGrouping<string, AcquisitionDeploymentApplicationStatus>[] taskGroups = deployments is null
             ? []
@@ -719,26 +722,32 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
             var deployment = group.Single();
             var taskId = deployment.TaskId.Trim().ToLowerInvariant();
             presentTaskIds.Add(taskId);
+            if (deployment.State == AcquisitionApplicationStates.Removing)
+                continue;
             if (deployment.AppliedVersion is not > 0 ||
                 string.IsNullOrWhiteSpace(deployment.AppliedConfigurationHash))
                 continue;
 
             var hash = deployment.AppliedConfigurationHash.Trim();
-            if (active.TryGetValue(taskId, out var previous) &&
-                previous.TaskVersion == deployment.AppliedVersion.Value &&
+            var hasPrevious = active.TryGetValue(taskId, out var previous);
+            var observationGap = hasPrevious ? receivedAt - previous!.LastObservedAt : TimeSpan.Zero;
+            var observationGapExceeded = hasPrevious && observationGap > MaximumDeploymentObservationGap;
+            if (hasPrevious && !observationGapExceeded &&
+                previous!.TaskVersion == deployment.AppliedVersion.Value &&
                 string.Equals(previous.ConfigurationHash, hash, StringComparison.Ordinal))
             {
                 await UpdateTaskDeploymentObservationAsync(
                         connection, transaction, edgeId, taskId, hash, reportedAt,
                         deployment, receivedAt, ct)
                     .ConfigureAwait(false);
+                active[taskId] = previous with { LastObservedAt = receivedAt };
                 continue;
             }
 
-            if (previous is not null)
+            if (hasPrevious)
             {
                 await CloseTaskDeploymentObservationAsync(
-                        connection, transaction, edgeId, taskId, receivedAt, ct)
+                        connection, transaction, edgeId, taskId, previous!.LastObservedAt, ct)
                     .ConfigureAwait(false);
                 active.Remove(taskId);
             }
@@ -748,15 +757,16 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
                     hash, source, reportedAt, deployment, receivedAt, ct)
                 .ConfigureAwait(false);
             active[taskId] = new ActiveTaskDeploymentObservation(
-                deployment.AppliedVersion.Value, hash);
+                deployment.AppliedVersion.Value, hash, receivedAt);
         }
 
+        // Only a complete snapshot can confirm absence; close at the last receipt that confirmed the task.
         if (completeSnapshot)
         {
             foreach (var taskId in active.Keys.Where(taskId => !presentTaskIds.Contains(taskId)).ToArray())
             {
                 await CloseTaskDeploymentObservationAsync(
-                        connection, transaction, edgeId, taskId, receivedAt, ct)
+                        connection, transaction, edgeId, taskId, active[taskId].LastObservedAt, ct)
                     .ConfigureAwait(false);
                 active.Remove(taskId);
             }
@@ -797,7 +807,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText =
-            "SELECT task_id, task_version, configuration_hash " +
+            "SELECT task_id, task_version, configuration_hash, last_observed_at " +
             "FROM edge_task_deployment_observations WHERE edge_id = $1 AND closed_observed_at IS NULL FOR UPDATE";
         command.Parameters.AddWithValue(edgeId);
         var active = new Dictionary<string, ActiveTaskDeploymentObservation>(StringComparer.OrdinalIgnoreCase);
@@ -805,7 +815,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             active[reader.GetString(0)] = new ActiveTaskDeploymentObservation(
-                reader.GetInt32(1), reader.GetString(2));
+                reader.GetInt32(1), reader.GetString(2), reader.GetFieldValue<DateTimeOffset>(3));
         }
         return active;
     }
@@ -878,7 +888,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
         NpgsqlTransaction transaction,
         string edgeId,
         string taskId,
-        DateTimeOffset receivedAt,
+        DateTimeOffset closureBoundaryAt,
         CancellationToken ct)
     {
         await using var command = connection.CreateCommand();
@@ -888,7 +898,7 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
             "WHERE edge_id = $1 AND task_id = $2 AND closed_observed_at IS NULL";
         command.Parameters.AddWithValue(edgeId);
         command.Parameters.AddWithValue(taskId);
-        command.Parameters.AddWithValue(receivedAt);
+        command.Parameters.AddWithValue(closureBoundaryAt);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
@@ -897,7 +907,10 @@ public sealed class EdgeRegistry(NpgsqlDataSource dataSource) : IEdgeSiteDirecto
             ? timestamp
             : null;
 
-    private sealed record ActiveTaskDeploymentObservation(int TaskVersion, string ConfigurationHash);
+    private sealed record ActiveTaskDeploymentObservation(
+        int TaskVersion,
+        string ConfigurationHash,
+        DateTimeOffset LastObservedAt);
 
     private async Task<EdgeState?> GetAsync(string edgeId, CancellationToken ct)
     {

@@ -634,7 +634,9 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
 
         await using var command = _dataSource.CreateCommand();
         var where = BuildWhere(command, query);
-        var order = query.AfterIngestId.HasValue ? "ASC" : "DESC";
+        var orderBy = query.OrderByIngestedAtDescending
+            ? "ingested_at DESC, ingest_id DESC"
+            : query.AfterIngestId.HasValue ? "ingest_id ASC" : "ingest_id DESC";
         command.CommandText = $"""
                               SELECT ingest_id, site_id, edge_id, ingested_at, event_id, schema_version, event_type, type_version,
                                      occurred_at, recorded_at, source, subject_type, subject_id,
@@ -642,7 +644,7 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
                                      quality_flags::text, payload_hash, context::text, data::text, seq
                               FROM production_events
                               {where}
-                              ORDER BY ingest_id {order}
+                              ORDER BY {orderBy}
                               LIMIT @limit
                               OFFSET @offset;
                               """;
@@ -949,9 +951,35 @@ public sealed partial class PostgresPlatformEventStore : IPlatformEventStore, ID
         var predicates = new List<string>();
         AddEquality(command, predicates, "site_id", "site_id", query.SiteId);
         AddEquality(command, predicates, "edge_id", "edge_id", query.EdgeId);
+        AddEquality(command, predicates, "event_id", "event_id", query.EventId);
         AddEquality(command, predicates, "event_type", "event_type", query.EventType);
+        AddEquality(command, predicates, "configuration_kind", "configuration_kind", query.AppliedConfigurationKind);
+        AddEquality(command, predicates, "configuration_id", "configuration_id", query.AppliedConfigurationId);
+        if (query.AppliedConfigurationVersion.HasValue)
+        {
+            predicates.Add("configuration_version = @configuration_version");
+            command.Parameters.AddWithValue("configuration_version", query.AppliedConfigurationVersion.Value);
+        }
         AddEquality(command, predicates, "subject_type", "subject_type", query.SubjectType);
         AddEquality(command, predicates, "subject_id", "subject_id", query.SubjectId);
+        if (query.RequireNonEmptyDataValues)
+            predicates.Add("jsonb_typeof(data -> 'values') = 'object' AND data -> 'values' <> '{}'::jsonb");
+        if (query.ExecutionIds is { } executionIds)
+        {
+            if (executionIds.Count == 0)
+            {
+                predicates.Add("FALSE");
+            }
+            else
+            {
+                predicates.Add("execution_id = ANY(@execution_ids)");
+                command.Parameters.AddWithValue("execution_ids", executionIds
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .Select(static value => value.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray());
+            }
+        }
         if (!string.IsNullOrWhiteSpace(query.EquipmentId))
         {
             predicates.Add("COALESCE(NULLIF(BTRIM(context ->> 'equipment_id'), ''), CASE WHEN LOWER(subject_type) = 'equipment' THEN subject_id END) = @equipment_id");

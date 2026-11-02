@@ -7,7 +7,9 @@ using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Errors;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.TimeSeries;
 using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.ProcessConfiguration;
@@ -37,7 +39,8 @@ public sealed class IngestionTaskActiveConfigurationTests
                     ["EDGE-001"] = "SITE-001"
                 }
             })),
-            new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()))
+            new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()),
+            new IngestionTaskSampleReceiptQuery(new EmptyTimeSeriesStore(), null!))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -57,7 +60,8 @@ public sealed class IngestionTaskActiveConfigurationTests
             new ProcessConfigurationApplication(new MissingModelStore()),
             new PlatformUserResolver(new TestHostEnvironment()),
             new EdgeTokenValidator(Options.Create(new PlatformEventOptions { RequireToken = false })),
-            new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()))
+            new AcquisitionProbeTaskCoordinator(new UnusedProbeTaskStore()),
+            new IngestionTaskSampleReceiptQuery(new EmptyTimeSeriesStore(), null!))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -160,7 +164,8 @@ public sealed class IngestionTaskActiveConfigurationTests
                     ["EDGE-001"] = "SITE-B"
                 }
             })),
-            new AcquisitionProbeTaskCoordinator(probeStore))
+            new AcquisitionProbeTaskCoordinator(probeStore),
+            new IngestionTaskSampleReceiptQuery(new EmptyTimeSeriesStore(), null!))
         {
             ControllerContext = new ControllerContext { HttpContext = context }
         };
@@ -257,6 +262,30 @@ public sealed class IngestionTaskActiveConfigurationTests
                             : new IngestionTaskVersionMetadata(reference.TaskId, reference.Version, null, null, true)
                         : new IngestionTaskVersionMetadata(reference.TaskId, reference.Version, null, null, false))
                     .ToArray());
+
+        public Task<IReadOnlyList<IngestionTaskCoverageMetadata>> FindCoverageMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<IngestionTaskCoverageMetadata>>(
+                references.Select(reference =>
+                {
+                    var match = string.Equals(reference.TaskId, Task.TaskId, StringComparison.Ordinal) &&
+                                reference.Version == Task.Version && authorizedEdgeIds.Contains(Task.EdgeId);
+                    return match
+                        ? new IngestionTaskCoverageMetadata(
+                            Task.TaskId, Task.Version, Task.EdgeId, Task.Status, Task.SubjectType, Task.SubjectId,
+                            Task.ValueMappings
+                                .Where(static mapping => mapping.Required && !string.IsNullOrWhiteSpace(mapping.DataItemCode))
+                                .Select(static mapping => mapping.DataItemCode.Trim())
+                                .Distinct(StringComparer.Ordinal)
+                                .Order(StringComparer.Ordinal)
+                                .ToArray(),
+                            false,
+                            false)
+                        : new IngestionTaskCoverageMetadata(
+                            reference.TaskId, reference.Version, null, null, null, null, [], false, false);
+                }).ToArray());
         public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
         {
             UpsertCount++;
@@ -403,5 +432,18 @@ public sealed class IngestionTaskActiveConfigurationTests
                 taskId = null;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class EmptyTimeSeriesStore : ITimeSeriesStore
+    {
+        public Task InitializeAsync(CancellationToken ct = default) => System.Threading.Tasks.Task.CompletedTask;
+
+        public Task<IReadOnlyList<SignalSample>> QueryAsync(TimeSeriesQuery query, CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<SignalSample>>([]);
+
+        public Task<IReadOnlyList<ProcessSampleFrame>> QueryFramesAsync(
+            TimeSeriesQuery query,
+            CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<ProcessSampleFrame>>([]);
     }
 }

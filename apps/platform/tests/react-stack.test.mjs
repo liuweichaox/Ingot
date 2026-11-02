@@ -109,7 +109,7 @@ test("navigation and overlays are accessible Headless UI components", () => {
   assert.match(app, /path="\/configuration" element=\{<Navigate to="\/configuration\/process-data-models" replace \/>\}/);
   assert.match(app, /id: "system"[\s\S]*\["\/identity\/users", "用户权限"\][\s\S]*\["\/model-service", "模型服务"\]/);
   assert.match(app, /\["\/chat", "AI 助手"\]/);
-  assert.match(app, /\["\/process-executions", "运行记录"\], \["\/production\/changeover", "生产切换"\], \["\/production\/tooling-installations", "工装装卸"\]/);
+  assert.match(app, /\["\/process-executions", "运行记录"\], \["\/edges", "现场节点"\], \["\/production\/changeover", "生产切换"\], \["\/production\/tooling-installations", "工装装卸"\]/);
   assert.match(app, /\["\/comparisons", "工艺分析"\]/);
   assert.match(app, /\["\/configuration\/process-specifications", "配方版本"\], \["\/recipe-adjustments", "调整与验证"\]/);
   assert.match(app, /\["\/knowledge\/process-materials", "工艺资料"\], \["\/knowledge\/mechanism", "机理知识"\]/);
@@ -197,7 +197,7 @@ test("feature search opens a command palette and table columns keep stable uniqu
   assert.match(app, /功能搜索/);
   assert.doesNotMatch(app, /navigate\("\/explorer", \{ state: \{ focusSearch: true \} \}\)/);
   assert.match(app, /\["\/platform-metrics", "系统状态"\]/);
-  assert.match(app, /\["\/logs", "平台日志"\]/);
+  assert.match(app, /\["\/logs", "现场节点日志"\]/);
   assert.match(app, /"\/production\/changeover": "生产切换 换产 产品切换 配方切换"/);
   assert.match(app, /"\/inspections": "质量检验 质量任务 质检 检测任务"/);
   assert.match(components, /key=\{column\.id \?\? `\$\{column\.key\}:\$\{columnIndex\}`\}/);
@@ -410,7 +410,7 @@ test("ingestion tasks probe real source points before publishing", () => {
     assert.match(acquisitionPanels.mapping, new RegExp(label));
   }
   // 发布仍然以探查通过为硬闸门
-  assert.match(acquisitionPage, /disabled=\{saving \|\| !probeValid\}/);
+  assert.match(acquisitionPage, /disabled=\{saving \|\| edgeScopeMismatch \|\| !probeValid\}/);
   assert.match(acquisitionPage, /发布前必须先验证连接/);
 });
 

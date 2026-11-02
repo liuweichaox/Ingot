@@ -73,6 +73,68 @@ function probePointNodeId(taskKey, pointIndex) {
   return `probe:${encodeURIComponent(taskKey)}:${pointIndex}`;
 }
 
+function isPersistedCanvasNode(nodeId) {
+  return ["edge:", "task:", "model:"].some(prefix => String(nodeId || "").startsWith(prefix));
+}
+
+function normalizedCanvasPosition(position) {
+  if (typeof position?.x !== "number" || typeof position?.y !== "number") return null;
+  const { x, y } = position;
+  return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x) <= 100000 && Math.abs(y) <= 100000
+    ? { x, y }
+    : null;
+}
+
+function readCanvasLayout(storageKey) {
+  if (!storageKey) return { positions: {}, storageAvailable: false };
+  let raw;
+  try {
+    raw = window.localStorage.getItem(storageKey);
+  } catch {
+    return { positions: {}, storageAvailable: false };
+  }
+  if (!raw) return { positions: {}, storageAvailable: true };
+  try {
+    const stored = JSON.parse(raw);
+    if (stored?.version !== 1 || !stored.positions || typeof stored.positions !== "object")
+      return { positions: {}, storageAvailable: true };
+    const positions = Object.fromEntries(Object.entries(stored.positions).slice(0, 100).flatMap(([nodeId, position]) => {
+      const safePosition = normalizedCanvasPosition(position);
+      return isPersistedCanvasNode(nodeId) && safePosition ? [[nodeId, safePosition]] : [];
+    }));
+    return { positions, storageAvailable: true };
+  } catch {
+    return { positions: {}, storageAvailable: true };
+  }
+}
+
+function writeCanvasLayout(storageKey, positions) {
+  if (!storageKey) return false;
+  const stablePositions = Object.fromEntries(Object.entries(positions)
+    .filter(([nodeId, position]) => isPersistedCanvasNode(nodeId) && normalizedCanvasPosition(position))
+    .slice(0, 100)
+    .map(([nodeId, position]) => [nodeId, normalizedCanvasPosition(position)]));
+  try {
+    if (Object.keys(stablePositions).length === 0) window.localStorage.removeItem(storageKey);
+    else window.localStorage.setItem(storageKey, JSON.stringify({ version: 1, positions: stablePositions }));
+    return true;
+  } catch {
+    // Storage can be disabled or full; keep the current layout in component state.
+    return false;
+  }
+}
+
+function clearCanvasLayout(storageKey) {
+  if (!storageKey) return false;
+  try {
+    window.localStorage.removeItem(storageKey);
+    return true;
+  } catch {
+    // Reset remains available for the current session when storage is unavailable.
+    return false;
+  }
+}
+
 function normalizeEdge(edge) {
   if (!edge?.edgeId) return null;
   const edgeId = String(edge.edgeId);
@@ -278,7 +340,7 @@ function PaletteItem({ children, icon, description, disabled, dragData, onClick,
 function CanvasWorkspace({
   devices = EMPTY_LIST, edges = EMPTY_LIST, models = EMPTY_LIST, activeDeviceKey = "", activeInspectorTab = "device", onInspectorTabChange, onSelect, onAddDevice,
   onAssignEdge, onAssignModel, onRemove, inspectorPanels = EMPTY_RECORD, probe, edgeError, canAddDevice, disabled, id,
-  onFocusMappingIssues, onFocusMappingRow, onFocusProbePoint,
+  onFocusMappingIssues, onFocusMappingRow, onFocusProbePoint, layoutStorageKey = "", layoutPersistenceStatus = "session",
 }) {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
@@ -286,7 +348,16 @@ function CanvasWorkspace({
   const [visibleModelValues, setVisibleModelValues] = useState([]);
   const [showAssociatedResources, setShowAssociatedResources] = useState(false);
   const [editorWideView, setEditorWideView] = useState(false);
-  const [nodePositions, setNodePositions] = useState({});
+  const [positionState, setPositionState] = useState(() => ({
+    storageKey: layoutStorageKey,
+    ...readCanvasLayout(layoutStorageKey),
+  }));
+  const nodePositions = positionState.storageKey === layoutStorageKey ? positionState.positions : EMPTY_RECORD;
+  const layoutKeyPending = Boolean(layoutStorageKey && positionState.storageKey !== layoutStorageKey);
+  const storageUnavailable = Boolean(layoutStorageKey && positionState.storageKey === layoutStorageKey && !positionState.storageAvailable);
+  const effectiveLayoutPersistenceStatus = layoutKeyPending ? "resolving"
+    : storageUnavailable ? "storage-unavailable" : layoutPersistenceStatus;
+  const layoutPositioningBlocked = ["resolving", "unavailable"].includes(effectiveLayoutPersistenceStatus);
   const [paletteSearch, setPaletteSearch] = useState("");
   const [mappingSearch, setMappingSearch] = useState("");
   const [mappingStatus, setMappingStatus] = useState("all");
@@ -296,12 +367,24 @@ function CanvasWorkspace({
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState("");
   const fitAllAfterTopologyChange = useRef(false);
   const fitAfterLayoutReset = useRef(false);
+  const fitAfterLayoutRestore = useRef(false);
   const [contextMenu, setContextMenu] = useState(null);
   const contextMenuRef = useRef(null);
+  const contextMenuTriggerRef = useRef(null);
+  const nodeActionsButtonRef = useRef(null);
   const dropzoneRef = useRef(null);
+  const probeToolsRef = useRef(null);
   const inspectorTabRefs = useRef({});
   const activeDevice = devices.find(device => device.key === activeDeviceKey) || devices[0];
   const defaultTaskKey = activeDeviceKey || devices[0]?.key || "";
+
+  useEffect(() => {
+    if (positionState.storageKey === layoutStorageKey) return;
+    const layout = readCanvasLayout(layoutStorageKey);
+    const { positions } = layout;
+    fitAfterLayoutRestore.current = Object.keys(positions).length > 0;
+    setPositionState({ storageKey: layoutStorageKey, ...layout });
+  }, [layoutStorageKey, positionState.storageKey]);
   const canvasDevices = useMemo(() => mappingTaskFilter === "all"
     ? devices
     : devices.filter(device => device.key === mappingTaskFilter), [devices, mappingTaskFilter]);
@@ -755,6 +838,18 @@ function CanvasWorkspace({
 
   const graphTopology = graphNodeDefinitions.map(node => node.id).join("|");
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const restoreSelectedGraphNode = useCallback(() => {
+    setNodes(current => {
+      let changed = false;
+      const restored = current.map(node => {
+        const selected = node.id === selectedGraphNodeId;
+        if (node.selected === selected) return node;
+        changed = true;
+        return { ...node, selected };
+      });
+      return changed ? restored : current;
+    });
+  }, [selectedGraphNodeId, setNodes]);
   const renderedNodeTopology = nodes.map(node => node.id).join("|");
   useEffect(() => {
     setNodes(current => {
@@ -770,6 +865,13 @@ function CanvasWorkspace({
       });
     });
   }, [graphNodeDefinitions, nodePositions, selectedGraphNodeId, setNodes]);
+
+  const restoredPositionsApplied = graphNodeDefinitions.every(definition => {
+    const expected = nodePositions[definition.id];
+    if (!expected) return true;
+    const current = nodes.find(node => node.id === definition.id)?.position;
+    return current?.x === expected.x && current?.y === expected.y;
+  });
 
   useEffect(() => {
     if (!fitAfterLayoutReset.current || !nodesInitialized) return undefined;
@@ -790,6 +892,26 @@ function CanvasWorkspace({
       if (settleFrame) cancelAnimationFrame(settleFrame);
     };
   }, [fitView, graphNodeDefinitions, nodePositions, nodesInitialized]);
+
+  useEffect(() => {
+    if (!fitAfterLayoutRestore.current || !nodesInitialized || !restoredPositionsApplied) return undefined;
+    let settleFrame = 0;
+    const fitFrame = requestAnimationFrame(() => {
+      settleFrame = requestAnimationFrame(() => {
+        fitAfterLayoutRestore.current = false;
+        void fitView({
+          nodes: graphNodeDefinitions.map(node => ({ id: node.id })),
+          padding: 0.08,
+          maxZoom: 1.08,
+          duration: 180,
+        });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(fitFrame);
+      if (settleFrame) cancelAnimationFrame(settleFrame);
+    };
+  }, [fitView, graphNodeDefinitions, nodePositions, nodes, nodesInitialized, restoredPositionsApplied]);
 
   useEffect(() => {
     if (!graphTopology || graphTopology !== renderedNodeTopology || !nodesInitialized) return undefined;
@@ -928,31 +1050,50 @@ function CanvasWorkspace({
   const contextAssignmentDevice = contextTaskDevice || selectedTaskDevice || activeDevice;
 
   function openTaskInspector(taskKey, tab, nodeId = taskNodeId(taskKey), focusTarget = null) {
-    setMappingTaskFilter(taskKey);
+    let accepted = true;
     if (focusTarget?.type === "mapping" && onFocusMappingRow) {
-      onFocusMappingRow(taskKey, focusTarget.index);
-      setEditorWideView(true);
+      accepted = onFocusMappingRow(taskKey, focusTarget.index) !== false;
     } else if (focusTarget?.type === "probePoint" && onFocusProbePoint) {
-      onFocusProbePoint(taskKey, focusTarget.point);
-      setEditorWideView(true);
+      accepted = onFocusProbePoint(taskKey, focusTarget.point) !== false;
     } else {
-      onSelect?.(taskKey);
-      onInspectorTabChange?.(tab);
+      accepted = onSelect?.(taskKey) !== false;
+      if (accepted) onInspectorTabChange?.(tab);
     }
+    if (!accepted) {
+      closeCanvasContextMenu(true);
+      return;
+    }
+    setMappingTaskFilter(taskKey);
+    if (focusTarget) setEditorWideView(true);
     setSelectedGraphNodeId(nodeId);
+    const inspectorTab = !focusTarget ? inspectorTabRefs.current[tab] : null;
+    contextMenuTriggerRef.current = null;
     setContextMenu(null);
+    if (accepted && inspectorTab) window.requestAnimationFrame(() => inspectorTab.isConnected && inspectorTab.focus());
   }
 
-  function openCanvasContextMenu(event, node = null) {
+  function closeCanvasContextMenu(restoreFocus = false) {
+    const menuWasOpen = Boolean(contextMenu);
+    const focusTarget = contextMenuTriggerRef.current || nodeActionsButtonRef.current;
+    contextMenuTriggerRef.current = null;
+    setContextMenu(null);
+    if (restoreFocus && menuWasOpen && focusTarget)
+      window.requestAnimationFrame(() => focusTarget.isConnected && !focusTarget.disabled && focusTarget.focus());
+  }
+
+  function openCanvasContextMenu(event, node = null, triggerElement = null) {
     event.preventDefault();
     event.stopPropagation();
     const bounds = dropzoneRef.current?.getBoundingClientRect();
     if (!bounds) return;
+    contextMenuTriggerRef.current = triggerElement;
     const width = 240;
     const estimatedHeight = !node ? (canAddDevice && !disabled ? 112 : 76) : node.type === "task" ? 232 : 168;
     const left = Math.max(8, Math.min(event.clientX - bounds.left, bounds.width - width - 8));
     const top = Math.max(8, Math.min(event.clientY - bounds.top, bounds.height - estimatedHeight - 8));
-    setSelectedGraphNodeId(node?.id || "");
+    if (!node) setSelectedGraphNodeId("");
+    else if (!["task", "mapping", "topic", "probePoint"].includes(node.type))
+      setSelectedGraphNodeId(node.id);
     setContextMenu({
       node: node ? { id: node.id, type: node.type, data: node.data } : null,
       left,
@@ -964,28 +1105,54 @@ function CanvasWorkspace({
   function fitCurrentFlow() {
     const flowNodes = nodes.filter(node => ["task", "topic", "mapping", "probePoint"].includes(node.type));
     void fitView({ nodes: flowNodes.length ? flowNodes : nodes, padding: 0.045, maxZoom: 1.08, duration: 180 });
-    setContextMenu(null);
+    closeCanvasContextMenu(true);
   }
 
   function fitAllGraph() {
     void fitView({ nodes, padding: 0.08, maxZoom: 1.08, duration: 180 });
-    setContextMenu(null);
+    closeCanvasContextMenu(true);
   }
 
   function resetAutoLayout() {
+    if (layoutPositioningBlocked) return;
     fitAfterLayoutReset.current = true;
-    setNodePositions({});
-    setContextMenu(null);
+    const storageAvailable = clearCanvasLayout(layoutStorageKey);
+    setPositionState({ storageKey: layoutStorageKey, positions: {}, storageAvailable });
+    closeCanvasContextMenu();
+  }
+
+  function storeNodePosition(nodeId, rawPosition) {
+    if (layoutPositioningBlocked) return;
+    const position = normalizedCanvasPosition(rawPosition);
+    if (!position) return;
+    const current = positionState.storageKey === layoutStorageKey
+      ? positionState
+      : { storageKey: layoutStorageKey, ...readCanvasLayout(layoutStorageKey) };
+    const previous = current.positions;
+    const positions = { ...previous, [nodeId]: position };
+    const storageAvailable = layoutStorageKey && isPersistedCanvasNode(nodeId) && current.storageAvailable
+      ? writeCanvasLayout(layoutStorageKey, positions)
+      : current.storageAvailable;
+    setPositionState({ storageKey: layoutStorageKey, positions, storageAvailable });
   }
 
   useEffect(() => {
     if (!contextMenu) return undefined;
     contextMenuRef.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
     const dismissOutside = event => {
-      if (!contextMenuRef.current?.contains(event.target)) setContextMenu(null);
+      if (!contextMenuRef.current?.contains(event.target)) {
+        contextMenuTriggerRef.current = null;
+        setContextMenu(null);
+      }
     };
     const dismissOnEscape = event => {
-      if (event.key === "Escape") setContextMenu(null);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        const trigger = contextMenuTriggerRef.current || nodeActionsButtonRef.current;
+        contextMenuTriggerRef.current = null;
+        setContextMenu(null);
+        if (trigger) window.requestAnimationFrame(() => trigger.isConnected && !trigger.disabled && trigger.focus());
+      }
     };
     document.addEventListener("pointerdown", dismissOutside, true);
     document.addEventListener("keydown", dismissOnEscape);
@@ -1001,7 +1168,7 @@ function CanvasWorkspace({
     setShowAssociatedResources(true);
     setVisibleEdgeIds(current => [...new Set([...current, edgeId])]);
     setSelectedGraphNodeId(edgeNodeId(edgeId));
-    if (position) setNodePositions(current => ({ ...current, [edgeNodeId(edgeId)]: position }));
+    if (position) storeNodePosition(edgeNodeId(edgeId), position);
   };
 
   const addVisibleModel = (value, position = null) => {
@@ -1010,7 +1177,7 @@ function CanvasWorkspace({
     setShowAssociatedResources(true);
     setVisibleModelValues(current => [...new Set([...current, value])]);
     setSelectedGraphNodeId(modelNodeId(value));
-    if (position) setNodePositions(current => ({ ...current, [modelNodeId(value)]: position }));
+    if (position) storeNodePosition(modelNodeId(value), position);
   };
 
   function toggleAssociatedResources() {
@@ -1022,13 +1189,13 @@ function CanvasWorkspace({
   }
 
   function addTask(kind = activeDevice?.form?.deviceProfile?.kind || "other", edgeId = activeDevice?.form?.edgeId || null, position = null) {
-    setContextMenu(null);
+    closeCanvasContextMenu(true);
     const deviceKey = onAddDevice?.(kind, edgeId);
     if (!deviceKey) return;
     const id = taskNodeId(deviceKey);
     setMappingTaskFilter(deviceKey);
     setSelectedGraphNodeId(id);
-    if (position) setNodePositions(current => ({ ...current, [id]: position }));
+    if (position) storeNodePosition(id, position);
   }
 
   const isValidConnection = useCallback(connection => {
@@ -1048,16 +1215,22 @@ function CanvasWorkspace({
     const target = nodes.find(node => node.id === connection.target);
     if (source?.type === "edge" && target?.type === "task") {
       const taskKey = target.data.device.key;
+      if (onSelect?.(taskKey) === false) {
+        restoreSelectedGraphNode();
+        return;
+      }
       setSelectedGraphNodeId(target.id);
-      onSelect?.(taskKey);
       onAssignEdge?.(taskKey, source.data.edgeId);
     } else if (source?.type === "task" && target?.type === "model") {
       const taskKey = source.data.device.key;
+      if (onSelect?.(taskKey) === false) {
+        restoreSelectedGraphNode();
+        return;
+      }
       setSelectedGraphNodeId(source.id);
-      onSelect?.(taskKey);
       onAssignModel?.(taskKey, target.data.value);
     }
-  }, [isValidConnection, nodes, onAssignEdge, onAssignModel, onSelect]);
+  }, [isValidConnection, nodes, onAssignEdge, onAssignModel, onSelect, restoreSelectedGraphNode]);
 
   function handlePaletteDrop(event) {
     event.preventDefault();
@@ -1078,23 +1251,31 @@ function CanvasWorkspace({
 
   function connectFromPalette(node) {
     if (node.type === "task") {
+      if (onSelect?.(node.data.device.key) === false) {
+        restoreSelectedGraphNode();
+        return;
+      }
       setMappingTaskFilter(node.data.device.key);
-      onSelect?.(node.data.device.key);
       setSelectedGraphNodeId(node.id);
     } else if (node.type === "mapping" || node.type === "topic" || node.type === "probePoint") {
       const taskKey = node.data.taskKey;
-      setMappingTaskFilter(taskKey);
+      let accepted = true;
       if (node.type === "mapping" && onFocusMappingRow) {
-        onFocusMappingRow(taskKey, node.data.index);
-        setEditorWideView(true);
+        accepted = onFocusMappingRow(taskKey, node.data.index) !== false;
       } else if (node.type === "probePoint" && onFocusProbePoint) {
-        onFocusProbePoint(taskKey, node.data.point);
-        setEditorWideView(true);
+        accepted = onFocusProbePoint(taskKey, node.data.point) !== false;
       } else {
-        onSelect?.(taskKey);
-        if (node.type === "mapping") onInspectorTabChange?.("mappings");
-        if (node.type === "probePoint") onInspectorTabChange?.("connection");
+        accepted = onSelect?.(taskKey) !== false;
+        if (accepted && node.type === "mapping") onInspectorTabChange?.("mappings");
+        if (accepted && node.type === "probePoint") onInspectorTabChange?.("connection");
       }
+      if (!accepted) {
+        restoreSelectedGraphNode();
+        return;
+      }
+      setMappingTaskFilter(taskKey);
+      if ((node.type === "mapping" && onFocusMappingRow) || (node.type === "probePoint" && onFocusProbePoint))
+        setEditorWideView(true);
       setSelectedGraphNodeId(node.id);
     } else setSelectedGraphNodeId(node.id);
   }
@@ -1159,13 +1340,15 @@ function CanvasWorkspace({
                 <ul>
                   {mappingIssuesByTask.map(issue => <li key={issue.taskKey}>
                     <button type="button" onClick={() => {
+                      const accepted = onFocusMappingIssues
+                        ? onFocusMappingIssues(issue.taskKey)
+                        : onSelect?.(issue.taskKey);
+                      if (accepted === false) return;
                       setMappingTaskFilter(issue.taskKey);
                       setMappingStatus("needs-attention");
                       setMappingSearch("");
                       setSelectedGraphNodeId(taskNodeId(issue.taskKey));
-                      onSelect?.(issue.taskKey);
-                      onInspectorTabChange?.("mappings");
-                      onFocusMappingIssues?.(issue.taskKey);
+                      if (!onFocusMappingIssues) onInspectorTabChange?.("mappings");
                     }}>
                       <strong>{issue.taskLabel}</strong>
                       <span>{issue.missingRequiredCount ? `${issue.missingRequiredCount} 个必需项未映射` : ""}
@@ -1174,6 +1357,30 @@ function CanvasWorkspace({
                     </button>
                   </li>)}
                 </ul>
+              </details>}
+              {unmappedProbePoints.length > 0 && <details open className="acq-canvas__issue-list">
+                <summary>{probe?.catalogCurrent === false
+                  ? `旧探查清单中有 ${unmappedProbePoints.length} 个点位待复核`
+                  : `当前任务有 ${unmappedProbePoints.length} 个探查点位未映射`}</summary>
+                <p>{activeDevice?.form?.name || activeDevice?.form?.taskId || "当前任务"}
+                  {probe?.catalogCurrent === false ? " 的探查清单已过期；重新探查后再确认这些点位是否仍存在。" : " 的探查结果中有未配置映射的点位。"}</p>
+                <ul><li><button type="button" onClick={() => {
+                  const taskKey = activeDevice?.key || activeDeviceKey;
+                  if (taskKey && taskKey !== activeDeviceKey && onSelect?.(taskKey) === false) return;
+                  setMappingTaskFilter(taskKey || "all");
+                  setMappingSearch("");
+                  setMappingStatus("all");
+                  setProbePage(0);
+                  window.requestAnimationFrame(() => {
+                    const target = probeToolsRef.current;
+                    if (!target?.isConnected) return;
+                    target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+                    target.focus({ preventScroll: true });
+                  });
+                }}>
+                  <strong>查看待映射点位清单</strong>
+                  <span>定位到当前任务的探查点位分页</span>
+                </button></li></ul>
               </details>}
               {saveCheckFailuresByTask.length > 0 && <details className="acq-canvas__issue-list">
                 <summary>最近一次保存检查未通过 {saveCheckFailuresByTask.length} 个任务</summary>
@@ -1194,11 +1401,34 @@ function CanvasWorkspace({
                 disabled={!canvasEdgeIds.size && !canvasModelValues.size && !visibleEdgeIds.length && !visibleModelValues.length}>
                 {showAssociatedResources ? "隐藏关联 Edge / 模型" : "显示关联 Edge / 模型"}
               </button>
+              <button type="button" className="acq-canvas__node-actions"
+                ref={nodeActionsButtonRef}
+                aria-haspopup="menu" aria-expanded={Boolean(selectedNode && contextMenu?.node?.id === selectedNode.id)}
+                aria-label={selectedNode ? "打开所选对象的更多操作" : "请先选择画布对象"}
+                title={selectedNode ? "打开所选对象的操作菜单" : "请先在画布中选择对象"}
+                disabled={!selectedNode}
+                onClick={event => openCanvasContextMenu(event, selectedNode, event.currentTarget)}>
+                更多操作
+              </button>
               <button type="button" onClick={fitCurrentFlow} disabled={nodes.length === 0} title="适配任务与当前页点位支路">适配点位</button>
               <button type="button" onClick={fitAllGraph} disabled={nodes.length === 0} title="适配画布当前显示的全部节点">适配全图</button>
-              <button type="button" onClick={resetAutoLayout} disabled={nodes.length === 0} title="恢复自动生成的节点位置，不修改采集配置">重置自动布局</button>
+              <button type="button" onClick={resetAutoLayout}
+                disabled={nodes.length === 0 || layoutPositioningBlocked}
+                title={layoutKeyPending ? "正在载入已保存布局，完成前不能重置" : layoutPositioningBlocked
+                  ? "请先确认站点和 Edge 范围，再调整或重置画布布局"
+                  : "恢复自动生成的节点位置，不修改采集配置"}>
+                重置自动布局
+              </button>
             </div>
-            <span className="acq-canvas__shortcut">布局仅保留在当前编辑 · 刷新后恢复自动布局 · 右键更多操作</span>
+            <span className="acq-canvas__shortcut">{effectiveLayoutPersistenceStatus === "persistent"
+              ? "任务、Edge 和模型位置保存在此浏览器；点位、主题和探查节点按当前数据自动排列"
+              : effectiveLayoutPersistenceStatus === "resolving"
+                ? layoutKeyPending ? "正在载入已保存布局；完成后才能调整节点位置" : "正在确认任务站点范围；完成后才会载入已保存布局"
+                : effectiveLayoutPersistenceStatus === "unavailable"
+                  ? "站点范围未确认；请先确认站点和 Edge 后再调整或重置画布布局"
+                  : effectiveLayoutPersistenceStatus === "storage-unavailable"
+                    ? "浏览器存储不可用；节点布局仅保留在当前会话"
+                  : "新建或版本工作区布局仅保留在当前编辑 · 刷新后恢复自动布局"} · 选中对象后可用“更多操作”或右键</span>
           </div>
           <div className="acq-canvas__mapping-tools" aria-label="点位映射支路筛选">
             <label className="acq-canvas__mapping-search">
@@ -1209,8 +1439,8 @@ function CanvasWorkspace({
             <label className="acq-canvas__mapping-filter">
               <span>任务</span><select value={mappingTaskFilter} onChange={event => {
                 const taskKey = event.target.value;
+                if (taskKey !== "all" && onSelect?.(taskKey) === false) return;
                 setMappingTaskFilter(taskKey);
-                if (taskKey !== "all") onSelect?.(taskKey);
               }}>
                 <option value="all">所有任务</option>
                 {devices.map(device => <option key={device.key} value={device.key}>{device.form?.name || device.form?.taskId || "采集任务"}</option>)}
@@ -1231,7 +1461,7 @@ function CanvasWorkspace({
                 onClick={() => setMappingPage(page => Math.min(mappingPageCount - 1, page + 1))}>下一批</button>
             </nav>
           </div>
-          {unmappedProbePoints.length > 0 && <div className="acq-canvas__probe-tools" aria-label="未映射探查点位分页">
+          {unmappedProbePoints.length > 0 && <div ref={probeToolsRef} role="region" aria-label="当前任务未映射探查点列表" tabIndex={-1} className="acq-canvas__probe-tools">
             <strong>待映射探查点位 · {activeDevice?.form?.name || activeDevice?.form?.taskId || "当前任务"}</strong>
             <span>显示 {probePageStart}–{probePageEnd}/{filteredProbePoints.length} 条 · 共 {unmappedProbePoints.length} 条</span>
             {probe?.catalogCurrent === false && <span className="is-stale">来自旧探查清单</span>}
@@ -1257,10 +1487,10 @@ function CanvasWorkspace({
               onNodeContextMenu={(event, node) => openCanvasContextMenu(event, node)}
               onPaneContextMenu={event => openCanvasContextMenu(event)}
               onPaneClick={() => { setContextMenu(null); setSelectedGraphNodeId(""); }}
-              onNodeDragStop={(_event, node) => setNodePositions(current => ({ ...current, [node.id]: node.position }))}
+              onNodeDragStop={(_event, node) => storeNodePosition(node.id, node.position)}
               isValidConnection={isValidConnection}
               onConnect={onConnect}
-              nodesDraggable={!disabled}
+              nodesDraggable={!disabled && !layoutPositioningBlocked}
               nodesConnectable={!disabled}
               elementsSelectable
               deleteKeyCode={null}
@@ -1292,8 +1522,22 @@ function CanvasWorkspace({
                 <strong>还没有配置点位映射</strong><span>选择采集任务，在右侧“点位映射”中添加源点位和目标变量。</span>
               </Panel>}
             </ReactFlow>
-            {contextMenu && <div ref={contextMenuRef} className="acq-canvas__context-menu" role="menu" aria-label="画布右键菜单"
+            {contextMenu && <div ref={contextMenuRef} className="acq-canvas__context-menu" role="menu" aria-label="画布对象操作"
               style={{ left: contextMenu.left, top: contextMenu.top }} onContextMenu={event => event.preventDefault()}
+              onKeyDown={event => {
+                const items = [...(contextMenuRef.current?.querySelectorAll('[role="menuitem"]:not(:disabled)') || [])];
+                if (items.length === 0) return;
+                const activeIndex = items.indexOf(document.activeElement);
+                let targetIndex = null;
+                if (event.key === "ArrowDown") targetIndex = (activeIndex + 1) % items.length;
+                if (event.key === "ArrowUp") targetIndex = (activeIndex - 1 + items.length) % items.length;
+                if (event.key === "Home") targetIndex = 0;
+                if (event.key === "End") targetIndex = items.length - 1;
+                if (targetIndex !== null) {
+                  event.preventDefault();
+                  items[targetIndex].focus();
+                }
+              }}
               onPointerDown={event => event.stopPropagation()}>
               <div className="acq-canvas__context-heading" role="presentation">
                 <span>{contextNode ? (contextNode.type === "task" ? "采集任务"
@@ -1330,21 +1574,21 @@ function CanvasWorkspace({
               {contextNode?.type === "topic" && <button type="button" role="menuitem"
                 onClick={() => openTaskInspector(contextNode.data.taskKey, "connection", contextNode.id)}>查看 MQTT 订阅配置</button>}
               {contextNode?.type === "edge" && <>
-                <button type="button" role="menuitem" onClick={() => setContextMenu(null)}>查看 Edge 属性</button>
+                <button type="button" role="menuitem" onClick={() => closeCanvasContextMenu(true)}>查看 Edge 属性</button>
                 {contextAssignmentDevice && <button type="button" role="menuitem" disabled={disabled || contextNode.data.unavailable}
                   onClick={() => {
-                    onAssignEdge?.(contextAssignmentDevice.key, contextNode.data.edgeId);
-                    setSelectedGraphNodeId(taskNodeId(contextAssignmentDevice.key));
-                    setContextMenu(null);
+                    const accepted = onAssignEdge?.(contextAssignmentDevice.key, contextNode.data.edgeId);
+                    if (accepted !== false) setSelectedGraphNodeId(taskNodeId(contextAssignmentDevice.key));
+                    closeCanvasContextMenu(true);
                   }}>分配给当前任务</button>}
               </>}
               {contextNode?.type === "model" && <>
-                <button type="button" role="menuitem" onClick={() => setContextMenu(null)}>查看模型属性</button>
+                <button type="button" role="menuitem" onClick={() => closeCanvasContextMenu(true)}>查看模型属性</button>
                 {contextAssignmentDevice && <button type="button" role="menuitem" disabled={disabled || !contextNode.data.published}
                   onClick={() => {
-                    onAssignModel?.(contextAssignmentDevice.key, contextNode.data.value);
-                    setSelectedGraphNodeId(taskNodeId(contextAssignmentDevice.key));
-                    setContextMenu(null);
+                    const accepted = onAssignModel?.(contextAssignmentDevice.key, contextNode.data.value);
+                    if (accepted !== false) setSelectedGraphNodeId(taskNodeId(contextAssignmentDevice.key));
+                    closeCanvasContextMenu(true);
                   }}>应用到当前任务</button>}
               </>}
               {!contextNode && canAddDevice && <button type="button" role="menuitem" disabled={disabled}

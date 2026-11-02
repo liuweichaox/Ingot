@@ -21,6 +21,7 @@ public static class AcquisitionApplicationStates
     public const string Applied = "applied";
     public const string Rollback = "rollback";
     public const string Failed = "failed";
+    public const string Removing = "removing";
 }
 
 public sealed record AcquisitionTaskRuntimeStatus(
@@ -44,7 +45,8 @@ public sealed record AcquisitionTaskRuntimeStatus(
     bool ProcessExecutionActive,
     long StaleSnapshotRejectionCount = 0,
     long StaleValueRejectionCount = 0,
-    int? MaximumValidSnapshotSilenceMs = null);
+    int? MaximumValidSnapshotSilenceMs = null,
+    string? LastValidSnapshotEventId = null);
 
 public sealed record AcquisitionDeploymentApplicationStatus(
     string TaskId,
@@ -82,7 +84,8 @@ public sealed record EdgeAcquisitionRuntimeStatus(
     long StaleSnapshotRejectionCount = 0,
     long StaleValueRejectionCount = 0,
     DateTimeOffset? PlatformReceivedAt = null,
-    DateTimeOffset? PlatformObservedAt = null);
+    DateTimeOffset? PlatformObservedAt = null,
+    bool SupportsSampleEventIdCorrelation = false);
 
 public static class AcquisitionDeploymentFingerprint
 {

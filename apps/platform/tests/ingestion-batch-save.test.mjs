@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyIngestionDraftWriteOutcome } from "../src/acquisition/ingestionBatchSave.js";
+import { classifyIngestionDraftWriteOutcome, getRetryableIngestionDraftKeys } from "../src/acquisition/ingestionBatchSave.js";
 
 // Keep retries safe when a batch draft write succeeds but its response is lost.
 
@@ -65,4 +65,16 @@ test("an unavailable verification keeps the result unresolved", () => {
   assert.equal(result.kind, "unknown");
   assert.equal(result.verificationRequired, true);
   assert.match(result.error, /连接中断；服务仍不可用/);
+});
+
+test("bulk retry only includes confirmed transient request failures", () => {
+  assert.deepEqual(getRetryableIngestionDraftKeys([
+    { key: "request-a", error: "连接中断", failureKind: "request", verificationRequired: false },
+    { key: "request-b", error: "限流", failureKind: "request", verificationRequired: false },
+    { key: "conflict", error: "编号冲突", failureKind: "conflict", verificationRequired: false },
+    { key: "rejected", error: "权限不足", failureKind: "rejected", verificationRequired: false },
+    { key: "unknown", error: "结果待核实", failureKind: "unknown", verificationRequired: true },
+    { key: "saved", error: "", failureKind: "saved", verificationRequired: false },
+    { key: "unknown-request", error: "结果待核实", failureKind: "request", verificationRequired: true },
+  ]), ["request-a", "request-b"]);
 });

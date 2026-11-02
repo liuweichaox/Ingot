@@ -108,7 +108,8 @@ internal sealed class MtConnectAcquisitionRunner : IAcquisitionProtocolRunner
                         configurationKey,
                         observedAt,
                         currentProcessSpecification,
-                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                        deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null,
+                        lifecycle.EmittedSampleEventId);
                     await Task.Delay(pollDelayMs, ct).ConfigureAwait(false);
                 }
             }

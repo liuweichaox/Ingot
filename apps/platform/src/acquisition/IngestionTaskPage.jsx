@@ -6,6 +6,7 @@ import {
 } from "../ui/components";
 import { deleteJson, downloadFile, getJson, postForm, postJson } from "../api/http";
 import { useApi, extractRows } from "../hooks/useApi";
+import { useSiteScope } from "../hooks/useSiteScope";
 import {
   mergeServerCapabilities, normalizeSnmpOid, protocolDescriptor, protocolOptionGroups,
 } from "./protocolRegistry";
@@ -13,16 +14,30 @@ import {
   applyProtocolChange, createIngestionTaskForm, modelValue, parseModelValue,
   patchFromProbePoint, summarizeValueMappings, toPayload, validateIngestionTask,
 } from "./ingestionTaskForm";
-import { classifyIngestionDraftWriteOutcome } from "./ingestionBatchSave";
+import { classifyIngestionDraftWriteOutcome, getRetryableIngestionDraftKeys } from "./ingestionBatchSave";
 import { ConnectionPanel } from "./panels/ConnectionPanel";
 import { PointMappingPanel, blankRow } from "./panels/PointMappingPanel";
 import { DevicePointsPanel } from "./panels/DevicePointsPanel";
 import { ReusableBindingPanel } from "./ReusableBindingPanel";
 import { IngestionDeviceGroupCanvas } from "./IngestionDeviceGroupCanvas";
+import { ingestionCanvasLayoutStorageKey as createCanvasLayoutStorageKey } from "./ingestionCanvasLayout";
+import { useUnsavedNavigationRegistration } from "./UnsavedNavigationGuard";
 import { deviceProfileOption, deviceProfileOptions } from "./deviceProfileRegistry";
-import { edgeConnectionStatus, formatDuration, formatInteger, formatTime } from "../pages/shared";
+import { edgeConnectionStatus, formatDuration, formatInteger, formatTime, SiteScopeField } from "../pages/shared";
 
 const ENDPOINT = "/api/v1/ingestion-tasks";
+
+function safeTaskListReturnPath(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value, "http://ingot.invalid");
+    return url.origin === "http://ingot.invalid" && url.pathname === "/configuration/ingestion-tasks"
+      ? `${url.pathname}${url.search}${url.hash}`
+      : "";
+  } catch {
+    return "";
+  }
+}
 
 function deviceGroupPayload(form) {
   const taskForm = { ...form, status: "draft" };
@@ -35,6 +50,10 @@ function deviceGroupPayload(form) {
 function storedDeviceFingerprint(task) {
   try { return JSON.stringify(deviceGroupPayload(createIngestionTaskForm(task))); }
   catch { return ""; }
+}
+
+function taskEditorFingerprint(form) {
+  return JSON.stringify({ ...form, status: "draft" });
 }
 
 function inspectorTabForErrors(errors, connectionSection) {
@@ -50,7 +69,7 @@ function inspectorTabForErrors(errors, connectionSection) {
 }
 
 // Keep the setup guide conservative: node-level health is never proof that this task is linked to a production run.
-function assessPublishedTaskObservation(task, edge, acquisition, loading, error) {
+function assessPublishedTaskObservation(task, edge, acquisition, sampleReceipt, sampleReceiptMode, expectedSampleEventId, loading, error) {
   if (task?.status !== "published")
     return { state: "unknown", detail: "发布后到现场节点确认配置应用、有效采样、上行和运行关联。" };
   if (loading && !acquisition)
@@ -98,27 +117,39 @@ function assessPublishedTaskObservation(task, edge, acquisition, loading, error)
     return { state: "unknown", detail: `${snapshotFreshness.detail}；等待新状态报告核实。` };
   if (["blocked", "degraded"].includes(String(edge?.delivery?.state || "").toLowerCase()))
     return { state: "needs-attention", detail: "节点数据上行阻塞或异常；查看节点诊断并处理待补传。" };
-  const lastSuccessfulShipmentMs = edge?.delivery?.lastSuccessfulShipmentAt
-    ? new Date(edge.delivery.lastSuccessfulShipmentAt).getTime()
-    : null;
-  if (edge?.backlogStatisticsFresh !== true || !Number.isFinite(lastSuccessfulShipmentMs))
-    return { state: "unknown", detail: "任务已有有效采样；节点上行证据尚未核实，运行关联仍待确认。" };
+  if (sampleReceiptMode === "waiting")
+    return { state: "unknown", detail: "Edge 尚未报告该任务的采样关联状态；等待节点状态报告后再核对 Platform 回执。" };
+  if (sampleReceiptMode === "no-sample")
+    return { state: "unknown", detail: "Edge 最近有效快照没有对应的样本 Event ID；检查运行边界是否产生样本事件，不能用旧回执代表当前快照。" };
+  if (sampleReceiptMode === "legacy")
+    return { state: "unknown", detail: sampleReceipt?.eventId
+      ? "发现该任务版本的历史采样记录，但此 Edge 版本未报告 Event ID，无法确认它对应最近有效快照。"
+      : "此 Edge 版本未报告样本 Event ID，无法核对最近有效快照的 Platform 回执。" };
+  const sampleReceiptMs = sampleReceipt?.ingestedAt ? new Date(sampleReceipt.ingestedAt).getTime() : null;
+  if (!sampleReceipt?.eventId || sampleReceipt.eventId !== expectedSampleEventId || !Number.isFinite(sampleReceiptMs) ||
+      !["typed-sample-frame", "event-payload"].includes(sampleReceipt.evidenceKind))
+    return { state: "unknown", detail: "Platform 尚未找到此样本 Event ID；它可能仍在 Edge 待补传队列中，不能据此判断源设备采样失败。" };
 
   const freshnessNote = snapshotFreshness.label === "未监控" ? "未配置采样静默时限" : "有效采样时效已核对";
+  const receiptEvidence = sampleReceipt.evidenceKind === "typed-sample-frame"
+    ? "类型化样本帧"
+    : "自定义事件载荷";
   return {
     state: "evidence-present",
-    detail: `已确认配置应用和有效采样，且节点曾成功上行（${freshnessNote}）；上行时间不证明本任务最新采样已送达，还需核对运行关联。`,
+    detail: `已确认配置应用、Edge 最近有效快照对应的样本 Event ID 已写入 Platform ${receiptEvidence}（${freshnessNote}）；这些证据不证明质量状态为良好或样本已关联运行。`,
   };
 }
 
 export function IngestionTaskPage({ canWrite = true }) {
   const { taskId } = useParams();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const isNew = !taskId || taskId === "new";
   const requestedVersion = searchParams.get("version");
   const mode = searchParams.get("mode") || (isNew ? "create" : "maintain");
+  const requestedEdgeId = searchParams.get("edgeId")?.trim() || "";
+  const editorIdentity = `${taskId || "new"}:${requestedVersion || ""}:${mode}`;
   const [groupActivated, setGroupActivated] = useState(false);
   const multiDeviceSetup = isNew && canWrite && groupActivated;
   const groupEnabled = isNew && canWrite && groupActivated;
@@ -128,16 +159,15 @@ export function IngestionTaskPage({ canWrite = true }) {
   const [groupSaveError, setGroupSaveError] = useState("");
   const groupDeviceOrdinal = useRef(0);
   const { confirm, confirmationDialog } = useConfirmDialog();
+  const setNavigationDirty = useUnsavedNavigationRegistration();
 
   const { data: modelData, error: modelLoadError, reload: reloadModels } = useApi("/api/v1/process-data-models");
-  const { data: edgeData, error: edgeLoadError, reload: reloadEdges } = useApi("/api/edges");
   const { data: groupTaskData, error: groupTasksError, reload: reloadGroupTasks } = useApi(ENDPOINT, { enabled: groupEnabled });
   const models = extractRows(modelData);
-  const edges = extractRows(edgeData);
   const groupTasks = extractRows(groupTaskData);
-  const deviceGroupLoadError = edgeLoadError || modelLoadError || groupTasksError;
 
-  const [form, setForm] = useState(() => createIngestionTaskForm({}, undefined));
+  const [form, setForm] = useState(() => createIngestionTaskForm({ edgeId: requestedEdgeId }, undefined));
+  const singleTaskBaseline = useRef(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -157,15 +187,41 @@ export function IngestionTaskPage({ canWrite = true }) {
   const [mappingFocusRequest, setMappingFocusRequest] = useState(null);
   const [probePointFocusRequest, setProbePointFocusRequest] = useState(null);
   const observationEnabled = form.status === "published" && Boolean(form.edgeId);
-  const { data: observedEdgeData, error: observedEdgeError, loading: observedEdgeLoading, reload: reloadObservedEdges } = useApi(
-    observationEnabled ? "/api/edges" : "",
-    { enabled: observationEnabled, interval: observationEnabled ? 10000 : 0 },
-  );
+  const siteScope = useSiteScope({ edgeInterval: observationEnabled ? 10000 : 0, allowAllSites: true });
+  const { data: edgeData } = siteScope.edgeResponse;
+  const edges = extractRows(edgeData).filter(edge => !siteScope.siteId || edge.siteId === siteScope.siteId);
+  const reloadEdges = siteScope.reload;
+  const deviceGroupLoadError = siteScope.error || modelLoadError || groupTasksError;
+  const observedEdgeError = siteScope.error;
+  const observedEdgeLoading = siteScope.loading;
+  const reloadObservedEdges = reloadEdges;
   const { data: acquisitionObservation, error: acquisitionObservationError, loading: acquisitionObservationLoading, reload: reloadAcquisitionObservation } = useApi(
     observationEnabled ? `/api/edges/${encodeURIComponent(form.edgeId)}/acquisition/status` : "",
     { enabled: observationEnabled, interval: observationEnabled ? 10000 : 0 },
   );
-  const observedEdge = extractRows(observedEdgeData).find(item => item.edgeId === form.edgeId);
+  const observedTaskKey = `${form.taskId || ""}@${form.version || ""}`.toLowerCase();
+  const observedTaskRuntime = (acquisitionObservation?.tasks || []).find(item =>
+    String(item.configurationKey || "").toLowerCase() === observedTaskKey);
+  const runtimeSupportsSampleEventIdCorrelation = acquisitionObservation?.supportsSampleEventIdCorrelation === true;
+  const runtimeReportsSampleEventId = runtimeSupportsSampleEventIdCorrelation && Boolean(observedTaskRuntime) &&
+    Object.prototype.hasOwnProperty.call(observedTaskRuntime, "lastValidSnapshotEventId");
+  const expectedSampleEventId = runtimeReportsSampleEventId && typeof observedTaskRuntime.lastValidSnapshotEventId === "string"
+    ? observedTaskRuntime.lastValidSnapshotEventId.trim()
+    : "";
+  const sampleReceiptMode = !observedTaskRuntime ? "waiting"
+    : !runtimeSupportsSampleEventIdCorrelation || !runtimeReportsSampleEventId ? "legacy"
+      : expectedSampleEventId ? "exact" : "no-sample";
+  const sampleReceiptBasePath = observationEnabled && form.taskId && Number.isInteger(Number(form.version)) && Number(form.version) > 0
+    ? `/api/v1/ingestion-tasks/${encodeURIComponent(form.taskId)}/${encodeURIComponent(form.version)}/sample-receipt`
+    : "";
+  const sampleReceiptPath = sampleReceiptBasePath && sampleReceiptMode === "exact"
+    ? `${sampleReceiptBasePath}?eventId=${encodeURIComponent(expectedSampleEventId)}`
+    : sampleReceiptBasePath && sampleReceiptMode === "legacy" ? sampleReceiptBasePath : "";
+  const { data: sampleReceiptData, error: sampleReceiptError, loading: sampleReceiptLoading, reload: reloadSampleReceipt } = useApi(
+    sampleReceiptPath,
+    { enabled: Boolean(sampleReceiptPath), interval: sampleReceiptPath ? 10000 : 0 },
+  );
+  const observedEdge = edges.find(item => item.edgeId === form.edgeId);
   const currentTaskKey = multiDeviceSetup ? activeDeviceKey : "single-device";
   const completeMappingFocus = useCallback(revision => {
     setMappingFocusRequest(current => current?.revision === revision ? null : current);
@@ -191,14 +247,14 @@ export function IngestionTaskPage({ canWrite = true }) {
     });
   }, [multiDeviceSetup, deviceGroupEntries, activeDeviceKey, form, deviceProbeValidationFingerprints]);
   const firstUnverifiedDevice = deviceGroupCards.find(item => item.verificationRequired);
-  const firstRetryableDevice = deviceGroupCards.find(item => item.error && item.failureKind === "request");
+  const retryableDeviceKeys = getRetryableIngestionDraftKeys(deviceGroupCards);
   const firstConflictDevice = deviceGroupCards.find(item => item.error && item.failureKind === "conflict");
   const firstInvalidDevice = deviceGroupCards.find(item => item.error && item.validationFailed);
   const firstRejectedDevice = deviceGroupCards.find(item => item.error && item.failureKind === "rejected");
   const groupResultAction = firstUnverifiedDevice
     ? { label: "核实首个提交结果", run: () => verifyDeviceGroupDraft(firstUnverifiedDevice.key) }
-    : firstRetryableDevice
-      ? { label: "重试首个接口失败项", run: () => saveDeviceGroupDrafts(firstRetryableDevice.key) }
+    : retryableDeviceKeys.length > 0
+      ? { label: `重试全部 ${retryableDeviceKeys.length} 个可重试项`, run: () => saveDeviceGroupDrafts(retryableDeviceKeys) }
       : firstConflictDevice || firstInvalidDevice || firstRejectedDevice
         ? { label: "查看首个待处理项", run: () => selectDeviceGroupTask((firstConflictDevice || firstInvalidDevice || firstRejectedDevice).key) }
         : null;
@@ -207,6 +263,7 @@ export function IngestionTaskPage({ canWrite = true }) {
     try { return item.savedFingerprint !== JSON.stringify(deviceGroupPayload(item.form)); }
     catch { return true; }
   });
+
   const canvasDevices = multiDeviceSetup
     ? deviceGroupCards
     : [{ key: "single-device", form, saved: false, error: "" }];
@@ -234,12 +291,14 @@ export function IngestionTaskPage({ canWrite = true }) {
           ? taskVersions.find(item => String(item.version) === String(requestedVersion))
           : taskVersions.slice().sort((left, right) => right.version - left.version)[0];
         if (!match) { setLoadError("没有找到该接入配置。"); return; }
-        setForm(createIngestionTaskForm(match, mode === "version" ? Number(match.version) + 1 : undefined));
+        const loadedForm = createIngestionTaskForm(match, mode === "version" ? Number(match.version) + 1 : undefined);
+        singleTaskBaseline.current = { identity: editorIdentity, fingerprint: taskEditorFingerprint(loadedForm) };
+        setForm(loadedForm);
       })
       .catch(error => { if (!cancelled) setLoadError(error.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [taskId, requestedVersion, mode, isNew]);
+  }, [taskId, requestedVersion, mode, isNew, editorIdentity]);
 
   useEffect(() => {
     if (!multiDeviceSetup || !activeDeviceKey) return;
@@ -258,8 +317,35 @@ export function IngestionTaskPage({ canWrite = true }) {
     });
   }, [form, multiDeviceSetup, activeDeviceKey]);
 
+  const managedByBinding = Boolean(form.templateId && form.dataSourceId);
+  const activeOutcomeUnverified = multiDeviceSetup && Boolean(
+    deviceGroupCards.find(item => item.key === activeDeviceKey)?.verificationRequired,
+  );
+  const readOnly = !canWrite || managedByBinding || (mode === "maintain" && form.status !== "draft") ||
+    saving || (multiDeviceSetup && activeOutcomeUnverified);
+  const allowProbe = canWrite && form.status === "draft" && !saving;
+
+  useLayoutEffect(() => {
+    if (!isNew) return;
+    const initialForm = createIngestionTaskForm({ edgeId: requestedEdgeId }, undefined);
+    singleTaskBaseline.current = { identity: editorIdentity, fingerprint: taskEditorFingerprint(initialForm) };
+    setForm(initialForm);
+  }, [editorIdentity, isNew]);
+
+  const singleTaskBaselineReady = singleTaskBaseline.current?.identity === editorIdentity;
+  const singleTaskEditable = canWrite && !managedByBinding && !(mode === "maintain" && form.status !== "draft");
+  const hasUnsavedSingleTaskChanges = !multiDeviceSetup && singleTaskEditable && !loading && !loadError &&
+    singleTaskBaselineReady && singleTaskBaseline.current.fingerprint !== taskEditorFingerprint(form);
+  const hasUnsavedChanges = multiDeviceSetup ? hasUnsavedDeviceChanges : hasUnsavedSingleTaskChanges;
+
+  useLayoutEffect(() => {
+    setNavigationDirty?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, setNavigationDirty]);
+
+  useEffect(() => () => setNavigationDirty?.(false), [setNavigationDirty]);
+
   useEffect(() => {
-    if (!multiDeviceSetup || !hasUnsavedDeviceChanges) return undefined;
+    if (!hasUnsavedChanges) return undefined;
     const protectUnload = event => {
       event.preventDefault();
       event.returnValue = "";
@@ -272,32 +358,24 @@ export function IngestionTaskPage({ canWrite = true }) {
       const currentUrl = `${location.pathname}${location.search}${location.hash}`;
       const destinationUrl = `${destination.pathname}${destination.search}${destination.hash}`;
       if (destination.origin !== window.location.origin || destinationUrl === currentUrl) return;
-      if (!window.confirm("当前画布还有未保存的设备配置。离开后这些更改将丢失；是否继续离开？")) {
+      if (!window.confirm("当前采集配置还有未保存的修改。离开后这些更改将丢失；是否继续离开？")) {
         event.preventDefault();
         event.stopPropagation();
       }
     };
     window.addEventListener("beforeunload", protectUnload);
-    document.addEventListener("click", protectInternalNavigation, true);
+    if (!setNavigationDirty) document.addEventListener("click", protectInternalNavigation, true);
     return () => {
       window.removeEventListener("beforeunload", protectUnload);
       document.removeEventListener("click", protectInternalNavigation, true);
     };
-  }, [hasUnsavedDeviceChanges, location.hash, location.pathname, location.search, multiDeviceSetup]);
+  }, [hasUnsavedChanges, location.hash, location.pathname, location.search, setNavigationDirty]);
 
   const descriptor = protocolDescriptor(form.protocol);
   const selectedModel = parseModelValue(form.dataModel);
   const model = models.find(item => item.modelId === selectedModel.id && item.version === selectedModel.version);
   const dataItems = model?.acquisition?.dataItems || [];
   const controlParameters = model?.controlParameters || [];
-  const managedByBinding = Boolean(form.templateId && form.dataSourceId);
-  const activeOutcomeUnverified = multiDeviceSetup && Boolean(
-    deviceGroupCards.find(item => item.key === activeDeviceKey)?.verificationRequired,
-  );
-  const readOnly = !canWrite || managedByBinding || (mode === "maintain" && form.status !== "draft") ||
-    (multiDeviceSetup && (saving || activeOutcomeUnverified));
-  const allowProbe = canWrite && form.status === "draft" && !saving;
-
   const validation = useMemo(
     () => validateIngestionTask(form, { dataItems }),
     [form, dataItems],
@@ -465,8 +543,11 @@ export function IngestionTaskPage({ canWrite = true }) {
     form,
     observedEdge,
     acquisitionObservation,
-    observedEdgeLoading || acquisitionObservationLoading,
-    observedEdgeError || acquisitionObservationError,
+    sampleReceiptData,
+    sampleReceiptMode,
+    expectedSampleEventId,
+    observedEdgeLoading || acquisitionObservationLoading || sampleReceiptLoading,
+    observedEdgeError || acquisitionObservationError || sampleReceiptError,
   );
   const setupSteps = [
     { id: "device", label: "选择节点、模型与设备对象", tab: "device", done: Boolean(form.edgeId && model?.status === "published" && form.subjectId.trim()),
@@ -516,7 +597,33 @@ export function IngestionTaskPage({ canWrite = true }) {
     },
     { label: "验证连接并通过点位换算校验", done: probeValid },
   ];
-  const siteId = searchParams.get("siteId");
+  const requestedSiteId = searchParams.get("siteId")?.trim() || "";
+  const assignedEdgeSiteId = edges.find(edge => edge.edgeId === form.edgeId)?.siteId || "";
+  const edgeScopeMismatch = Boolean(form.edgeId && (
+    siteScope.error || (!siteScope.administrator && (!siteScope.siteId || !assignedEdgeSiteId))
+  ));
+  const siteId = assignedEdgeSiteId || (form.edgeId
+    ? form.edgeId === requestedEdgeId ? siteScope.siteId : ""
+    : siteScope.siteId || requestedSiteId);
+  const canvasLayoutStorageKey = createCanvasLayoutStorageKey({
+    taskId: form.taskId,
+    version: form.version,
+    mode,
+    siteId,
+    siteResolved: !siteScope.loading && !siteScope.invalidRequestedSite,
+    siteError: Boolean(siteScope.error),
+    edgeScopeMismatch,
+    isNew,
+  });
+  const canvasLayoutPersistenceStatus = canvasLayoutStorageKey ? "persistent"
+    : !isNew && mode === "maintain" ? siteScope.loading ? "resolving" : "unavailable"
+      : "session";
+  const taskListEdgeId = assignedEdgeSiteId ? form.edgeId : form.edgeId === requestedEdgeId ? requestedEdgeId : "";
+  const taskListParams = new URLSearchParams();
+  if (siteId) taskListParams.set("siteId", siteId);
+  if (taskListEdgeId) taskListParams.set("edgeId", taskListEdgeId);
+  const taskListHref = `/configuration/ingestion-tasks${taskListParams.size ? `?${taskListParams}` : ""}`;
+  const taskReturnHref = safeTaskListReturnPath(searchParams.get("returnTo")) || taskListHref;
   const qualityQuery = new URLSearchParams();
   if (siteId) qualityQuery.set("siteId", siteId);
   if (form.edgeId) qualityQuery.set("edgeId", form.edgeId);
@@ -534,6 +641,16 @@ export function IngestionTaskPage({ canWrite = true }) {
 
   function update(patch) { setForm(value => ({ ...value, ...patch })); }
   function updateSection(section, value) { setForm(current => ({ ...current, [section]: value })); }
+  function selectEditorSite(value) {
+    if (value === siteScope.siteId) return;
+    setSearchParams(current => {
+      const next = new URLSearchParams(current);
+      if (value) next.set("siteId", value);
+      else next.delete("siteId");
+      next.delete("edgeId");
+      return next;
+    }, { replace: true });
+  }
   function updateDeviceKind(kind) {
     const profile = deviceProfileOption(kind);
     setForm(current => {
@@ -556,23 +673,25 @@ export function IngestionTaskPage({ canWrite = true }) {
   }
 
   function focusMappingIssues(key) {
-    if (multiDeviceSetup && key) selectDeviceGroupTask(key);
+    if (multiDeviceSetup && key && !selectDeviceGroupTask(key)) return false;
     setActiveInspectorTab("mappings");
     setShowErrors(true);
     setMappingFocusRevision(value => value + 1);
     document.getElementById("acq-workbench")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    return true;
   }
 
   function focusMappingRow(key, index) {
-    if (multiDeviceSetup && key) selectDeviceGroupTask(key);
+    if (multiDeviceSetup && key && !selectDeviceGroupTask(key)) return false;
     setActiveInspectorTab("mappings");
     setShowErrors(true);
     setMappingFocusRequest(current => ({ taskKey: key, index, revision: (current?.revision || 0) + 1 }));
     document.getElementById("acq-workbench")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    return true;
   }
 
   function focusProbePoint(key, point) {
-    if (multiDeviceSetup && key) selectDeviceGroupTask(key);
+    if (multiDeviceSetup && key && !selectDeviceGroupTask(key)) return false;
     setActiveInspectorTab("connection");
     setShowErrors(false);
     setProbePointFocusRequest(current => ({
@@ -582,6 +701,7 @@ export function IngestionTaskPage({ canWrite = true }) {
       revision: (current?.revision || 0) + 1,
     }));
     document.getElementById("acq-workbench")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    return true;
   }
 
   function nextDeviceGroupKey() {
@@ -607,10 +727,10 @@ export function IngestionTaskPage({ canWrite = true }) {
 
   function selectDeviceGroupTask(key) {
     const target = deviceGroupCards.find(item => item.key === key);
-    if (!target) return;
+    if (!target) return false;
     if (target.verificationRequired) {
-      setGroupSaveError("请先核实该设备上一次保存结果，再从画布移除。未核实前会保留此设备和草稿状态。");
-      return;
+      setGroupSaveError("请先核实该设备上一次保存结果。核实前不能切换到此任务或继续修改配置。");
+      return false;
     }
     if (target.key === activeDeviceKey) {
       if (target.validationFailed) {
@@ -618,7 +738,7 @@ export function IngestionTaskPage({ canWrite = true }) {
         setShowErrors(true);
       }
       setGroupSaveError("");
-      return;
+      return true;
     }
     if (target.key !== activeDeviceKey) {
       setActiveDeviceKey(key);
@@ -628,11 +748,12 @@ export function IngestionTaskPage({ canWrite = true }) {
     setActiveInspectorTab(target.validationTab || "device");
     setShowErrors(Boolean(target.validationFailed));
     setGroupSaveError("");
+    return true;
   }
 
   function continueDeviceGroupTask(progress) {
     if (!progress || progress.verificationRequired) return;
-    selectDeviceGroupTask(progress.key);
+    if (!selectDeviceGroupTask(progress.key)) return;
     setActiveInspectorTab(progress.nextTab);
     setShowErrors(true);
     document.getElementById("acq-workbench")?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -707,10 +828,15 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
     const target = deviceGroupCards.find(item => item.key === key);
     const normalizedEdgeId = edgeId || "";
-    if (!target || target.form.edgeId === normalizedEdgeId) return;
+    if (!target) return false;
+    if (target.verificationRequired) {
+      setGroupSaveError("请先核实该设备上一次保存结果。核实前不能修改配置。");
+      return false;
+    }
+    if (target.form.edgeId === normalizedEdgeId) return true;
     if (normalizedEdgeId && !edges.some(edge => edge.edgeId === normalizedEdgeId)) {
       setGroupSaveError(`现场节点 ${normalizedEdgeId} 当前不可用；请刷新 Edge 清单后重新分配。`);
-      return;
+      return false;
     }
 
     const nextForm = { ...target.form, edgeId: normalizedEdgeId };
@@ -730,13 +856,19 @@ export function IngestionTaskPage({ canWrite = true }) {
     setShowErrors(Boolean(target.validationFailed));
     setGroupSaveError("");
     resetActiveProbe();
+    return true;
   }
 
   function assignDeviceGroupModel(key, dataModel) {
     const target = multiDeviceSetup
       ? deviceGroupCards.find(item => item.key === key)
       : key === "single-device" ? { form } : null;
-    if (!target || target.form.dataModel === dataModel) return;
+    if (!target) return false;
+    if (target.verificationRequired) {
+      setGroupSaveError("请先核实该设备上一次保存结果。核实前不能修改配置。");
+      return false;
+    }
+    if (target.form.dataModel === dataModel) return true;
     const nextForm = { ...target.form, dataModel };
     if (multiDeviceSetup) {
       setDeviceGroupEntries(deviceGroupCards.map(({ key: entryKey, form: entryForm, savedFingerprint, error, validationFailed, validationTab, failureKind, verificationRequired }) => ({
@@ -756,6 +888,7 @@ export function IngestionTaskPage({ canWrite = true }) {
     setShowErrors(false);
     setGroupSaveError("");
     resetActiveProbe();
+    return true;
   }
 
   async function removeDeviceGroupTask(key) {
@@ -841,6 +974,10 @@ export function IngestionTaskPage({ canWrite = true }) {
 
   async function save(targetStatus) {
     const next = { ...form, status: targetStatus };
+    if (edgeScopeMismatch) {
+      setSaveError("请先选择现场节点所属站点，并确认当前 Edge 在可访问清单中。");
+      return;
+    }
     const check = validateIngestionTask(next, { dataItems });
     if (check.count > 0) {
       setShowErrors(true);
@@ -860,7 +997,9 @@ export function IngestionTaskPage({ canWrite = true }) {
       else
         await postJson(ENDPOINT, toPayload(next));
       notify(targetStatus === "published" ? "接入配置已发布" : "接入配置已保存");
-      navigate("/configuration/ingestion-tasks");
+      singleTaskBaseline.current = { identity: editorIdentity, fingerprint: taskEditorFingerprint(next) };
+      setNavigationDirty?.(false);
+      navigate(taskListHref);
     } catch (error) {
       setSaveError(error.message);
     } finally {
@@ -868,7 +1007,7 @@ export function IngestionTaskPage({ canWrite = true }) {
     }
   }
 
-  async function saveDeviceGroupDrafts(targetKey = null) {
+  async function saveDeviceGroupDrafts(targetKeysInput = null) {
     if (!groupTaskData || deviceGroupLoadError) {
       setGroupSaveError("任务编号清单尚未完整载入；请等待载入或重试后再保存。未完整载入时不会写入草稿。");
       return;
@@ -912,13 +1051,20 @@ export function IngestionTaskPage({ canWrite = true }) {
         failureKind: device.failureKind || "",
       };
     });
-    const candidates = targetKey ? prepared.filter(item => item.key === targetKey) : prepared;
+    const targetKeys = targetKeysInput === null
+      ? null
+      : new Set(Array.isArray(targetKeysInput) ? targetKeysInput : [targetKeysInput]);
+    const candidates = targetKeys ? prepared.filter(item => targetKeys.has(item.key)) : prepared;
+    if (targetKeys && candidates.length === 0) {
+      setGroupSaveError("所选设备已不在当前接入列表中；请刷新后重新检查保存结果。");
+      return;
+    }
     const invalid = candidates.filter(item => item.errors.length > 0);
-    if (invalid.length > 0 && targetKey) {
+    if (invalid.length > 0 && targetKeys?.size === 1) {
       const firstInvalid = invalid[0];
       setDeviceGroupEntries(current => current.map(entry => {
         const item = prepared.find(candidate => candidate.key === entry.key);
-        if (!item || (targetKey && item.key !== targetKey)) return entry;
+        if (!item || !targetKeys.has(item.key)) return entry;
         return {
           key: item.key,
           form: item.form,
@@ -942,7 +1088,7 @@ export function IngestionTaskPage({ canWrite = true }) {
     setSaving(true);
     setGroupSaveError("");
     const results = prepared.map(item => {
-      const isCandidate = !targetKey || item.key === targetKey;
+      const isCandidate = !targetKeys || targetKeys.has(item.key);
       return {
         key: item.key,
         form: item.form,
@@ -1020,14 +1166,15 @@ export function IngestionTaskPage({ canWrite = true }) {
           setShowErrors(Boolean(firstValidationIssue.validationFailed || results.find(result => result.key === firstValidationIssue.key)?.validationFailed));
           resetActiveProbe();
         }
-        setGroupSaveError(`本次${targetKey ? "重试" : "保存"}已完成：${savedCount} 项已保存或保持成功，${validationFailureCount} 项配置校验未通过，${requestFailureCount} 项确认未保存，${conflictCount} 项任务编号冲突，${rejectedCount} 项请求被服务器拒绝，${verificationRequiredCount} 项提交结果待核实。下方列出各项原因和后续操作。`);
+        setGroupSaveError(`本次${targetKeys ? "重试" : "保存"}已完成：${savedCount} 项已保存或保持成功，${validationFailureCount} 项配置校验未通过，${requestFailureCount} 项确认未保存，${conflictCount} 项任务编号冲突，${rejectedCount} 项请求被服务器拒绝，${verificationRequiredCount} 项提交结果待核实。下方列出各项原因和后续操作。`);
         return;
       }
-      if (targetKey) {
+      if (targetKeys) {
         setGroupSaveError("");
-        notify("该设备草稿已保存");
+        notify(targetKeys.size === 1 ? "该设备草稿已保存" : `已重试并保存 ${savedCount} 个设备草稿`);
       } else {
         notify(`已保存 ${savedCount} 个独立采集草稿任务`);
+        setNavigationDirty?.(false);
         navigate("/configuration/ingestion-tasks");
       }
     } finally {
@@ -1214,7 +1361,7 @@ export function IngestionTaskPage({ canWrite = true }) {
       actions={
         <div className="flex items-center gap-2">
           <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            to="/configuration/ingestion-tasks">返回列表</Link>
+            to={taskReturnHref}>返回列表</Link>
           {multiDeviceSetup && (
             <Button variant="primary" disabled={saving || !groupTaskData || Boolean(deviceGroupLoadError)}
               onClick={() => void saveDeviceGroupDrafts()}>
@@ -1223,14 +1370,14 @@ export function IngestionTaskPage({ canWrite = true }) {
           )}
           {!readOnly && !multiDeviceSetup && (
             <>
-              <Button disabled={saving} onClick={() => save("draft")}>{saving ? "保存中…" : "保存草稿"}</Button>
-              <Button data-acq-publish="true" variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
+              <Button disabled={saving || edgeScopeMismatch} onClick={() => save("draft")}>{saving ? "保存中…" : "保存草稿"}</Button>
+              <Button data-acq-publish="true" variant="primary" disabled={saving || edgeScopeMismatch || !probeValid} onClick={() => save("published")}>
                 发布到现场节点
               </Button>
             </>
           )}
           {!multiDeviceSetup && canWrite && managedByBinding && form.status === "draft" && (
-            <Button data-acq-publish="true" variant="primary" disabled={saving || !probeValid} onClick={() => save("published")}>
+            <Button data-acq-publish="true" variant="primary" disabled={saving || edgeScopeMismatch || !probeValid} onClick={() => save("published")}>
               发布任务绑定
             </Button>
           )}
@@ -1241,6 +1388,31 @@ export function IngestionTaskPage({ canWrite = true }) {
       {protocolCapabilitiesError && <Alert tone="warning">
         <p>驱动能力列表读取失败，当前表单使用内置能力描述；服务端仍会在探查和发布时校验配置。{protocolCapabilitiesError}</p>
         <Button className="mt-2" onClick={() => setProtocolCapabilitiesRevision(value => value + 1)}>重试读取驱动能力</Button>
+      </Alert>}
+      {siteScope.siteChoices.length > 1 && <div className="max-w-md">
+        <SiteScopeField
+          siteId={siteScope.siteId}
+          siteChoices={siteScope.siteChoices}
+          onChange={selectEditorSite}
+          loading={siteScope.loading}
+          label="可选现场节点所属站点"
+          emptyLabel={siteScope.administrator ? "全部可访问站点" : "选择站点"}
+        />
+      </div>}
+      {siteScope.invalidRequestedSite && <Alert tone="warning">URL 中的站点不在当前账号可访问范围内；请重新选择站点。</Alert>}
+      {siteScope.error && <Alert tone="danger" title="现场节点范围读取失败">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>{siteScope.error}</span>
+          <Button onClick={() => void siteScope.reload()}>重试读取站点和 Edge 清单</Button>
+        </div>
+      </Alert>}
+      {!siteScope.error && !siteScope.siteId && !siteScope.administrator && !siteScope.loading && <Alert tone="info">
+        {siteScope.siteChoices.length
+          ? "当前账号可访问多个站点。请选择现场节点所属站点后，才能加载可分配的 Edge。"
+          : "当前账号没有可访问站点，无法加载可分配的 Edge。"}
+      </Alert>}
+      {siteScope.siteId && form.edgeId && !siteScope.loading && !edges.some(edge => edge.edgeId === form.edgeId) && <Alert tone="warning">
+        当前任务的 Edge {form.edgeId} 不属于所选站点 {siteScope.siteId}；请选择正确站点，或重新分配现场节点后再保存。
       </Alert>}
       {multiDeviceSetup && deviceGroupLoadError && <Alert tone="danger">
         <p>读取可访问任务清单失败，无法安全检查多设备配置中的编号冲突：{deviceGroupLoadError}</p>
@@ -1273,9 +1445,14 @@ export function IngestionTaskPage({ canWrite = true }) {
         task={form}
         edge={observedEdge}
         acquisition={acquisitionObservation}
-        loading={observedEdgeLoading || acquisitionObservationLoading}
-        error={observedEdgeError || acquisitionObservationError}
-        onRetry={() => Promise.all([reloadObservedEdges(), reloadAcquisitionObservation()])}
+        sampleReceipt={sampleReceiptData}
+        sampleReceiptMode={sampleReceiptMode}
+        expectedSampleEventId={expectedSampleEventId}
+        sampleReceiptError={sampleReceiptError}
+        sampleReceiptLoading={sampleReceiptLoading}
+        loading={observedEdgeLoading || acquisitionObservationLoading || sampleReceiptLoading}
+        error={observedEdgeError || acquisitionObservationError || sampleReceiptError}
+        onRetry={() => Promise.all([reloadObservedEdges(), reloadAcquisitionObservation(), reloadSampleReceipt()])}
         edgeDiagnosticHref={edgeDiagnosticHref}
         dataQualityHref={dataQualityHref}
         processExecutionsHref={processExecutionsHref}
@@ -1359,6 +1536,8 @@ export function IngestionTaskPage({ canWrite = true }) {
       <IngestionDeviceGroupCanvas
         id="acq-workbench"
         canvasInstanceKey={`${taskId || "new"}:${requestedVersion || mode}`}
+        layoutStorageKey={canvasLayoutStorageKey}
+        layoutPersistenceStatus={canvasLayoutPersistenceStatus}
         devices={canvasDevices}
         edges={edges}
         models={models}
@@ -1384,7 +1563,8 @@ export function IngestionTaskPage({ canWrite = true }) {
   );
 }
 
-function PublishedTaskObservationCard({ task, edge, acquisition, loading, error, onRetry, edgeDiagnosticHref, dataQualityHref, processExecutionsHref }) {
+function PublishedTaskObservationCard({ task, edge, acquisition, sampleReceipt, sampleReceiptMode, expectedSampleEventId, sampleReceiptError, sampleReceiptLoading, loading, error, onRetry, edgeDiagnosticHref, dataQualityHref, processExecutionsHref }) {
+  const [refreshingEvidence, setRefreshingEvidence] = useState(false);
   const taskKey = `${task.taskId}@${task.version}`.toLowerCase();
   const runtime = (acquisition?.tasks || []).find(item => String(item.configurationKey || "").toLowerCase() === taskKey);
   const deployment = (acquisition?.deployments || []).find(item => String(item.taskId || "").toLowerCase() === String(task.taskId || "").toLowerCase());
@@ -1402,6 +1582,7 @@ function PublishedTaskObservationCard({ task, edge, acquisition, loading, error,
         : deployment.desiredConfigurationHash && deployment.appliedConfigurationHash && deployment.desiredConfigurationHash !== deployment.appliedConfigurationHash
           ? "配置指纹不一致"
           : deployment.state === "failed" ? "应用失败"
+            : deployment.state === "removing" ? "停止并移除中"
             : deployment.state === "rollback" ? "保留旧版本"
               : deployment.state === "applied" ? "尚未确认当前配置指纹"
                 : undefined;
@@ -1440,12 +1621,57 @@ function PublishedTaskObservationCard({ task, edge, acquisition, loading, error,
   const reportTimeIsVerifiable = Number.isFinite(platformObservedMs) && Number.isFinite(platformReceivedMs) && reportAgeMs >= 0;
   const reportIsStale = reportTimeIsVerifiable && reportAgeMs > 30000;
   const snapshotFreshness = assessTaskSnapshotFreshness(task, runtime, acquisition);
+  const sampleReceiptMs = sampleReceipt?.ingestedAt ? new Date(sampleReceipt.ingestedAt).getTime() : null;
+  const sampleReceiptRecordValid = Boolean(sampleReceipt?.eventId) && Number.isFinite(sampleReceiptMs) &&
+    ["typed-sample-frame", "event-payload"].includes(sampleReceipt?.evidenceKind);
+  const sampleReceiptValid = sampleReceiptRecordValid && sampleReceiptMode === "exact" &&
+    sampleReceipt.eventId === expectedSampleEventId;
+  const sampleReceiptState = sampleReceiptMode === "waiting" ? "waiting"
+    : sampleReceiptMode === "no-sample" ? "no-sample"
+      : sampleReceiptMode === "legacy" && sampleReceiptRecordValid ? "legacy-unverified"
+        : sampleReceiptLoading && !sampleReceiptValid ? "loading"
+    : refreshingEvidence ? "refreshing"
+      : sampleReceiptError ? sampleReceiptValid ? "stale" : "error"
+        : sampleReceiptValid ? "found" : "empty";
+  const sampleReceiptIsTypedFrame = sampleReceipt?.evidenceKind === "typed-sample-frame" ||
+    task?.sampleEventType === "process.sample";
+  const sampleReceiptEvidenceDescription = sampleReceiptMode === "legacy"
+    ? sampleReceiptIsTypedFrame
+      ? "历史记录属于该任务版本的类型化样本帧，但 Edge 未报告 Event ID，无法确认它对应最近有效快照。"
+      : "历史记录属于该任务版本的自定义事件载荷，但 Edge 未报告 Event ID，无法确认它对应最近有效快照或已投影为时序样本。"
+    : sampleReceiptIsTypedFrame
+      ? "内置 process.sample 已按数据模型校验并写入类型化样本表，当前 Event ID 已与 Edge 最近有效快照核对；此证据仍不表示采样质量为良好、任务版本当时已在 Edge 生效或样本已关联运行。"
+      : "自定义事件当前 Event ID 已与 Edge 最近有效快照核对，且事件类型、任务版本引用、对象归属与非空 data.values 结构匹配并已由 Platform 保存；这不证明事件已投影为时序样本、采样值质量可用、任务版本当时已在 Edge 生效或样本已关联运行。";
+  const sampleReceiptDescription = sampleReceiptState === "waiting" ? "等待 Edge 报告任务的最近有效采样状态；收到状态前不查询旧回执。"
+    : sampleReceiptState === "no-sample" ? "Edge 未提供最近有效快照对应的样本 Event ID；可能尚无有效采样事件或运行边界未触发。不会把较早回执标记为当前样本已入库。"
+      : sampleReceiptState === "legacy-unverified" ? `发现版本内采样记录，但旧版 Edge 未提供 Event ID，无法确认同一帧。${sampleReceiptEvidenceDescription}`
+        : sampleReceiptState === "loading" ? "查询尚未完成，暂不判断此样本是否已入库。"
+    : sampleReceiptState === "refreshing" ? sampleReceiptValid
+      ? `正在重新查询；以下记录来自最近一次成功查询。${sampleReceiptEvidenceDescription}`
+      : "正在重新查询；在本次响应返回前不判断是否存在匹配记录。"
+      : sampleReceiptState === "error" ? "本次请求失败不代表没有匹配记录；请刷新重试，或查看现场节点诊断。"
+        : sampleReceiptState === "empty" ? sampleReceiptMode === "exact"
+          ? "Platform 尚未找到此样本 Event ID；它可能仍在 Edge 待补传队列中，稍后刷新核对。"
+          : "此旧版 Edge 没有提供样本 Event ID，无法核对同一帧的 Platform 回执。"
+          : sampleReceiptState === "stale" ? `本次刷新失败；以下记录来自最近一次成功查询。${sampleReceiptEvidenceDescription}`
+            : sampleReceiptEvidenceDescription;
+
+  async function refreshEvidence() {
+    setRefreshingEvidence(true);
+    try {
+      await onRetry();
+    } finally {
+      setRefreshingEvidence(false);
+    }
+  }
 
   return (
     <Card
       title="发布后现场证据"
-      description="按任务配置、节点连接、有效采样和节点级上行分别核对。最近成功上行是历史节点级证据，不能证明本任务最新采样已送达或已关联到运行。"
-      actions={<Button disabled={loading} onClick={() => void onRetry()}>{loading ? "正在刷新…" : "刷新现场证据"}</Button>}
+      description="分别核对任务配置、节点连接、Edge 有效采样、节点级上行和 Platform 样本回执；有 Event ID 时按同一帧核对。"
+      actions={<Button disabled={loading || refreshingEvidence} onClick={() => void refreshEvidence()}>
+        {loading || refreshingEvidence ? "正在刷新…" : "刷新现场证据"}
+      </Button>}
     >
       {error && <Alert tone="warning">
         <p>部分现场证据读取失败：{error}{acquisition || edge ? " 以下内容来自最近一次成功响应。" : " 当前无法判断现场状态。"}</p>
@@ -1488,6 +1714,33 @@ function PublishedTaskObservationCard({ task, edge, acquisition, loading, error,
           {delivery?.lastFailureAt && <p className="mt-1 text-xs text-amber-800">最近一次上行失败：{formatTime(delivery.lastFailureAt)} · 当前连续失败 {formatInteger(delivery.consecutiveFailures || 0)} 次</p>}
           {delivery?.lastError && <p className="mt-1 break-words text-xs text-rose-700">{delivery.lastError}</p>}
         </div>
+      </div>
+      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-medium text-slate-500">任务版本采样落库证据</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">
+              {sampleReceiptState === "waiting" ? "等待 Edge 采样状态…"
+                : sampleReceiptState === "no-sample" ? "当前快照没有样本事件"
+                  : sampleReceiptState === "legacy-unverified" ? "发现历史记录；同一帧未核验"
+                    : sampleReceiptState === "loading" ? "正在核对当前样本 Event ID…"
+                : sampleReceiptState === "found" ? sampleReceiptIsTypedFrame ? "同一帧已写入类型化样本" : "同一帧事件载荷已入库"
+                  : sampleReceiptState === "refreshing" ? sampleReceiptValid ? "正在刷新；显示最近一次已确认记录" : "正在刷新采样落库证据"
+                  : sampleReceiptState === "stale" ? "最近一次已确认匹配记录；本次刷新失败"
+                    : sampleReceiptState === "error" ? "采样证据查询失败"
+                      : "尚未找到此样本回执"}
+            </p>
+          </div>
+          <StatusBadge
+            value={sampleReceiptState === "found" ? "synchronized" : "unknown"}
+            label={{ waiting: "等待 Edge 状态", "no-sample": "无样本事件", "legacy-unverified": "同帧未核验", loading: "正在核对", refreshing: "刷新中", found: "同一帧已入库", stale: "结果待刷新", error: "查询失败", empty: "尚无回执" }[sampleReceiptState]}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-600">Platform 回执时间：{formatTime(sampleReceipt?.ingestedAt)}</p>
+        {sampleReceiptValid && <p className="mt-1 break-all font-mono text-[11px] text-slate-500">同帧 Event ID · {sampleReceipt.eventId}</p>}
+        {sampleReceiptMode === "exact" && expectedSampleEventId && <p className="mt-1 break-all font-mono text-[11px] text-slate-500">Edge 最近有效样本 · {expectedSampleEventId}</p>}
+        {sampleReceiptMode === "legacy" && sampleReceiptRecordValid && <p className="mt-1 break-all font-mono text-[11px] text-slate-500">历史回执 Event ID · {sampleReceipt.eventId}</p>}
+        <p className="mt-2 text-xs leading-5 text-slate-500">{sampleReceiptDescription}</p>
       </div>
       <p className="mt-3 text-xs text-slate-500">
         最近节点状态报告：{formatTime(reportObservedAt)} · Platform 接收：{formatTime(acquisition?.platformReceivedAt)}。在线只表示心跳有效；采样时效还需结合任务运行状态和配置的静默时限判断。
@@ -1897,21 +2150,43 @@ function StrategyPanel({ descriptor, form, errors, readOnly, onChange }) {
 }
 
 export function IngestionTasksPage({ canWrite = true }) {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, error, loading, reload } = useApi(ENDPOINT);
   const { data: templateData, error: templateError, reload: reloadTemplates } = useApi("/api/v1/ingestion-configuration/templates");
   const { data: sourceData, error: sourceError, reload: reloadSources } = useApi("/api/v1/ingestion-configuration/data-sources");
   const { data: bindingData, error: bindingError, reload: reloadBindings } = useApi("/api/v1/ingestion-configuration/bindings");
   const { data: capabilityData, error: capabilityError } = useApi("/api/v1/acquisition-protocols");
+  const { data: siteEdgeData, error: siteEdgeError, loading: siteEdgeLoading } = useApi(
+    searchParams.get("siteId") ? `/api/edges?siteId=${encodeURIComponent(searchParams.get("siteId"))}` : "",
+  );
   const rows = extractRows(data);
+  const requestedSiteId = searchParams.get("siteId")?.trim() || "";
+  const siteEdgeIds = useMemo(() => new Set(extractRows(siteEdgeData)
+    .filter(edge => edge.siteId === requestedSiteId)
+    .map(edge => edge.edgeId)
+    .filter(Boolean)), [siteEdgeData, requestedSiteId]);
   const templates = extractRows(templateData);
   const sources = extractRows(sourceData);
   const bindings = extractRows(bindingData);
   const capabilities = capabilityData?.protocols || [];
   const requestedEdgeId = searchParams.get("edgeId")?.trim() || "";
+  const siteScopeReady = !requestedSiteId || siteEdgeData !== null;
+  const siteScopedRows = requestedSiteId && siteScopeReady
+    ? rows.filter(row => siteEdgeIds.has(row.edgeId))
+    : requestedSiteId ? [] : rows;
+  const newTaskParams = new URLSearchParams();
+  if (requestedSiteId) newTaskParams.set("siteId", requestedSiteId);
+  if (requestedEdgeId) newTaskParams.set("edgeId", requestedEdgeId);
+  newTaskParams.set("returnTo", `${location.pathname}${location.search}${location.hash}`);
+  const newTaskHref = `/configuration/ingestion-tasks/new${newTaskParams.size ? `?${newTaskParams}` : ""}`;
+  const edgePageHref = requestedEdgeId
+    ? `/edges/${encodeURIComponent(requestedEdgeId)}${requestedSiteId ? `?siteId=${encodeURIComponent(requestedSiteId)}` : ""}`
+    : `/edges${requestedSiteId ? `?siteId=${encodeURIComponent(requestedSiteId)}` : ""}`;
+  const edgePageLabel = requestedEdgeId ? "返回节点诊断" : requestedSiteId ? "查看本站节点" : "查看现场节点";
   const visibleRows = useMemo(
-    () => requestedEdgeId ? rows.filter(row => row.edgeId === requestedEdgeId) : rows,
-    [requestedEdgeId, rows],
+    () => requestedEdgeId ? siteScopedRows.filter(row => row.edgeId === requestedEdgeId) : siteScopedRows,
+    [requestedEdgeId, siteScopedRows],
   );
   const navigate = useNavigate();
   const { confirm, confirmationDialog } = useConfirmDialog();
@@ -1920,6 +2195,22 @@ export function IngestionTasksPage({ canWrite = true }) {
     const next = new URLSearchParams(searchParams);
     next.delete("edgeId");
     setSearchParams(next, { replace: true });
+  }
+
+  function clearSiteFilter() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("siteId");
+    next.delete("edgeId");
+    setSearchParams(next, { replace: true });
+  }
+
+  function taskEditorHref(row, createVersion = false) {
+    const params = new URLSearchParams({ version: String(row.version) });
+    if (createVersion) params.set("mode", "version");
+    if (requestedSiteId) params.set("siteId", requestedSiteId);
+    if (requestedEdgeId) params.set("edgeId", requestedEdgeId);
+    params.set("returnTo", `${location.pathname}${location.search}${location.hash}`);
+    return `/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?${params}`;
   }
 
   async function removeReusableDraft(kind, row) {
@@ -1977,10 +2268,10 @@ export function IngestionTasksPage({ canWrite = true }) {
       title="采集配置"
       actions={
         <div className="flex items-center gap-2">
-          <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            to="/edges">查看现场节点</Link>
+            <Link className="inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              to={edgePageHref}>{edgePageLabel}</Link>
           {canWrite && <LinkButton
-            to="/configuration/ingestion-tasks/new">新建采集配置</LinkButton>}
+            to={newTaskHref}>新建采集配置</LinkButton>}
         </div>
       }
     >
@@ -1995,10 +2286,17 @@ export function IngestionTasksPage({ canWrite = true }) {
         {sourceError && <Alert tone="danger">数据源读取失败：{sourceError}</Alert>}
         {bindingError && <Alert tone="danger">任务绑定读取失败：{bindingError}</Alert>}
         {capabilityError && <Alert tone="warning">驱动能力读取失败，暂无法确认连接复用方式：{capabilityError}</Alert>}
+        {siteEdgeError && <Alert tone="danger" title="站点节点范围读取失败">{siteEdgeError} 暂时无法核实此站点的采集配置。</Alert>}
         {requestedEdgeId && <Alert tone="info" title={`已筛选现场节点 ${requestedEdgeId}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span>下方采集配置仅显示此节点可见的任务。</span>
-            <Button onClick={clearEdgeFilter}>显示全部节点</Button>
+            <span>{requestedSiteId ? `下方仅显示站点 ${requestedSiteId} 中此节点可见的任务。` : "下方采集配置仅显示此节点可见的任务。"}</span>
+            <Button onClick={clearEdgeFilter}>{requestedSiteId ? "显示本站全部节点" : "显示全部节点"}</Button>
+          </div>
+        </Alert>}
+        {!requestedEdgeId && requestedSiteId && <Alert tone="info" title={`已筛选站点 ${requestedSiteId}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>下方采集配置仅显示此站点已登记 Edge 的任务。</span>
+            <Button onClick={clearSiteFilter}>显示全部站点</Button>
           </div>
         </Alert>}
         {canWrite ? (
@@ -2061,12 +2359,12 @@ export function IngestionTasksPage({ canWrite = true }) {
                     <td className="px-3 py-2">
                       <div className="flex min-w-max gap-1">
                         <Button variant="ghost"
-                          onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}`)}>
+                          onClick={() => navigate(taskEditorHref(row))}>
                           查看
                         </Button>
                         {canWrite && !row.templateId && (
                           <Button variant="ghost"
-                            onClick={() => navigate(`/configuration/ingestion-tasks/${encodeURIComponent(row.taskId)}?version=${row.version}&mode=version`)}>
+                            onClick={() => navigate(taskEditorHref(row, true))}>
                             新版本
                           </Button>
                         )}
@@ -2082,7 +2380,13 @@ export function IngestionTasksPage({ canWrite = true }) {
                 ))}
                 {visibleRows.length === 0 && (
                   <tr><td colSpan="7" className="px-3 py-8 text-center text-slate-500">
-                    {loading && !data ? "正在读取采集配置…" : error && !data ? "采集配置读取失败，暂时无法确认此节点是否有任务。" : !data ? "尚无成功读取的配置，暂时无法判断是否存在任务。" : requestedEdgeId ? "该现场节点没有可见采集配置。" : "还没有采集配置。"}
+                    {requestedSiteId && siteEdgeError ? "无法读取站点节点范围，暂时不能确认该站点有哪些采集配置。"
+                      : requestedSiteId && siteEdgeLoading && !siteScopeReady ? "正在核对站点节点范围…"
+                        : loading && !data ? "正在读取采集配置…"
+                          : error && !data ? "采集配置读取失败，暂时无法确认是否有任务。"
+                            : !data ? "尚无成功读取的配置，暂时无法判断是否存在任务。"
+                              : requestedEdgeId ? "该现场节点没有可见采集配置。"
+                                : requestedSiteId ? "该站点没有可见采集配置。" : "还没有采集配置。"}
                   </td></tr>
                 )}
               </tbody>

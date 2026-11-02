@@ -1002,9 +1002,25 @@ export function DataQualityPage() {
                         const groups = evidence || [];
                         const expectedCoverage = run.expectedConfigurationCoverage || [];
                         const hasEvidence = groups.length > 0 || expectedCoverage.length > 0;
+                        const runStartReceipt = Date.parse(run.startedPlatformIngestedAt || "");
+                        const runCompletionReceipt = Date.parse(run.completedPlatformIngestedAt || "");
+                        const baselineGeneratedAt = Date.parse(baseline.data?.generatedAt || "");
+                        const baselineEnd = Date.parse(baseline.data?.to || "");
+                        const reportReceiptEnd = Number.isFinite(baselineGeneratedAt)
+                          ? Number.isFinite(baselineEnd) ? Math.min(baselineEnd, baselineGeneratedAt) : baselineGeneratedAt
+                          : Number.NaN;
+                        const runReceiptBoundaryUnavailable = !run.hasStarted ||
+                          !Number.isFinite(runStartReceipt) ||
+                          !Number.isFinite(reportReceiptEnd) ||
+                          runStartReceipt > reportReceiptEnd ||
+                          (run.hasCompleted && (!Number.isFinite(runCompletionReceipt) ||
+                            runCompletionReceipt < runStartReceipt ||
+                            runCompletionReceipt > baselineGeneratedAt));
                         if (!hasEvidence) return (
                           <p className="min-w-64 whitespace-normal text-xs leading-5 text-slate-600">
-                            {baseline.data?.taskDeploymentObservationHistoryTruncated
+                            {runReceiptBoundaryUnavailable
+                              ? "缺少有效的生命周期 Platform 收件时间，无法划定运行区间；版本覆盖保持未知。"
+                              : baseline.data?.taskDeploymentObservationHistoryTruncated
                               ? "应用观察历史已截断；此运行的来源状态未知。"
                               : baseline.data?.expectedConfigurationCoverageTruncated
                                 ? "应用观察覆盖详情已截断；此运行的版本与映射来源未知。"
@@ -1048,7 +1064,12 @@ export function DataQualityPage() {
                                   <p className="mt-1 text-xs leading-5 text-slate-600">{verification.detail}</p>
                                   {item.sourceEdgeId && <div className="text-xs leading-5 text-slate-600">帧报告 Edge：{item.sourceEdgeId}</div>}
                                   {verificationStatus === "matched" && configurationStatusLabel && (
-                                    <div className="text-xs leading-5 text-slate-600">当前平台记录状态：{configurationStatusLabel}</div>
+                                    <>
+                                      <div className="text-xs leading-5 text-slate-600">当前平台记录状态：{configurationStatusLabel}</div>
+                                      <p className="text-xs leading-5 text-slate-500">
+                                        当前平台记录状态不代表采样时状态；不证明 Edge 当时或当前已部署或应用该版本，也不证明该版本导致运行、分析或配方建议受影响。
+                                      </p>
+                                    </>
                                   )}
                                   <div className="mt-1 text-xs leading-5 text-slate-600">
                                     {formatInteger(item.sampleFrameCount ?? 0)} 帧 · {formatInteger(item.observedValueCount ?? 0)} 个已保存值
@@ -1064,9 +1085,14 @@ export function DataQualityPage() {
                             })}
                             <section className="border-t border-slate-200 pt-2" aria-label={`${run.executionId} 的任务版本应用观察`}>
                               <h4 className="text-xs font-semibold text-slate-700">运行时段的任务版本应用观察</h4>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                运行区间按 Platform 收到生命周期事件的时间计算，并截断至查询截止时间与报告生成时间中的较早者；未完成运行截至该边界。开始收件时间缺失，或已完成运行缺少完成收件时间时，覆盖状态保持未知。
+                              </p>
                               {expectedCoverage.length === 0 ? (
                                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                                  {baseline.data?.taskDeploymentObservationHistoryTruncated
+                                  {runReceiptBoundaryUnavailable
+                                    ? "缺少有效的生命周期 Platform 收件时间，无法划定运行区间；版本覆盖保持未知。"
+                                    : baseline.data?.taskDeploymentObservationHistoryTruncated
                                     ? "本次应用观察历史已截断；此运行是否有重叠观察仍未知。"
                                     : baseline.data?.expectedConfigurationCoverageTruncated
                                       ? "应用观察覆盖详情已截断；此运行的版本与映射来源保持未知。"
@@ -1080,6 +1106,7 @@ export function DataQualityPage() {
                                       matched: { label: "找到该版本样本", tone: "success" },
                                       "no-matching-frames": { label: "未找到该版本样本", tone: "warning" },
                                       "summarized-unverifiable": { label: "来源已汇总，无法逐版本核验", tone: "neutral" },
+                                      "unverifiable-sample-time-range": { label: "样本时间无法限定到观察区间", tone: "neutral" },
                                       "unverifiable-task-version": { label: "任务版本归属无法核验", tone: "neutral" },
                                       "observation-history-truncated": { label: "应用观察历史截断，无法判断", tone: "neutral" },
                                       "coverage-result-truncated": { label: "映射覆盖详情截断，无法判断", tone: "neutral" },
@@ -1119,6 +1146,8 @@ export function DataQualityPage() {
                                               ? "样本来源分组超过逐项明细范围；未观察到的映射代码不能解释为缺失。"
                                               : evidenceStatus === "unverifiable-task-version"
                                                 ? "平台无法核验此任务版本与运行对象的对应关系；不会列出缺失映射代码。"
+                                                : evidenceStatus === "unverifiable-sample-time-range"
+                                                  ? "该版本样本的 Platform 接收时间统计跨出本次应用观察重叠区间，无法确认区间内的点位覆盖。"
                                                 : evidenceStatus === "observation-history-truncated"
                                                   ? "应用观察超出本次查询结果上限；该版本的样本覆盖状态保持未知。"
                                                   : evidenceStatus === "coverage-result-truncated"

@@ -3,11 +3,16 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Ingot.Contracts.Acquisition;
+using Ingot.Contracts.Analytics;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessConfiguration;
+using Ingot.Domain.Events;
 using Ingot.Platform.Api.Agents;
 using Ingot.Platform.Api.Controllers;
 using Ingot.Platform.Api.Events;
+using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessConfiguration;
+using Ingot.Platform.Application.TimeSeries;
 using Ingot.Platform.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -135,15 +140,168 @@ public sealed class AcquisitionSiteAuthorizationTests
         Assert.False(validator.TryGetSiteId("EDGE-UNKNOWN", out _));
     }
 
-    private static IngestionTasksController TaskController(MemoryTaskStore tasks, string siteId)
+    [Fact]
+    public async Task TaskSampleReceipt_QueriesExactCustomEventAndSubjectWithSampleValues()
+    {
+        var ingestedAt = DateTimeOffset.Parse("2026-10-31T12:15:00Z");
+        var sample = ProductionEvent.Create(
+            "test.sample",
+            ingestedAt.AddDays(-1),
+            "connector/http/task-a",
+            new ObjectRef("equipment", "PRESS-01"),
+            appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "task-a", 3)) with
+        {
+            Data = new Dictionary<string, object?>
+            {
+                ["values"] = new Dictionary<string, object?> { ["temperature"] = 25d }
+            }
+        };
+        var eventStore = new RecordingPlatformEventStore(
+        [
+            new PlatformProductionEvent
+            {
+                IngestId = 42,
+                SiteId = "SITE-A",
+                EdgeId = "EDGE-A",
+                IngestedAt = ingestedAt,
+                Event = sample
+            }
+        ]);
+        var tasks = new MemoryTaskStore([Task("task-a", "EDGE-A") with
+        {
+            Version = 3,
+            SampleEventType = "test.sample",
+            SubjectId = "PRESS-01"
+        }]);
+        var controller = TaskController(tasks, "SITE-A", eventStore);
+
+        var result = await controller.GetLatestSampleReceipt("task-a", 3, CancellationToken.None, sample.EventId);
+
+        var response = Assert.IsType<OkObjectResult>(result);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response.Value));
+        Assert.Equal(3, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(sample.EventId, document.RootElement.GetProperty("eventId").GetString());
+        Assert.Equal(ingestedAt, document.RootElement.GetProperty("ingestedAt").GetDateTimeOffset());
+        Assert.Equal("event-payload", document.RootElement.GetProperty("evidenceKind").GetString());
+        Assert.Equal("SITE-A", eventStore.LastQuery?.SiteId);
+        Assert.Equal("EDGE-A", eventStore.LastQuery?.EdgeId);
+        Assert.Equal("test.sample", eventStore.LastQuery?.EventType);
+        Assert.Equal("ingestion-task", eventStore.LastQuery?.AppliedConfigurationKind);
+        Assert.Equal("task-a", eventStore.LastQuery?.AppliedConfigurationId);
+        Assert.Equal(3, eventStore.LastQuery?.AppliedConfigurationVersion);
+        Assert.Equal("equipment", eventStore.LastQuery?.SubjectType);
+        Assert.Equal("PRESS-01", eventStore.LastQuery?.SubjectId);
+        Assert.Equal(sample.EventId, eventStore.LastQuery?.EventId);
+        Assert.True(eventStore.LastQuery?.RequireNonEmptyDataValues);
+        Assert.True(eventStore.LastQuery?.OrderByIngestedAtDescending);
+        Assert.Equal(1, eventStore.LastQuery?.Limit);
+    }
+
+    [Fact]
+    public async Task TaskSampleReceipt_QueriesTypedFramesForTheBuiltInSampleType()
+    {
+        var ingestedAt = DateTimeOffset.Parse("2026-10-31T12:15:00Z");
+        var frameStore = new RecordingTimeSeriesStore(
+        [
+            new ProcessSampleFrame
+            {
+                EventId = "sample-event-1",
+                IngestId = 42,
+                OccurredAt = ingestedAt.AddSeconds(-1),
+                RecordedAt = ingestedAt.AddSeconds(-1),
+                IngestedAt = ingestedAt
+            }
+        ]);
+        var eventStore = new RecordingPlatformEventStore([]);
+        var tasks = new MemoryTaskStore([Task("task-a", "EDGE-A") with { Version = 3 }]);
+        var controller = TaskController(tasks, "SITE-A", eventStore, frameStore);
+
+        var result = await controller.GetLatestSampleReceipt("task-a", 3, CancellationToken.None, "sample-event-1");
+
+        var response = Assert.IsType<OkObjectResult>(result);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response.Value));
+        Assert.Equal("sample-event-1", document.RootElement.GetProperty("eventId").GetString());
+        Assert.Equal(ingestedAt, document.RootElement.GetProperty("ingestedAt").GetDateTimeOffset());
+        Assert.Equal("typed-sample-frame", document.RootElement.GetProperty("evidenceKind").GetString());
+        Assert.Null(eventStore.LastQuery);
+        Assert.Equal("SITE-A", frameStore.LastQuery?.SiteId);
+        Assert.Equal("EDGE-A", frameStore.LastQuery?.EdgeId);
+        Assert.Equal("equipment", frameStore.LastQuery?.SubjectType);
+        Assert.Equal("task-a", frameStore.LastQuery?.SubjectId);
+        Assert.Equal(new AppliedConfigurationRef("ingestion-task", "task-a", 3), frameStore.LastQuery?.AppliedConfiguration);
+        Assert.Equal("sample-event-1", frameStore.LastQuery?.EventId);
+        Assert.True(frameStore.LastQuery?.OrderByIngestedAtDescending);
+        Assert.Equal(1, frameStore.LastQuery?.Limit);
+    }
+
+    [Fact]
+    public async Task TaskSampleReceipt_HidesCrossSiteTasksBeforeQueryingEvents()
+    {
+        var eventStore = new RecordingPlatformEventStore([]);
+        var frameStore = new RecordingTimeSeriesStore([]);
+        var controller = TaskController(
+            new MemoryTaskStore([Task("foreign", "EDGE-B") with { Version = 2 }]),
+            "SITE-A",
+            eventStore,
+            frameStore);
+
+        var result = await controller.GetLatestSampleReceipt("foreign", 2, CancellationToken.None);
+
+        AssertStatus(StatusCodes.Status404NotFound, result);
+        Assert.Null(eventStore.LastQuery);
+        Assert.Null(frameStore.LastQuery);
+    }
+
+    [Fact]
+    public async Task TaskSampleReceipt_RequiresConfigurationReadRoleBeforeQueryingEvents()
+    {
+        var eventStore = new RecordingPlatformEventStore([]);
+        var controller = TaskController(
+            new MemoryTaskStore([Task("task-a", "EDGE-A")]),
+            "SITE-A",
+            eventStore,
+            role: "site.viewer");
+
+        var result = await controller.GetLatestSampleReceipt("task-a", 1, CancellationToken.None);
+
+        AssertStatus(StatusCodes.Status403Forbidden, result);
+        Assert.Null(eventStore.LastQuery);
+    }
+
+    [Fact]
+    public async Task TaskSampleReceipt_ReturnsNullFieldsWhenNoPlatformSampleExists()
+    {
+        var eventStore = new RecordingPlatformEventStore([]);
+        var controller = TaskController(
+            new MemoryTaskStore([Task("task-a", "EDGE-A")]),
+            "SITE-A",
+            eventStore);
+
+        var result = await controller.GetLatestSampleReceipt("task-a", 1, CancellationToken.None);
+
+        var response = Assert.IsType<OkObjectResult>(result);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(response.Value));
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("eventId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("ingestedAt").ValueKind);
+    }
+
+    private static IngestionTasksController TaskController(
+        MemoryTaskStore tasks,
+        string siteId,
+        RecordingPlatformEventStore? platformEvents = null,
+        RecordingTimeSeriesStore? timeSeries = null,
+        string role = PlatformRoles.ProcessEngineer)
         => new(
             new AcquisitionApplication(tasks, null!),
             new ProcessConfigurationApplication(null!),
             new PlatformUserResolver(new TestHostEnvironment()),
             EdgeValidator(),
-            new AcquisitionProbeTaskCoordinator(null!))
+            new AcquisitionProbeTaskCoordinator(null!),
+            new IngestionTaskSampleReceiptQuery(
+                timeSeries ?? new RecordingTimeSeriesStore([]),
+                platformEvents ?? new RecordingPlatformEventStore([])))
         {
-            ControllerContext = Context(siteId)
+            ControllerContext = Context(siteId, role)
         };
 
     private static IngestionConfigurationController ConfigurationController(
@@ -169,7 +327,7 @@ public sealed class AcquisitionSiteAuthorizationTests
             }
         }));
 
-    private static ControllerContext Context(string siteId)
+    private static ControllerContext Context(string siteId, string role = PlatformRoles.ProcessEngineer)
         => new()
         {
             HttpContext = new DefaultHttpContext
@@ -177,7 +335,7 @@ public sealed class AcquisitionSiteAuthorizationTests
                 User = new ClaimsPrincipal(new ClaimsIdentity(
                 [
                     new Claim(ClaimTypes.NameIdentifier, "engineer"),
-                    new Claim(ClaimTypes.Role, PlatformRoles.ProcessEngineer),
+                    new Claim(ClaimTypes.Role, role),
                     new Claim(PlatformClaimTypes.SiteId, siteId)
                 ], "test"))
             }
@@ -280,6 +438,35 @@ public sealed class AcquisitionSiteAuthorizationTests
                     .ToArray());
         }
 
+        public Task<IReadOnlyList<IngestionTaskCoverageMetadata>> FindCoverageMetadataAsync(
+            IReadOnlyCollection<IngestionTaskVersionReference> references,
+            IReadOnlyCollection<string> authorizedEdgeIds,
+            CancellationToken ct = default)
+        {
+            var edges = authorizedEdgeIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return System.Threading.Tasks.Task.FromResult<IReadOnlyList<IngestionTaskCoverageMetadata>>(
+                references.Select(reference =>
+                    {
+                        var task = tasks.SingleOrDefault(item =>
+                            string.Equals(item.TaskId, reference.TaskId, StringComparison.OrdinalIgnoreCase) &&
+                            item.Version == reference.Version);
+                        return task is null || !edges.Contains(task.EdgeId)
+                            ? new IngestionTaskCoverageMetadata(
+                                reference.TaskId, reference.Version, null, null, null, null, [], false, false)
+                            : new IngestionTaskCoverageMetadata(
+                                task.TaskId, task.Version, task.EdgeId, task.Status, task.SubjectType, task.SubjectId,
+                                task.ValueMappings
+                                    .Where(static mapping => mapping.Required && !string.IsNullOrWhiteSpace(mapping.DataItemCode))
+                                    .Select(static mapping => mapping.DataItemCode.Trim())
+                                    .Distinct(StringComparer.Ordinal)
+                                    .Order(StringComparer.Ordinal)
+                                    .ToArray(),
+                                false,
+                                false);
+                    })
+                    .ToArray());
+        }
+
         public Task<IngestionTask> UpsertAsync(IngestionTask value, CancellationToken ct = default)
         {
             UpsertCount++;
@@ -296,6 +483,66 @@ public sealed class AcquisitionSiteAuthorizationTests
             var removed = tasks.RemoveAll(task => task.TaskId == taskId && task.Version == version) > 0;
             if (removed) Deleted.Add($"{taskId}@{version}");
             return System.Threading.Tasks.Task.FromResult(removed);
+        }
+    }
+
+    private sealed class RecordingPlatformEventStore(IReadOnlyList<PlatformProductionEvent> result)
+        : IPlatformEventStore
+    {
+        public PlatformEventQuery? LastQuery { get; private set; }
+
+        public Task InitializeAsync(CancellationToken ct = default) => System.Threading.Tasks.Task.CompletedTask;
+
+        public Task<EventBatchResponse> IngestAsync(EventBatchRequest request, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryAsync(
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+        {
+            LastQuery = query;
+            return System.Threading.Tasks.Task.FromResult(result);
+        }
+
+        public Task<IReadOnlyList<PlatformProductionEvent>> QueryByExecutionIdsAsync(
+            IReadOnlyCollection<string> executionIds,
+            string siteId,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PlatformProcessExecutionSummarySource>> QueryExecutionSummarySourcesAsync(
+            IReadOnlyCollection<string> executionIds,
+            string siteId,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<DataObjectPage> QueryDataObjectsAsync(DataObjectQuery query, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<PlatformEventScopeStats> GetScopeStatsAsync(
+            PlatformEventQuery query,
+            CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> CanConnectAsync(CancellationToken ct = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingTimeSeriesStore(IReadOnlyList<ProcessSampleFrame> result) : ITimeSeriesStore
+    {
+        public TimeSeriesQuery? LastQuery { get; private set; }
+
+        public Task InitializeAsync(CancellationToken ct = default) => System.Threading.Tasks.Task.CompletedTask;
+
+        public Task<IReadOnlyList<SignalSample>> QueryAsync(TimeSeriesQuery query, CancellationToken ct = default)
+            => System.Threading.Tasks.Task.FromResult<IReadOnlyList<SignalSample>>([]);
+
+        public Task<IReadOnlyList<ProcessSampleFrame>> QueryFramesAsync(
+            TimeSeriesQuery query,
+            CancellationToken ct = default)
+        {
+            LastQuery = query;
+            return System.Threading.Tasks.Task.FromResult(result);
         }
     }
 

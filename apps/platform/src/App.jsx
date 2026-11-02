@@ -1,5 +1,5 @@
 // 定义产品壳层、规范路由、导航结构、权限入口和全局功能搜索。
-import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import { Dialog, DialogBackdrop, DialogPanel, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import {
   AdjustmentsHorizontalIcon,
   Bars3Icon,
@@ -16,7 +16,7 @@ import {
   SignalIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router";
 import { extractRows, useApi } from "./hooks/useApi";
 import { edgeStatus } from "./pages/shared";
@@ -67,7 +67,7 @@ const sections = [
   },
   {
     id: "evidence", label: "现场运行", icon: CircleStackIcon, path: "/process-executions", groups: [
-      { items: [["/process-executions", "运行记录"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
+      { items: [["/process-executions", "运行记录"], ["/edges", "现场节点"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
     ],
   },
   {
@@ -83,7 +83,7 @@ const sections = [
   {
     id: "configuration", label: "配置与接入", icon: SignalIcon, path: "/configuration/process-data-models", groups: [
       { heading: "工艺与质量", items: [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { heading: "现场接入", items: [["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"]] },
+      { heading: "现场接入", items: [["/configuration/ingestion-tasks", "采集配置"]] },
       { heading: "生产资源", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
     ],
   },
@@ -91,7 +91,7 @@ const sections = [
 
 const systemSection = {
   id: "system", label: "系统管理", icon: Cog6ToothIcon, path: "/identity/users", groups: [
-    { items: [["/identity/users", "用户权限"], ["/platform-metrics", "系统状态"], ["/logs", "平台日志"], ["/events", "原始事件"], ["/model-service", "模型服务"]] },
+    { items: [["/identity/users", "用户权限"], ["/platform-metrics", "系统状态"], ["/logs", "现场节点日志"], ["/events", "原始事件"], ["/model-service", "模型服务"]] },
   ],
 };
 
@@ -140,7 +140,7 @@ const pageDetails = {
   "/configuration/tooling-assemblies": ["工装总成", "查看工装总成身份、不可变配置版本及每个位置的实际成员"],
   "/edges": ["现场节点", "查看负责连接设备、仪器、系统并上报数据的现场节点"],
   "/platform-metrics": ["系统状态", "确认中心服务、现场节点和数据上行是否正常"],
-  "/logs": ["平台日志", "查询平台运行记录"],
+  "/logs": ["现场节点日志", "选择现场节点并查看其运行记录"],
   "/identity/users": ["用户权限", "管理本地账户、岗位权限、密码和启停状态"],
 };
 
@@ -161,7 +161,7 @@ const searchAliases = {
   "/configuration/inspection-definitions": "检测项目 检验特性 判定规则",
   "/configuration/ingestion-tasks": "采集 PLC 点位映射",
   "/platform-metrics": "平台运行状态 系统状态",
-  "/logs": "运行日志 系统日志",
+  "/logs": "现场节点日志 节点运行日志 Edge 日志",
   "/model-service": "AI 大模型 API key DeepSeek OpenAI Qwen",
 };
 
@@ -200,6 +200,42 @@ function SidebarSection({ section, activeSectionId, activeNavigationPath, expand
   const items = sectionItems(section);
   const hasNestedItems = items.length > 1 || items[0]?.[0] !== section.path || items[0]?.[1] !== section.label;
   const sectionPath = section.path === "/chat" ? chatPath : withSiteScope(section.path, siteId);
+
+  if (compact && hasNestedItems) {
+    return (
+      <Popover className="relative">
+        {({ open, close }) => (
+          <>
+            <PopoverButton
+              className={cx("grid h-10 w-full place-items-center rounded-sm text-slate-400 transition hover:bg-white/8 hover:text-white", active && "bg-evidence-500/15 text-evidence-100", open && "text-white")}
+              aria-label={`${section.label}菜单`}
+              title={section.label}
+            >
+              <Icon className="size-5" />
+            </PopoverButton>
+            <PopoverPanel
+              anchor={{ to: "right start", gap: 8, padding: 8 }}
+              className="z-80 max-h-[80vh] w-64 overflow-y-auto rounded-md border border-coal-800 bg-coal-950 py-2 text-white shadow-2xl"
+            >
+              <p className="px-3 py-2 text-sm font-semibold text-white">{section.label}</p>
+              <nav aria-label={`${section.label}导航`} className="grid gap-1">
+                {section.groups.map((group, index) => (
+                  <SidebarGroup
+                    key={group.heading || group.items[0]?.[0] || index}
+                    group={group}
+                    activeNavigationPath={activeNavigationPath}
+                    onNavigate={() => { close(); onNavigate?.(); }}
+                    chatPath={chatPath}
+                    siteId={siteId}
+                  />
+                ))}
+              </nav>
+            </PopoverPanel>
+          </>
+        )}
+      </Popover>
+    );
+  }
 
   if (compact) {
     return (
@@ -338,6 +374,8 @@ export function SystemStatusIndicator({ siteId, identity }) {
 export default function App({ identity, logout }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const routeMainRef = useRef(null);
+  const previousPathname = useRef(location.pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("ingot.sidebar.collapsed") === "true");
@@ -403,6 +441,12 @@ export default function App({ identity, logout }) {
       : location.pathname.startsWith("/configuration/ingestion-tasks/")
           ? ["采集配置", "选择现场节点和工艺变量，把设备点位映射上去并发布"]
           : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
+  useEffect(() => {
+    if (previousPathname.current === location.pathname) return;
+    previousPathname.current = location.pathname;
+    const focusTimer = window.setTimeout(() => routeMainRef.current?.focus(), 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [location.pathname]);
   return (
     <div className="app-canvas min-h-screen text-slate-900">
       <aside className={cx("fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-coal-800 bg-coal-950 text-white transition-[width] duration-200 lg:flex", sidebarCollapsed ? "w-18" : "w-64")}>
@@ -461,12 +505,12 @@ export default function App({ identity, logout }) {
       </header>
 
       {isChatWorkspace ? (
-        <main className={cx("fixed inset-x-0 bottom-0 top-16 overflow-hidden transition-[left] duration-200", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
+        <main ref={routeMainRef} tabIndex={-1} aria-label={page[0]} className={cx("fixed inset-x-0 bottom-0 top-16 overflow-hidden transition-[left] duration-200", sidebarCollapsed ? "lg:left-18" : "lg:left-64")}>
           <AppRoutes identity={identity} canConfigure={canConfigure} />
         </main>
       ) : (
         <div className={cx("pt-16 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
-          <main className={cx("mx-auto w-full p-4 sm:p-6 lg:p-7", location.pathname.startsWith("/configuration/ingestion-tasks/") ? "max-w-none" : "max-w-[1600px]")}>
+          <main ref={routeMainRef} tabIndex={-1} aria-label={page[0]} className={cx("mx-auto w-full p-4 sm:p-6 lg:p-7", location.pathname.startsWith("/configuration/ingestion-tasks/") ? "max-w-none" : "max-w-[1600px]")}>
             <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>
         </div>

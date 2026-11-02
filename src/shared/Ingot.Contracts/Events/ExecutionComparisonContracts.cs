@@ -349,6 +349,12 @@ public sealed record ProcessSampleConfigurationEvidence
 
     public DateTimeOffset? LastOccurredAt { get; init; }
 
+    public DateTimeOffset? FirstPlatformIngestedAt { get; init; }
+
+    public DateTimeOffset? LastPlatformIngestedAt { get; init; }
+
+    public bool HasCompletePlatformIngestedAt { get; init; }
+
     public int ObservedValueCount { get; init; }
 
     public int GoodValueCount { get; init; }

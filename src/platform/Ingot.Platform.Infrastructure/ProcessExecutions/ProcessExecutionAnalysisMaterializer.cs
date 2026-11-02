@@ -328,6 +328,12 @@ internal static class ProcessSampleConfigurationEvidenceProjector
 
         public DateTimeOffset? LastOccurredAt { get; private set; }
 
+        public DateTimeOffset? FirstPlatformIngestedAt { get; private set; }
+
+        public DateTimeOffset? LastPlatformIngestedAt { get; private set; }
+
+        public bool HasCompletePlatformIngestedAt { get; private set; } = true;
+
         public int ObservedValueCount { get; private set; }
 
         public int GoodValueCount { get; private set; }
@@ -356,6 +362,21 @@ internal static class ProcessSampleConfigurationEvidenceProjector
             LastOccurredAt = !LastOccurredAt.HasValue || frame.OccurredAt > LastOccurredAt.Value
                 ? frame.OccurredAt
                 : LastOccurredAt;
+            if (frame.IngestedAt is { } ingestedAt)
+            {
+                FirstPlatformIngestedAt = !FirstPlatformIngestedAt.HasValue ||
+                                          ingestedAt < FirstPlatformIngestedAt.Value
+                    ? ingestedAt
+                    : FirstPlatformIngestedAt;
+                LastPlatformIngestedAt = !LastPlatformIngestedAt.HasValue ||
+                                         ingestedAt > LastPlatformIngestedAt.Value
+                    ? ingestedAt
+                    : LastPlatformIngestedAt;
+            }
+            else
+            {
+                HasCompletePlatformIngestedAt = false;
+            }
             foreach (var qualityCode in frame.QualityCodes.Values)
             {
                 ObservedValueCount++;
@@ -387,6 +408,11 @@ internal static class ProcessSampleConfigurationEvidenceProjector
                 SampleFrameCount = SampleFrameCount,
                 FirstOccurredAt = FirstOccurredAt,
                 LastOccurredAt = LastOccurredAt,
+                FirstPlatformIngestedAt = FirstPlatformIngestedAt,
+                LastPlatformIngestedAt = LastPlatformIngestedAt,
+                HasCompletePlatformIngestedAt = HasCompletePlatformIngestedAt &&
+                                                FirstPlatformIngestedAt.HasValue &&
+                                                LastPlatformIngestedAt.HasValue,
                 ObservedValueCount = ObservedValueCount,
                 GoodValueCount = GoodValueCount,
                 UncertainValueCount = UncertainValueCount,

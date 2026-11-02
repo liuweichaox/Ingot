@@ -374,7 +374,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             timeSeries);
 
         var edgeId = $"EDGE-REPLAY-{Guid.NewGuid():N}";
-        var evt = ProductionEvent.Create(
+        var evt = ProductionEventIntegrity.Seal(ProductionEvent.Create(
             "equipment.heartbeat",
             DateTimeOffset.UtcNow,
             $"edge/{edgeId}/equipment/PRESS-01",
@@ -382,8 +382,12 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4),
             qualityFlags: ["communication_degraded"]) with
         {
-            Seq = 1
-        };
+            Seq = 1,
+            Data = new Dictionary<string, object?>
+            {
+                ["values"] = new Dictionary<string, object?> { ["temperature"] = 25d }
+            }
+        });
         var request = new EventBatchRequest { SiteId = "SITE-REPLAY", EdgeId = edgeId, Events = [evt] };
 
         var first = await store.IngestAsync(request);
@@ -417,6 +421,68 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         {
             SiteId = "SITE-OTHER",
             EdgeId = edgeId
+        }));
+
+        var emptyValuesEvent = ProductionEventIntegrity.Seal(ProductionEvent.Create(
+            "equipment.heartbeat",
+            DateTimeOffset.UtcNow,
+            $"edge/{edgeId}/equipment/PRESS-01",
+            new ObjectRef("equipment", "PRESS-01"),
+            appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4)) with
+        {
+            Seq = 2,
+            Data = new Dictionary<string, object?>
+            {
+                ["values"] = new Dictionary<string, object?>()
+            }
+        });
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = "SITE-REPLAY",
+            EdgeId = edgeId,
+            Events = [emptyValuesEvent]
+        });
+        var receiptMatches = await store.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = "SITE-REPLAY",
+            EdgeId = edgeId,
+            EventType = "equipment.heartbeat",
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "TASK-REPLAY",
+            AppliedConfigurationVersion = 4,
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            EventId = evt.EventId,
+            RequireNonEmptyDataValues = true,
+            OrderByIngestedAtDescending = true,
+            Limit = 1
+        });
+        var receiptMatch = Assert.Single(receiptMatches);
+        Assert.Equal(evt.EventId, receiptMatch.Event.EventId);
+        Assert.Empty(await store.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = "SITE-REPLAY",
+            EdgeId = edgeId,
+            EventType = "equipment.heartbeat",
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "TASK-REPLAY",
+            AppliedConfigurationVersion = 4,
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            EventId = "unmatched-sample-event",
+            RequireNonEmptyDataValues = true
+        }));
+        Assert.Empty(await store.QueryAsync(new PlatformEventQuery
+        {
+            SiteId = "SITE-REPLAY",
+            EdgeId = edgeId,
+            EventType = "equipment.heartbeat",
+            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationId = "TASK-REPLAY",
+            AppliedConfigurationVersion = 4,
+            SubjectType = "equipment",
+            SubjectId = "PRESS-OTHER",
+            RequireNonEmptyDataValues = true
         }));
         var dataObject = Assert.Single((await store.QueryDataObjectsAsync(new DataObjectQuery
         {
@@ -682,6 +748,18 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         });
         Assert.Equal(30, typed.Count);
         Assert.All(typed, static row => Assert.Equal("SITE-SINGLE-SOURCE", row.SiteId));
+        Assert.Equal(typed.Count, (await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            ExecutionId = executionId
+        })).Count);
+        Assert.Empty(await timeSeries.QueryAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = "EDGE-OTHER",
+            ExecutionId = executionId
+        }));
         Assert.Empty(await timeSeries.QueryAsync(new TimeSeriesQuery
         {
             SiteId = "SITE-OTHER",
@@ -730,6 +808,78 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         var scopedFrame = Assert.Single(scopedFrames);
         Assert.Equal(secondSample.EventId, scopedFrame.EventId);
         Assert.Equal(secondTaskConfiguration, scopedFrame.AppliedConfiguration);
+
+        var olderOccurredButLaterIngested = CreateSample(now.AddSeconds(-1), "press-01", 1, 4);
+        await store.IngestAsync(new EventBatchRequest
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            Events = [olderOccurredButLaterIngested]
+        });
+        await using (var orphanConnection = new NpgsqlConnection(postgres.ConnectionString))
+        {
+            await orphanConnection.OpenAsync();
+            await using var orphan = new NpgsqlCommand(
+                """
+                INSERT INTO process_sample_frames (
+                  occurred_at, frame_id, event_id, recorded_at, ingested_at,
+                  site_id, edge_id, source, subject_type, subject_id,
+                  data_model_id, data_model_version,
+                  configuration_kind, configuration_id, configuration_version)
+                VALUES (
+                  @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
+                  @site_id, @edge_id, @source, @subject_type, @subject_id,
+                  @model_id, 1,
+                  'ingestion-task', 'press-01', 1);
+                """,
+                orphanConnection);
+            orphan.Parameters.AddWithValue("occurred_at", now.UtcDateTime);
+            orphan.Parameters.AddWithValue("frame_id", long.MaxValue - 1000);
+            orphan.Parameters.AddWithValue("event_id", $"orphan-{Guid.NewGuid():N}");
+            orphan.Parameters.AddWithValue("recorded_at", now.UtcDateTime);
+            orphan.Parameters.AddWithValue("ingested_at", DateTimeOffset.UtcNow.AddMinutes(1).UtcDateTime);
+            orphan.Parameters.AddWithValue("site_id", "SITE-SINGLE-SOURCE");
+            orphan.Parameters.AddWithValue("edge_id", edgeId);
+            orphan.Parameters.AddWithValue("source", "test/orphan");
+            orphan.Parameters.AddWithValue("subject_type", "equipment");
+            orphan.Parameters.AddWithValue("subject_id", "PRESS-01");
+            orphan.Parameters.AddWithValue("model_id", modelId);
+            await orphan.ExecuteNonQueryAsync();
+        }
+        var latestReceiptFrame = Assert.Single(await timeSeries.QueryFramesAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            AppliedConfiguration = firstTaskConfiguration,
+            EventId = olderOccurredButLaterIngested.EventId,
+            OrderByIngestedAtDescending = true,
+            Limit = 1
+        }));
+        Assert.Equal(olderOccurredButLaterIngested.EventId, latestReceiptFrame.EventId);
+        Assert.Equal(firstTaskConfiguration, latestReceiptFrame.AppliedConfiguration);
+        Assert.Empty(await timeSeries.QueryFramesAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = edgeId,
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            AppliedConfiguration = firstTaskConfiguration,
+            EventId = "unmatched-sample-event",
+            OrderByIngestedAtDescending = true,
+            Limit = 1
+        }));
+        Assert.Empty(await timeSeries.QueryFramesAsync(new TimeSeriesQuery
+        {
+            SiteId = "SITE-SINGLE-SOURCE",
+            EdgeId = "EDGE-OTHER",
+            SubjectType = "equipment",
+            SubjectId = "PRESS-01",
+            AppliedConfiguration = firstTaskConfiguration,
+            OrderByIngestedAtDescending = true,
+            Limit = 1
+        }));
         Assert.Null(frames.Single(item => item.EventId == legacySample.EventId).AppliedConfiguration);
     }
 

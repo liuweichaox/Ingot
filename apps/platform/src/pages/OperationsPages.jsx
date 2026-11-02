@@ -330,6 +330,7 @@ export function ProcessExecutionsPage() {
   const [query, setQuery] = useState(() => makeProcessExecutionQuery(filters, 1, 50));
   const siteScope = useSiteScope();
   const { siteId, siteChoices, selectSite, edgeResponse } = siteScope;
+  const siteQuery = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
   const priorSiteId = useRef(siteId);
   const { data, loading, error, reload } = useApi(
     siteId ? `/api/v1/process-executions?${query}&siteId=${encodeURIComponent(siteId)}` : "",
@@ -427,8 +428,8 @@ export function ProcessExecutionsPage() {
               )}
               actions={(
                 <>
-                  <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to="/edges">查看现场节点</Link>
-                  <LinkButton to="/configuration/ingestion-tasks">配置采集</LinkButton>
+                  <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to={`/edges${siteQuery}`}>查看现场节点</Link>
+                  <LinkButton to={`/configuration/ingestion-tasks${siteQuery}`}>配置采集</LinkButton>
                 </>
               )}
             />

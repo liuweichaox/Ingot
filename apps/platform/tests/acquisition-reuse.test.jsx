@@ -185,7 +185,8 @@ describe("绑定草稿现场验证", () => {
         return Promise.resolve(response({ data: boundTask }));
       if (path.includes("/ingestion-tasks?")) return Promise.resolve(response({ data: [boundTask] }));
       if (path.includes("/process-data-models")) return Promise.resolve(response({ data: [{ modelId: "model-1", version: 1, name: "工艺变量", acquisition: { dataItems: [{ code: "temperature", displayName: "温度", nullable: false, unit: "°C" }] }, controlParameters: [] }] }));
-      if (path.includes("/api/edges")) return Promise.resolve(response({ data: [{ edgeId: "edge-1" }] }));
+      if (path === "/api/v1/auth/me") return Promise.resolve(response({ roles: ["process.engineer"], siteIds: ["SITE-001"] }));
+      if (path.includes("/api/edges")) return Promise.resolve(response({ data: [{ edgeId: "edge-1", siteId: "SITE-001" }] }));
       return Promise.resolve(response({ protocols: [] }));
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -250,7 +251,8 @@ describe("过程执行激活条件", () => {
       if (path === "/api/v1/ingestion-tasks" && options.method === "POST") return Promise.resolve(response(task));
       if (path.includes("/ingestion-tasks?")) return Promise.resolve(response({ data: [task] }));
       if (path.includes("/process-data-models")) return Promise.resolve(response({ data: [{ modelId: "model-1", version: 1, name: "工艺变量", acquisition: { dataItems: [{ code: "temperature", unit: "°C", nullable: false }] }, controlParameters: [] }] }));
-      if (path.includes("/api/edges")) return Promise.resolve(response({ data: [{ edgeId: "edge-1" }] }));
+      if (path === "/api/v1/auth/me") return Promise.resolve(response({ roles: ["process.engineer"], siteIds: ["SITE-001"] }));
+      if (path.includes("/api/edges")) return Promise.resolve(response({ data: [{ edgeId: "edge-1", siteId: "SITE-001" }] }));
       return Promise.resolve(response({ protocols: [] }));
     });
     vi.stubGlobal("fetch", fetchMock);

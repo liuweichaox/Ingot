@@ -32,6 +32,7 @@ public sealed class AcquisitionStatusTests
         Assert.Equal(1, snapshot.ReadSuccessCount);
         Assert.Equal(1, snapshot.ValidSnapshotCount);
         Assert.Equal(2, snapshot.EmittedEventCount);
+        Assert.True(snapshot.SupportsSampleEventIdCorrelation);
         Assert.Equal("connection refused", snapshot.Tasks.Single(item => item.ConfigurationKey == "furnace-b@2").LastError);
     }
 
@@ -176,6 +177,20 @@ public sealed class AcquisitionStatusTests
         Assert.Equal(1, task.DuplicateSuppressionCount);
         Assert.Equal(1, task.SourceIdentityStallCount);
         Assert.Equal("source clock stalled", task.LastError);
+    }
+
+    [Fact]
+    public void RecordValidSnapshot_ShouldReplaceOrClearTheSampleEventIdentity()
+    {
+        var status = new AcquisitionStatus();
+        status.RegisterTask("furnace-a@1");
+        var timestamp = DateTimeOffset.UtcNow;
+
+        status.RecordValidSnapshot("furnace-a@1", timestamp, null, lastValidSnapshotEventId: "sample-1");
+        Assert.Equal("sample-1", Assert.Single(status.Get().Tasks).LastValidSnapshotEventId);
+
+        status.RecordValidSnapshot("furnace-a@1", timestamp.AddSeconds(1), null, lastValidSnapshotEventId: null);
+        Assert.Null(Assert.Single(status.Get().Tasks).LastValidSnapshotEventId);
     }
 
     private static AcquisitionDeployment Deployment(int version)

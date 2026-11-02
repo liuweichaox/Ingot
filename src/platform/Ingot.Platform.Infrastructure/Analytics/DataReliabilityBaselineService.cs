@@ -103,6 +103,10 @@ public sealed class DataReliabilityBaselineService(
                 QueryAllAsync(scopedQuery with { EventType = "process.execution.completed" }, ct))
             .ConfigureAwait(false);
         var completedEvents = lifecycleEvents[1];
+        var startedPlatformIngestedAtByExecution = LifecycleReceiptTimesByExecution(
+            lifecycleEvents[0], earliest: true);
+        var completedPlatformIngestedAtByExecution = LifecycleReceiptTimesByExecution(
+            completedEvents, earliest: false);
         var matchingIds = lifecycleEvents
             .SelectMany(static items => items)
             .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
@@ -129,6 +133,54 @@ public sealed class DataReliabilityBaselineService(
         var impactedRows = evaluatedRows
             .Where(static item => item.ReasonCodes.Count > 0)
             .ToArray();
+        var rowsNeedingLifecycleBoundaries = impactedRows.Select(static item => item.Row).ToArray();
+        var scopedLifecycleBoundariesMayBePartial = query.From.HasValue || query.To.HasValue ||
+            !string.IsNullOrWhiteSpace(query.EdgeId) || !string.IsNullOrWhiteSpace(query.EquipmentId) ||
+            !string.IsNullOrWhiteSpace(query.SubjectType) || !string.IsNullOrWhiteSpace(query.SubjectId);
+        var startedBoundaryRecoveryIds = scopedLifecycleBoundariesMayBePartial
+            ? rowsNeedingLifecycleBoundaries
+                .Where(static row => row.HasStarted)
+                .Select(static row => row.ExecutionId)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : [];
+        var completedBoundaryRecoveryIds = scopedLifecycleBoundariesMayBePartial
+            ? rowsNeedingLifecycleBoundaries
+                .Where(static row => row.HasCompleted)
+                .Select(static row => row.ExecutionId)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+            : [];
+        if (startedBoundaryRecoveryIds.Length > 0 || completedBoundaryRecoveryIds.Length > 0)
+        {
+            // Re-read full lifecycle boundaries for scoped runs without loading sample-event types.
+            var boundaryQuery = new PlatformEventQuery
+            {
+                SiteId = scopedQuery.SiteId,
+                Limit = 500
+            };
+            IReadOnlyList<PlatformProductionEvent> empty = [];
+            var recoveredBoundaries = await Task.WhenAll(
+                    startedBoundaryRecoveryIds.Length == 0
+                        ? Task.FromResult(empty)
+                        : QueryAllAsync(boundaryQuery with
+                        {
+                            ExecutionIds = startedBoundaryRecoveryIds,
+                            EventType = "process.execution.started"
+                        }, ct),
+                    completedBoundaryRecoveryIds.Length == 0
+                        ? Task.FromResult(empty)
+                        : QueryAllAsync(boundaryQuery with
+                        {
+                            ExecutionIds = completedBoundaryRecoveryIds,
+                            EventType = "process.execution.completed"
+                        }, ct))
+                .ConfigureAwait(false);
+            foreach (var pair in LifecycleReceiptTimesByExecution(recoveredBoundaries[0], earliest: true))
+                startedPlatformIngestedAtByExecution[pair.Key] = pair.Value;
+            foreach (var pair in LifecycleReceiptTimesByExecution(recoveredBoundaries[1], earliest: false))
+                completedPlatformIngestedAtByExecution[pair.Key] = pair.Value;
+        }
         var reportedConfigurationEvidence = impactedRows
             .SelectMany(static item => item.Row.SampleConfigurationEvidence)
             .ToArray();
@@ -150,11 +202,17 @@ public sealed class DataReliabilityBaselineService(
             {
                 ExecutionId = item.Row.ExecutionId,
                 EquipmentId = item.Row.EquipmentId,
+                SubjectType = item.Row.SubjectType,
+                SubjectId = item.Row.SubjectId,
                 EdgeIds = item.Row.EdgeIds,
                 HasStarted = item.Row.HasStarted,
                 HasCompleted = item.Row.HasCompleted,
                 StartedAt = item.Row.HasStarted ? item.Row.StartedAt : null,
                 CompletedAt = item.Row.HasCompleted ? item.Row.CompletedAt : null,
+                StartedPlatformIngestedAt = startedPlatformIngestedAtByExecution.GetValueOrDefault(
+                    item.Row.ExecutionId),
+                CompletedPlatformIngestedAt = completedPlatformIngestedAtByExecution.GetValueOrDefault(
+                    item.Row.ExecutionId),
                 ProcessDataStatus = item.Row.ProcessDataQuality.Status,
                 ReasonCodes = item.ReasonCodes,
                 SampleConfigurationEvidence = verifiedForRun
@@ -280,9 +338,10 @@ public sealed class DataReliabilityBaselineService(
             return new CoverageProjection(runImpacts, false, false);
 
         var runSpans = new Dictionary<string, RunTimeSpan>(StringComparer.Ordinal);
+        var reportEnd = query.To is { } queryEnd && queryEnd < generatedAt ? queryEnd : generatedAt;
         foreach (var impact in runImpacts)
         {
-            if (ResolveRunTimeSpan(impact, query.To, generatedAt) is { } span)
+            if (ResolveRunTimeSpan(impact, reportEnd, generatedAt) is { } span)
                 runSpans[impact.ExecutionId] = span;
         }
         if (runSpans.Count == 0)
@@ -462,6 +521,11 @@ public sealed class DataReliabilityBaselineService(
                 string.Equals(item.ReferenceVerificationStatus,
                     ProcessSampleConfigurationReferenceStatuses.Matched, StringComparison.Ordinal))
             .ToArray();
+        var timeScopedEvidence = verifiedExactEvidence.Where(item =>
+                item.HasCompletePlatformIngestedAt &&
+                item.FirstPlatformIngestedAt is { } first && item.LastPlatformIngestedAt is { } last &&
+                first >= candidate.OverlapStart && last <= candidate.OverlapEnd)
+            .ToArray();
         var rawExactEvidenceExists = sampleEvidence.Any(item =>
             string.Equals(item.AppliedConfigurationKind, "ingestion-task", StringComparison.Ordinal) &&
             string.Equals(item.AppliedConfigurationId, observation.TaskId, StringComparison.OrdinalIgnoreCase) &&
@@ -471,7 +535,7 @@ public sealed class DataReliabilityBaselineService(
         var observedCodes = new HashSet<string>(StringComparer.Ordinal);
         var observedCodesTruncated = false;
         long frameCount = 0;
-        foreach (var item in verifiedExactEvidence)
+        foreach (var item in timeScopedEvidence)
         {
             frameCount += Math.Max(0, item.SampleFrameCount);
             foreach (var code in item.ObservedDataItemCodes)
@@ -492,7 +556,8 @@ public sealed class DataReliabilityBaselineService(
         var hasSummarizedEvidence = sampleEvidence.Any(static item => item.SummarizedConfigurationGroupCount > 0);
         var hasUnattributableEvidence = sampleEvidence.Any(item =>
             item.SampleFrameCount > 0 &&
-            string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase) &&
+            (item.SourceEdgeId is null ||
+             string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase)) &&
             (string.IsNullOrWhiteSpace(item.AppliedConfigurationKind) ||
              string.IsNullOrWhiteSpace(item.AppliedConfigurationId) ||
              item.AppliedConfigurationVersion is null));
@@ -502,8 +567,10 @@ public sealed class DataReliabilityBaselineService(
                 ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
                 : metadata.RequiredDataItemCodesTruncated || observedCodesTruncated
                     ? ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
-                    : verifiedExactEvidence.Length > 0
+                    : timeScopedEvidence.Length > 0
                         ? ExpectedConfigurationSampleEvidenceStatuses.Matched
+                        : verifiedExactEvidence.Length > 0
+                            ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableSampleTimeRange
                         : rawExactEvidenceExists || hasUnattributableEvidence
                             ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
                             : hasSummarizedEvidence
@@ -511,6 +578,7 @@ public sealed class DataReliabilityBaselineService(
                                 : ExpectedConfigurationSampleEvidenceStatuses.NoMatchingFrames;
 
         IReadOnlyList<string> required = status is ExpectedConfigurationSampleEvidenceStatuses.ObservationHistoryTruncated or
+            ExpectedConfigurationSampleEvidenceStatuses.UnverifiableSampleTimeRange or
             ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion or
             ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
             ? []
@@ -568,13 +636,26 @@ public sealed class DataReliabilityBaselineService(
 
     private static RunTimeSpan? ResolveRunTimeSpan(
         ReliabilityRunImpact impact,
-        DateTimeOffset? queryTo,
+        DateTimeOffset reportEnd,
         DateTimeOffset generatedAt)
     {
-        var start = impact.StartedAt ?? impact.CompletedAt;
+        if (!impact.HasStarted)
+            return null;
+        var start = impact.StartedPlatformIngestedAt;
         if (!start.HasValue || start.Value == default)
             return null;
-        var end = impact.CompletedAt ?? (impact.HasStarted ? queryTo ?? generatedAt : start.Value);
+        if (start.Value > reportEnd || start.Value > generatedAt)
+            return null;
+        DateTimeOffset end;
+        if (impact.HasCompleted)
+        {
+            if (impact.CompletedPlatformIngestedAt is not { } completedAt ||
+                completedAt == default || completedAt > generatedAt)
+                return null;
+            end = completedAt < reportEnd ? completedAt : reportEnd;
+        }
+        else
+            end = reportEnd;
         return end < start.Value ? null : new RunTimeSpan(start.Value, end);
     }
 
@@ -618,6 +699,25 @@ public sealed class DataReliabilityBaselineService(
             .ToArray();
         return present.Length == 0 ? null : present.Max();
     }
+
+    private static Dictionary<string, DateTimeOffset?> LifecycleReceiptTimesByExecution(
+        IReadOnlyList<PlatformProductionEvent> lifecycleEvents,
+        bool earliest)
+        => lifecycleEvents
+            .Where(static item => !string.IsNullOrWhiteSpace(item.Event.ExecutionId))
+            .GroupBy(static item => item.Event.ExecutionId!, StringComparer.Ordinal)
+            .ToDictionary(
+                static group => group.Key,
+                group =>
+                {
+                    var ordered = earliest
+                        ? group.OrderBy(static item => item.Event.OccurredAt)
+                            .ThenBy(static item => item.IngestId)
+                        : group.OrderByDescending(static item => item.Event.OccurredAt)
+                            .ThenByDescending(static item => item.IngestId);
+                    return (DateTimeOffset?)ordered.First().IngestedAt;
+                },
+                StringComparer.Ordinal);
 
     private async Task<IReadOnlyList<PlatformProductionEvent>> QueryAllAsync(
         PlatformEventQuery query,

@@ -172,12 +172,16 @@ export function EdgeDetailPage() {
   const acquisition = useApi(`/api/edges/${encodedId}/acquisition/status`, { interval: 5000 });
   const statusIntervals = useApi(`/api/edges/${encodedId}/status-intervals?limit=24`, { interval: 30000 });
   const taskFreshnessHistory = useApi(`/api/edges/${encodedId}/task-freshness-transitions?limit=100`, { interval: 30000 });
-  const logAudience = showSystemLogs ? "" : "&audience=operator";
+  const logAudience = siteScope.administrator && showSystemLogs ? "" : "&audience=operator";
   const logs = useApi(`/api/edges/${encodedId}/logs?page=1&pageSize=50${logAudience}`, { interval: 10000 });
   const ingestionTasks = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
   const edge = extractRows(edges.data).find(row => row.edgeId === edgeId);
   const scopedSiteId = edge?.siteId || siteId;
   const scopedSiteQuery = scopedSiteId ? `?siteId=${encodeURIComponent(scopedSiteId)}` : "";
+  const ingestionTaskQuery = new URLSearchParams();
+  if (scopedSiteId) ingestionTaskQuery.set("siteId", scopedSiteId);
+  if (edgeId) ingestionTaskQuery.set("edgeId", edgeId);
+  const ingestionTasksHref = `/configuration/ingestion-tasks?${ingestionTaskQuery.toString()}`;
   const error = siteScope.error || edges.error || acquisition.error || statusIntervals.error || logs.error || ingestionTasks.error;
   if (!edge && !siteScope.loading) {
     return (
@@ -312,7 +316,7 @@ export function EdgeDetailPage() {
       actions={(
         <>
           <Link className="inline-flex min-h-9 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" to={`/edges${scopedSiteQuery}`}>返回现场节点</Link>
-          <LinkButton to={`/configuration/ingestion-tasks${scopedSiteQuery}`}>配置采集</LinkButton>
+          <LinkButton to={ingestionTasksHref}>配置采集</LinkButton>
         </>
       )}
     >
@@ -396,7 +400,7 @@ export function EdgeDetailPage() {
       <Card
         title="数据源交付情况"
         description="查看已发布数据源的过程信号、控制参数和运行边界映射。"
-        actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to="/configuration/ingestion-tasks">查看采集配置</Link>}
+        actions={<Link className="text-sm font-medium text-blue-600 hover:text-blue-700" to={ingestionTasksHref}>查看采集配置</Link>}
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="已发布数据源" value={publishedTasks.length} hint={allTaskDefinitionsResolved ? "运行任务已关联配置版本" : tasks.length ? "有运行任务尚未匹配配置版本" : "尚未加载运行任务"} />
@@ -532,7 +536,7 @@ export function EdgeDetailPage() {
       <Card
         title={showSystemLogs ? "节点系统日志" : "节点操作日志"}
         description={`${showSystemLogs ? "包含框架启动和内部运行记录" : "默认仅显示连接、采集、配置、上行问题与可操作事件"} · 最近 ${recentLogs.length} 条 / 共 ${logs.data?.total ?? recentLogs.length} 条`}
-        actions={<button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setShowSystemLogs(value => !value)}>{showSystemLogs ? "返回操作日志" : "展开系统日志"}</button>}
+        actions={siteScope.administrator && <button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setShowSystemLogs(value => !value)}>{showSystemLogs ? "返回操作日志" : "展开系统日志"}</button>}
       >
         <DataTable
           rows={recentLogs}

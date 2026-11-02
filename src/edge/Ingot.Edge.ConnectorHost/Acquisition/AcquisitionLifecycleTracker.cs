@@ -18,6 +18,9 @@ public sealed class AcquisitionLifecycleTracker
     private bool _activeRunStartedWithoutObservedIdle;
     private bool _hasObservedLifecycleState;
 
+    // Identifies the sample event only when the current mapped snapshot entered the local event outbox.
+    public string? EmittedSampleEventId { get; private set; }
+
     public bool IsRunActive => _activeExecutionId is not null;
 
     public sealed record Snapshot(
@@ -69,11 +72,13 @@ public sealed class AcquisitionLifecycleTracker
         {
             var events = Track(mapped, lifecycle, pollDelayMs);
             await sink.EmitBatchAsync(events, cancellationToken).ConfigureAwait(false);
+            EmittedSampleEventId = SampleEventIdWhenEmitted(mapped, events);
             return events;
         }
         catch
         {
             RestoreState(snapshot);
+            EmittedSampleEventId = null;
             throw;
         }
     }
@@ -90,11 +95,13 @@ public sealed class AcquisitionLifecycleTracker
         {
             var events = Track(mapped, lifecycle, pollDelayMs);
             await sink.EmitBatchAsync(events, cancellationToken).ConfigureAwait(false);
+            EmittedSampleEventId = SampleEventIdWhenEmitted(mapped, events);
             return events;
         }
         catch
         {
             RestoreState(snapshot);
+            EmittedSampleEventId = null;
             throw;
         }
     }
@@ -273,4 +280,11 @@ public sealed class AcquisitionLifecycleTracker
         => mapped.ProcessSpecificationApplied is null
             ? [mapped.Sample]
             : [mapped.ProcessSpecificationApplied, mapped.Sample];
+
+    private static string? SampleEventIdWhenEmitted(
+        AcquisitionMappingResult mapped,
+        IReadOnlyList<ProductionEvent> events)
+        => events.Any(evt => string.Equals(evt.EventId, mapped.Sample.EventId, StringComparison.Ordinal))
+            ? mapped.Sample.EventId
+            : null;
 }

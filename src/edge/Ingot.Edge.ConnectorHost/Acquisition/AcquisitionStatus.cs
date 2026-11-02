@@ -62,7 +62,8 @@ public sealed class AcquisitionStatus
                 tasks,
                 deployments,
                 tasks.Sum(static item => item.StaleSnapshotRejectionCount),
-                tasks.Sum(static item => item.StaleValueRejectionCount));
+                tasks.Sum(static item => item.StaleValueRejectionCount),
+                SupportsSampleEventIdCorrelation: true);
         }
     }
 
@@ -92,7 +93,11 @@ public sealed class AcquisitionStatus
             var activeTaskIds = deployments.Select(static item => item.Task.TaskId)
                 .ToHashSet(StringComparer.Ordinal);
             foreach (var removed in _deployments.Keys.Where(item => !activeTaskIds.Contains(item)).ToArray())
-                _deployments.Remove(removed);
+                _deployments[removed] = _deployments[removed] with
+                {
+                    State = AcquisitionApplicationStates.Removing,
+                    LastError = null
+                };
 
             foreach (var deployment in deployments)
             {
@@ -129,6 +134,18 @@ public sealed class AcquisitionStatus
                         null);
                 }
             }
+        }
+    }
+
+    // Retains the last applied identity until the hosted service has fully stopped its worker.
+    public void CompleteDeploymentRemoval(string taskId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
+        lock (_gate)
+        {
+            if (_deployments.TryGetValue(taskId, out var deployment) &&
+                deployment.State == AcquisitionApplicationStates.Removing)
+                _deployments.Remove(taskId);
         }
     }
 
@@ -259,7 +276,8 @@ public sealed class AcquisitionStatus
         string configurationKey,
         DateTimeOffset timestamp,
         string? processSpecification,
-        DateTimeOffset? sourceIdentityChangedAt = null)
+        DateTimeOffset? sourceIdentityChangedAt = null,
+        string? lastValidSnapshotEventId = null)
     {
         lock (_gate)
         {
@@ -269,6 +287,7 @@ public sealed class AcquisitionStatus
             {
                 State = "running",
                 LastValidSnapshotAt = timestamp,
+                LastValidSnapshotEventId = lastValidSnapshotEventId,
                 ValidSnapshotCount = task.ValidSnapshotCount + 1,
                 LastSourceIdentityChangeAt = sourceIdentityChangedAt ?? task.LastSourceIdentityChangeAt,
                 ActiveProcessSpecification = processSpecification,
@@ -291,8 +310,12 @@ public sealed class AcquisitionStatus
                         ? deployment.AppliedAt
                         : timestamp,
                     State = converged
-                        ? AcquisitionApplicationStates.Applied
-                        : AcquisitionApplicationStates.Rollback,
+                        ? deployment.State == AcquisitionApplicationStates.Removing
+                            ? AcquisitionApplicationStates.Removing
+                            : AcquisitionApplicationStates.Applied
+                        : deployment.State == AcquisitionApplicationStates.Removing
+                            ? AcquisitionApplicationStates.Removing
+                            : AcquisitionApplicationStates.Rollback,
                     LastError = converged ? null : deployment.LastError
                 };
             }
@@ -342,7 +365,8 @@ public sealed class AcquisitionStatus
                 _tasks[configurationKey] = task with { State = "degraded", LastError = error };
             if (_taskIdentities.TryGetValue(configurationKey, out var identity) &&
                 _deployments.TryGetValue(identity.TaskId, out var deployment) &&
-                deployment.AppliedVersion != identity.Version)
+                deployment.AppliedVersion != identity.Version &&
+                deployment.State != AcquisitionApplicationStates.Removing)
             {
                 _deployments[identity.TaskId] = deployment with
                 {

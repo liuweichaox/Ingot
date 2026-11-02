@@ -7,6 +7,7 @@ import {
   pointMappingCsvTemplate,
   pointMappingsToCsv,
 } from "./pointMappingCsv";
+import { mergePointMappingRows, normalizePointMappingTarget } from "./pointMappingCsvMerge";
 
 function downloadCsv(fileName, contents) {
   const blob = new Blob(["\uFEFF", contents], { type: "text/csv;charset=utf-8" });
@@ -16,10 +17,6 @@ function downloadCsv(fileName, contents) {
   anchor.download = fileName;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function normalizeCode(value) {
-  return String(value ?? "").trim().toLocaleLowerCase("en");
 }
 
 export function PointMappingCsvPanel({ descriptor, rows = [], options = [], form, readOnly, onApply, createBlankRow }) {
@@ -33,10 +30,10 @@ export function PointMappingCsvPanel({ descriptor, rows = [], options = [], form
     if (!selectedFile) return null;
     const parsed = parsePointMappingCsv(selectedFile.text, descriptor);
     const errors = [...parsed.errors];
-    const targets = new Map(options.map(item => [normalizeCode(item.code), item]));
+    const targets = new Map(options.map(item => [normalizePointMappingTarget(item.code), item]));
     const providedColumns = parsed.rows.map(row => Object.keys(row));
     const preparedRows = parsed.rows.map((row, index) => {
-      const target = targets.get(normalizeCode(row.dataItemCode));
+      const target = targets.get(normalizePointMappingTarget(row.dataItemCode));
       const defaults = createBlankRow(descriptor);
       const values = { ...defaults, ...row };
       for (const column of providedColumns[index]) {
@@ -85,15 +82,7 @@ export function PointMappingCsvPanel({ descriptor, rows = [], options = [], form
     if (mode === "replace") {
       onApply?.(preview.rows);
     } else {
-      const next = [...rows];
-      for (const [rowIndex, imported] of preview.rows.entries()) {
-        const target = normalizeCode(imported.dataItemCode);
-        const existingIndex = next.findIndex(item => normalizeCode(item.dataItemCode) === target);
-        const updates = Object.fromEntries(preview.providedColumns[rowIndex].map(column => [column, imported[column]]));
-        if (existingIndex >= 0) next[existingIndex] = { ...next[existingIndex], ...updates, dataItemCode: imported.dataItemCode, required: imported.required };
-        else next.push(imported);
-      }
-      onApply?.(next);
+      onApply?.(mergePointMappingRows(rows, preview.rows, preview.providedColumns));
     }
     setSuccessMessage(`已应用 ${preview.rows.length} 个点位映射。仍需检查整张配置并重新探查。`);
     setSelectedFile(null);

@@ -124,7 +124,8 @@ public sealed class MqttAcquisitionRunner(
                         configurationKey,
                         DateTimeOffset.UtcNow,
                         currentProcessSpecification,
-                        receivedAt);
+                        receivedAt,
+                        lifecycle.EmittedSampleEventId);
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)

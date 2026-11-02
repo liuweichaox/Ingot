@@ -88,7 +88,8 @@ public sealed class SiemensS7AcquisitionRunner(
                 configurationKey,
                 observedAt,
                 currentProcessSpecification,
-                deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null,
+                lifecycle.EmittedSampleEventId);
             await Task.Delay(connection.PollIntervalMs, ct).ConfigureAwait(false);
         }
     }

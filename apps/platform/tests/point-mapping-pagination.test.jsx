@@ -201,4 +201,30 @@ describe("点位映射表分页", () => {
     expect(screen.getByLabelText("搜索映射")).toHaveValue("");
     expect(screen.getByLabelText("状态")).toHaveValue("all");
   });
+
+  it("合并 CSV 时按大小写无关的目标变量更新现有映射并保留其他行", async () => {
+    const rows = createUniqueRows(2);
+    const applyRows = vi.fn();
+    const { container } = render(<MappingPanelHarness
+      initialRows={rows}
+      options={createUniqueOptions(2)}
+      onChange={applyRows}
+    />);
+    const csv = pointMappingsToCsv([{ ...rows[0], dataItemCode: "POINT-1", sourcePath: "/updated" }], descriptor);
+    const file = new File([csv], "merge.csv", { type: "text/csv" });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: async () => new TextEncoder().encode(csv).buffer,
+    });
+
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+    await screen.findByText(/merge\.csv · 导入预览/);
+    fireEvent.click(screen.getByRole("button", { name: "应用 1 个映射" }));
+
+    expect(await screen.findByText("已应用 1 个点位映射。仍需检查整张配置并重新探查。")).toBeInTheDocument();
+    expect(applyRows).toHaveBeenCalledTimes(1);
+    const appliedRows = applyRows.mock.calls[0][0];
+    expect(appliedRows).toHaveLength(2);
+    expect(appliedRows[0]).toMatchObject({ dataItemCode: "point-1", sourcePath: "/updated", required: false });
+    expect(appliedRows[1]).toEqual(rows[1]);
+  });
 });

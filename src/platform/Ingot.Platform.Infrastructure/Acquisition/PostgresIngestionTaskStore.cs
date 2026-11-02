@@ -137,7 +137,11 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
         await using var command = _dataSource.CreateCommand(
             """
             SELECT requested.task_id, requested.version,
-                   authorized.edge_id, authorized.status, authorized.payload::text,
+                   authorized.edge_id, authorized.status,
+                   COALESCE(authorized.payload ->> 'subjectType', 'equipment'),
+                   authorized.payload ->> 'subjectId',
+                   COALESCE(mapping_codes.required_codes, ARRAY[]::text[]),
+                   COALESCE(mapping_codes.codes_truncated, false),
                    EXISTS (
                      SELECT 1
                      FROM ingestion_tasks AS candidate
@@ -150,6 +154,23 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
               ON authorized.task_id = requested.task_id
              AND authorized.version = requested.version
              AND authorized.edge_id = ANY(@authorized_edge_ids::text[])
+            LEFT JOIN LATERAL (
+              SELECT array_agg(bounded.code ORDER BY bounded.code) AS required_codes,
+                     count(*) > @maximum_required_codes AS codes_truncated
+              FROM (
+                SELECT DISTINCT btrim(mapping.value ->> 'dataItemCode') AS code
+                FROM jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof(authorized.payload -> 'valueMappings') = 'array'
+                      THEN authorized.payload -> 'valueMappings'
+                    ELSE '[]'::jsonb
+                  END) AS mapping(value)
+                WHERE COALESCE(mapping.value ->> 'required', 'true') = 'true'
+                  AND NULLIF(btrim(mapping.value ->> 'dataItemCode'), '') IS NOT NULL
+                ORDER BY code
+                LIMIT @maximum_required_codes_plus_one
+              ) AS bounded
+            ) AS mapping_codes ON authorized.task_id IS NOT NULL
             ORDER BY requested.task_id, requested.version;
             """);
         command.Parameters.Add("task_ids", NpgsqlDbType.Array | NpgsqlDbType.Text).Value =
@@ -157,26 +178,15 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
         command.Parameters.Add("versions", NpgsqlDbType.Array | NpgsqlDbType.Integer).Value =
             uniqueReferences.Select(static item => item.Version).ToArray();
         command.Parameters.Add("authorized_edge_ids", NpgsqlDbType.Array | NpgsqlDbType.Text).Value = scopedEdgeIds;
+        command.Parameters.AddWithValue("maximum_required_codes", MaximumRequiredCoverageCodes);
+        command.Parameters.AddWithValue("maximum_required_codes_plus_one", MaximumRequiredCoverageCodes + 1);
 
         var result = new List<IngestionTaskCoverageMetadata>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
-            IngestionTask? task = null;
-            if (!reader.IsDBNull(4))
-            {
-                task = JsonSerializer.Deserialize<IngestionTask>(reader.GetString(4), JsonOptions)
-                    ?? throw new InvalidDataException("授权采集任务版本载荷为空，无法计算预期映射覆盖。");
-            }
-
-            var requiredCodes = task?.ValueMappings
-                .Where(static mapping => mapping.Required && !string.IsNullOrWhiteSpace(mapping.DataItemCode))
-                .Select(static mapping => mapping.DataItemCode.Trim())
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
-                .Take(MaximumRequiredCoverageCodes + 1)
-                .ToArray() ?? [];
-            var requiredCodesTruncated = requiredCodes.Length > MaximumRequiredCoverageCodes;
+            var requiredCodes = reader.GetFieldValue<string[]>(6);
+            var requiredCodesTruncated = reader.GetBoolean(7);
             if (requiredCodesTruncated)
                 requiredCodes = requiredCodes.Take(MaximumRequiredCoverageCodes).ToArray();
             result.Add(new IngestionTaskCoverageMetadata(
@@ -184,10 +194,10 @@ public sealed class PostgresIngestionTaskStore : IIngestionTaskStore
                 reader.GetInt32(1),
                 reader.IsDBNull(2) ? null : reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                task?.SubjectType,
-                task?.SubjectId,
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
                 requiredCodes,
-                reader.GetBoolean(5),
+                reader.GetBoolean(8),
                 requiredCodesTruncated));
         }
         return result;

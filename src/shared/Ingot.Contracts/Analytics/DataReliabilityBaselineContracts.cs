@@ -83,11 +83,15 @@ public sealed record ReliabilityRunImpact
 {
     public required string ExecutionId { get; init; }
     public required string EquipmentId { get; init; }
+    public string? SubjectType { get; init; }
+    public string? SubjectId { get; init; }
     public IReadOnlyList<string> EdgeIds { get; init; } = [];
     public bool HasStarted { get; init; }
     public bool HasCompleted { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
+    public DateTimeOffset? StartedPlatformIngestedAt { get; init; }
+    public DateTimeOffset? CompletedPlatformIngestedAt { get; init; }
     public required string ProcessDataStatus { get; init; }
     public IReadOnlyList<string> ReasonCodes { get; init; } = [];
     public IReadOnlyList<ProcessSampleConfigurationEvidence> SampleConfigurationEvidence { get; init; } = [];
@@ -119,6 +123,7 @@ public static class ExpectedConfigurationSampleEvidenceStatuses
     public const string Matched = "matched";
     public const string NoMatchingFrames = "no-matching-frames";
     public const string SummarizedUnverifiable = "summarized-unverifiable";
+    public const string UnverifiableSampleTimeRange = "unverifiable-sample-time-range";
     public const string UnverifiableTaskVersion = "unverifiable-task-version";
     public const string ObservationHistoryTruncated = "observation-history-truncated";
     public const string CoverageResultTruncated = "coverage-result-truncated";

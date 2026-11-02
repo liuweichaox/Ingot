@@ -166,16 +166,22 @@ internal sealed class HttpPollingAcquisitionHostedService(
         CancellationToken stoppingToken)
     {
         status.SetDesiredDeployments(deployments, configurationSource);
-        var activeTaskIds = deployments
-            .Select(static item => item.Task.TaskId)
+        var removingTaskIds = status.Get().Deployments
+            .Where(static item => item.State == AcquisitionApplicationStates.Removing)
+            .Select(static item => item.TaskId)
             .ToHashSet(StringComparer.Ordinal);
-        foreach (var key in _workers
-                     .Where(item => item.Key != "local" &&
-                                    item.Value.Deployment is { } existing &&
-                                    !activeTaskIds.Contains(existing.Task.TaskId))
-                     .Select(static item => item.Key)
-                     .ToArray())
-            await StopWorkerAsync(key).ConfigureAwait(false);
+        foreach (var taskId in removingTaskIds)
+        {
+            var taskWorkerKeys = _workers
+                .Where(item => item.Key != "local" &&
+                               item.Value.Deployment is { } existing &&
+                               string.Equals(existing.Task.TaskId, taskId, StringComparison.Ordinal))
+                .Select(static item => item.Key)
+                .ToArray();
+            foreach (var key in taskWorkerKeys)
+                await StopWorkerAsync(key).ConfigureAwait(false);
+            status.CompleteDeploymentRemoval(taskId);
+        }
 
         foreach (var deployment in deployments)
         {
@@ -472,7 +478,8 @@ internal sealed class HttpPollingAcquisitionHostedService(
                     key,
                     observedAt,
                     currentProcessSpecification,
-                    deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null);
+                    deduplication == AcquisitionDeduplicationResult.Changed ? observedAt : null,
+                    lifecycle.EmittedSampleEventId);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {

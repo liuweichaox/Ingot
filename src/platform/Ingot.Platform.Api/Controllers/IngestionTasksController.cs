@@ -18,7 +18,8 @@ public sealed class IngestionTasksController(
     ProcessConfigurationApplication processStore,
     PlatformUserResolver userResolver,
     EdgeTokenValidator edgeTokenValidator,
-    AcquisitionProbeTaskCoordinator probeTasks) : PlatformConfigurationControllerBase(userResolver)
+    AcquisitionProbeTaskCoordinator probeTasks,
+    IngestionTaskSampleReceiptQuery sampleReceiptQuery) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -42,6 +43,34 @@ public sealed class IngestionTasksController(
         return value is null || !CanAccessEdge(ResolveIdentity()!, value.EdgeId)
             ? ResourceNotFound()
             : Ok(value);
+    }
+
+    // Resolve receipt evidence from the persistence path used by the configured sample event type.
+    [HttpGet("{taskId}/{version:int}/sample-receipt")]
+    public async Task<IActionResult> GetLatestSampleReceipt(
+        string taskId,
+        int version,
+        CancellationToken ct,
+        [FromQuery] string? eventId = null)
+    {
+        var denied = DeniedConfigurationRead();
+        if (denied is not null) return denied;
+
+        var task = await store.GetAsync(NormalizeCode(taskId), version, ct).ConfigureAwait(false);
+        var identity = ResolveIdentity();
+        if (task is null || identity is null || !CanAccessEdge(identity, task.EdgeId) ||
+            !edgeTokenValidator.TryGetSiteId(task.EdgeId, out var siteId))
+        {
+            return ResourceNotFound("采集配置不存在或当前身份无权访问。");
+        }
+
+        var receipt = await sampleReceiptQuery.ExecuteAsync(task, siteId, eventId, ct).ConfigureAwait(false);
+        return Ok(new
+        {
+            eventId = receipt.EventId,
+            ingestedAt = receipt.IngestedAt,
+            evidenceKind = receipt.EvidenceKind
+        });
     }
 
     [HttpGet("active")]

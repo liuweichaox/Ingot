@@ -25,8 +25,8 @@ public sealed class EdgeDiagnosticsController(
         [FromQuery] int pageSize = 100,
         CancellationToken cancellationToken = default)
     {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
+        var access = await ResolveEdgeAccessAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (access.Denial is not null) return access.Denial;
         var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
         if (baseUrl == null) return InvalidRequest("该现场节点未配置可信诊断地址，无法代理 logs。");
 
@@ -34,7 +34,7 @@ public sealed class EdgeDiagnosticsController(
         {
             ["level"] = string.IsNullOrWhiteSpace(level) ? null : level,
             ["keyword"] = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
-            ["audience"] = string.IsNullOrWhiteSpace(audience) ? null : audience,
+            ["audience"] = EdgeLogAudiencePolicy.Resolve(access.Identity!, audience),
             ["page"] = page.ToString(),
             ["pageSize"] = pageSize.ToString()
         };
@@ -68,8 +68,8 @@ public sealed class EdgeDiagnosticsController(
         [FromRoute] string edgeId,
         CancellationToken cancellationToken)
     {
-        var denied = await DeniedEdgeAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (denied is not null) return denied;
+        var access = await ResolveEdgeAccessAsync(edgeId, cancellationToken).ConfigureAwait(false);
+        if (access.Denial is not null) return access.Denial;
         var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
         if (reported is not null)
             return Ok(reported);
@@ -104,17 +104,19 @@ public sealed class EdgeDiagnosticsController(
             : null;
     }
 
-    private async Task<IActionResult?> DeniedEdgeAsync(string edgeId, CancellationToken ct)
+    private async Task<(IActionResult? Denial, PlatformIdentity? Identity)> ResolveEdgeAccessAsync(
+        string edgeId,
+        CancellationToken ct)
     {
         var identity = userResolver.ResolveIdentity(User);
         if (identity is null)
-            return AuthenticationRequired("需要平台统一认证。");
+            return (AuthenticationRequired("需要平台统一认证。"), null);
         if (!identity.HasAnyRole(PlatformRoles.QualityRead))
-            return AuthorizationDenied();
+            return (AuthorizationDenied(), null);
         var edge = await registry.FindAsync(edgeId, ct).ConfigureAwait(false);
         if (edge is null || !identity.CanAccessSite(edge.SiteId))
-            return ResourceNotFound("现场节点不存在。");
-        return null;
+            return (ResourceNotFound("现场节点不存在。"), null);
+        return (null, identity);
     }
 
     private HttpClient CreateEdgeClient(string edgeId)

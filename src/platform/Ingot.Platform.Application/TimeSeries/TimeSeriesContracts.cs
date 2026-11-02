@@ -45,6 +45,8 @@ public static class SignalQualityCodes
 public sealed record TimeSeriesQuery
 {
     public string? SiteId { get; init; }
+    public string? EdgeId { get; init; }
+    public string? EventId { get; init; }
     public string? CollectionPointId { get; init; }
     public string? SignalCode { get; init; }
     public string? ExecutionId { get; init; }
@@ -56,6 +58,7 @@ public sealed record TimeSeriesQuery
     public DateTimeOffset? AfterOccurredAt { get; init; }
     public long? AfterFrameId { get; init; }
     public int Limit { get; init; } = 10_000;
+    public bool OrderByIngestedAtDescending { get; init; }
 }
 
 public sealed record ProcessSampleFrame

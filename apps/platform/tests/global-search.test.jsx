@@ -1,6 +1,7 @@
 // 验证功能搜索的键盘导航、输入法边界与角色可见范围。
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router";
 import App, { sectionsForIdentity } from "../src/App";
@@ -13,6 +14,11 @@ afterEach(() => {
 
 function CurrentPath() {
   return <output aria-label="当前位置">{useLocation().pathname}</output>;
+}
+
+function CurrentUrl() {
+  const location = useLocation();
+  return <output aria-label="当前位置">{`${location.pathname}${location.search}`}</output>;
 }
 
 async function openSearch(roles = ["process.engineer"]) {
@@ -38,18 +44,102 @@ describe("功能搜索", () => {
       ["configuration", "配置与接入", "/configuration/process-data-models"],
     ]);
     expect(sections.find(section => section.id === "evidence")?.groups).toEqual([
-      { items: [["/process-executions", "运行记录"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
+      { items: [["/process-executions", "运行记录"], ["/edges", "现场节点"], ["/production/changeover", "生产切换"], ["/production/tooling-installations", "工装装卸"], ["/inspections", "检验任务"], ["/quality-analysis", "质量偏差"], ["/data-quality", "数据质量"]] },
     ]);
     expect(sections.find(section => section.id === "insight")?.groups).toEqual([
       { items: [["/comparisons", "工艺分析"], ["/knowledge/process-materials", "工艺资料"], ["/knowledge/mechanism", "机理知识"]] },
     ]);
     expect(sections.find(section => section.id === "configuration")?.groups.map(group => [group.heading, group.items])).toEqual([
       ["工艺与质量", [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]]],
-      ["现场接入", [["/configuration/ingestion-tasks", "采集配置"], ["/edges", "现场节点"]]],
+      ["现场接入", [["/configuration/ingestion-tasks", "采集配置"]]],
       ["生产资源", [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]]],
     ]);
+    expect(sections.flatMap(section => section.groups.flatMap(group => group.items.filter(([path]) => path === "/edges")))
+      .map(([, label]) => label)).toEqual(["现场节点"]);
     expect(sections.some(section => section.id === "system")).toBe(false);
     expect(sectionsForIdentity({ roles: ["platform.admin"] }).at(-1)?.id).toBe("system");
+  });
+
+  it("把现场节点列入现场运行，并在功能搜索中保留当前站点", async () => {
+    vi.stubGlobal("fetch", vi.fn(async input => {
+      const url = new URL(String(input), "http://localhost");
+      const value = url.pathname === "/api/v1/auth/me"
+        ? { roles: ["process.engineer"], siteIds: ["SITE-A"] }
+        : url.pathname === "/api/edges"
+          ? [{ edgeId: "EDGE-A", siteId: "SITE-A", hostname: "节点 A" }]
+          : [];
+      return new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
+    }));
+    render(<MemoryRouter initialEntries={["/workbench?siteId=SITE-A"]}>
+      <App identity={{ roles: ["process.engineer"], siteIds: ["SITE-A"] }} logout={vi.fn()} />
+      <CurrentUrl />
+    </MemoryRouter>);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
+    const input = await screen.findByRole("combobox");
+    fireEvent.change(input, { target: { value: "现场节点" } });
+    const option = screen.getAllByRole("option").find(item => within(item).queryByText("现场节点", { exact: true }));
+    expect(option).toBeDefined();
+    expect(within(option).getByText("现场运行")).toBeInTheDocument();
+    fireEvent.click(option);
+
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges?siteId=SITE-A"));
+    expect(screen.getByRole("main", { name: "现场节点" })).toHaveFocus();
+    expect(await screen.findByRole("heading", { name: "现场节点" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("link", { name: "配置采集" }))
+      .toHaveAttribute("href", "/configuration/ingestion-tasks?siteId=SITE-A"));
+    expect(screen.getByRole("link", { name: "现场节点" })).toHaveAttribute("aria-current", "page");
+
+    fireEvent.click(await screen.findByRole("link", { name: "查看诊断" }));
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges/EDGE-A?siteId=SITE-A"));
+    expect(screen.getByRole("link", { name: "现场节点" })).toHaveAttribute("aria-current", "page");
+    expect(within(screen.getByRole("navigation", { name: "面包屑" })).getByRole("link", { name: "现场运行" }))
+      .toHaveAttribute("href", "/process-executions?siteId=SITE-A");
+  });
+
+  it("收起侧栏后仍可用子菜单进入二级页面并看到当前项", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async input => {
+      const url = new URL(String(input), "http://localhost");
+      const value = url.pathname === "/api/v1/auth/me"
+        ? { roles: ["process.engineer"], siteIds: ["SITE-A"] }
+        : url.pathname === "/api/edges"
+          ? [{ edgeId: "EDGE-A", siteId: "SITE-A", hostname: "节点 A" }]
+          : [];
+      return new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
+    }));
+    render(<MemoryRouter initialEntries={["/workbench?siteId=SITE-A"]}>
+      <App identity={{ roles: ["process.engineer"], siteIds: ["SITE-A"] }} logout={vi.fn()} />
+      <CurrentUrl />
+    </MemoryRouter>);
+
+    await user.click(screen.getByRole("button", { name: "收起侧边栏" }));
+    expect(screen.getByRole("link", { name: "AI 助手" })).toHaveAttribute(
+      "href", "/chat?contextKind=site&contextId=SITE-A&contextSiteId=SITE-A",
+    );
+    const sectionButton = screen.getByRole("button", { name: "现场运行菜单" });
+    expect(sectionButton).toHaveAttribute("aria-expanded", "false");
+    sectionButton.focus();
+    await user.keyboard("{Enter}");
+    let submenu = await screen.findByRole("navigation", { name: "现场运行导航" });
+    await user.tab();
+    expect(within(submenu).getByRole("link", { name: "运行记录" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(sectionButton).toHaveAttribute("aria-expanded", "false"));
+    expect(sectionButton).toHaveFocus();
+
+    await user.click(sectionButton);
+    submenu = await screen.findByRole("navigation", { name: "现场运行导航" });
+    const edgeLink = within(submenu).getByRole("link", { name: "现场节点" });
+    expect(edgeLink).toHaveAttribute("href", "/edges?siteId=SITE-A");
+    await user.click(edgeLink);
+
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges?siteId=SITE-A"));
+    expect(screen.getByRole("main", { name: "现场节点" })).toHaveFocus();
+    await waitFor(() => expect(sectionButton).toHaveAttribute("aria-expanded", "false"));
+    await user.click(sectionButton);
+    submenu = await screen.findByRole("navigation", { name: "现场运行导航" });
+    expect(within(submenu).getByRole("link", { name: "现场节点" })).toHaveAttribute("aria-current", "page");
   });
 
   it("旧的研发项目地址不再进入产品页面", async () => {
