@@ -62,7 +62,7 @@ See [Production architecture](production-architecture.en.md) for the target topo
 
 ## Inspect the supporting evidence
 
-- Domain and authorization behavior: `tests/Ingot.Core.Tests`, including Platform workflow, factory-level authorization, optimizer-contract, and Edge acquisition tests.
+- Domain and authorization behavior: `tests/Ingot.Core.Tests`, including Platform workflow, factory-level authorization, optimizer-contract, and Edge event-ingestion tests.
 - Numerical contracts: the locked `optimizer` test suite; run it through `uv run --project optimizer --locked pytest` after installing service and development dependencies.
 - Public documentation and site output: the architecture, product-scope, product-language, and documentation-style checks, plus exported-site tests run by `./scripts/verify.sh`.
 - Operational acceptance: backup/restore, failure drills, observability checks, and `scripts/verify-production-acceptance.sh` produce evidence for the target deployment. A script being present is not a passing result.

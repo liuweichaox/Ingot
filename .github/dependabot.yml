@@ -44,7 +44,6 @@ updates:
       - /src/platform/Ingot.Platform.Api
       - /src/platform/Ingot.Platform.Migrator
       - /src/platform/Ingot.Platform.Worker
-      - /tools/semiconductor-etch-simulator
     schedule:
       interval: weekly
     groups:

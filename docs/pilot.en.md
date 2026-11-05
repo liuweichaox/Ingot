@@ -4,7 +4,7 @@
 
 ## Pilot Scope
 
-Limit the pilot to one product or process scope and one quality objective. It requires real recipe runs, actual settings, process context, and quality outcomes. Where a reliable field source exists, prefer connector-based automatic acquisition, semantic mapping, buffering, and replay; manual entry or existing external records remain valid supplementary sources. Confirm up front that identity, units, provenance, and quality review are reliable.
+Limit the pilot to one product or process scope and one quality objective. It requires real recipe runs, actual settings, process context, and quality outcomes. Where a reliable field source exists, a site adapter can acquire and map its data while Edge buffers and delivers events; manual entry or existing external records remain valid supplementary sources. Confirm up front that identity, units, provenance, and quality review are reliable.
 
 ## Operating Sequence
 

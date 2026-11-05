@@ -29,8 +29,8 @@ const copy = {
     lead: "开源工艺研发与优化系统。组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化。",
     primary: "阅读快速开始",
     secondary: "了解工作方式",
-    demoEntry: "查看采集模拟演示（合成数据）",
-    integrationEntry: "真实设备接入与驱动范围",
+    pilotEntry: "了解配方优化试点",
+    integrationEntry: "外部适配器数据接入",
     contributeEntry: "参与代码与文档贡献",
     truth: ["证据可追溯", "原因可验证", "建议可审核", "结论可复用"],
     productKicker: "FROM DATA TO DECISION",
@@ -70,7 +70,7 @@ const copy = {
     engineFeatures: ["数据质量", "真实运行", "版本谱系", "片段级引用", "已复核知识", "工程决策"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "研发记录、分析与决策，各有明确职责。",
-    archText: "Web、API、Worker、数据库与优化服务构成自身运行栈，连接器是可选的数据来源。具备可靠现场来源时优先自动采集、语义映射、缓冲与补传；正式记录保存来源、版本与审核状态，分析和建议引用这些事实。",
+    archText: "Web、API、Worker、数据库与优化服务构成自身运行栈。现场适配器负责设备通信和数据映射，可通过 Edge 接收、持久化并上报事件；正式记录保存来源、版本与审核状态，分析和建议引用这些事实。",
     layers: [
       ["研发记录", "配方 · 变量 · 边界", "组织目标、参数设定、可调范围和适用条件"],
       ["运行与质量", "参数 · 轨迹 · 检验", "关联运行上下文与质量结果，核对版本、完整性和审核状态"],
@@ -122,8 +122,8 @@ const copy = {
     lead: "Open-source Process R&D and Optimization System. Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.",
     primary: "Read the quickstart",
     secondary: "See how it works",
-    demoEntry: "Inspect the simulator demo (synthetic data)",
-    integrationEntry: "Field integration and driver coverage",
+    pilotEntry: "Explore a recipe optimization pilot",
+    integrationEntry: "External adapter integration",
     contributeEntry: "Contribute code or documentation",
     truth: ["Traceable evidence", "Testable causes", "Reviewable recommendations", "Reusable conclusions"],
     productKicker: "FROM DATA TO DECISION",
@@ -163,7 +163,7 @@ const copy = {
     engineFeatures: ["Data quality", "Real runs", "Version lineage", "Fragment citations", "Reviewed knowledge", "Engineering decisions"],
     archKicker: "RECORDS · ANALYSIS · DECISIONS",
     archTitle: "Research records, analysis, and decisions have clear responsibilities.",
-    archText: "The Web app, API, Worker, database, and optimizer form the runtime stack; connectors are optional data sources. When a reliable field source exists, prefer automatic acquisition, semantic mapping, buffering, and replay. Formal records retain provenance, versions, and review status, and analysis and recommendations reference those facts.",
+    archText: "The Web app, API, Worker, database, and optimizer form the runtime stack. Site adapters handle equipment communication and data mapping; Edge can receive, persist, and deliver their events. Formal records retain provenance, versions, and review status, and analysis and recommendations reference those facts.",
     layers: [
       ["RESEARCH RECORDS", "recipes · variables · boundaries", "Organize objectives, settings, adjustable scope, and applicability"],
       ["RUNS AND QUALITY", "settings · trajectories · inspections", "Link run context and quality outcomes; check versions, completeness, and review status"],
@@ -286,7 +286,7 @@ function Hero({ t, locale }: { t: SiteCopy; locale: Locale }) {
             <a className="button quiet" href="#product">{t.secondary} <span aria-hidden="true">↓</span></a>
           </div>
           <nav className="hero-paths" aria-label={locale === "zh" ? "快速入口" : "Quick paths"}>
-            <a href={`${t.docs}/semiconductor-demo`}>{t.demoEntry} <span aria-hidden="true">↗</span></a>
+            <a href={`${t.docs}/pilot`}>{t.pilotEntry} <span aria-hidden="true">↗</span></a>
             <a href={`${t.docs}/data-connection`}>{t.integrationEntry} <span aria-hidden="true">↗</span></a>
             <a href={`${github}/blob/main/CONTRIBUTING${locale === "en" ? ".en" : ""}.md`}>{t.contributeEntry} <span aria-hidden="true">↗</span></a>
           </nav>

@@ -1,4 +1,4 @@
-# Semiconductor Wafer Etch Acquisition Demo
+# Semiconductor Wafer Etch Acquisition Demo (Retired)
 
 ## Purpose
 

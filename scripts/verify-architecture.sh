@@ -364,17 +364,6 @@ else
   echo "✓ [platform-application-rule-ownership]"
 fi
 
-acquisition_controller_writes=$(grep -nE \
-  '\b(store|taskStore|processStore|probeTasks)\.(Upsert|Publish|Save|Delete|QueueAndWait)[A-Za-z]*Async' \
-  src/platform/Ingot.Platform.Api/Controllers/IngestionConfigurationController.cs 2>/dev/null || true)
-if [[ -n "$acquisition_controller_writes" ]]; then
-  echo "✗ [acquisition-application-boundary] 采集配置写用例必须由 Application 工作流编排"
-  echo "$acquisition_controller_writes" | sed 's/^/    /'
-  fail=1
-else
-  echo "✓ [acquisition-application-boundary]"
-fi
-
 api_module_implementation_leaks=$(grep -rnE \
   '^using Ingot\.Platform\.Infrastructure\.(Acquisition|Analytics|Manufacturing|Insight|ProcessConfiguration|ProcessExecutions|ProcessResearch);' \
   src/platform/Ingot.Platform.Api/Controllers --include='*.cs' 2>/dev/null || true)
@@ -450,7 +439,13 @@ check "connector-contract" src \
 echo "== 架构图一致性 =="
 
 diagram_require docs/architecture/system-architecture.svg \
-  '本地 SQLite：outbox · 日志 · 配置缓存' \
+  '本地 SQLite：outbox · 日志' \
+  'architecture-diagram-zh'
+diagram_require docs/architecture/system-architecture.svg \
+  '现场适配器与数据源' \
+  'architecture-diagram-zh'
+diagram_reject docs/architecture/system-architecture.svg \
+  '协议映射 · 运行边界识别|配置缓存' \
   'architecture-diagram-zh'
 diagram_require docs/architecture/system-architecture.svg \
   'Platform Worker' \
@@ -475,7 +470,13 @@ diagram_reject docs/architecture/system-architecture.svg \
   'architecture-diagram-zh'
 
 diagram_require docs/architecture/system-architecture.en.svg \
-  'Local SQLite: outbox · logs · configuration cache' \
+  'Local SQLite: outbox · logs' \
+  'architecture-diagram-en'
+diagram_require docs/architecture/system-architecture.en.svg \
+  'Site Adapters and Data Sources' \
+  'architecture-diagram-en'
+diagram_reject docs/architecture/system-architecture.en.svg \
+  'Protocol mapping · run detection|configuration cache' \
   'architecture-diagram-en'
 diagram_require docs/architecture/system-architecture.en.svg \
   'Platform Worker' \

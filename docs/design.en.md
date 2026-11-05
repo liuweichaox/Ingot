@@ -8,7 +8,7 @@ This document defines component responsibilities, dependency direction, systems 
 
 Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
-Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Field-device, enterprise-system, and cloud-service connectors are optional data sources. When a scenario has a reliable source, production evidence should preferably be acquired, semantically mapped, buffered, and replayed through a connector. Connectors must not become required dependencies of core R&D workflows, and Ingot does not replace MES, QMS, LIMS, scheduling, or equipment control. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
+Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Site adapters are optional data sources: they acquire data and map process semantics as the site requires; Edge receives standard events, buffers them locally, and delivers them to Platform. Site adapters must not become required dependencies of core R&D workflows, and Ingot does not replace MES, QMS, LIMS, scheduling, or equipment control. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
 
 The architecture must therefore:
 
@@ -116,7 +116,7 @@ Chat uses `ChatConversation` and ordered `ChatMessage` records as its formal use
 
 The production host stores Agent run snapshots and event streams in Platform PostgreSQL. Agent core still depends only on `IAgentRunStore` and does not reference Npgsql. After the message transaction commits, API only creates a queued run; an independent Platform Worker claims, renews, and executes it through a database lease. Restarting API does not lose an accepted answer task, and a later Worker instance can reclaim an expired lease after interruption. A continuing conversation assembles only bounded summaries, findings, and limitations from recent completed answers instead of feeding unbounded charts, proposals, or old record references back to the model; an old answer also cannot replace a production-data query required by the current question.
 
-Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, acquisition configuration, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points.
+Platform separates policy from implementation by use case: `Platform.Application` owns database-independent ports plus multi-step rules and use cases for process research, manufacturing context, events, identity, insight, analytics, and inspection. `Platform.Infrastructure` implements PostgreSQL transactions, external services, background hosts, and cross-context adapters through module-specific composition entry points. Historical acquisition configuration remains available to explain existing evidence rather than providing a current device configuration workflow.
 
 New business controllers handle transport and authorization, then delegate business operations through Application use cases. A small set of operational adapters for Edge registration/diagnostics, identity, and runtime metrics still injects Infrastructure services directly into API; `ARCH-001` below constrains this gap, which must not expand into new business-write paths. Migrator bootstraps the first local user under a transactional lock, and Worker owns periodic maintenance.
 
@@ -267,7 +267,7 @@ Within a site, one content hash maps to one source record and one scope selector
 - Decision outcomes are calculated from source data rather than accepted as trustworthy self-assertions.
 - Concurrent requests and retries do not create duplicate recommendation, decision, execution-link, or outcome records.
 - Historical data remain interpretable under their original versions and recomputable under new versions.
-- Optimizer or Agent failure does not stop acquisition, run records, or inspections.
+- Optimizer or Agent failure does not stop Edge event intake, run records, or inspections; field acquisition depends on the external adapter and equipment.
 
 ## Scenario replacement boundary
 
@@ -302,7 +302,7 @@ The current Agent exposes authorized read-only analysis tools, does not connect 
 The following record current choices but do not define the product core:
 
 - Web navigation and page layout;
-- protocol drivers and equipment templates;
+- site adapters and their equipment protocol implementations;
 - feature algorithms, statistical tests, and surrogate models;
 - default repetitions, blocks, and stopping rules;
 - GP variants, acquisition functions, physical priors, and transfer methods;

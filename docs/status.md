@@ -62,7 +62,7 @@ Ingot 已实现基于生产运行证据的质量分析、工艺分析（包含�
 
 ## 查验支持证据
 
-- 领域与授权行为：`tests/Ingot.Core.Tests`，包括 Platform 工作流、工厂级授权、优化器契约与 Edge 采集测试。
+- 领域与授权行为：`tests/Ingot.Core.Tests`，包括 Platform 工作流、工厂级授权、优化器契约与 Edge 事件接入测试。
 - 数值契约：锁定的 `optimizer` 测试套件；安装服务与开发依赖后，通过 `uv run --project optimizer --locked pytest` 执行。
 - 公开文档与站点产物：架构、产品范围、产品语言、文档风格检查，以及 `./scripts/verify.sh` 执行的站点导出测试。
 - 运维验收：备份恢复、故障演练、可观测性检查和 `scripts/verify-production-acceptance.sh` 为目标部署形成证据。存在脚本不等于验收通过。

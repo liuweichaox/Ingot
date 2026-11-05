@@ -6,7 +6,7 @@ Choose a path from local installation to a first recommendation and ongoing oper
 
 The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Ingot Chat is a cross-module verification and investigation entry rather than a production step.
 
-Configuration and integration prepares process semantics and automated acquisition for that daily path. The user-facing boundary is a factory or production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
+Configuration and integration prepares process semantics for that daily path; site adapters can map and submit data from equipment or existing systems to Edge. The user-facing boundary is a factory or production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
 
 ## First use
 
@@ -15,7 +15,7 @@ Choose an entry by objective; you do not need to read every page first:
 | Objective | Path | Completion signal |
 |---|---|---|
 | Start locally and open the workbench | [Getting started](getting-started.en.md) | Migration succeeds, core services are healthy, and sign-in works; no external-system account or equipment connection is required |
-| Inspect the acquisition path | [Getting started](getting-started.en.md) → [Semiconductor acquisition demo](semiconductor-demo.en.md) | Simulated run data appears in the workbench; all values are synthetic demo data, not real equipment or process results |
+| Understand field integration | [Data integration](data-connection.en.md) | Review site adapters, the Edge event interface, and acceptance boundaries |
 | Evaluate the real-run evidence workflow | [Current status](status.en.md) → [Recipe-optimization pilot guide](pilot.en.md) | Check admission using authorized real runs and reviewed quality outcomes, then record a recommendation and its later outcome |
 | Contribute code or documentation | [Contributing](../CONTRIBUTING.en.md) | Prepare tools for the change area and complete its checks; the full pre-submission gate is in the guide |
 
@@ -41,7 +41,7 @@ Read [Current status](status.en.md) before or after startup to understand implem
 ### How-to guides
 
 - [Data integration](data-connection.en.md): integration identities, points, mappings, and run admission.
-- [Semiconductor wafer etch acquisition demo](semiconductor-demo.en.md): inspect process data, recipe versions, and a 300-second run path with an independent simulator.
+- [Semiconductor wafer etch acquisition demo](semiconductor-demo.en.md): historical information about the retired demo; its equipment acquisition workflow is no longer available.
 - [Deployment](deployment.en.md): configuration, model services, observability, backup, and upgrades.
 - [Troubleshooting](troubleshooting.en.md): diagnose startup, authorization, data, and recommendation problems by symptom.
 - [Scenario evaluation boundary](rollout.en.md): assess suitability and effects using your own evidence.

@@ -177,7 +177,7 @@ Adapters independently manage equipment connections, triggers, and conversion; E
 | Web | `/health` | frontend service state |
 | PostgreSQL | `pg_isready` | database accepts connections |
 
-Platform starts without Optimizer. An Optimizer outage pauses new numerical recommendations while acquisition, run records, and inspections continue. Agent or model failure also leaves formal business records available.
+Platform starts without Optimizer. An Optimizer outage pauses new numerical recommendations while Edge event intake, run records, and inspections remain independent of it; field acquisition also depends on the external adapter and equipment. Agent or model failure also leaves formal business records available.
 
 ## Observability
 
@@ -251,7 +251,7 @@ A recovery exercise verifies more than service startup:
 ## Upgrade
 
 1. Read `CHANGELOG.md` and identify data-model or configuration changes.
-2. Back up the database, attachments, knowledge files, Data Protection keys, and enabled Edge data and configuration caches.
+2. Back up the database, attachments, knowledge files, Data Protection keys, and enabled Edge persistent data.
 3. Run migrations and replay in a test environment.
 4. Run `scripts/verify.sh`.
 5. Upgrade Platform and database dependencies.

@@ -78,9 +78,10 @@ PostgreSQL 保存：
 ```mermaid
 flowchart LR
     subgraph OT["现场 OT 区"]
-        Sources["PLC / DCS / 仪器 / 视觉 / MES"]
-        Edge["Edge ConnectorHost\n协议映射 · 本地 outbox · 配置缓存"]
-        Sources --> Edge
+        Sources["设备 / 业务系统"]
+        Adapter["现场适配器\n协议转换 · 运行识别"]
+        Edge["Edge ConnectorHost\n事件接收 · 本地 outbox · 上报"]
+        Sources --> Adapter --> Edge
     end
 
     subgraph Cell["工厂/生产现场单元"]
@@ -132,16 +133,18 @@ flowchart LR
 
 ### Edge 持久化与上送
 
-Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得确定性结果。流程固定为：
+Edge 向 Platform 使用至少一次传输，Platform 对已接收身份执行冲突检查。以下流程的可靠性受本地保留、队列容量和身份恢复条件约束；不能据此推断跨本地清理的端到端去重：
 
-1. 设备数据先转换为带稳定身份、事件时间、配置版本和质量标记的事件；
-2. Edge 先把事件提交到本地 outbox，再向采集调用方报告已记录；
+1. 现场适配器将数据转换为带稳定身份、事件时间、适用配置引用和质量标记的事件；
+2. Edge 将事件提交到本地 outbox，再向适配器报告已接受；
 3. Edge 从最小未确认序号开始批量上送；超时或响应丢失时重发同一事件；
 4. Platform 在一个持久事务内完成去重键、规范事件、时序投影和派生任务脏标记；
 5. 事务提交后 Platform 返回当前批次最大序号 `AckSeq`，并用 `GapDetected` 独立报告序号缺口；
 6. Edge 按该确认推进本地已上送标记，随后按保留策略清理；确定性拒绝的事件另行隔离并保留审计。
 
 `EventId` 与 `(SiteId, EdgeId, Seq)` 都是幂等键。重放必须保留事件身份和来源载荷；相同键对应不同事件身份或载荷是数据完整性故障，必须拒绝，不能以后到值覆盖以前值。`AckSeq` 不证明此前所有整数序号均已被 Platform 接收；发送方必须遵守本地顺序上送与拒绝隔离规则，不能把它当作任意乱序上传的全局连续水位线。
+
+外部适配器提交成功仅表示 Edge 已接受并写入本地；队列触及硬上限时，同一事务可能丢弃最旧待传事件。原事件被清理或丢弃后，相同 `EventId` 重发可能获得新序号并被 Platform 因身份冲突拒绝。适配器必须结合平台接收与隔离记录核对恢复，详见[数据接入](data-connection.md)。
 
 ### 规范摄入信封
 
@@ -154,10 +157,10 @@ Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得
 | `Seq` | 同一 Edge 内单调递增的持久序号 |
 | `EventId` | 全局事件身份 |
 | `OccurredAt` | 来源事件时间，不因补传改写 |
-| `RecordedAt` | 来源侧记录时间，属于事件内容 |
+| `RecordedAt` | 事件记录时间；外部适配器经 Edge 接入时由 Edge 设置，属于事件内容 |
 | `IngestedAt` | Platform 持久接收时间，属于平台查询包装 |
 | `SchemaVersion` | 信封主版本；未知主版本失败关闭 |
-| `AppliedConfiguration` | Edge 生成事件时实际应用的 `Kind / Id / Version` 不可变配置引用；无配置驱动事件可以为空 |
+| `AppliedConfiguration` | 来源声明实际应用的 `Kind / Id / Version` 不可变配置引用；没有适用配置引用时可以为空 |
 | `ExecutionId` | 能确定时关联的真实运行身份 |
 | `PayloadHash` | 规范化载荷哈希，用于冲突检测 |
 | `QualityFlags` | 缺失、超范围、时钟、通信和来源质量标记 |
@@ -174,7 +177,7 @@ Edge 使用至少一次传输，Platform 使用幂等写入，两者共同获得
 |---|---|---|---|
 | 部署全局 | 无 `SiteId`；部署管理员权限 | `users`、`user_sessions`、全局类型目录、通用模板 | 只能保存跨站点身份或可复用定义，不得写入某次生产运行、现场值或审批结果 |
 | 站点生产数据 | `SiteId`，并由 Edge token 绑定 | `platform_edges`；`event_ingest_keys`、`production_events`、`process_sample_frames`、`collection_points`、`data_object_summaries`、`data_object_operation_keys` | 摄入、查询、保留、容量和导出都必须显式指定站点；禁止推断默认站点 |
-| 版本化配置 | 配置身份与版本；发布绑定指向站点/Edge | `ingestion_tasks`、`ingestion_task_bindings`、`process_data_models`、`process_analysis_plans`、`process_specification_versions`、`signal_definitions` | 定义可以复用；生效范围只能通过显式绑定表达，生产事件必须保存实际应用的配置引用 |
+| 版本化配置 | 配置身份与版本；旧采集配置保留历史用途 | `ingestion_tasks`、`ingestion_task_bindings`、`process_data_models`、`process_analysis_plans`、`process_specification_versions`、`signal_definitions` | 工艺定义可以复用；适配器应保存可追溯的实际配置版本，事件中的 `AppliedConfiguration` 在没有适用引用时允许为空 |
 | 运行派生数据 | `ExecutionId`，可追溯到站点摄入事实 | `execution_features`、`execution_phases`、分析物化与重算任务、`operation_context_snapshots` | 不作为独立租户边界；所有外部读取必须从已授权站点范围解析运行集合，禁止仅凭任意 ExecutionId 越站点读取 |
 | 配方建议与知识 | `SiteId` + 配方；知识来源仅 `SiteId` | `research_recipe_recommendation*`、`recipe_recommendation*`、`mechanism_*`、`knowledge_*` | 建议、决定、运行关联与机理证据只在同一站点和配方内引用；知识来源与片段只在所属站点检索 |
 | 质量与检验 | `SiteId` + 运行/检验计划关系 | `inspection_*` | 检验记录、范围和附件固化站点归属；授权仍从关联运行继承，附件和审核日志不能脱离父记录单独访问 |
@@ -260,13 +263,13 @@ TimescaleDB 的分块、压缩和保留策略只负责物理生命周期；不�
 
 ### 按可用性目标选择拓扑
 
-基础部署可以使用单 API、单 Worker 和单 PostgreSQL，但必须记录可接受停机与 RPO/RTO，保护持久卷、身份与密钥，并实测恢复。启用现场接入后，额外保护 Edge outbox、身份、配置缓存和离线容量。单机恢复能力不等于高可用。
+基础部署可以使用单 API、单 Worker 和单 PostgreSQL，但必须记录可接受停机与 RPO/RTO，保护持久卷、身份与密钥，并实测恢复。启用现场接入后，额外保护 Edge outbox、身份与离线容量，并按现场需求保护适配器配置及待上报数据。单机恢复能力不等于高可用。
 
 只有声明单节点故障期间仍持续提供服务时，才采用以下高可用目标：
 
 | 组件 | 高可用目标形态 | 允许的降级 |
 |---|---|---|
-| Edge（启用时） | 每个现场故障域独立进程和持久卷 | Platform 不可用时继续本地采集，受已验收离线容量限制 |
+| Edge（启用时） | 每个现场故障域独立进程和持久卷 | Platform 不可用时继续接收并暂存适配器事件，受已验收离线容量限制 |
 | Platform API | 至少两个无状态副本和健康摘除 | 单副本故障不影响接入 |
 | Platform Worker | 至少两个可竞争租约的副本 | 任务延迟，不丢已持久化任务 |
 | PostgreSQL/TimescaleDB | 经演练的 HA 主备或托管等价能力 | 故障切换期间短时停止写入 |

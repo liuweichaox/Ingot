@@ -180,7 +180,7 @@ docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 | Web | `/health` | 前端服务状态 |
 | PostgreSQL | `pg_isready` | 数据库接受连接 |
 
-Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集、运行记录和检验，只暂停新数值建议。Agent 或模型服务故障也不能阻止核心业务记录。
+Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间 Edge 事件接收、运行记录和检验不依赖优化器，只暂停新数值建议；现场采集还取决于外部适配器和设备。Agent 或模型服务故障也不能阻止核心业务记录。
 
 ## 可观测性
 
@@ -254,7 +254,7 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 ## 升级
 
 1. 阅读 `CHANGELOG.md` 并识别数据模型或配置变化；
-2. 备份数据库、附件、知识文件、Data Protection 密钥和已启用的 Edge 数据与配置缓存；
+2. 备份数据库、附件、知识文件、Data Protection 密钥和已启用的 Edge 持久数据；
 3. 在测试环境执行迁移和回放；
 4. 运行 `scripts/verify.sh`；
 5. 升级 Platform 和数据库依赖；

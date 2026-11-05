@@ -19,9 +19,6 @@ public sealed class PlatformAuthorizationTests
         {
             "AuthController.Configuration",
             "AuthController.Login",
-            "IngestionTasksController.Active",
-            "IngestionTasksController.NextProbeTask",
-            "IngestionTasksController.CompleteProbeTask",
             "EdgesController.Register",
             "EdgesController.Heartbeat",
             "EventsController.Ingest"

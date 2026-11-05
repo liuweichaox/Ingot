@@ -19,9 +19,9 @@
     <rect x="920" y="112" width="390" height="86" rx="12" fill="#F8FAFC" stroke="#64748B" stroke-width="1.5" stroke-dasharray="6 5"/>
     <rect x="938" y="126" width="118" height="18" rx="9" fill="#64748B"/>
     <text x="997" y="139" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">EXTERNAL · FIELD</text>
-    <text x="1115" y="164" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Field Data Sources</text>
-    <text x="1115" y="183" font-size="10.5" fill="#64748B" text-anchor="middle">controls · instruments · vision · inspection</text>
-    <text x="1115" y="196" font-size="10.5" fill="#64748B" text-anchor="middle">MES/QMS/LIMS when integrated</text>
+    <text x="1115" y="164" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Site Adapters and Data Sources</text>
+    <text x="1115" y="183" font-size="10.5" fill="#64748B" text-anchor="middle">equipment and business systems</text>
+    <text x="1115" y="196" font-size="10.5" fill="#64748B" text-anchor="middle">protocol conversion · run identification</text>
   </g>
 
   <rect x="60" y="250" width="1320" height="800" rx="18" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.8"/>
@@ -39,8 +39,8 @@
     <rect x="918" y="298" width="52" height="18" rx="9" fill="#0F766E"/>
     <text x="944" y="311" font-size="9.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">EDGE</text>
     <text x="1110" y="340" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle">Edge ConnectorHost</text>
-    <text x="1110" y="360" font-size="12" fill="#334155" text-anchor="middle">Protocol mapping · run detection · acquisition and replay</text>
-    <text x="1110" y="378" font-size="11" fill="#64748B" text-anchor="middle">Local SQLite: outbox · logs · configuration cache</text>
+    <text x="1110" y="360" font-size="12" fill="#334155" text-anchor="middle">Event intake · local persistence · delivery and replay</text>
+    <text x="1110" y="378" font-size="11" fill="#64748B" text-anchor="middle">Local SQLite: outbox · logs</text>
     <text x="1302" y="380" font-size="10.5" font-family="ui-monospace, Menlo, monospace" fill="#94A3B8" text-anchor="end">src/edge</text>
   </g>
 
@@ -116,12 +116,12 @@
   <line x1="300" y1="198" x2="300" y2="282" stroke="#64748B" stroke-width="1.8" marker-end="url(#arrowGray)"/>
   <text x="312" y="216" font-size="11.5" fill="#475569">configure · review · confirm</text>
   <line x1="1115" y1="198" x2="1115" y2="282" stroke="#64748B" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrowGray)"/>
-  <text x="1102" y="216" font-size="11.5" fill="#475569" text-anchor="end">field acquisition</text>
+  <text x="1102" y="216" font-size="11.5" fill="#475569" text-anchor="end">standard events</text>
   <line x1="300" y1="390" x2="300" y2="450" stroke="#0F766E" stroke-width="1.8" marker-start="url(#arrowTeal)" marker-end="url(#arrowTeal)"/>
   <text x="312" y="425" font-size="11.5" fill="#0F766E">HTTPS / JSON</text>
   <line x1="1110" y1="390" x2="1110" y2="450" stroke="#0F766E" stroke-width="1.8" marker-start="url(#arrowTeal)" marker-end="url(#arrowTeal)"/>
   <text x="1098" y="414" font-size="11" fill="#0F766E" text-anchor="end">events/heartbeat upstream</text>
-  <text x="1098" y="432" font-size="11" fill="#0F766E" text-anchor="end">configuration/diagnostics calls</text>
+  <text x="1098" y="432" font-size="11" fill="#0F766E" text-anchor="end">diagnostics calls</text>
 
   <path d="M1120,674 C1120,700 1160,700 1160,736" fill="none" stroke="#A16207" stroke-width="1.8" marker-start="url(#arrowAmber)" marker-end="url(#arrowAmber)"/>
   <text x="1180" y="706" font-size="11.5" fill="#A16207">HTTP numerical request/result</text>

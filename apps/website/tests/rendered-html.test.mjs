@@ -168,10 +168,10 @@ test("both locales link the pilot and troubleshooting with explicit admission bo
   }
 });
 
-test("both locales link the simulator demo and real-device integration guide separately", async () => {
+test("both locales link the pilot and external adapter guide", async () => {
   for (const [pathname, locale, label] of [
-    ["/", "zh", "真实设备接入与驱动范围"],
-    ["/en/", "en", "Field integration and driver coverage"],
+    ["/", "zh", "外部适配器数据接入"],
+    ["/en/", "en", "External adapter integration"],
   ]) {
     const source = await html(pathname);
     const anchor = source.match(new RegExp(`<a\\b[^>]*href="https://docs\\.ingotstack\\.com/${locale}/data-connection"[^>]*>([\\s\\S]*?)<\\/a>`, "i"));
@@ -180,5 +180,7 @@ test("both locales link the simulator demo and real-device integration guide sep
     const quickPaths = source.match(/<nav\b[^>]*aria-label="(?:快速入口|Quick paths)"[^>]*>([\s\S]*?)<\/nav>/i);
     assert.ok(quickPaths, `Expected the ${locale} quick-path navigation`);
     assert.ok(quickPaths[1].includes(anchor[0]), "The field integration guide should stay in the quick-path navigation");
+    assert.ok(quickPaths[1].includes(`href="https://docs.ingotstack.com/${locale}/pilot"`));
+    assert.ok(!quickPaths[1].includes("semiconductor-demo"));
   }
 });

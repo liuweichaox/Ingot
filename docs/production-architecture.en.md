@@ -78,9 +78,10 @@ Before the first production release, this project does not maintain legacy compa
 ```mermaid
 flowchart LR
     subgraph OT["Field OT zone"]
-        Sources["PLC / DCS / instruments / vision / MES"]
-        Edge["Edge ConnectorHost\nprotocol mapping · local outbox · configuration cache"]
-        Sources --> Edge
+        Sources["equipment / business systems"]
+        Adapter["site adapter\nprotocol conversion · run identification"]
+        Edge["Edge ConnectorHost\nevent intake · local outbox · delivery"]
+        Sources --> Adapter --> Edge
     end
 
     subgraph Cell["Factory / production-site cell"]
@@ -132,16 +133,18 @@ Multiple sites are not built by making one larger database first. They are built
 
 ### Edge durability and delivery
 
-Edge uses at-least-once transport. Platform uses idempotent writes. Together they produce a deterministic result. The sequence is fixed:
+Edge uses at-least-once transport to Platform, which checks accepted event identities for conflicts. Reliability is bounded by local retention, queue capacity, and identity recovery; these steps do not guarantee end-to-end deduplication after local cleanup:
 
-1. Equipment data is converted into an event with a stable identity, event time, configuration version, and quality flags.
-2. Edge commits the event to the local outbox before telling the acquisition caller that it is recorded.
+1. A site adapter converts data into an event with a stable identity, event time, applicable configuration reference, and quality flags.
+2. Edge commits the event to the local outbox before telling the adapter that it is accepted.
 3. Edge uploads batches from the lowest unacknowledged sequence. A timeout or a lost response resends the same event.
 4. Platform completes the deduplication key, canonical event, time-series projection, and derived-job dirty mark inside one durable transaction.
 5. After commit, Platform returns the batch's maximum sequence `AckSeq` and reports sequence gaps separately with `GapDetected`.
 6. Edge advances its local uploaded mark from that acknowledgement and later cleans up by retention policy. Deterministically rejected events are quarantined and keep an audit record.
 
 `EventId` and `(SiteId, EdgeId, Seq)` are both idempotency keys. Replay must keep the event identity and source payload. The same key with a different event identity or payload is an integrity failure and must be rejected. A later value must not overwrite an earlier one. `AckSeq` does not prove that every preceding integer sequence was received. The sender must follow local in-order upload and rejection quarantine. `AckSeq` is not a global watermark for arbitrary out-of-order upload.
+
+Acceptance from an external adapter means Edge has received and written the event locally. At the queue hard limit, the same transaction may drop the oldest pending events. After an event is cleaned up or dropped, resubmitting the same `EventId` can assign a new sequence and trigger an identity conflict at Platform. Adapters must reconcile Platform receipt and quarantine records during recovery; see [Data integration](data-connection.en.md).
 
 ### Canonical ingestion envelope
 
@@ -154,10 +157,10 @@ The current contract is the batch request, `ProductionEvent`, and the platform q
 | `Seq` | Monotonic durable sequence within one Edge |
 | `EventId` | Global event identity |
 | `OccurredAt` | Source event time; replay does not rewrite it |
-| `RecordedAt` | Source-side record time; part of the event content |
+| `RecordedAt` | Event recording time; Edge sets it for external adapter intake; part of the event content |
 | `IngestedAt` | Platform durable receive time; part of the platform query wrapper |
 | `SchemaVersion` | Envelope major version; an unknown major version fails closed |
-| `AppliedConfiguration` | Immutable `Kind / Id / Version` reference to the configuration Edge actually applied; empty when the event is not configuration-driven |
+| `AppliedConfiguration` | Immutable `Kind / Id / Version` reference to the configuration the source reports as applied; empty when no reference applies |
 | `ExecutionId` | Linked real-run identity when it can be determined |
 | `PayloadHash` | Canonical payload hash, used for conflict detection |
 | `QualityFlags` | Missing, out-of-range, clock, communication, and source quality marks |
@@ -174,7 +177,7 @@ Table ownership is fixed by the keys and access rules below, not by directory na
 |---|---|---|---|
 | Deployment-global | No `SiteId`; deployment-administrator permission | `users`, `user_sessions`, global type catalogues, shared templates | May store only cross-site identity or reusable definitions; must not store a production run, a field value, or an approval result |
 | Site production data | `SiteId`, bound by the Edge token | `platform_edges`; `event_ingest_keys`, `production_events`, `process_sample_frames`, `collection_points`, `data_object_summaries`, `data_object_operation_keys` | Ingestion, query, retention, capacity, and export must name the site; inferring a default site is forbidden |
-| Versioned configuration | Configuration identity and version; publication binding points at a site or Edge | `ingestion_tasks`, `ingestion_task_bindings`, `process_data_models`, `process_analysis_plans`, `process_specification_versions`, `signal_definitions` | Definitions may be reused; effective scope is expressed only by an explicit binding; a production event must store the configuration reference actually applied |
+| Versioned configuration | Configuration identity and version; legacy acquisition configuration remains for historical use | `ingestion_tasks`, `ingestion_task_bindings`, `process_data_models`, `process_analysis_plans`, `process_specification_versions`, `signal_definitions` | Process definitions may be reused; adapters should retain traceable applied configuration versions, while `AppliedConfiguration` may be empty when no reference applies |
 | Run-derived data | `ExecutionId`, traceable to a site ingestion fact | `execution_features`, `execution_phases`, analysis materializations and recompute jobs, `operation_context_snapshots` | Not an independent tenant boundary; every external read must resolve the run set from an authorized site scope and must not cross sites by an arbitrary ExecutionId alone |
 | Recipe recommendations and knowledge | `SiteId` plus recipe; knowledge sources are authorized by `SiteId` with optional recipe applicability | `research_recipe_recommendation*`, `recipe_recommendation*`, `mechanism_*`, `knowledge_*` | Recommendations, decisions, run links, and mechanism evidence are referenced only inside the same site and recipe; knowledge sources and fragments require site authorization and are further filtered by recipe applicability when known |
 | Quality and inspection | `SiteId` plus run or inspection-plan relationship | `inspection_*` | Inspection records, scopes, and attachments fix site ownership; authorization is inherited from the linked run; attachments and audit logs cannot be read apart from the parent record |
@@ -260,13 +263,13 @@ TimescaleDB chunks, compression, and retention policies govern physical lifecycl
 
 ### Choose topology by availability objective
 
-A base deployment may use one API, one Worker, and one PostgreSQL, but it must record the acceptable outage and RPO/RTO, protect persistent volumes, identity, and keys, and measure recovery. After field integration is enabled, also protect the Edge outbox, identity, configuration cache, and offline capacity. Single-host recovery is not high availability.
+A base deployment may use one API, one Worker, and one PostgreSQL, but it must record the acceptable outage and RPO/RTO, protect persistent volumes, identity, and keys, and measure recovery. After field integration is enabled, also protect the Edge outbox, identity, and offline capacity, as well as adapter configuration and pending data according to site needs. Single-host recovery is not high availability.
 
 Use the high-availability targets below only when the deployment claims continued service during a single-node failure:
 
 | Component | High-availability target | Permitted degradation |
 |---|---|---|
-| Edge, when enabled | Independent process and persistent volume per field failure domain | Continue local acquisition while Platform is unavailable, within accepted offline capacity |
+| Edge, when enabled | Independent process and persistent volume per field failure domain | Continue receiving and buffering adapter events while Platform is unavailable, within accepted offline capacity |
 | Platform API | At least two stateless replicas with health removal | One replica failure does not stop ingestion |
 | Platform Worker | At least two replicas that can compete for leases | Jobs are delayed; persisted jobs are not lost |
 | PostgreSQL/TimescaleDB | Drilled HA primary/standby or a managed equivalent | Writes may pause briefly during failover |

@@ -8,7 +8,7 @@ A shared run identity links actual recipes, process curves, and quality outcomes
 
 ## Is Ingot a data-acquisition system?
 
-Data acquisition is not Ingot's only responsibility. Acquisition receives raw data; the system also determines the associated run, actual conditions, quality outcome, and subsequent real runs.
+Ingot is a process R&D and optimization system; external adapters handle field data acquisition. Edge receives and delivers standard events from adapters, while the system organizes runs, actual conditions, and quality outcomes for analysis and subsequent R&D decisions.
 
 ## Does Ingot replace process engineers?
 
@@ -74,7 +74,7 @@ No. A next-recipe recommendation does not automatically create an equipment-disp
 
 ## Does an optimization or language-model outage stop acquisition?
 
-No. Field acquisition, run records, and inspections continue; generation of new optimization recommendations and natural-language explanations pauses.
+Optimizer and model services are not startup dependencies for Edge event intake, run records, or inspections; an outage pauses the corresponding new optimization recommendations or natural-language explanations. Whether field acquisition continues also depends on the external adapter and equipment.
 
 ## Why does the repository bundle no validation data?
 
