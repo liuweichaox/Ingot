@@ -1,6 +1,7 @@
 // 验证 SQLite 事件日志的持久化、游标、筛选与保留行为。
 
 using Ingot.Domain.Events;
+using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Infrastructure.Events;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,6 +12,66 @@ namespace Ingot.Core.Tests.Infrastructure;
 
 public sealed class SqliteEventLogTests
 {
+    [Fact]
+    public async Task AppendBatch_ConcurrentRetries_ShareOneSequence()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var options = Options.Create(new EventOptions { DatabasePath = dbPath });
+            var log = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
+            var secondLog = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
+            var evt = CreateEvent("process.execution.started", "run-1", "LOT-A");
+            var results = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(index => (index % 2 == 0 ? log : secondLog).AppendBatchAsync([evt])));
+            Assert.All(results, result => Assert.Equal(results[0][0], result[0]));
+            Assert.Equal(1, await log.CountPendingAsync());
+        }
+        finally { DeleteSqliteFiles(dbPath); }
+    }
+
+    [Fact]
+    public async Task AppendBatch_RetryAndReopen_ReturnOriginalSequenceWithoutGrowingOutbox()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var options = Options.Create(new EventOptions { DatabasePath = dbPath });
+            var firstLog = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
+            var first = CreateEvent("process.execution.started", "run-1", "LOT-A");
+            var second = CreateEvent("process.execution.completed", "run-1", "LOT-A");
+            var firstSequence = await firstLog.AppendBatchAsync([first]);
+            var reopened = new SqliteEventLog(options, NullLogger<SqliteEventLog>.Instance);
+            var retried = ProductionEventIntegrity.Seal(first with { RecordedAt = DateTimeOffset.UtcNow.AddMinutes(1) });
+            var sequences = await reopened.AppendBatchAsync([retried, second, retried]);
+            Assert.Equal(firstSequence[0], sequences[0]);
+            Assert.Equal(firstSequence[0], sequences[2]);
+            Assert.NotEqual(sequences[0], sequences[1]);
+            Assert.Equal(2, await reopened.CountPendingAsync());
+        }
+        finally { DeleteSqliteFiles(dbPath); }
+    }
+
+    [Fact]
+    public async Task AppendBatch_ConflictingIdentity_RollsBackAllNewEvents()
+    {
+        var dbPath = CreateTempDbPath();
+        try
+        {
+            var log = new SqliteEventLog(Options.Create(new EventOptions { DatabasePath = dbPath }),
+                NullLogger<SqliteEventLog>.Instance);
+            var original = CreateEvent("process.execution.started", "run-1", "LOT-A");
+            await log.AppendBatchAsync([original]);
+            var fresh = CreateEvent("process.execution.completed", "run-1", "LOT-A");
+            var conflicting = ProductionEventIntegrity.Seal(original with { ExecutionId = "other-run" });
+            var error = await Assert.ThrowsAsync<EventIdentityConflictException>(
+                () => log.AppendBatchAsync([fresh, conflicting]));
+            Assert.Equal(original.EventId, error.EventId);
+            Assert.Equal(1, await log.CountPendingAsync());
+            Assert.DoesNotContain(await log.QueryAsync(new EventQuery()), item => item.EventId == fresh.EventId);
+        }
+        finally { DeleteSqliteFiles(dbPath); }
+    }
     [Fact]
     public async Task Append_ShouldSurviveReopenAndSupportBusinessFilters()
     {

@@ -22,9 +22,13 @@ The event contract is defined in `src/shared/Ingot.Domain/Events/ProductionEvent
 
 For `process.sample`, `data.values` must be an object keyed by published process data model codes. Value types must match the model and required items must be present. Platform must also resolve a published model from the event context. Passing Edge format validation does not mean Platform has admitted the event.
 
+While an event remains in the Edge log, retrying the same `EventId` and business content returns its original sequence without adding another pending event. Reusing an identity with different content returns HTTP 409 and rolls back the batch. Edge-generated recording time, sequence, and hash are excluded from the comparison. Acknowledged events may be removed by retention and a full queue may drop the oldest pending events; local deduplication is not guaranteed after removal, so adapters must monitor and reconcile delivery. The [external adapter example](../examples/external-adapter/README.md) verifies Edge intake only, not Platform admission or the complete run workflow.
+
 ## Delivery and failure handling
 
-HTTP `202 Accepted` means Edge accepted the batch and persisted it in its local event log; it does not mean Platform has received it or business analysis has completed. Edge advances its local pending queue after Platform confirmation. Operators should monitor health, backlog, and rejections, and provision sufficient persistent storage and backups. Adapters should also retain events not accepted by Edge and handle errors and retries.
+HTTP `202 Accepted` means Edge accepted the batch and persisted it in its local event log; it does not mean Platform has received it or business analysis has completed. At the queue's hard limit, the same transaction may drop the oldest pending events, including events from this batch, even when it returns 202. Edge advances its local pending queue after Platform confirmation. Operators should monitor health, backlog, and rejections, and provision sufficient persistent storage and backups. Adapters should also retain events not accepted by Edge and handle errors and retries.
+
+Do not blindly resend an ID after its original event has been removed or dropped locally: Edge may assign a new sequence and return 202, while Platform may reject and quarantine it because the existing ID has a different sequence or hash. First reconcile Platform receipt and Edge quarantine records, then follow the site's recovery process. End-to-end idempotency across the retention boundary is not currently guaranteed.
 
 Each Edge instance needs its own persistent directory. If the directory changes or the pending queue is lost, use a new `EdgeId` to avoid resetting sequences under the same identity. Configure separate ingestion, node diagnostics, and Platform delivery credentials; see [Deployment](deployment.en.md) for deployment and recovery.
 

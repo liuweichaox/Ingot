@@ -21,7 +21,7 @@
 | 表组 | 表 | 正式职责 |
 | --- | --- | --- |
 | 身份与访问 | `users`, `user_sessions` | 身份、会话与站点授权；不保存生产事实。 |
-| 站点与接入 | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `edge_task_deployment_observation_state`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Edge、数据源与采集任务的版本化配置和运行状态；任务部署表保留平台实际观察到的 Edge 已应用版本及其观察区间，水位表防止较旧 Edge 报告回退观察状态。 |
+| 站点与接入 | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `edge_task_deployment_observation_state`, `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, `ingestion_tasks`, `acquisition_probe_tasks` | Edge 身份和运行状态；旧数据源、采集任务与部署观察表保留历史配置及来源证据，不再作为当前设备采集配置入口。 |
 | 事件幂等与原始事实 | `event_ingest_keys`, `production_events`, `collection_points`, `process_sample_frames`, `process_sample_values` | 事件接收去重账本、不可变事件信封、点位目录及高频样本事实。 |
 | 执行与分析派生 | `process_execution_boundaries`, `execution_boundary_recompute_jobs`, `execution_analysis_backfill_jobs`, `execution_analysis_recompute_jobs`, `execution_analysis_materializations`, `execution_features`, `execution_phases` | 从原始事件确定执行边界，并记录可重算的阶段、特征与物化状态。 |
 | 工艺配置 | `process_data_models`, `signal_definitions`, `feature_definitions`, `phase_definitions`, `phase_mappings`, `process_specification_versions`, `scenario_packages`, `process_analysis_plans` | 稳定工艺语义、信号/特征、规范和场景策略的版本化定义。 |

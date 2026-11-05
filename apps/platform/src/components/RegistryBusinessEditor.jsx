@@ -460,7 +460,7 @@ function ProcessModelEditor({ form, onChange, readOnly, lockIdentity }) {
         description="这里定义过程量和控制参数，不填写 PLC 地址、设备点位或采集频率。"
         actions={canApplyStarter ? <Button variant="ghost" onClick={applyStarter}>应用精密模压示例</Button> : undefined}
       >
-        <p className="text-sm leading-6 text-slate-600">同一套工艺变量可以复用于多台设备；每个来源的协议、地址、原始类型和换算规则在“现场接入”中配置。</p>
+        <p className="text-sm leading-6 text-slate-600">同一套工艺变量可以复用于多台设备；现场适配器负责协议、地址、原始类型和单位换算。</p>
       </Card>
       <ItemDefinitions form={form} onChange={onChange} field="dataItems" title="过程量" readOnly={readOnly} includeCategory />
       <ItemDefinitions form={form} onChange={onChange} field="controlParameters" title="控制参数结构" readOnly={readOnly} />
@@ -473,7 +473,7 @@ function ItemDefinitions({ form, onChange, field, title, readOnly, includeCatego
   return (
     <Card
       title={title}
-      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义控制参数的业务结构，具体来源地址在现场接入中映射。"}
+      description={field === "dataItems" ? "定义稳定业务代码、显示名称、平台类型和标准单位；阶段号的用途分类设为“阶段号”。" : "只定义控制参数的业务结构，具体来源地址由现场适配器映射。"}
       actions={!readOnly ? <Button onClick={() => addRow(form, onChange, field, factory())}>添加{title}</Button> : undefined}
     >
       <div className="grid gap-4">

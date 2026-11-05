@@ -61,7 +61,7 @@ docker compose -f docker-compose.app.yml config --quiet
 **Symptom**: the node is online but expected runs, curves, or optimization observations are absent.
 
 1. Check consistent `SiteId`, `EdgeId`, tokens, and equipment identity.
-2. Check the applied published acquisition configuration and point, process-variable, unit, and timestamp mappings.
+2. Check the site adapter's applied version and configuration, and its source point, process-variable, unit, and timestamp mappings.
 3. Distinguish event receipt, run-boundary assembly, process analysis, and quality review. Event acceptance does not establish completion of later stages.
 4. Check Worker health and background-job errors, and whether identity, boundaries, required fields, or quality data excluded the run.
 

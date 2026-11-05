@@ -14,6 +14,30 @@ namespace Ingot.Core.Tests.Edge;
 public sealed class ConnectorEventsControllerTests
 {
     [Fact]
+    public async Task Ingest_ConflictingEventIdentity_ReturnsConflict()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["ConnectorHost:IngestToken"] = "test-token" }).Build();
+        var controller = new ConnectorEventsController(new ConflictingSink(), new StubEdgeIdentityProvider(), configuration)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+        controller.Request.Headers.Authorization = "Bearer test-token";
+        var evt = ProductionEvent.Create("equipment.heartbeat", DateTimeOffset.UtcNow,
+            "connector/test", new ObjectRef("equipment", "PRESS-01"));
+
+        Assert.IsType<ConflictObjectResult>(await controller.Ingest([evt], CancellationToken.None));
+    }
+
+    private sealed class ConflictingSink : IEventSink
+    {
+        public ValueTask<ProductionEvent> EmitAsync(ProductionEvent evt, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<ProductionEvent>> EmitBatchAsync(
+            IReadOnlyList<ProductionEvent> events, CancellationToken ct = default)
+            => throw new EventIdentityConflictException(events[0].EventId);
+    }
+    [Fact]
     public async Task Ingest_NormalizesPersistenceFieldsBeforeBatchValidation()
     {
         var sink = new CapturingEventSink();

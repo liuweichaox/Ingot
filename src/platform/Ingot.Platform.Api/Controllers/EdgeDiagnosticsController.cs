@@ -63,40 +63,6 @@ public sealed class EdgeDiagnosticsController(
         }
     }
 
-    [HttpGet("acquisition/status")]
-    public async Task<IActionResult> GetAcquisitionStatus(
-        [FromRoute] string edgeId,
-        CancellationToken cancellationToken)
-    {
-        var access = await ResolveEdgeAccessAsync(edgeId, cancellationToken).ConfigureAwait(false);
-        if (access.Denial is not null) return access.Denial;
-        var reported = (await registry.FindAsync(edgeId, cancellationToken).ConfigureAwait(false))?.Acquisition;
-        if (reported is not null)
-            return Ok(reported);
-
-        var baseUrl = GetEdgeBaseUrlOrNull(edgeId);
-        if (baseUrl is null)
-            return InvalidRequest("该现场节点未配置可信诊断地址，无法查询任务状态。");
-
-        var uri = new Uri(new Uri(baseUrl), "/api/v1/acquisition/status");
-        var client = CreateEdgeClient(edgeId);
-        try
-        {
-            using var response = await client.GetAsync(uri, cancellationToken).ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return response.IsSuccessStatusCode
-                ? Content(body, "application/json; charset=utf-8")
-                : EdgeProxyFailure(response, body);
-        }
-        catch (HttpRequestException exception)
-        {
-            return ProblemResponse(
-                StatusCodes.Status502BadGateway,
-                "现场节点不可访问。",
-                [("upstreamDetail", exception.Message)]);
-        }
-    }
-
     private string? GetEdgeBaseUrlOrNull(string edgeId)
     {
         return diagnosticsTokenProvider.TryGetBaseUrl(edgeId, out var baseUrl)

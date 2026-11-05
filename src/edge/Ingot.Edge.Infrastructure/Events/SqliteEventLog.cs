@@ -164,6 +164,7 @@ public sealed class SqliteEventLog : IEventLog
                 .BeginTransactionAsync(ct)
                 .ConfigureAwait(false);
             var sequences = new List<long>(events.Count);
+            var insertedCount = 0;
             foreach (var evt in events)
             {
                 ArgumentNullException.ThrowIfNull(evt);
@@ -174,6 +175,19 @@ public sealed class SqliteEventLog : IEventLog
                         out var validationError))
                 {
                     throw new ArgumentException(validationError, nameof(events));
+                }
+                var existing = await FindByIdAsync(connection, transaction, sealedEvent.EventId, ct)
+                    .ConfigureAwait(false);
+                if (existing is not null)
+                {
+                    // Edge owns these transport fields, so retries compare only the stable event content.
+                    var comparisonTime = DateTimeOffset.UnixEpoch;
+                    var existingHash = ProductionEventIntegrity.ComputePayloadHash(existing with { RecordedAt = comparisonTime });
+                    var incomingHash = ProductionEventIntegrity.ComputePayloadHash(sealedEvent with { RecordedAt = comparisonTime });
+                    if (!string.Equals(existingHash, incomingHash, StringComparison.Ordinal))
+                        throw new EventIdentityConflictException(sealedEvent.EventId);
+                    sequences.Add(existing.Seq);
+                    continue;
                 }
                 await using var command = connection.CreateCommand();
                 command.Transaction = transaction;
@@ -209,8 +223,9 @@ public sealed class SqliteEventLog : IEventLog
                 await InsertContextIndexAsync(connection, transaction, seq, sealedEvent.Context, ct)
                     .ConfigureAwait(false);
                 sequences.Add(seq);
+                insertedCount++;
             }
-            await AdjustPendingCountAsync(connection, transaction, events.Count, ct).ConfigureAwait(false);
+            await AdjustPendingCountAsync(connection, transaction, insertedCount, ct).ConfigureAwait(false);
 
             var backlogDrop = await EnforceBacklogLimitAsync(
                     connection,
@@ -235,6 +250,22 @@ public sealed class SqliteEventLog : IEventLog
         {
             _writeLock.Release();
         }
+    }
+
+    private static async Task<ProductionEvent?> FindByIdAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string eventId, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT seq, event_id, schema_version, event_type, type_version, occurred_at, recorded_at,
+                   source, subject_type, subject_id, execution_id, configuration_kind, configuration_id,
+                   configuration_version, quality_flags_json, payload_hash, context_json, data_json
+            FROM events WHERE event_id = $event_id;
+            """;
+        command.Parameters.AddWithValue("$event_id", eventId);
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        return await reader.ReadAsync(ct).ConfigureAwait(false) ? ReadEvent(reader) : null;
     }
 
     private void RecordBacklogDropMetrics(int droppedCount)

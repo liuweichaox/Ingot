@@ -1,9 +1,7 @@
-
+// 管理版本化工艺配置，并保护仍在使用的业务引用。
 using System.Text.Json;
-using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Platform.Api.Agents;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.ProcessConfiguration;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,8 +11,6 @@ namespace Ingot.Platform.Api.Controllers;
 [Route("api/v1/process-data-models")]
 public sealed class ProcessDataModelsController(
     ProcessConfigurationApplication store,
-    AcquisitionApplication ingestionTasks,
-    AcquisitionApplication ingestionConfigurations,
     PlatformUserResolver userResolver) : PlatformConfigurationControllerBase(userResolver)
 {
     [HttpGet]
@@ -40,15 +36,6 @@ public sealed class ProcessDataModelsController(
         if (!ProcessConfigurationValidator.TryValidate(request, out var normalized, out var error))
             return InvalidRequest(error);
         var existing = await store.GetDataModelAsync(normalized!.ModelId, normalized.Version, ct).ConfigureAwait(false);
-        if (existing?.Status == ConfigurationStatuses.Published &&
-            normalized.Status == ConfigurationStatuses.Retired)
-        {
-            var activeReferences = await ActiveIngestionReferences(existing, ct).ConfigureAwait(false);
-            if (activeReferences.Count > 0)
-                return StateConflict(
-                    "工艺数据模型仍被活动的数据摄取任务或任务模板引用，不能退役。",
-                    ("references", activeReferences));
-        }
         var immutable = HandleImmutable(existing, normalized, value => value.Status, (value, status) => value with
         {
             Status = status,
@@ -80,22 +67,18 @@ public sealed class ProcessDataModelsController(
         var processSpecifications = await store.ListProcessSpecificationsAsync(ct).ConfigureAwait(false);
         var plans = await store.ListAnalysisPlansAsync(ct).ConfigureAwait(false);
         var packages = await store.ListScenarioPackagesAsync(ct).ConfigureAwait(false);
-        var ingestionTaskValues = await ingestionTasks.ListAsync(ct).ConfigureAwait(false);
-        var ingestionTemplates = await ingestionConfigurations.ListTemplatesAsync(ct).ConfigureAwait(false);
         if (processSpecifications.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
             plans.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
-            packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version) ||
-            ingestionTaskValues.Any(item => References(item, existing)) ||
-            ingestionTemplates.Any(item => References(item, existing)))
+            packages.Any(item => item.DataModelId == existing.ModelId && item.DataModelVersion == existing.Version))
         {
-            return StateConflict("工艺数据模型仍被配方版本号、分析方案、工艺配置或数据摄取配置引用，不能删除。");
+            return StateConflict("工艺数据模型仍被配方版本号、分析方案或工艺配置引用，不能删除。");
         }
         var deleted = await store.TryDeleteDataModelAsync(existing.ModelId, version, ct).ConfigureAwait(false);
         return deleted.Status switch
         {
             ProcessConfigurationMutationStatus.Applied => NoContent(),
             ProcessConfigurationMutationStatus.Referenced => StateConflict(
-                "工艺数据模型仍被配方版本号、分析方案、工艺配置或数据摄取配置引用，不能删除。"),
+                "工艺数据模型仍被配方版本号、分析方案或工艺配置引用，不能删除。"),
             ProcessConfigurationMutationStatus.StateConflict => StateConflict("工艺数据模型状态已发生变化，请重新加载后再试。"),
             _ => ResourceNotFound()
         };
@@ -120,25 +103,6 @@ public sealed class ProcessDataModelsController(
     private static bool SamePayload<T>(T left, T right)
         => JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
 
-    private async Task<IReadOnlyList<string>> ActiveIngestionReferences(
-        ProcessDataModel model,
-        CancellationToken ct)
-    {
-        var tasks = await ingestionTasks.ListAsync(ct).ConfigureAwait(false);
-        var templates = await ingestionConfigurations.ListTemplatesAsync(ct).ConfigureAwait(false);
-        return tasks.Where(item => item.Status != ConfigurationStatuses.Retired && References(item, model))
-            .Select(item => $"task:{item.TaskId}@{item.Version}")
-            .Concat(templates.Where(item => item.Status != ConfigurationStatuses.Retired && References(item, model))
-                .Select(item => $"template:{item.TemplateId}@{item.Version}"))
-            .OrderBy(static item => item, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static bool References(IngestionTask task, ProcessDataModel model)
-        => task.DataModelId == model.ModelId && task.DataModelVersion == model.Version;
-
-    private static bool References(IngestionTaskTemplate template, ProcessDataModel model)
-        => template.DataModelId == model.ModelId && template.DataModelVersion == model.Version;
 }
 
 [ApiController]

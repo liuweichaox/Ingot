@@ -1,3 +1,4 @@
+// 接收现场适配器事件，并区分身份冲突与可重试的持久化错误。
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Domain.Events;
@@ -51,7 +52,15 @@ public sealed class ConnectorEventsController(
             normalizedEvents.Add(normalized);
         }
 
-        var persistedEvents = await sink.EmitBatchAsync(normalizedEvents, ct).ConfigureAwait(false);
+        IReadOnlyList<ProductionEvent> persistedEvents;
+        try
+        {
+            persistedEvents = await sink.EmitBatchAsync(normalizedEvents, ct).ConfigureAwait(false);
+        }
+        catch (EventIdentityConflictException exception)
+        {
+            return Conflict(new { error = exception.Message, eventId = exception.EventId });
+        }
         var accepted = persistedEvents.Select(item => new { item.EventId, item.Seq }).ToArray();
         return Accepted(new { count = accepted.Length, events = accepted });
     }

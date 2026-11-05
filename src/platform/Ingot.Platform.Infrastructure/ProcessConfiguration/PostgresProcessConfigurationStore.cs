@@ -66,18 +66,10 @@ public sealed class PostgresProcessConfigurationStore : IProcessConfigurationSto
                     SELECT 1 FROM scenario_packages package
                     WHERE package.data_model_id = model.model_id
                       AND package.data_model_version = model.version)
-                  AND NOT EXISTS (
-                    SELECT 1 FROM ingestion_tasks task
-                    WHERE lower(task.payload ->> 'dataModelId') = model.model_id
-                      AND task.payload ->> 'dataModelVersion' = @version_text)
-                  AND NOT EXISTS (
-                    SELECT 1 FROM ingestion_task_templates template
-                    WHERE lower(template.payload ->> 'dataModelId') = model.model_id
-                      AND template.payload ->> 'dataModelVersion' = @version_text);
+                  ;
                 """, connection, transaction);
             command.Parameters.AddWithValue("key", key);
             command.Parameters.AddWithValue("version", version);
-            command.Parameters.AddWithValue("version_text", version.ToString(System.Globalization.CultureInfo.InvariantCulture));
             command.Parameters.AddWithValue("draft", ConfigurationStatuses.Draft);
             var deleted = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 1;
             if (deleted)

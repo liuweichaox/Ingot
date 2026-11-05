@@ -64,7 +64,7 @@ const sampleSourceVerificationDetails = {
   unverifiable: {
     label: "无法逐版本核对",
     tone: "neutral",
-    detail: "来源已汇总、帧来源信息不完整，或配置引用不是采集任务版本。",
+    detail: "来源已汇总、帧来源信息不完整，或配置引用无法按历史任务版本核验。",
   },
 };
 
@@ -1022,13 +1022,13 @@ export function DataQualityPage() {
                               ? "应用观察历史已截断；此运行的来源状态未知。"
                               : baseline.data?.expectedConfigurationCoverageTruncated
                                 ? "应用观察覆盖详情已截断；此运行的版本与映射来源未知。"
-                                : "没有可核验的样本来源或任务版本应用观察；不能据此判断采集任务是否健康。"}
+                                : "没有可核验的样本来源或历史任务版本应用观察；不能据此判断现场适配器是否健康。"}
                           </p>
                         );
                         return (
                           <div className="min-w-80 space-y-3">
                             {groups.length === 0 && <p className="text-xs leading-5 text-slate-600">
-                              未返回匹配的已保存采样帧；仅凭这一点无法判断采集任务是否健康。
+                              未返回匹配的已保存采样帧；仅凭这一点无法判断现场适配器是否健康。
                             </p>}
                             {groups.map((item, index) => {
                               const summarizedGroupCount = item.summarizedConfigurationGroupCount ?? 0;

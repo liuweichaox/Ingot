@@ -88,6 +88,11 @@ public sealed class EventSink : IEventSink
         {
             sequences = await _eventLog.AppendBatchAsync(recorded, ct).ConfigureAwait(false);
         }
+        catch (EventIdentityConflictException)
+        {
+            // A client identity conflict is not a storage-health failure.
+            throw;
+        }
         catch (Exception ex)
         {
             foreach (var evt in recorded)
