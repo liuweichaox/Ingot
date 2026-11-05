@@ -105,11 +105,9 @@ function reliabilityRunActions(reasonCode, run, siteId) {
     "minimal_context_missing",
   ].includes(reasonCode)) {
     for (const edgeId of edgeIds) {
-      const query = new URLSearchParams({ edgeId });
-      if (siteId) query.set("siteId", siteId);
       actions.push({
-        href: `/configuration/ingestion-tasks?${query}#task-configurations`,
-        label: `检查 ${edgeId} 的采集配置`,
+        href: `/edges/${encodeURIComponent(edgeId)}${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`,
+        label: `检查 ${edgeId} 的节点状态`,
       });
     }
   }

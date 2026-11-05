@@ -37,12 +37,12 @@ The current Web information architecture balances the decision chain with freque
 - **Field operations**: production runs, production changeover, quality inspection, quality deviations, sampling and run-completeness checks, and tooling installation when a scenario needs tooling traceability;
 - **Process insight**: process analysis, process materials, and mechanism knowledge;
 - **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome freezing;
-- **Configuration and integration**: process variables, analysis rules, inspection definitions, quality plans, acquisition setup, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
+- **Configuration and integration**: process variables, analysis rules, inspection definitions, quality plans, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
 - **System administration**: users and permissions, system status, logs, raw events, model services, and assistant evaluation for administrators.
 
 Raw events reported by Edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
 
-A recipe version's launch check covers only that version's own dependencies: the recipe version and its referenced process variables are published; a published acquisition setup references the same process-variable version and maps every control parameter and process quantity; a published analysis plan references the same process-variable version and includes process curves; and a published quality plan covers the version's product scope with a numeric characteristic that has a unit and acceptance range.
+A recipe version's launch check covers its published recipe and process variables, applicable analysis plan, and quality plan. Site adapters map actual parameters and process quantities to process variables; actual evidence determines whether run data is complete.
 
 When every check passes, production changeover selects that version, and new runs are acquired, analyzed, and judged against it. Each run has fixed trace sources for equipment and run identity, product and recipe, material lot, process fields, and quality outcomes; tooling is linked when the scenario needs tooling traceability.
 
@@ -58,8 +58,8 @@ Menus may change, but these business facts must not be hidden, duplicated into p
 
 ```mermaid
 flowchart LR
-    Sources["controls / instruments / vision / inspection\nMES / QMS / LIMS when integrated"] --> Edge["Edge ConnectorHost\nprotocol mapping · run detection · acquisition replay"]
-    EdgeStore[("local SQLite\noutbox · logs · configuration cache")] --- Edge
+    Sources["site adapter\nequipment / business systems"] --> Edge["Edge ConnectorHost\nevent intake · persistence · replay"]
+    EdgeStore[("local SQLite\noutbox · logs")] --- Edge
     Engineer["Process engineer"] --> Web["Platform Web\nstatic engineering workbench"]
     Web <--> Api
     Edge -->|events and heartbeat| Api
@@ -93,15 +93,13 @@ This document fixes stable business boundaries. [Production architecture](produc
 
 ### Edge
 
-- Actively connect to controls, instruments, gateways, and approved business sources.
-- Map vendor addresses, protocol types, and raw units to stable business codes.
-- Detect run boundaries and report actual settings, process samples, events, and context provenance.
+- Authenticate and validate standard events submitted by site adapters.
 - Use a durable local queue for outages, platform restarts, and short backpressure.
-- Pull versioned acquisition configuration, validate it locally, and report applied state.
+- Report events and node health. Site adapters own equipment protocols, unit mapping, and run identification.
 
 Edge does not decide process causes, run product-level optimization, or become the formal record for recipe decisions and quality outcomes.
 
-Discrete run identity must remain traceable across ConnectorHost restarts. If the connector starts while equipment is already active and no recoverable shop-floor run identity exists, Edge marks the segment as incomplete instead of presenting it as a complete run from a normal start. A single event deterministically rejected by Platform is quarantined with a local audit record and must not block later valid events.
+Site adapters must keep run identity traceable and must not present a run without its start as complete. A single event deterministically rejected by Platform is quarantined with a local audit record and must not block later valid events.
 
 ### Platform
 

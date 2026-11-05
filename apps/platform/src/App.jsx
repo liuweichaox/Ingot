@@ -48,8 +48,6 @@ const ModelServiceConfigurationPage = lazyNamed(() => import("./pages/Administra
 const MetricsPage = lazyNamed(() => import("./pages/AdministrationPages"), "MetricsPage");
 const LogsPage = lazyNamed(() => import("./pages/AdministrationPages"), "LogsPage");
 const NotFoundPage = lazyNamed(() => import("./pages/AdministrationPages"), "NotFoundPage");
-const IngestionTasksPage = lazyNamed(() => import("./acquisition/IngestionTaskPage"), "IngestionTasksPage");
-const IngestionTaskPage = lazyNamed(() => import("./acquisition/IngestionTaskPage"), "IngestionTaskPage");
 const RecipeAdjustmentsPage = lazyNamed(() => import("./pages/RegistryPages"), "RecipeAdjustmentsPage");
 const ProcessMaterialsPage = lazyNamed(() => import("./pages/KnowledgePages"), "ProcessMaterialsPage");
 const MechanismKnowledgePage = lazyNamed(() => import("./pages/KnowledgePages"), "MechanismKnowledgePage");
@@ -83,7 +81,6 @@ const sections = [
   {
     id: "configuration", label: "配置与接入", icon: SignalIcon, path: "/configuration/process-data-models", groups: [
       { heading: "工艺与质量", items: [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]] },
-      { heading: "现场接入", items: [["/configuration/ingestion-tasks", "采集配置"]] },
       { heading: "生产资源", items: [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]] },
     ],
   },
@@ -131,7 +128,6 @@ const pageDetails = {
   "/recipe-adjustments": ["调整与验证", "基于真实运行和质量结果生成、决定并验证下一轮配方调整"],
   "/knowledge/process-materials": ["工艺资料", "管理经过复核、带来源和适用范围的工艺资料"],
   "/knowledge/mechanism": ["机理知识", "管理按站点与配方归属、可复核并带证据的机理知识"],
-  "/configuration/ingestion-tasks": ["采集配置", "选择现场节点和通信驱动，将来源字段映射到工艺变量"],
   "/configuration/inspection-definitions": ["检测定义", "定义要检测的特性、录入类型和判定规则"],
   "/configuration/quality-plans": ["质量方案", "配置产品适用的检测项目与复核规则"],
   "/configuration/component-types": ["组件分类", "维护可复用物理组件的业务分类；装配位置由工装结构规定"],
@@ -159,7 +155,6 @@ const searchAliases = {
   "/knowledge/mechanism": "工艺知识 机理知识 约束 冲突 证据 适用范围",
   "/configuration/process-analysis-plans": "分析规则 分析方案 过程分析 过程曲线 特征提取",
   "/configuration/inspection-definitions": "检测项目 检验特性 判定规则",
-  "/configuration/ingestion-tasks": "采集 PLC 点位映射",
   "/platform-metrics": "平台运行状态 系统状态",
   "/logs": "现场节点日志 节点运行日志 Edge 日志",
   "/model-service": "AI 大模型 API key DeepSeek OpenAI Qwen",
@@ -438,9 +433,7 @@ export default function App({ identity, logout }) {
     ? ["运行详情", "查看单次生产运行的过程、质量和数据完整性"]
     : location.pathname.startsWith("/edges/")
       ? ["节点诊断", "查看现场节点的连接、采集、上行和最近日志"]
-      : location.pathname.startsWith("/configuration/ingestion-tasks/")
-          ? ["采集配置", "选择现场节点和工艺变量，把设备点位映射上去并发布"]
-          : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
+      : pageDetails[location.pathname] ?? ["页面不存在", "地址可能已经变更，请返回可用功能页面"];
   useEffect(() => {
     if (previousPathname.current === location.pathname) return;
     previousPathname.current = location.pathname;
@@ -510,7 +503,7 @@ export default function App({ identity, logout }) {
         </main>
       ) : (
         <div className={cx("pt-16 transition-[margin] duration-200", sidebarCollapsed ? "lg:ml-18" : "lg:ml-64")}>
-          <main ref={routeMainRef} tabIndex={-1} aria-label={page[0]} className={cx("mx-auto w-full p-4 sm:p-6 lg:p-7", location.pathname.startsWith("/configuration/ingestion-tasks/") ? "max-w-none" : "max-w-[1600px]")}>
+          <main ref={routeMainRef} tabIndex={-1} aria-label={page[0]} className={"mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-7"}>
             <AppRoutes identity={identity} canConfigure={canConfigure} />
           </main>
         </div>
@@ -620,8 +613,6 @@ function AppRoutes({ identity, canConfigure }) {
         <Route path="/configuration/process-data-models" element={<ProcessDataModelsPage canWrite={canConfigure} />} />
         <Route path="/configuration/process-specifications" element={<ProcessSpecificationsPage canWrite={canConfigure} />} />
         <Route path="/recipe-adjustments" element={<RecipeAdjustmentsPage canWrite={canConfigure} />} />
-        <Route path="/configuration/ingestion-tasks" element={<IngestionTasksPage canWrite={canConfigure} />} />
-        <Route path="/configuration/ingestion-tasks/:taskId" element={<IngestionTaskPage canWrite={canConfigure} />} />
         <Route path="/edges" element={<EdgesPage />} />
         <Route path="/edges/:edgeId" element={<EdgeDetailPage />} />
         <Route path="/platform-metrics" element={<RequireRole identity={identity} roles={["platform.admin"]}><MetricsPage /></RequireRole>} />

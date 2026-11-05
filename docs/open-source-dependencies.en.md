@@ -7,7 +7,6 @@ Dependency selection is based on the engineering problem, license compatibility,
 | Capability | Main components | Typical licenses |
 |---|---|---|
 | .NET platform and services | .NET, ASP.NET Core, Npgsql, SQLitePCLRaw | MIT / PostgreSQL |
-| Field protocols and acquisition | MQTTnet, OPC Foundation UA .NET Standard, NModbus | MIT |
 | Numerical computation and optimization | Python, PyTorch, GPyTorch, BoTorch, NumPy, SciPy | PSF / BSD / Apache-2.0 |
 | Product frontend | React, Vite, Headless UI, Plotly.js, oidc-client-ts | MIT / Apache-2.0 |
 | Website and documentation | Next.js, remark, rehype, Tailwind CSS | MIT |

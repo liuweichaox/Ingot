@@ -1,10 +1,8 @@
-// 组合 Edge Connector Host 的采集、持久化、上报、健康与出站安全服务。
+// 组合 Edge 的外部事件接入、持久化、上报与健康服务。
 using System.Security.Cryptography;
 using System.Text;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.Application.Options;
-using Ingot.Edge.ConnectorHost.Acquisition;
-using Ingot.Edge.ConnectorHost.Acquisition.Probers;
 using Ingot.Edge.ConnectorHost.BackgroundServices;
 using Ingot.Edge.ConnectorHost.Configuration;
 using Ingot.Edge.ConnectorHost.HealthChecks;
@@ -28,26 +26,12 @@ var urls = builder.Configuration["Urls"]
     ?? throw new InvalidOperationException("Urls is required.");
 builder.WebHost.UseUrls(urls);
 
-builder.Services.Configure<AcquisitionSecurityOptions>(
-    builder.Configuration.GetSection("Acquisition:Security"));
-builder.Services.AddSingleton<AcquisitionSerialPortPolicy>();
-builder.Services.AddSingleton<AcquisitionSerialSessionCoordinator>();
-builder.Services.AddSingleton<IAcquisitionDnsResolver, SystemAcquisitionDnsResolver>();
-builder.Services.AddSingleton<AcquisitionHttpEgressPolicy>();
 builder.Services.AddHttpClient();
-builder.Services.AddHttpClient("device-http-acquisition")
-    .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler
-    {
-        AllowAutoRedirect = false,
-        UseProxy = false,
-        ConnectCallback = provider.GetRequiredService<AcquisitionHttpEgressPolicy>().ConnectAsync
-    });
 
 builder.Services.Configure<Ingot.Domain.Events.EventOptions>(builder.Configuration.GetSection("Events"));
 builder.Services.Configure<LogOptions>(builder.Configuration.GetSection("Logging"));
 
 builder.Services.Configure<EdgeReportingOptions>(builder.Configuration.GetSection("Edge"));
-builder.Services.Configure<HttpPollingAcquisitionOptions>(builder.Configuration.GetSection("Acquisition"));
 builder.Services.AddSingleton<EdgeIdentityService>();
 builder.Services.AddSingleton<IEdgeIdentityProvider>(services => services.GetRequiredService<EdgeIdentityService>());
 builder.Services.AddSingleton<IPlatformReportingClient, PlatformReportingClient>();
@@ -60,52 +44,10 @@ builder.Services.AddSingleton<IEventLog, SqliteEventLog>();
 builder.Services.AddSingleton<IEventPersistenceHealth, EventPersistenceHealth>();
 builder.Services.AddSingleton<IEventSink, EventSink>();
 builder.Services.AddSingleton<IEventShipper, HttpEventShipper>();
-builder.Services.AddSingleton<AcquisitionStatus>();
-builder.Services.AddSingleton<IAcquisitionDeploymentCache, JsonAcquisitionDeploymentCache>();
-builder.Services.AddSingleton<IAcquisitionSecretResolver, EnvironmentAcquisitionSecretResolver>();
-builder.Services.AddSingleton<RegisterAcquisitionSessionPool>();
-builder.Services.AddSingleton<ModbusSerialSessionPool>();
-builder.Services.AddSingleton<BacnetMstpSessionPool>();
-builder.Services.AddSingleton<IProtocolProber, HttpProtocolProber>();
-builder.Services.AddSingleton<MtConnectTransport>();
-builder.Services.AddSingleton<IProtocolProber, MtConnectProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, MqttProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, OpcUaProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, ModbusTcpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, ModbusRtuProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, ModbusAsciiProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, MelsecA1EProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, MelsecMc3EProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, SiemensS7ProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, EtherNetIpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, OmronFinsTcpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, OmronFinsUdpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, BacnetIpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, BacnetMstpProtocolProber>();
-builder.Services.AddSingleton<IProtocolProber, SnmpProtocolProber>();
-builder.Services.AddSingleton<AcquisitionProbeService>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, MqttAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, MtConnectAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, OpcUaAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusTcpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusRtuAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, ModbusAsciiAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, MelsecA1EAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, MelsecMc3EAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, SiemensS7AcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, EtherNetIpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, OmronFinsTcpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, OmronFinsUdpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, BacnetIpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, BacnetMstpAcquisitionRunner>();
-builder.Services.AddSingleton<IAcquisitionProtocolRunner, SnmpAcquisitionRunner>();
-
 builder.Services.AddSingleton<ILogViewService, SqliteLogViewService>();
 
 builder.Services.AddHostedService<EdgePlatformReporterHostedService>();
-builder.Services.AddHostedService<AcquisitionProbeTaskHostedService>();
 builder.Services.AddHostedService<EventShipperHostedService>();
-builder.Services.AddHostedService<HttpPollingAcquisitionHostedService>();
 
 builder.Services.AddControllers();
 
@@ -149,7 +91,6 @@ app.Use(async (context, next) =>
     var path = context.Request.Path;
     var protectedPath =
         path.StartsWithSegments("/api/logs") ||
-        path.StartsWithSegments("/api/v1/acquisition") ||
         path.StartsWithSegments("/api/v1/events") ||
         path.StartsWithSegments("/api/v1/process-executions") ||
         path.StartsWithSegments("/api/v1/context") ||
@@ -196,7 +137,6 @@ app.MapGet("/", () => Results.Ok(new
         logs = "/api/logs",
         logLevels = "/api/logs/levels",
         connectorEvents = "/api/v1/connector-events",
-        acquisitionStatus = "/api/v1/acquisition/status",
         events = "/api/v1/events",
         eventStream = "/api/v1/events/stream",
         execution = "/api/v1/process-executions/{executionId}",

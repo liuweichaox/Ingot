@@ -27,7 +27,7 @@ async function openSearch(roles = ["process.engineer"]) {
   }))));
   render(<MemoryRouter initialEntries={["/workbench"]}><App identity={{ roles }} logout={vi.fn()} /><CurrentPath /></MemoryRouter>);
   fireEvent.click(screen.getByRole("button", { name: "打开功能搜索" }));
-  const input = await screen.findByPlaceholderText("例如：采集配置、配方版本、运行对比、检验任务");
+  const input = await screen.findByPlaceholderText("例如：现场节点、配方版本、运行对比、检验任务");
   await waitFor(() => expect(input).toHaveFocus());
   return input;
 }
@@ -51,7 +51,6 @@ describe("功能搜索", () => {
     ]);
     expect(sections.find(section => section.id === "configuration")?.groups.map(group => [group.heading, group.items])).toEqual([
       ["工艺与质量", [["/configuration/process-data-models", "工艺变量"], ["/configuration/process-analysis-plans", "分析规则"], ["/configuration/inspection-definitions", "检测定义"], ["/configuration/quality-plans", "质量方案"]]],
-      ["现场接入", [["/configuration/ingestion-tasks", "采集配置"]]],
       ["生产资源", [["/configuration/component-types", "组件分类"], ["/configuration/components", "组件台账"], ["/configuration/tooling-types", "工装结构"], ["/configuration/tooling-assemblies", "工装总成"]]],
     ]);
     expect(sections.flatMap(section => section.groups.flatMap(group => group.items.filter(([path]) => path === "/edges")))
@@ -86,8 +85,6 @@ describe("功能搜索", () => {
     await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/edges?siteId=SITE-A"));
     expect(screen.getByRole("main", { name: "现场节点" })).toHaveFocus();
     expect(await screen.findByRole("heading", { name: "现场节点" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("link", { name: "配置采集" }))
-      .toHaveAttribute("href", "/configuration/ingestion-tasks?siteId=SITE-A"));
     expect(screen.getByRole("link", { name: "现场节点" })).toHaveAttribute("aria-current", "page");
 
     fireEvent.click(await screen.findByRole("link", { name: "查看诊断" }));
@@ -182,9 +179,9 @@ describe("功能搜索", () => {
   it("筛选后重置选项，空结果不会跳转，重新打开清除查询", async () => {
     const input = await openSearch();
     fireEvent.keyDown(input, { key: "ArrowUp" });
-    fireEvent.change(input, { target: { value: "采集配置" } });
+    fireEvent.change(input, { target: { value: "工艺变量" } });
     const [firstOption] = screen.getAllByRole("option");
-    expect(firstOption).toHaveTextContent("采集配置");
+    expect(firstOption).toHaveTextContent("工艺变量");
     expect(firstOption).toHaveAttribute("aria-selected", "true");
     fireEvent.change(input, { target: { value: "不存在的功能xyz" } });
     expect(screen.queryByRole("option")).toBeNull();
@@ -200,14 +197,14 @@ describe("功能搜索", () => {
 
   it("中文组合输入期间 Enter 不跳转，确认完成后可正常打开", async () => {
     const input = await openSearch();
-    fireEvent.change(input, { target: { value: "采集配置" } });
+    fireEvent.change(input, { target: { value: "工艺变量" } });
     fireEvent.keyDown(input, { key: "Enter", isComposing: true });
     fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("当前位置")).toHaveTextContent("/workbench");
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/ingestion-tasks"));
+    await waitFor(() => expect(screen.getByLabelText("当前位置")).toHaveTextContent("/configuration/process-data-models"));
   });
 
   it("普通工程师不能搜索管理员入口，管理员可点击打开", async () => {

@@ -26,7 +26,7 @@ The bundled Compose file is a single-API reference topology, not an HA claim. Ag
 
 ### Edge partitioning
 
-Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume, configuration cache, and lifecycle. `SiteId` represents a factory or independent production site and is the data, authorization, and failure-isolation boundary; one factory may have multiple Edges, while each Edge belongs to one factory. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another factory.
+Every Edge ConnectorHost has an explicit `SiteId` assignment plus its own `EdgeId`, process or container, data volume and lifecycle. `SiteId` represents a factory or independent production site and is the data, authorization, and failure-isolation boundary; one factory may have multiple Edges, while each Edge belongs to one factory. Platform binds the Edge token, `EdgeId`, and `SiteId`, so even an Edge holding the correct token cannot write into another factory.
 
 Production reads also fail closed on `SiteId`. The OIDC issuer must emit one or more `ingot:site` claims for non-administrator identities; platform administrators assign sites to local accounts in user management. A `platform.admin` may run cross-site administrative lists, but execution detail, analysis, and curve reads still require an explicit `siteId` to avoid resolving a same-named execution in another production cell.
 
@@ -159,24 +159,11 @@ For an independent field connector:
 docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
 
-Before connecting real equipment, configure the target Edge, connection, and mappings in Platform. Example addresses, passwords, and process ranges are not production defaults.
+External adapters connect equipment and submit events to Edge. Publish the process data model and check site and node identity, event fields, and credentials before validating real data in the target environment. See [Data integration](data-connection.en.md).
 
-## Acquisition configuration rules
+## External adapter operating rules
 
-Platform publishes versioned acquisition configuration by `EdgeId`. Edge pulls and validates it locally and stores the last successful version in `Data/acquisition-deployments.json`.
-
-- During a Platform outage, Edge continues with the last successful version.
-- A version that fails connection, point, or conversion validation never replaces the old version.
-- An explicit zero-configuration publication stops the corresponding acquisition and reports state.
-- Production never silently enables an unversioned local fallback.
-- HTTP/MQTT may read a sample payload; OPC UA may browse nodes.
-- Modbus TCP, Modbus RTU/ASCII, MELSEC 1E, MELSEC 3E/SLMP, Siemens S7, EtherNet/IP, and Omron FINS/TCP/UDP read only explicitly configured addresses or tags and never blind-scan.
-- HTTP, MQTT, OPC UA, MTConnect, Modbus TCP, MELSEC 1E, MELSEC 3E/SLMP, Siemens S7, EtherNet/IP, and Omron FINS/TCP/UDP reject every unregistered network target by default. Device hosts require an explicit `Acquisition:Security:AllowedHttpHosts` entry for HTTP/MTConnect or `AllowedNetworkHosts` entry for other protocols, and connections use the validated DNS result as the pinned address. FINS/UDP applies the same host allowlist and DNS-pinning policy. Loopback, link-local, unspecified, and multicast addresses remain forbidden even when allowlisted.
-- Modbus RTU/ASCII and BACnet MS/TP reject every serial port by default. List each exact permitted port name in `Acquisition:Security:AllowedSerialPorts`, such as `COM3` or `/dev/ttyUSB0`. A Linux container also needs a local Compose override that maps the device and grants the ConnectorHost process access; do not hard-code a potentially absent serial device in the generic Compose file. Edge images publish `linux-x64` or `linux-arm64` serial runtime assets for the target architecture; custom publishing must also specify the matching Runtime Identifier.
-- Every target that receives an Edge secret, username/password, or client certificate must be explicitly host-allowlisted; merely resolving to a private address is not enough to receive credentials.
-- Real-value validation runs before and during publication.
-
-Apply configuration at a process-safe boundary. For cyclic equipment, prefer switching between process executions and retain the old version on failure.
+Adapters independently manage equipment connections, triggers, and conversion; Edge does not deploy equipment protocol configuration. Operators must configure equipment network access, failure recovery, and necessary safety controls in the adapter. Edge receives, persists, and delivers events; an ingestion acknowledgment and Platform admission are separate stages.
 
 ## Health and readiness
 
@@ -196,9 +183,8 @@ Platform starts without Optimizer. An Optimizer outage pauses new numerical reco
 
 Monitor the capabilities actually enabled; Edge, equipment, and acquisition metrics apply to field-connected deployments:
 
-- Edge heartbeat, desired/applied configuration versions, and errors;
-- freshness evaluation duration, edges and tasks evaluated per pass, state transitions, failures, and last-success time for the Worker;
-- connection state, sample time, and backlog per equipment;
+- Edge heartbeat, delivery backlog, and errors;
+- adapter-reported connection state, sample time, and backlog per equipment;
 - event duplicates, disorder, maximum gaps, and replay delay;
 - run completeness and actual-setting, context, and inspection linkage coverage;
 - PostgreSQL connectivity, disk, migration, and slow transactions;
@@ -252,7 +238,6 @@ Back up at least:
 - process-knowledge files;
 - the Platform Data Protection key volume and database-matched recovery instructions;
 - Edge local event databases until upload is confirmed;
-- the last successful Edge acquisition configuration;
 - required certificates, secret references, and recovery instructions.
 
 A recovery exercise verifies more than service startup:
@@ -288,11 +273,11 @@ A recovery exercise verifies more than service startup:
 
 ## Production acceptance
 
-Before a basic R&D deployment goes live, validate authorization; business-record, file, and key recovery; Platform/Worker outages; and degradation of enabled dependencies. Record acceptable downtime and RPO/RTO. Field-connected deployments additionally exercise Edge restart, network loss, bad configuration publication, and backlog replay, proving that acquisition and formal records degrade or recover as designed.
+Before a basic R&D deployment goes live, validate authorization; business-record, file, and key recovery; Platform/Worker outages; and degradation of enabled dependencies. Record acceptable downtime and RPO/RTO. Field-connected deployments additionally exercise Edge restart, network loss, adapter error handling, and backlog replay, proving that acquisition and formal records degrade or recover as designed.
 
 `scripts/verify-production-acceptance.sh` is the existing field-production acceptance gate. It requires database HA, PITR, Edge replay, capacity, and continuous-observation evidence. It is not a startup check for a single-team R&D deployment that permits maintenance downtime, and it does not authorize equipment action. Claims to this field-production level must satisfy all existing script requirements.
 
-The recipe-version launch check verifies whether process variables, recipe versions, acquisition setup, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether Platform API and Edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
+The recipe-version launch check verifies whether process variables, recipe versions, data integration, process analysis, quality plans, and production changeover are ready. The platform status page shows only whether Platform API and Edge nodes are healthy. None of these pages completes production admission. Backup recovery, failure, capacity, alert-delivery, and continuous-observation evidence remain mandatory. After those exercises, run `scripts/verify-production-acceptance.sh` on the deployment host to record the acceptance result.
 
 The RPO, RTO, offline window, backlog age, peak load, and observation period in `.env.example` are deployment targets, not acceptance evidence. After site exercises, load those targets and provide measured values plus stable evidence identifiers:
 

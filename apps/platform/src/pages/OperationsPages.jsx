@@ -119,7 +119,7 @@ export function WorkbenchPage({ identity }) {
   const platformAction = {
       title: `${onlineEdges}/${currentState.edges.length} 个现场节点在线`,
       description: currentState.edges.length === 0
-        ? "尚未登记现场节点，可从采集配置开始接入。"
+        ? "尚未登记现场节点，请检查外部数据接入。"
         : onlineEdges === currentState.edges.length
           ? "现场节点心跳均在线；请在节点诊断中确认采样和数据上行。"
           : "检查离线节点或尚未接入的设备。",
@@ -218,7 +218,6 @@ export function WorkbenchPage({ identity }) {
               <ol className="grid divide-y divide-evidence-100 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
                 {[
                   ["/configuration/process-data-models", "发布工艺变量和配方版本"],
-                  ["/configuration/ingestion-tasks", "配置采集"],
                   ["/configuration/process-analysis-plans", "发布分析规则"],
                   ["/configuration/quality-plans", "发布质量方案"],
                   ["/production/changeover", "完成生产切换"],
@@ -340,14 +339,10 @@ export function ProcessExecutionsPage() {
   const attentionRows = attentionOnly ? extractRows(data).filter(processExecutionNeedsAttention) : [];
   const rows = attentionOnly ? attentionRows.slice((page - 1) * pageSize, page * pageSize) : extractRows(data);
   const total = attentionOnly ? attentionRows.length : data?.total ?? rows.length;
-  const showingEmptyState = Boolean(data) && rows.length === 0;
-  const ingestionResponse = useApi("/api/v1/ingestion-tasks", { enabled: showingEmptyState && !attentionOnly });
   const hasAppliedFilters = appliedFilters.status !== "all" || Object.entries(appliedFilters).some(([key, value]) => key !== "status" && value.trim());
   const edgeRows = extractRows(edgeResponse.data).filter(edge => !siteId || edge.siteId === siteId);
   const onlineEdges = countOnlineEdges(edgeRows);
-  const publishedIngestionTasks = extractRows(ingestionResponse.data).filter(item => item.status === "published").length;
   const edgeSummary = edgeResponse.error ? "检查失败" : edgeResponse.loading ? "检查中" : `${onlineEdges}/${edgeRows.length} 在线`;
-  const ingestionSummary = ingestionResponse.error ? "检查失败" : ingestionResponse.loading ? "检查中" : publishedIngestionTasks;
   useEffect(() => {
     if (priorSiteId.current === siteId) return;
     priorSiteId.current = siteId;
@@ -419,17 +414,15 @@ export function ProcessExecutionsPage() {
           ) : (
             <EmptyState
               title="还没有形成生产运行"
-              description="先确认现场节点在线、采集任务已发布，并且设备数据包含明确的运行开始与结束边界。"
+              description="先确认现场节点在线，外部数据包含明确的运行开始与结束边界。"
               details={(
                 <dl className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
                   <div className="flex items-center justify-between gap-4"><dt>现场节点</dt><dd className={`font-semibold ${edgeResponse.error ? "text-rose-700" : "text-slate-800"}`}>{edgeSummary}</dd></div>
-                  <div className="flex items-center justify-between gap-4"><dt>已发布采集任务</dt><dd className={`font-semibold ${ingestionResponse.error ? "text-rose-700" : "text-slate-800"}`}>{ingestionSummary}</dd></div>
                 </dl>
               )}
               actions={(
                 <>
                   <Link className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" to={`/edges${siteQuery}`}>查看现场节点</Link>
-                  <LinkButton to={`/configuration/ingestion-tasks${siteQuery}`}>配置采集</LinkButton>
                 </>
               )}
             />

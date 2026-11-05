@@ -157,10 +157,8 @@ describe("生产界面状态反馈", () => {
     render(<MemoryRouter><ProcessSpecificationsPage /></MemoryRouter>);
 
     const launchButton = await screen.findByRole("button", { name: "查看 spec-lens-a V1 的上线检查" }, { timeout: 3000 });
-    expect(launchButton).toHaveTextContent("缺 3 项");
+    expect(launchButton).toHaveTextContent("缺 2 项");
     fireEvent.click(screen.getByRole("button", { name: "查看 spec-lens-a V1 的上线检查" }));
-    expect(await screen.findByText("采集配置 press-01 还没有发布。")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "配置采集" })).toHaveAttribute("href", "/configuration/ingestion-tasks");
     expect(screen.getByRole("link", { name: "配置分析规则" })).toHaveAttribute("href", "/configuration/process-analysis-plans");
     expect(screen.getByRole("link", { name: "配置质量方案" })).toHaveAttribute("href", "/configuration/quality-plans");
     expect(screen.queryByRole("link", { name: "去做生产切换" })).toBeNull();

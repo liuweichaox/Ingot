@@ -27,7 +27,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 The repository currently covers:
 
 - recipe-version and process-variable management; run and quality records constitute experiment facts;
-- connecting field sources, standardizing fields and units, and resuming delivery after a network outage;
+- accepting standard events from site adapters and resuming Edge-to-platform delivery after an outage; site adapters acquire data and map fields and units;
 - linking equipment, product, recipe version, material, process curves, and quality outcomes to one run, with tooling also linked when a scenario needs its traceability;
 - checking completeness, actual execution values, units, sources, and versions before analysis;
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;

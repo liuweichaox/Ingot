@@ -1,11 +1,10 @@
+// 定期向平台报告节点身份和上报队列状态。
 using Ingot.Edge.Application.Abstractions;
-using Ingot.Edge.ConnectorHost.Acquisition;
 
 namespace Ingot.Edge.ConnectorHost.BackgroundServices;
 
 public sealed class EdgePlatformReporterHostedService(
     IPlatformReportingClient client,
-    AcquisitionStatus acquisitionStatus,
     EdgeDeliveryStatus deliveryStatus,
     IConfiguration configuration,
     ILogger<EdgePlatformReporterHostedService> logger) : BackgroundService
@@ -27,7 +26,7 @@ public sealed class EdgePlatformReporterHostedService(
                await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
             await client.SendHeartbeatAsync(
-                acquisitionStatus.Get(),
+                null,
                 deliveryStatus.Get(),
                 stoppingToken).ConfigureAwait(false);
         }

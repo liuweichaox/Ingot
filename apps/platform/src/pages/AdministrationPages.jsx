@@ -419,9 +419,7 @@ export function MetricsPage() {
   const metricResponse = useApi("/api/metrics-data?names=event_ingest_total,process_start_time_seconds,process_working_set_bytes,system_runtime_dotnet_thread_pool_queue_length", { interval: 30000 });
   const executionResponse = useApi(siteReady ? `/api/v1/process-executions?limit=100&${siteQuery}` : "", { enabled: siteReady, interval: 10000 });
   const qualityResponse = useApi(siteReady ? `/api/v1/inspection-tasks/summary?${siteQuery}` : "", { enabled: siteReady, interval: 10000 });
-  const profileResponse = useApi("/api/v1/ingestion-tasks", { interval: 10000 });
   const rows = extractRows(edgeResponse.data);
-  const siteEdgeIds = new Set(rows.filter(row => row.siteId === siteId).map(row => row.edgeId));
   const online = countOnlineEdges(rows);
   const offline = rows.filter(row => edgeStatus(row) === "offline").length;
   const unknown = Math.max(0, rows.length - online - offline);
@@ -430,25 +428,23 @@ export function MetricsPage() {
   const startedAtSeconds = metricTotal(metrics, "process_start_time_seconds");
   const memory = metricTotal(metrics, "process_working_set_bytes");
   const threadQueue = metricTotal(metrics, "system_runtime_dotnet_thread_pool_queue_length");
-  const publishedProfiles = siteId ? extractRows(profileResponse.data).filter(row => row.status === "published" && siteEdgeIds.has(row.edgeId)).length : null;
   const actionRequired = siteId ? qualityResponse.data?.actionRequired ?? 0 : null;
-  const error = siteScope.error || metricResponse.error || executionResponse.error || qualityResponse.error || profileResponse.error;
+  const error = siteScope.error || metricResponse.error || executionResponse.error || qualityResponse.error;
   const healthy = rows.length > 0 && offline === 0 && unknown === 0 && threadQueue === 0;
   return (
     <Page title="系统状态">
       <div className="mb-5 max-w-md"><SiteScopeField siteId={siteId} siteChoices={siteChoices} onChange={siteScope.selectSite} loading={siteScope.loading} /></div>
       <RequestError
         error={error}
-        onRetry={() => siteScope.error ? siteScope.reload() : Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload(), profileResponse.reload()])}
+        onRetry={() => siteScope.error ? siteScope.reload() : Promise.all([edgeResponse.reload(), metricResponse.reload(), executionResponse.reload(), qualityResponse.reload()])}
       />
-      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后查看该站点的运行、质量任务和采集任务汇总。" : "当前账号没有可访问站点。"}</Alert>}
+      {!siteId && !siteScope.loading && <Alert tone="warning">{siteScope.invalidRequestedSite ? "当前账号无权访问 URL 中指定的站点。" : siteChoices.length ? "请选择站点后查看该站点的运行与质量任务汇总。" : "当前账号没有可访问站点。"}</Alert>}
       <Alert tone={healthy ? "success" : "warning"} title={healthy ? "平台运行正常" : "平台存在需要关注的项目"}>
         {healthy ? "已发现的现场节点均在线，当前后台队列为空。" : rows.length === 0 ? "尚未发现现场节点，不能判断现场运行状态。" : `离线节点 ${offline} 个，待确认节点 ${unknown} 个，后台排队 ${formatInteger(threadQueue)} 项。`}
       </Alert>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="已保存运行" value={siteId ? formatInteger(executionResponse.data?.total) : "—"} hint="所选站点" />
         <Metric label="待处理质量任务" value={siteId ? formatInteger(actionRequired) : "—"} hint="所选站点的录入与复核" />
-        <Metric label="已发布采集任务" value={siteId ? formatInteger(publishedProfiles) : "—"} hint="所选站点的现场节点" />
         <Metric label="已摄入事件" value={formatInteger(ingested)} hint="本次平台运行累计" />
       </div>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -457,7 +453,7 @@ export function MetricsPage() {
         <Metric label="后台排队" value={formatInteger(threadQueue)} />
         <Metric label="现场节点在线" value={`${online}/${rows.length}`} hint={`${offline} 个离线`} />
       </div>
-      <Card title="现场节点" description="点击诊断可查看采集任务、上行积压和最近日志。">
+      <Card title="现场节点" description="点击诊断可查看节点状态和最近日志。">
         <DataTable rows={rows} keyField="edgeId" columns={[
           { key: "edgeId", label: "节点" },
           { key: "_status", label: "状态", render: (_value, row) => <StatusBadge value={edgeStatus(row)} /> },

@@ -316,12 +316,6 @@ services:
       Edge__PlatformApiBaseUrl: http://platform-api:8000
       Edge__PublicBaseUrl: http://connector-host:8001
       Edge__EventIngestToken: ${INGOT_EDGE_TOKEN:-}
-      Acquisition__Enabled: ${INGOT_ACQUISITION_ENABLED:-true}
-      Acquisition__AllowLocalFallbackWhenPlatformAvailable: "false"
-      Acquisition__DeploymentCachePath: /app/Data/acquisition-deployments.json
-      Acquisition__StartupHealthTimeoutMs: "30000"
-      # The demo simulator is an explicitly allow-listed private network target.
-      Acquisition__Security__AllowedNetworkHosts__0: semiconductor-etch-simulator
     depends_on:
       platform-api:
         condition: service_healthy
@@ -333,27 +327,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  semiconductor-etch-simulator:
-    profiles:
-      - semiconductor-demo
-    build:
-      context: tools/semiconductor-etch-simulator
-      dockerfile: Dockerfile
-    container_name: ingot-semiconductor-etch-simulator
-    ports:
-      - "127.0.0.1:1502:1502"
-      - "127.0.0.1:9100:9100"
-    environment:
-      DEVICE_MODBUS_PORT: 1502
-      DEVICE_HEALTH_PORT: 9100
-      DEVICE_IDLE_SECONDS: ${INGOT_DEMO_DEVICE_IDLE_SECONDS:-10}
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9100/health', timeout=2)"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 2s
-    restart: unless-stopped
 
 volumes:
   ingot-postgres-data:

@@ -49,17 +49,9 @@ describe("配方版本上线检查", () => {
     expect(checks().every(item => item.ready)).toBe(true);
   });
 
-  it("指出采集配置缺少的控制参数和过程量", () => {
-    const acquisition = byKey(checks({ tasks: [{ ...task, valueMappings: [], processSpecification: { parameterMappings: [] } }] }), "acquisition");
-    expect(acquisition.ready).toBe(false);
-    expect(acquisition.detail).toContain("保压温度设定");
-    expect(acquisition.detail).toContain("模具温度");
-    expect(acquisition.detail).not.toContain("stage");
-  });
-
-  it("只有草稿采集配置或引用其他工艺变量版本时不通过", () => {
-    expect(byKey(checks({ tasks: [{ ...task, status: "draft" }] }), "acquisition").detail).toContain("还没有发布");
-    expect(byKey(checks({ tasks: [{ ...task, dataModelVersion: 2 }] }), "acquisition").detail).toContain("还没有引用");
+  it("不依赖采集任务配置", () => {
+    expect(checks({ tasks: [] }).every(item => item.ready)).toBe(true);
+    expect(byKey(checks(), "acquisition")).toBeUndefined();
   });
 
   it("过程分析的上下文和配方冲突时不通过", () => {

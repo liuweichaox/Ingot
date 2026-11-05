@@ -74,24 +74,6 @@ const inspectionInputTypeLabels = {
   boolean: "是/否",
 };
 
-export const acquisitionProtocolLabels = {
-  "http-polling": "HTTP 接口",
-  mqtt: "MQTT",
-  "opc-ua": "OPC UA",
-  "modbus-tcp": "Modbus TCP",
-  "modbus-rtu": "Modbus RTU",
-  "modbus-ascii": "Modbus ASCII",
-  "melsec-a1e": "三菱 MC 1E",
-  "melsec-mc-3e": "Mitsubishi MC 3E/SLMP",
-  "siemens-s7": "Siemens S7",
-  "ethernet-ip": "Rockwell EtherNet/IP",
-  "omron-fins-tcp": "Omron FINS/TCP",
-  "omron-fins-udp": "Omron FINS/UDP",
-  mtconnect: "MTConnect",
-  "bacnet-ip": "BACnet/IP",
-  "bacnet-mstp": "BACnet MS/TP",
-};
-
 const objectTypeLabels = {
   equipment: "生产设备",
   workpiece: "工件",

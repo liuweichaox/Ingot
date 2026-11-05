@@ -65,18 +65,16 @@ function RegistryPage({ definition, canWrite = true, focus = "registry" }) {
     isProcessSpecification ? "/api/v1/process-data-models" : "",
     { enabled: isProcessSpecification },
   );
-  const ingestionResponse = useApi(isProcessSpecification ? "/api/v1/ingestion-tasks" : "", { enabled: isProcessSpecification });
   const analysisPlansResponse = useApi(isProcessSpecification ? "/api/v1/process-analysis-plans" : "", { enabled: isProcessSpecification });
   const qualityPlansResponse = useApi(isProcessSpecification ? "/api/v1/inspection-plans" : "", { enabled: isProcessSpecification });
   const definitionsResponse = useApi(isProcessSpecification ? "/api/v1/inspection-definitions" : "", { enabled: isProcessSpecification });
-  const launchResponses = [processModelsResponse, ingestionResponse, analysisPlansResponse, qualityPlansResponse, definitionsResponse];
+  const launchResponses = [processModelsResponse, analysisPlansResponse, qualityPlansResponse, definitionsResponse];
   const launchLoading = launchResponses.some(response => response.loading && !response.data);
   const launchError = launchResponses.find(response => response.error)?.error || "";
   const [launchSource, setLaunchSource] = useState(null);
   const launchChecksFor = specification => recipeLaunchChecks({
     specification,
     models: extractRows(processModelsResponse.data),
-    tasks: extractRows(ingestionResponse.data),
     analysisPlans: extractRows(analysisPlansResponse.data),
     qualityPlans: extractRows(qualityPlansResponse.data),
     definitions: extractRows(definitionsResponse.data),

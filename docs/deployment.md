@@ -26,7 +26,7 @@ Platform API 负责请求、Chat 消息事务和业务事务，Platform Worker �
 
 ### Edge 划分原则
 
-每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷、配置缓存和生命周期。`SiteId` 表示一个工厂或独立生产现场，是数据、权限和故障隔离边界；一个工厂可以有多个 Edge，单个 Edge 只归属一个工厂。Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个工厂写入数据。
+每个 Edge ConnectorHost 拥有明确的 `SiteId` 归属，以及独立 `EdgeId`、进程或容器、数据卷和生命周期。`SiteId` 表示一个工厂或独立生产现场，是数据、权限和故障隔离边界；一个工厂可以有多个 Edge，单个 Edge 只归属一个工厂。Platform 会把 Edge token、`EdgeId` 与 `SiteId` 绑定，持有正确 token 的 Edge 也不能向另一个工厂写入数据。
 
 生产读路径同样按 `SiteId` 失败关闭。OIDC 颁发者必须为非管理员身份签发一个或多个 `ingot:site` 声明；本地账户由平台管理员在用户管理中分配站点。`platform.admin` 可进行跨站点管理查询，但按运行号读取详情、分析和曲线仍要求显式给出 `siteId`，避免把同名运行误归到其他生产单元。
 
@@ -162,24 +162,11 @@ Platform、Optimizer 和数据库不应直接暴露给非必要网段；反向�
 docker compose -f docker-compose.app.yml --profile connector-host up -d --build
 ```
 
-连接真实设备前，先在 Platform 中配置目标 Edge、连接信息和数据映射。示例地址、密码和工艺范围不能直接用于生产。
+外部适配器负责连接设备并将事件提交到 Edge。先发布工艺数据模型，核对工厂和节点身份、事件字段及凭据，再在目标环境验证实际数据。详见[数据接入](data-connection.md)。
 
-## 采集配置运行规则
+## 外部适配器运行规则
 
-Platform 按 `EdgeId` 发布版本化采集配置。Edge 主动拉取、在本地验证，并把最后成功版本保存到 `Data/acquisition-deployments.json`。
-
-- Platform 暂时不可用时，Edge 继续使用最后成功版本；
-- 新版本连接、点位或换算验证失败时，不替换旧版本；
-- Platform 明确发布零配置时，Edge 停止对应采集并报告状态；
-- 生产环境禁止静默启用未版本化本地 fallback；
-- HTTP/MQTT 可以读取示例报文，OPC UA 可以浏览节点；
-- Modbus TCP、Modbus RTU/ASCII、MELSEC 1E、MELSEC 3E/SLMP、Siemens S7、EtherNet/IP 和 Omron FINS/TCP/UDP 只读取用户明确配置的地址或标签，不进行盲扫；
-- HTTP、MQTT、OPC UA、MTConnect、Modbus TCP、MELSEC 1E、MELSEC 3E/SLMP、Siemens S7、EtherNet/IP 和 Omron FINS/TCP/UDP 默认拒绝所有未登记网络目标；设备主机必须显式加入 `Acquisition:Security:AllowedHttpHosts`（HTTP/MTConnect）或 `AllowedNetworkHosts`，并固定使用校验过的 DNS 解析结果；FINS/UDP 也按目标主机执行同一白名单和 DNS 固定策略；回环、链路本地、未指定和组播地址即使列入白名单也不会放行；
-- Modbus RTU/ASCII 与 BACnet MS/TP 默认拒绝全部串口；必须在 `Acquisition:Security:AllowedSerialPorts` 中逐个精确列出允许的串口名，例如 `COM3` 或 `/dev/ttyUSB0`。运行于 Linux 容器时，还要在本地 Compose 覆盖中映射设备并授予 ConnectorHost 进程访问权限；不要把不存在的串口设备硬编码进通用 Compose 文件；Edge 镜像会按目标架构发布 `linux-x64` 或 `linux-arm64` 串口运行文件；自定义发布时也要指定与目标匹配的 Runtime Identifier。
-- 任何会发送 Edge 密钥、用户名密码或客户端证书的目标都必须显式加入上述主机白名单，只有“位于私网”不足以获得凭据；
-- 发布前和发布请求中都执行真实值校验。
-
-配置应用应在工艺允许的安全边界进行。离散设备优先在两次过程执行之间切换，失败时继续运行旧版本。
+适配器独立管理设备连接、触发与数据转换；Edge 不下发设备协议配置。部署者应在适配器侧配置设备网络访问、故障恢复和必要的安全控制。Edge 负责接收事件、持久化和上报；接收确认与 Platform 准入是不同阶段。
 
 ## 健康与就绪
 
@@ -199,9 +186,8 @@ Platform 不依赖 Optimizer 才能启动。Optimizer 故障期间继续采集�
 
 按实际启用的能力监控；Edge、设备与采集指标适用于已接入现场的部署：
 
-- Edge 最后心跳、配置期望/应用版本和错误；
-- Worker 采集静默评估耗时分布、每轮处理的节点/任务数、状态转移、失败次数和最近成功时间；
-- 每个设备连接状态、采样时间和积压；
+- Edge 最后心跳、上报积压和错误；
+- 由适配器提供的设备连接状态、采样时间和积压；
 - 事件重复、乱序、最大间隙和补传延迟；
 - 运行完整、实际参数、上下文和检验关联覆盖；
 - PostgreSQL 连接、磁盘、迁移和慢事务；
@@ -255,7 +241,6 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 - 工艺知识文件；
 - Platform Data Protection 密钥卷，以及与数据库配套的恢复说明；
 - Edge 本地事件数据库，直到确认全部上送；
-- Edge 最后成功采集配置缓存；
 - 生产所需的证书、密钥引用和恢复说明。
 
 恢复演练不仅检查服务启动，还要验证：
@@ -291,11 +276,11 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 
 ## 生产验收
 
-基础研发部署上线前应验证：身份权限；业务记录、文件与密钥恢复；Platform/Worker 中断；已启用依赖的降级。同时记录可接受停机窗口和 RPO/RTO。接入现场后，还需完成 Edge 重启、网络断开、错误配置发布与积压补传演练，证明采集和正式业务记录按设计降级或恢复。
+基础研发部署上线前应验证：身份权限；业务记录、文件与密钥恢复；Platform/Worker 中断；已启用依赖的降级。同时记录可接受停机窗口和 RPO/RTO。接入现场后，还需完成 Edge 重启、网络断开、适配器错误处理与积压补传演练，证明采集和正式业务记录按设计降级或恢复。
 
 `scripts/verify-production-acceptance.sh` 是现有现场生产验收门禁，要求数据库 HA、PITR、Edge 补传、容量及连续观察证据。它不是允许维护停机的单团队研发部署启动检查，也不包含设备动作授权。声称达到该现场生产等级时必须满足脚本原有全部要求。
 
-配方版本的上线检查会核对工艺变量、配方版本、采集配置、过程分析、质量方案和生产切换是否就绪；平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
+配方版本的上线检查会核对工艺变量、配方版本、接入数据、过程分析、质量方案和生产切换是否就绪；平台状态页只显示中心服务和现场节点是否正常。这些页面都不等于生产准入；备份恢复、故障、容量、监控告警和连续观察证据仍然必须独立完成。完成这些演练后，在部署主机运行 `scripts/verify-production-acceptance.sh` 固化验收记录。
 
 `.env.example` 中的 RPO、RTO、离线窗口、积压时限、峰值负载和连续观察周期都是部署目标，本身不构成验收证据。完成现场演练后，加载这些目标，并补充实测值和稳定证据标识：
 

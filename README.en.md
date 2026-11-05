@@ -64,7 +64,7 @@ The repository claims only code, automated tests, and reproducible software beha
 | Path | Responsibility |
 |---|---|
 | `src/platform` | Business API, system of record, evidence assembly, and background work |
-| `src/edge` | Field acquisition, semantic mapping, offline buffering, and replay |
+| `src/edge` | External event ingestion, offline buffering, and delivery |
 | `src/agent` | Read-only analysis, knowledge retrieval, and evidence explanation |
 | `src/shared` | Domain models and cross-module contracts |
 | `optimizer` | Response surfaces, constraint checks, and sequential optimization |
@@ -81,7 +81,6 @@ Choose an entry by objective:
 | Objective | Path | Completion signal |
 |---|---|---|
 | Start locally | [Getting started](docs/getting-started.en.md) | Migration succeeds, services are healthy, and sign-in works; no external-system account or equipment connection is required |
-| Inspect the acquisition demo | [Getting started](docs/getting-started.en.md) → [Semiconductor acquisition demo](docs/semiconductor-demo.en.md) | Observe synthetic run data move through the Modbus simulator into the workbench; this does not validate real equipment interoperability or field benefit |
 | Evaluate the real-evidence workflow | [Current status](docs/status.en.md) → [Pilot guide](docs/pilot.en.md) | Check data admission using authorized real runs and reviewed quality outcomes |
 | Contribute | [Contributing](CONTRIBUTING.en.md) | Install tools for the change area and verify it; the full gate is in the guide |
 
@@ -113,7 +112,7 @@ After `platform-migrate` exits successfully and the database, API, Worker, Optim
 
 ## Usage
 
-After sign-in, publish a recipe version that defines variables and boundaries. Where field integration is configured, connectors automatically collect and semantically map actual settings, process trajectories, and run context; this is the preferred path for production evidence. Manually entered records or existing records from adjacent systems can also be linked. A run becomes an optimization observation only when trustworthy run facts and quality outcomes together pass admission.
+After sign-in, publish a recipe version that defines variables and boundaries. External adapters can send actual settings, process trajectories, and run context through Edge. Manually entered records or existing records from adjacent systems can also be linked. A run becomes an optimization observation only when trustworthy run facts and quality outcomes together pass admission.
 
 The system proposes the next recipe inside safety boundaries and observed coverage. The engineer adopts it as the next-run correction, or turns a significant change into a revision draft; a later real run, parameter readback, and inspection record freeze the outcome once.
 
@@ -129,7 +128,7 @@ System Administration → Users, status, logs, raw events, and model services
 
 This is the current workbench navigation, not a mandatory operating sequence. The daily business path is Field Operations → Quality Inspection → Process Insight → Recipe Optimization; Process Insight also provides process materials and mechanism knowledge. The user-facing boundary is a factory or independent production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. Ingot Chat verifies authorized formal records and reviewed materials with source citations. It does not replace an engineer's decision or automatically change production parameters.
 
-Field-equipment and enterprise-system connectors are optional source adapters. Without trustworthy run facts, the system does not produce a recommendation.
+Field adapters and enterprise systems are optional data sources. Without trustworthy run facts, the system does not produce a recommendation.
 
 | Adjacent system | Boundary |
 |---|---|
@@ -151,7 +150,6 @@ Choose a reading path from the [documentation index](docs/index.en.md) or [onlin
 - **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
 - **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
 - **Connect and operate**: [Data integration](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment](docs/deployment.en.md).
-- **Connector demo**: [Semiconductor wafer etch acquisition demo](docs/semiconductor-demo.en.md) starts an independent Modbus TCP simulator and verifies 19 process values, 20 demonstration parameters, and a 300-second run path.
 - **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundary](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
 - **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
 

@@ -5,6 +5,31 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- Legacy device-driver tests are excluded while their sources await removal. -->
+  <ItemGroup>
+    <Compile Remove="Edge/AcquisitionConfigurationReconciliationTests.cs" />
+    <Compile Remove="Edge/AcquisitionDeploymentCacheTests.cs" />
+    <Compile Remove="Edge/AcquisitionEgressPolicyTests.cs" />
+    <Compile Remove="Edge/AcquisitionLifecycleTrackerEventIdTests.cs" />
+    <Compile Remove="Edge/AcquisitionLogicalSubjectTests.cs" />
+    <Compile Remove="Edge/AcquisitionProbeServiceTests.cs" />
+    <Compile Remove="Edge/AcquisitionProtocolTests.cs" />
+    <Compile Remove="Edge/AcquisitionSampleMetadataTests.cs" />
+    <Compile Remove="Edge/AcquisitionSecretReferenceTests.cs" />
+    <Compile Remove="Edge/AcquisitionSelectorTests.cs" />
+    <Compile Remove="Edge/AcquisitionStatusTests.cs" />
+    <Compile Remove="Edge/AcquisitionValuePolicyTests.cs" />
+    <Compile Remove="Edge/HttpAcquisitionRequestFactoryTests.cs" />
+    <Compile Remove="Edge/HttpJsonSnapshotReaderTests.cs" />
+    <Compile Remove="Edge/HttpPollingSnapshotMapperTests.cs" />
+    <Compile Remove="Edge/JsonElementPathResolverTests.cs" />
+    <Compile Remove="Edge/MqttAcquisitionTests.cs" />
+    <Compile Remove="Edge/MqttPayloadDecoderTests.cs" />
+    <Compile Remove="Edge/MqttSnapshotAssemblerTests.cs" />
+    <Compile Remove="Edge/Protocols/IndustrialProtocolFrameTests.cs" />
+    <Compile Remove="Edge/RegisterAcquisitionSessionPoolTests.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Ingot.Platform.Application.Inspections" />
     <Using Include="Ingot.Platform.Application.TimeSeries" />

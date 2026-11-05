@@ -75,7 +75,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+
         });
 
         EdgeValidator.Validate(configuration);
@@ -94,60 +94,13 @@ public sealed class ProductionConfigurationValidatorTests
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
-            ["Acquisition:Security:AllowedSecretEnvironmentVariables:0"] = "DEVICE_API_TOKEN",
-            ["Acquisition:Security:AllowedHttpHosts:0"] = "device.example.internal",
-            ["Acquisition:Security:AllowedNetworkHosts:0"] = "broker.example.internal"
+
+
+
+
         });
 
         EdgeValidator.Validate(configuration);
-    }
-
-    [Fact]
-    public void ConnectorHost_RejectsForbiddenAcquisitionAllowlistLiteral()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
-            ["ConnectorHost:LocalApiToken"] = "local-api-token-with-at-least-24-characters",
-            ["Edge:SiteId"] = "SITE-001",
-            ["Edge:EnablePlatformReporting"] = "true",
-            ["Edge:EdgeId"] = "EDGE-001",
-            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
-            ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
-            ["Acquisition:Security:AllowedNetworkHosts:0"] = "169.254.169.254"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
-
-        Assert.Contains("cannot allow loopback, link-local", error.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ConnectorHost_RejectsProtectedAcquisitionRuntimeSecretAllowlistEntry()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
-            ["ConnectorHost:LocalApiToken"] = "local-api-token-with-at-least-24-characters",
-            ["Edge:SiteId"] = "SITE-001",
-            ["Edge:EnablePlatformReporting"] = "true",
-            ["Edge:EdgeId"] = "EDGE-001",
-            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
-            ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
-            ["Acquisition:Security:AllowedSecretEnvironmentVariables:0"] = "EDGE__EVENTINGESTTOKEN"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
-
-        Assert.Contains(
-            "AllowedSecretEnvironmentVariables contains an invalid or protected name",
-            error.Message,
-            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -164,7 +117,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = reusedToken,
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
@@ -364,7 +317,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
@@ -383,7 +336,7 @@ public sealed class ProductionConfigurationValidatorTests
             ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
             ["Edge:EnableEventShipping"] = "true",
             ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json"
+
         });
 
         var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
@@ -406,44 +359,6 @@ public sealed class ProductionConfigurationValidatorTests
 
         var error = Assert.Throws<InvalidOperationException>(() => PlatformValidator.Validate(configuration));
         Assert.Contains("placeholder", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void ConnectorHost_RejectsSilentLocalFallbackInProduction()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
-            ["Edge:EnablePlatformReporting"] = "true",
-            ["Edge:EdgeId"] = "EDGE-001",
-            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
-            ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
-            ["Acquisition:AllowLocalFallbackWhenPlatformAvailable"] = "true"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
-        Assert.Contains("AllowLocalFallbackWhenPlatformAvailable must be false", error.Message);
-    }
-
-    [Fact]
-    public void ConnectorHost_RejectsUnsafeAcquisitionStartupHealthTimeout()
-    {
-        var configuration = Build(new Dictionary<string, string?>
-        {
-            ["ConnectorHost:IngestToken"] = "connector-token-with-at-least-24-characters",
-            ["Edge:EnablePlatformReporting"] = "true",
-            ["Edge:EdgeId"] = "EDGE-001",
-            ["Edge:PlatformApiBaseUrl"] = "http://platform-api:8000",
-            ["Edge:EnableEventShipping"] = "true",
-            ["Edge:EventIngestToken"] = "edge-token-with-at-least-24-characters",
-            ["Acquisition:DeploymentCachePath"] = "/data/acquisition-deployments.json",
-            ["Acquisition:StartupHealthTimeoutMs"] = "500"
-        });
-
-        var error = Assert.Throws<InvalidOperationException>(() => EdgeValidator.Validate(configuration));
-        Assert.Contains("Acquisition:StartupHealthTimeoutMs", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

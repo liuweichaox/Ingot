@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ingot.Platform.Api.Controllers;
 
+[NonController]
 [ApiController]
 [Route("api/v1/ingestion-configuration")]
 public sealed class IngestionConfigurationController(

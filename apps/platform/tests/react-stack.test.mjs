@@ -1,3 +1,4 @@
+// 验证产品导航、业务界面与前端技术栈的基本约束。
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
@@ -16,15 +17,7 @@ const auth = await readFile(new URL("../src/auth/AuthGate.jsx", import.meta.url)
 const components = await readFile(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
 const apiHook = await readFile(new URL("../src/hooks/useApi.js", import.meta.url), "utf8");
 const registryEditor = await readFile(new URL("../src/components/RegistryBusinessEditor.jsx", import.meta.url), "utf8");
-const acquisitionRegistry = await readFile(new URL("../src/acquisition/protocolRegistry.js", import.meta.url), "utf8");
-const acquisitionCanvasStyles = await readFile(new URL("../src/acquisition/IngestionTaskCanvas.css", import.meta.url), "utf8");
-const acquisitionPage = await readFile(new URL("../src/acquisition/IngestionTaskPage.jsx", import.meta.url), "utf8");
-const acquisitionForm = await readFile(new URL("../src/acquisition/ingestionTaskForm.js", import.meta.url), "utf8");
-const acquisitionPanels = {
-  connection: await readFile(new URL("../src/acquisition/panels/ConnectionPanel.jsx", import.meta.url), "utf8"),
-  mapping: await readFile(new URL("../src/acquisition/panels/PointMappingPanel.jsx", import.meta.url), "utf8"),
-  points: await readFile(new URL("../src/acquisition/panels/DevicePointsPanel.jsx", import.meta.url), "utf8"),
-};
+
 const styles = await readFile(new URL("../src/styles/global.css", import.meta.url), "utf8");
 const vite = await readFile(new URL("../vite.config.mjs", import.meta.url), "utf8");
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
@@ -64,7 +57,7 @@ test("all platform routes remain available after the React migration", () => {
     "/quality-analysis", "/configuration", "/configuration/inspection-definitions", "/configuration/quality-plans",
     "/comparisons", "/data-quality",
     "/configuration/process-analysis-plans", "/configuration/process-data-models",
-    "/configuration/process-specifications", "/configuration/ingestion-tasks", "/edges",
+    "/configuration/process-specifications", "/edges",
     "/platform-metrics", "/logs", "/identity/users",
   ]) {
     assert.match(app, new RegExp(route.replaceAll("/", "\\/")));
@@ -164,7 +157,6 @@ test("authenticated application exposes the identity administration surface", ()
 
 test("versioned registries use composite row keys and statuses are localized", () => {
   assert.match(pages, /getRowKey=\{row => `\$\{row\[definition\.key\]\}:\$\{row\.version \?\? 1\}`\}/);
-  assert.match(pages, /label="数据上行"/);
   assert.match(app, /section\.label/);
   assert.match(components, /pending: "待处理"/);
   assert.match(components, /published: "已发布"/);
@@ -173,9 +165,6 @@ test("versioned registries use composite row keys and statuses are localized", (
   assert.match(components, /starting: "启动中"/);
   assert.match(components, /applied: "已应用"/);
   assert.match(components, /"waiting-execution-boundary": "等待过程执行边界"/);
-  assert.match(pages, /title="采集配置应用状态"/);
-  assert.match(pages, /desiredConfigurationSetHash/);
-  assert.match(pages, /appliedConfigurationSetHash/);
 });
 
 test("route changes cannot display stale registry rows under new columns", () => {
@@ -288,28 +277,11 @@ test("product flow does not expose an orphan configuration-publishing workspace"
   assert.doesNotMatch(pages, /title: "配置发布"|createLabel: "创建配置版本"/);
 });
 
-test("device acquisition has its own page instead of a generic registry drawer", () => {
-  // Acquisition configuration needs a dedicated edit-probe-adjust loop.
-  assert.match(app, /acquisition\/IngestionTaskPage/);
-  assert.match(app, /path="\/configuration\/ingestion-tasks\/:taskId"/);
-  assert.match(acquisitionPage, /export function IngestionTaskPage/);
-  assert.match(acquisitionPage, /export function IngestionTasksPage/);
-  // Keep the canvas and inspector usable at desktop widths, then stack them on smaller screens.
-  assert.match(acquisitionPage, /className="ingestion-task-editor-page"/);
-  assert.match(acquisitionPage, /id="acq-workbench"/);
-  assert.match(acquisitionCanvasStyles, /grid-template-columns: minmax\(180px, 210px\) minmax\(0, 1fr\) minmax\(320px, 360px\)/);
-  assert.match(acquisitionCanvasStyles, /@media \(max-width: 1199px\)[\s\S]*\.ingestion-task-editor-page \.acq-workbench__layout \{ height: auto; min-height: 560px; \}/);
-  assert.match(acquisitionPage, /<DevicePointsPanel/);
-});
-
 test("configuration surfaces align write actions with platform roles", () => {
   assert.match(app, /const canConfigure = \(identity\?\.roles \|\| \[\]\)\.some/);
   assert.match(app, /role === "process\.engineer" \|\| role === "platform\.admin"/);
   assert.match(app, /const lazyNamed = /);
   assert.match(app, /<ProductionSetupPage section="context" canWrite=\{canConfigure\}/);
-  assert.match(app, /<IngestionTasksPage canWrite=\{canConfigure\}/);
-  assert.match(acquisitionPage, /const readOnly = !canWrite \|\| managedByBinding/);
-  assert.match(acquisitionPage, /canWrite && row\.status === "draft"/);
 });
 
 test("form primitives keep controls aligned and make non-editable state visible", () => {
@@ -320,7 +292,6 @@ test("form primitives keep controls aligned and make non-editable state visible"
   assert.match(styles, /input\[type="checkbox"\]/);
   assert.match(globalSearch, /<Input\s+ref=\{inputRef\}/);
   assert.doesNotMatch(globalSearch, /focus:ring-blue-100/);
-  assert.match(acquisitionPanels.connection, /group\.fields\.length === 4 \|\| group\.fields\.length === 8/);
 });
 
 test("comparison investigation renders context as bounded business facts", () => {
@@ -332,7 +303,6 @@ test("comparison investigation renders context as bounded business facts", () =>
 });
 
 test("dynamic pages and operational evidence keep business-facing labels", () => {
-  assert.match(app, /startsWith\("\/configuration\/ingestion-tasks\/"\)/);
   assert.match(app, /\["页面不存在", "地址可能已经变更/);
   assert.match(pages, /contextFieldLabel/);
   for (const [field, label] of [
@@ -370,48 +340,6 @@ test("local authentication has a complete login and session-expiry experience", 
   assert.match(auth, /autoComplete="current-password"/);
   assert.match(app, /退出登录/);
   assert.doesNotMatch(app, /开发模式 · operator/);
-});
-
-test("protocol differences live in one descriptor registry", () => {
-  for (const protocol of ["http-polling", "mqtt", "opc-ua", "modbus-tcp", "melsec-a1e"]) {
-    assert.match(acquisitionRegistry, new RegExp(`id: "${protocol}"`));
-  }
-  // 每个描述符都要声明连接字段、能力开关与点位校验，界面据此渲染
-  for (const key of ["connectionFieldsAreDeclarative", "capabilities", "validateConnection", "validatePoint", "probeReadiness"]) {
-    if (key === "connectionFieldsAreDeclarative") continue;
-    assert.match(acquisitionRegistry, new RegExp(key));
-  }
-  // 能力矩阵以后端 Runner 的真实行为为准
-  assert.match(acquisitionRegistry, /mergeServerCapabilities/);
-  assert.match(acquisitionPage, /\/api\/v1\/acquisition-protocols/);
-  // MELSEC 软元件带进制与位/字区分，X\/Y 八进制换算对工程师可见
-  assert.match(acquisitionRegistry, /melsecWireAddress/);
-  assert.match(acquisitionPanels.mapping, /软元件号/);
-  for (const device of ["W", "B", "L"]) {
-    assert.match(acquisitionRegistry, new RegExp(`code: "${device}"`));
-  }
-});
-
-test("acquisition validation reports errors per field", () => {
-  assert.match(acquisitionForm, /export function validateIngestionTask/);
-  assert.match(acquisitionForm, /const set = \(path, message\)/);
-  assert.match(acquisitionPanels.connection, /error=\{errors\[/);
-  assert.match(acquisitionPanels.mapping, /const error = field => errors\[/);
-});
-
-test("ingestion tasks probe real source points before publishing", () => {
-  assert.match(acquisitionPage, /const ENDPOINT = "\/api\/v1\/ingestion-tasks"/);
-  assert.match(acquisitionPage, /postJson\(`\$\{ENDPOINT\}\/probe`/);
-  assert.match(acquisitionPanels.points, /验证连接/);
-  assert.match(acquisitionRegistry, /probeViewLabel: "JSON 字段树"/);
-  assert.match(acquisitionRegistry, /probeViewLabel: "节点浏览器"/);
-  assert.match(acquisitionRegistry, /probeViewLabel: "寄存器读取结果"/);
-  for (const label of ["原始值", "换算值", "设备类型", "单位"]) {
-    assert.match(acquisitionPanels.mapping, new RegExp(label));
-  }
-  // 发布仍然以探查通过为硬闸门
-  assert.match(acquisitionPage, /disabled=\{saving \|\| edgeScopeMismatch \|\| !probeValid\}/);
-  assert.match(acquisitionPage, /发布前必须先验证连接/);
 });
 
 test("tooling and configuration workflows avoid editable JSON fields", () => {
