@@ -6,6 +6,8 @@
 
 Ingot does not include equipment protocol drivers. A site adapter owns its equipment, gateway, or existing collector protocols, sampling frequency, triggers, and PLC writes. Engineers may write adapters with AI assistance; before use, verify real values, safety boundaries, and failure handling in the target environment.
 
+For adapter-local storage, see the [site acquisition data reference design](acquisition-data-design.en.md). Its tables are examples, not required or existing Ingot database tables.
+
 Edge provides authenticated event ingestion, local persistence, delivery, and health status. Platform is the system of record and enforces site isolation, event ingestion, and process-data admission. Receiving an event does not control equipment or prove process quality or optimization results.
 
 ## Identity and data semantics

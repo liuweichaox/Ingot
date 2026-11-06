@@ -94,7 +94,6 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TimeSeriesStoreInitializerHostedService>();
         services.AddSingleton<IPlatformEventStore, PostgresPlatformEventStore>();
         services.AddSingleton<PlatformEventApplication>();
-        services.AddSingleton<IngestionTaskSampleReceiptQuery>();
         services.AddHostedService<EventStoreInitializerHostedService>();
 
         services.Configure<ChatDataAccessOptions>(configuration.GetSection("ChatDataAccess"));
@@ -169,11 +168,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
         services.AddSingleton<IProcessSampleConfigurationReferenceVerifier, ProcessSampleConfigurationReferenceVerifier>();
-        services.AddSingleton<IIngestionConfigurationStore, PostgresIngestionConfigurationStore>();
-        services.AddSingleton<AcquisitionApplication>();
-        services.AddSingleton<IAcquisitionProbeTaskStore, PostgresAcquisitionProbeTaskStore>();
-        services.AddSingleton<AcquisitionProbeTaskCoordinator>();
-        services.AddSingleton<IngestionConfigurationWorkflow>();
 
         services.AddSingleton<PostgresExecutionBoundaryStore>();
         services.AddSingleton<IExecutionBoundaryStore>(

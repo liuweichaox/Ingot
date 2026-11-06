@@ -2,6 +2,8 @@
 
 This is the responsibility inventory for Ingot's PostgreSQL relations. Migrations run in numeric order; `0001_baseline.sql` is a historical starting point, not a hand-maintained current-schema dump.
 
+For optional adapter-local acquisition tables, see the [site acquisition data reference design](acquisition-data-design.en.md); those example tables are not the formal Ingot relations listed here.
+
 In this document, “site” is the database and historical API term for a factory or independent production site, identified by `SiteId`; one factory may have multiple Edges.
 
 ## 1. Business Boundaries

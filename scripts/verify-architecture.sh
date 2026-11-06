@@ -343,7 +343,7 @@ else
 fi
 
 application_port_leaks=$(grep -rnE \
-  'public interface (IPlatformEventStore|IIngestionTaskStore|IIngestionConfigurationStore|IAcquisitionProbeTaskStore|IManufacturingContextStore|IQualityAnalysisService|ILocalUserStore)' \
+  'public interface (IPlatformEventStore|IIngestionTaskStore|IManufacturingContextStore|IQualityAnalysisService|ILocalUserStore)' \
   src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
 if [[ -n "$application_port_leaks" ]]; then
   echo "✗ [platform-application-port-ownership] 数据库无关的 Platform 存储端口必须归属 Application"
@@ -354,7 +354,7 @@ else
 fi
 
 application_rule_leaks=$(grep -rnE \
-  'public (sealed |static )?class (ProcessAnalysisResolver|ProcessExecutionAnalysisEngine|ExecutionDiagnosisEngine|ExecutionInvestigationReportBuilder|BuiltInFeatureDefinitionRegistry|AcquisitionProbeTaskCoordinator)' \
+  'public (sealed |static )?class (ProcessAnalysisResolver|ProcessExecutionAnalysisEngine|ExecutionDiagnosisEngine|ExecutionInvestigationReportBuilder|BuiltInFeatureDefinitionRegistry)' \
   src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
 if [[ -n "$application_rule_leaks" ]]; then
   echo "✗ [platform-application-rule-ownership] 可脱库测试的应用规则必须归属 Application"

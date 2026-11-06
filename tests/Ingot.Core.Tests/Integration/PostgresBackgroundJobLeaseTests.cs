@@ -1,10 +1,7 @@
 // 验证 PostgresBackgroundJobLease 的真实基础设施集成、失败和恢复行为。
 
 using System.Text;
-using Ingot.Contracts.Acquisition;
 using Ingot.Contracts.Events;
-using Ingot.Contracts.ProcessConfiguration;
-using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.ProcessExecutions;
 using Ingot.Platform.Infrastructure.ResearchAssets;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -111,61 +108,6 @@ public sealed class PostgresBackgroundJobLeaseTests(PostgresIntegrationFixture p
         var retried = await store.ClaimRecomputeAsync(TimeSpan.FromMinutes(5));
         Assert.NotNull(retried);
         Assert.True(await store.CompleteRecomputeAsync(executionId, retried!.LeaseId));
-    }
-
-    [LinuxDockerFact]
-    public async Task ProbeTask_ShouldCrossApiReplicaStoreInstances()
-    {
-        await postgres.EnsureSchemaAsync();
-        var coordinatorA = new AcquisitionProbeTaskCoordinator(
-            new PostgresAcquisitionProbeTaskStore(postgres.DataSource));
-        var coordinatorB = new AcquisitionProbeTaskCoordinator(
-            new PostgresAcquisitionProbeTaskStore(postgres.DataSource));
-        var waiting = coordinatorA.QueueAndWaitAsync(
-            new AcquisitionDeployment
-            {
-                Task = new IngestionTask
-                {
-                    TaskId = "probe-test",
-                    Name = "Probe test",
-                    Status = ConfigurationStatuses.Draft,
-                    EdgeId = "EDGE-PROBE",
-                    Protocol = AcquisitionProtocols.HttpPolling,
-                    DataModelId = "model-test",
-                    Source = "connector/http/probe-test",
-                    SubjectId = "MACHINE-01"
-                },
-                DataModel = new ProcessDataModel
-                {
-                    ModelId = "model-test",
-                    Name = "Model test",
-                    Status = ConfigurationStatuses.Published
-                }
-            },
-            TimeSpan.FromSeconds(10));
-
-        AcquisitionProbeTask? task = null;
-        for (var attempt = 0; attempt < 50 && task is null; attempt++)
-        {
-            task = await coordinatorB.ClaimNextAsync("EDGE-PROBE");
-            if (task is null) await Task.Delay(20);
-        }
-        Assert.NotNull(task);
-        var result = new AcquisitionProbeResult
-        {
-            Success = true,
-            MappingsValidated = true,
-            Protocol = AcquisitionProtocols.HttpPolling,
-            Message = "ok",
-            TestedAt = DateTimeOffset.UtcNow
-        };
-        Assert.True(await coordinatorB.CompleteAsync(new AcquisitionProbeTaskCompletion
-        {
-            TaskId = task!.TaskId,
-            EdgeId = task.EdgeId,
-            Result = result
-        }));
-        Assert.True((await waiting).Success);
     }
 
     [LinuxDockerFact]
