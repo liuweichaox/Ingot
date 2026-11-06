@@ -257,12 +257,12 @@ Grafana、Prometheus 和 Alertmanager 分别只绑定本机 `3001`、`9090` 和 
 2. 备份数据库、附件、知识文件、Data Protection 密钥和已启用的 Edge 持久数据；
 3. 在测试环境执行迁移和回放；
 4. 运行 `scripts/verify.sh`；
-5. 若迁移会移动历史采集配置表，先停止旧版 Platform API 和 Worker，避免旧版本继续访问 `public` 下的表；
+5. 确认升级窗口内没有旧版 Platform API 或 Worker 继续运行；
 6. 升级 Platform 和数据库依赖，先运行 Migrator，再启动新版本 API 和 Worker；
 7. 升级 Edge 与外部适配器，检查事件契约、离线积压恢复和重复事件处理；
 8. 对一个已知配方执行运行装配、比较和建议回归。
 
-迁移 `0043` 和 `0044` 将历史采集配置表移入 `ingot_legacy`，保留原始数据供历史来源核验。迁移后旧版 Platform 二进制不兼容，不应与新版本并行运行；自定义多角色数据库需向 Platform 只读角色授予该 schema 的 `USAGE` 与 `ingestion_tasks` 的 `SELECT`，并向历史审计角色授予其所需表的 `USAGE`/`SELECT`。
+迁移 `0045` 和 `0046` 会永久删除退役的 `ingot_legacy` 采集配置表、Edge 任务新鲜度和部署观察表，以及场景包中的旧采集任务引用。执行升级前应确认这些记录不再需要，并在迁移窗口停止旧版 Platform API 与 Worker；新旧二进制不得并行运行。迁移后无需为 Platform 授予 `ingot_legacy` 权限。
 
 ## 安全最小集
 

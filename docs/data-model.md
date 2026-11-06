@@ -23,7 +23,7 @@
 | 表组 | 表 | 正式职责 |
 | --- | --- | --- |
 | 身份与访问 | `users`, `user_sessions` | 身份、会话与站点授权；不保存生产事实。 |
-| 站点与接入 | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `edge_task_deployment_observation_state` | Edge 身份和运行状态，以及适配器报告的部署观察。 |
+| 站点与接入 | `platform_edges`, `edge_runtime_status_history` | Edge 身份、心跳和运行状态。 |
 | 事件幂等与原始事实 | `event_ingest_keys`, `production_events`, `collection_points`, `process_sample_frames`, `process_sample_values` | 事件接收去重账本、不可变事件信封、点位目录及高频样本事实。 |
 | 执行与分析派生 | `process_execution_boundaries`, `execution_boundary_recompute_jobs`, `execution_analysis_backfill_jobs`, `execution_analysis_recompute_jobs`, `execution_analysis_materializations`, `execution_features`, `execution_phases` | 从原始事件确定执行边界，并记录可重算的阶段、特征与物化状态。 |
 | 工艺配置 | `process_data_models`, `signal_definitions`, `feature_definitions`, `phase_definitions`, `phase_mappings`, `process_specification_versions`, `scenario_packages`, `process_analysis_plans` | 稳定工艺语义、信号/特征、规范和场景策略的版本化定义。 |
@@ -35,7 +35,7 @@
 | Agent 对话与问题案例 | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | 模型调用轨迹、问题案例、案例评估和持久对话；不授予业务写权限。 |
 | 操作对象缓存 | `data_object_operation_keys`, `data_object_summaries` | 外部对象的操作幂等键和受限摘要缓存。 |
 
-旧采集配置表不属于当前活动 schema。迁移 `0043` 将 `data_source_instances`、`ingestion_task_templates`、`ingestion_task_bindings`、`acquisition_probe_tasks` 移入 `ingot_legacy`；迁移 `0044` 将 `ingestion_tasks` 也移入该 schema。原行、索引和表间外键保留。Platform 只读 `ingot_legacy.ingestion_tasks`，用于核对历史样本事件中的 `AppliedConfiguration` 引用；当前 API 不再创建、发布或删除采集任务。
+Platform 不提供设备采集配置、采集任务新鲜度或任务部署历史的管理与核验。迁移 `0045` 删除已退役的 `ingot_legacy` 采集配置表，以及 Edge 任务新鲜度和部署观察表；迁移 `0046` 清除场景包中不再使用的采集任务引用。设备协议、采样计划和现场点位绑定由外部 Edge 适配器负责；Platform 保留通用的 `collection_points`、`process_sample_frames` 和 `process_sample_values`，用于目录化点位并存储实际收到的采样事实。迁移会永久删除这些退役数据。
 
 `process_sample_values.quality_code` 保存点位质量，`quality_evidence_version` 标记生成该质量码的采集契约。迁移前的样本和未写入契约版本的旧版 Edge 写入均为 `0`，读取时按“不确定”处理；只有带当前契约版本的采集事件才能把未标记点位判为良好。未知质量值和旧格式都不会被推断为良好，也不会作为完整数据进入正式追因或配方建议。
 
@@ -52,8 +52,7 @@
 ## 4. 待解决的技术债
 
 1. `event_ingest_keys` 会按保留期清理，而 `production_events` 没有永久事件唯一约束。因此当前合同是“保留窗口内幂等”，不是无限期重放幂等。若现场需要长期审计，应增加永久轻量 tombstone 或 `(site_id, edge_id, seq)` 水位线。
-2. 退役采集配置表保存在 `ingot_legacy`；其中 `ingestion_tasks` 仅供正式代码只读核验历史证据，其余归档表供数据库管理员按需审计，不属于活动 schema。
-3. 部分旧索引由新的分页索引前缀覆盖。生产库应基于 `pg_stat_user_indexes` 和 `EXPLAIN` 确认没有使用后再删除，不能在迁移中盲删。
+2. 部分旧索引由新的分页索引前缀覆盖。生产库应基于 `pg_stat_user_indexes` 和 `EXPLAIN` 确认没有使用后再删除，不能在迁移中盲删。
 
 ## 5. 写入规则
 

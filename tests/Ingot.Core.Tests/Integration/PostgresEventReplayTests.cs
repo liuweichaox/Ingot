@@ -379,7 +379,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             DateTimeOffset.UtcNow,
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4),
+            appliedConfiguration: new AppliedConfigurationRef("external-config", "TASK-REPLAY", 4),
             qualityFlags: ["communication_degraded"]) with
         {
             Seq = 1,
@@ -414,7 +414,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
         }));
         Assert.Equal("SITE-REPLAY", stored.SiteId);
         Assert.Equal(1, stored.Event.SchemaVersion);
-        Assert.Equal(new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4), stored.Event.AppliedConfiguration);
+        Assert.Equal(new AppliedConfigurationRef("external-config", "TASK-REPLAY", 4), stored.Event.AppliedConfiguration);
         Assert.Equal(["communication_degraded"], stored.Event.QualityFlags);
         Assert.True(ProductionEventIntegrity.HasValidPayloadHash(stored.Event));
         Assert.Empty(await store.QueryAsync(new PlatformEventQuery
@@ -428,7 +428,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             DateTimeOffset.UtcNow,
             $"edge/{edgeId}/equipment/PRESS-01",
             new ObjectRef("equipment", "PRESS-01"),
-            appliedConfiguration: new AppliedConfigurationRef("ingestion-task", "TASK-REPLAY", 4)) with
+            appliedConfiguration: new AppliedConfigurationRef("external-config", "TASK-REPLAY", 4)) with
         {
             Seq = 2,
             Data = new Dictionary<string, object?>
@@ -447,7 +447,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             SiteId = "SITE-REPLAY",
             EdgeId = edgeId,
             EventType = "equipment.heartbeat",
-            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationKind = "external-config",
             AppliedConfigurationId = "TASK-REPLAY",
             AppliedConfigurationVersion = 4,
             SubjectType = "equipment",
@@ -464,7 +464,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             SiteId = "SITE-REPLAY",
             EdgeId = edgeId,
             EventType = "equipment.heartbeat",
-            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationKind = "external-config",
             AppliedConfigurationId = "TASK-REPLAY",
             AppliedConfigurationVersion = 4,
             SubjectType = "equipment",
@@ -477,7 +477,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             SiteId = "SITE-REPLAY",
             EdgeId = edgeId,
             EventType = "equipment.heartbeat",
-            AppliedConfigurationKind = "ingestion-task",
+            AppliedConfigurationKind = "external-config",
             AppliedConfigurationId = "TASK-REPLAY",
             AppliedConfigurationVersion = 4,
             SubjectType = "equipment",
@@ -680,8 +680,8 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                 {
                     ["data_model_id"] = modelId,
                     ["data_model_version"] = "1",
-                    ["ingestion_task_id"] = taskId,
-                    ["ingestion_task_version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    ["external_configuration_id"] = taskId,
+                    ["external_configuration_version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 },
                 new Dictionary<string, object?>
                 {
@@ -691,7 +691,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                         StringComparer.Ordinal)
                 },
                 appliedConfiguration: includeAppliedConfiguration
-                    ? new AppliedConfigurationRef("ingestion-task", taskId, version)
+                    ? new AppliedConfigurationRef("external-config", taskId, version)
                     : null) with
             { Seq = sequence };
 
@@ -766,8 +766,8 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
             ExecutionId = executionId
         }));
         Assert.Equal(601d, typed.Single(row => row.EventId == sample.EventId && row.SignalCode == "sensor.01").NumericValue);
-        var firstTaskConfiguration = new AppliedConfigurationRef("ingestion-task", "press-01", 1);
-        var secondTaskConfiguration = new AppliedConfigurationRef("ingestion-task", "press-02", 2);
+        var firstTaskConfiguration = new AppliedConfigurationRef("external-config", "press-01", 1);
+        var secondTaskConfiguration = new AppliedConfigurationRef("external-config", "press-02", 2);
         var firstTaskSamples = await timeSeries.QueryAsync(new TimeSeriesQuery
         {
             SiteId = "SITE-SINGLE-SOURCE",
@@ -830,7 +830,7 @@ public sealed class PostgresEventReplayTests(PostgresIntegrationFixture postgres
                   @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
                   @site_id, @edge_id, @source, @subject_type, @subject_id,
                   @model_id, 1,
-                  'ingestion-task', 'press-01', 1);
+                  'external-config', 'press-01', 1);
                 """,
                 orphanConnection);
             orphan.Parameters.AddWithValue("occurred_at", now.UtcDateTime);

@@ -50,7 +50,7 @@ public sealed class TimeSeriesSampleProjectorTests
     [Fact]
     public void Project_preserves_only_the_explicit_applied_configuration_reference()
     {
-        var configuration = new AppliedConfigurationRef("ingestion-task", "press-01", 3);
+        var configuration = new AppliedConfigurationRef("external-config", "press-01", 3);
         var evt = CreateEvent(new Dictionary<string, object?>
         {
             ["temperature"] = 618.5

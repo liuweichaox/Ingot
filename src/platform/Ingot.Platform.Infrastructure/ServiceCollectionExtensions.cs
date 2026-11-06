@@ -1,7 +1,7 @@
 // 注册 Platform 基础设施端口、只读 Agent 工具和独立 Worker 服务。
 using Ingot.Agent;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
+using Ingot.Platform.Application.Edges;
 using Ingot.Platform.Application.Chat;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.Inspections;
@@ -11,7 +11,6 @@ using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessExecutions;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Application.ResearchAssets;
-using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.AgentRuns;
 using Ingot.Platform.Infrastructure.AgentTools;
 using Ingot.Platform.Infrastructure.Analytics;
@@ -74,7 +73,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<EdgeRegistry>();
         services.AddSingleton<IEdgeSiteDirectory>(provider => provider.GetRequiredService<EdgeRegistry>());
-        services.AddSingleton<IEdgeTaskDeploymentHistoryReader>(provider => provider.GetRequiredService<EdgeRegistry>());
         services.AddSingleton<SystemSiteCatalog>();
 
         services.AddSingleton<IManufacturingContextStore, PostgresManufacturingContextStore>();
@@ -165,9 +163,6 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<ResearchAssetInitializerHostedService>();
 
         services.AddIngotProcessResearch(configuration);
-
-        services.AddSingleton<ILegacyIngestionMetadataReader, PostgresLegacyIngestionMetadataReader>();
-        services.AddSingleton<IProcessSampleConfigurationReferenceVerifier, ProcessSampleConfigurationReferenceVerifier>();
 
         services.AddSingleton<PostgresExecutionBoundaryStore>();
         services.AddSingleton<IExecutionBoundaryStore>(

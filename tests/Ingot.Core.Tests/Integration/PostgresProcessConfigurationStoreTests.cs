@@ -64,39 +64,6 @@ public sealed class PostgresProcessConfigurationStoreTests(PostgresIntegrationFi
     }
 
     [LinuxDockerFact]
-    public async Task DraftDataModelDelete_DoesNotDependOnRetiredAcquisitionConfiguration()
-    {
-        await postgres.EnsureSchemaAsync();
-        var store = new PostgresProcessConfigurationStore(postgres.DataSource);
-        var suffix = Guid.NewGuid().ToString("N");
-        var model = DataModel($"legacy-model-{suffix}", "draft");
-        Assert.True((await store.TryUpsertDataModelAsync(model)).Succeeded);
-
-        await using var command = postgres.DataSource.CreateCommand("""
-            INSERT INTO ingot_legacy.ingestion_tasks (task_id, version, edge_id, status, payload, updated_at)
-            VALUES (@task, 1, 'legacy-edge', 'published', jsonb_build_object('dataModelId', @model, 'dataModelVersion', 1), now());
-            INSERT INTO ingot_legacy.ingestion_task_templates (template_id, version, status, protocol, payload, updated_at)
-            VALUES (@template, 1, 'published', 'legacy', jsonb_build_object('dataModelId', @model, 'dataModelVersion', 1), now());
-            """);
-        command.Parameters.AddWithValue("task", $"legacy-task-{suffix}");
-        command.Parameters.AddWithValue("template", $"legacy-template-{suffix}");
-        command.Parameters.AddWithValue("model", model.ModelId);
-        await command.ExecuteNonQueryAsync();
-
-        var result = await store.TryDeleteDataModelAsync(model.ModelId, model.Version);
-
-        Assert.True(result.Succeeded);
-        Assert.Null(await store.GetDataModelAsync(model.ModelId, model.Version));
-        await using var verify = postgres.DataSource.CreateCommand("""
-            SELECT (SELECT count(*) FROM ingot_legacy.ingestion_tasks WHERE task_id = @task) +
-                   (SELECT count(*) FROM ingot_legacy.ingestion_task_templates WHERE template_id = @template);
-            """);
-        verify.Parameters.AddWithValue("task", $"legacy-task-{suffix}");
-        verify.Parameters.AddWithValue("template", $"legacy-template-{suffix}");
-        Assert.Equal(2L, (long)(await verify.ExecuteScalarAsync())!);
-    }
-
-    [LinuxDockerFact]
     public async Task DraftAnalysisPlanDelete_IsRejectedWhenReferencedByScenarioPackage()
     {
         await postgres.EnsureSchemaAsync();

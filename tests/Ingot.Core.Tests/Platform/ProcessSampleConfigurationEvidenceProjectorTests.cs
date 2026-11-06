@@ -14,8 +14,8 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
     public void Project_groups_frames_by_configuration_and_counts_quality_rows()
     {
         var start = new DateTimeOffset(2026, 10, 30, 0, 0, 0, TimeSpan.Zero);
-        var configurationV3 = new AppliedConfigurationRef("ingestion-task", "task-01", 3);
-        var configurationV4 = new AppliedConfigurationRef("ingestion-task", "task-01", 4);
+        var configurationV3 = new AppliedConfigurationRef("recipe", "recipe-01", 3);
+        var configurationV4 = new AppliedConfigurationRef("recipe", "recipe-01", 4);
         var firstFrame = Frame(1, start, configurationV3,
             new Dictionary<string, string>
             {
@@ -41,12 +41,9 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
         var evidence = ProcessSampleConfigurationEvidenceProjector.Project(frames);
 
         Assert.Equal(3, evidence.Count);
-        Assert.All(evidence, item => Assert.Equal(
-            ProcessSampleConfigurationReferenceStatuses.NotEvaluated,
-            item.ReferenceVerificationStatus));
         var v3 = Assert.Single(evidence, item => item.AppliedConfigurationVersion == 3);
-        Assert.Equal("ingestion-task", v3.AppliedConfigurationKind);
-        Assert.Equal("task-01", v3.AppliedConfigurationId);
+        Assert.Equal("recipe", v3.AppliedConfigurationKind);
+        Assert.Equal("recipe-01", v3.AppliedConfigurationId);
         Assert.Equal(2, v3.SampleFrameCount);
         Assert.Equal(start, v3.FirstOccurredAt);
         Assert.Equal(start.AddSeconds(5), v3.LastOccurredAt);
@@ -79,7 +76,7 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
     public void Project_counts_same_frame_id_at_distinct_timestamps_separately()
     {
         var start = new DateTimeOffset(2026, 10, 30, 0, 0, 0, TimeSpan.Zero);
-        var configuration = new AppliedConfigurationRef("ingestion-task", "task-01", 3);
+        var configuration = new AppliedConfigurationRef("recipe", "recipe-01", 3);
         var frames = new[]
         {
             Frame(1, start, configuration,
@@ -102,7 +99,7 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
     public void Project_keeps_same_configuration_separate_for_each_source_edge()
     {
         var start = new DateTimeOffset(2026, 10, 30, 0, 0, 0, TimeSpan.Zero);
-        var configuration = new AppliedConfigurationRef("ingestion-task", "task-01", 3);
+        var configuration = new AppliedConfigurationRef("recipe", "recipe-01", 3);
         var frames = new[]
         {
             Frame(1, start, configuration,
@@ -120,7 +117,7 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
         Assert.Equal(2, edgeA.SampleFrameCount);
         var edgeB = Assert.Single(evidence, item => item.SourceEdgeId == "EDGE-B");
         Assert.Equal(1, edgeB.SampleFrameCount);
-        Assert.Equal("ingestion-task", edgeB.AppliedConfigurationKind);
+        Assert.Equal("recipe", edgeB.AppliedConfigurationKind);
     }
 
     [Fact]
@@ -130,7 +127,7 @@ public sealed class ProcessSampleConfigurationEvidenceProjectorTests
         var frames = Enumerable.Range(1, 25)
             .SelectMany(version =>
             {
-                var configuration = new AppliedConfigurationRef("ingestion-task", $"task-{version:D2}", version);
+                var configuration = new AppliedConfigurationRef("recipe", $"recipe-{version:D2}", version);
                 var primaryQuality = version switch
                 {
                     21 => SignalQualityCodes.Good,

@@ -120,7 +120,7 @@ public sealed class SqliteEventLogTests
             Assert.Equal("LOT-A", evt.Context["material_lot"]);
             Assert.Equal(2, Assert.IsType<System.Text.Json.JsonElement>(evt.Data["count"]).GetInt32());
             Assert.Equal(1, evt.SchemaVersion);
-            Assert.Equal(new AppliedConfigurationRef("ingestion-task", "TASK-01", 2), evt.AppliedConfiguration);
+            Assert.Equal(new AppliedConfigurationRef("external-config", "TASK-01", 2), evt.AppliedConfiguration);
             Assert.Equal(["missing_value"], evt.QualityFlags);
             Assert.True(ProductionEventIntegrity.HasValidPayloadHash(evt));
             Assert.Equal(3, await reopened.CountPendingAsync());
@@ -430,7 +430,7 @@ public sealed class SqliteEventLogTests
             executionId,
             new Dictionary<string, string> { ["material_lot"] = lot },
             new Dictionary<string, object?> { ["count"] = 2 },
-            new AppliedConfigurationRef("ingestion-task", "TASK-01", 2),
+            new AppliedConfigurationRef("external-config", "TASK-01", 2),
             ["missing_value"]);
 
     private static ProductionEvent PhysicalEvent(string subjectType, string subjectId, string? equipmentId)

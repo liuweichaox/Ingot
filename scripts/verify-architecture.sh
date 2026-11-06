@@ -343,7 +343,7 @@ else
 fi
 
 application_port_leaks=$(grep -rnE \
-  'public interface (IPlatformEventStore|ILegacyIngestionMetadataReader|IManufacturingContextStore|IQualityAnalysisService|ILocalUserStore)' \
+  'public interface (IPlatformEventStore|IManufacturingContextStore|IQualityAnalysisService|ILocalUserStore)' \
   src/platform/Ingot.Platform.Infrastructure --include='*.cs' 2>/dev/null || true)
 if [[ -n "$application_port_leaks" ]]; then
   echo "✗ [platform-application-port-ownership] 数据库无关的 Platform 存储端口必须归属 Application"

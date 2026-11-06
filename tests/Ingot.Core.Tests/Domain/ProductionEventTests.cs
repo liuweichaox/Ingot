@@ -19,7 +19,7 @@ public sealed class ProductionEventTests
             "execution-001",
             new Dictionary<string, string> { ["material_lot"] = "LOT-01" },
             new Dictionary<string, object?> { ["good_count"] = 12 },
-            new AppliedConfigurationRef("ingestion-task", "TASK-01", 3),
+            new AppliedConfigurationRef("external-config", "TASK-01", 3),
             ["missing_value"]);
 
         Assert.Equal(7, Guid.Parse(evt.EventId).Version);
@@ -31,7 +31,7 @@ public sealed class ProductionEventTests
         Assert.Equal(12, evt.Data["good_count"]);
         Assert.Equal("execution-001", evt.ExecutionId);
         Assert.Equal(1, evt.SchemaVersion);
-        Assert.Equal(new AppliedConfigurationRef("ingestion-task", "TASK-01", 3), evt.AppliedConfiguration);
+        Assert.Equal(new AppliedConfigurationRef("external-config", "TASK-01", 3), evt.AppliedConfiguration);
         Assert.Equal(["missing_value"], evt.QualityFlags);
         Assert.Equal(64, evt.PayloadHash.Length);
         Assert.True(ProductionEventIntegrity.HasValidPayloadHash(evt));

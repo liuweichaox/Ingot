@@ -38,7 +38,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
-    public async Task RetiredAcquisitionArchive_ShouldPreserveExistingDataAndForeignKeys()
+    public async Task RetiredAcquisitionCleanup_ShouldRemoveArchiveAndObservationTables()
     {
         // An isolated database lets this test exercise the real pre-archive migrations and populated tables.
         var database = $"ingot_archive_test_{Guid.NewGuid():N}";
@@ -81,7 +81,12 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
                 """, connection))
                 await seed.ExecuteNonQueryAsync();
 
-            foreach (var migration in new[] { "0043_archive_retired_acquisition", "0044_archive_legacy_ingestion_tasks" })
+            foreach (var migration in new[]
+                     {
+                         "0043_archive_retired_acquisition",
+                         "0044_archive_legacy_ingestion_tasks",
+                         "0045_remove_retired_acquisition_archive"
+                     })
             {
                 // The scripts also support a retry if their state already exists in full.
                 var sql = LoadMigrationSql(migration);
@@ -93,30 +98,24 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
             }
 
             await using var verify = new NpgsqlCommand("""
-                SELECT
-                  to_regclass('public.data_source_instances') IS NULL
+                SELECT to_regnamespace('ingot_legacy') IS NULL
+                  AND to_regclass('public.data_source_instances') IS NULL
                   AND to_regclass('public.ingestion_task_templates') IS NULL
                   AND to_regclass('public.ingestion_task_bindings') IS NULL
                   AND to_regclass('public.ingestion_tasks') IS NULL
                   AND to_regclass('public.acquisition_probe_tasks') IS NULL
-                  AND (SELECT payload ->> 'evidence' = 'source' FROM ingot_legacy.data_source_instances WHERE data_source_id = 'source-old')
-                  AND (SELECT payload ->> 'evidence' = 'template' FROM ingot_legacy.ingestion_task_templates WHERE template_id = 'template-old')
-                  AND (SELECT payload ->> 'evidence' = 'binding' FROM ingot_legacy.ingestion_task_bindings WHERE task_id = 'binding-old')
-                  AND (SELECT payload ->> 'evidence' = 'task' FROM ingot_legacy.ingestion_tasks WHERE task_id = 'task-old')
-                  AND (SELECT task_payload ->> 'evidence' = 'probe' FROM ingot_legacy.acquisition_probe_tasks WHERE task_id = 'probe-old')
-                  AND (SELECT count(*) = 2 FROM pg_constraint
-                       WHERE conrelid = 'ingot_legacy.ingestion_task_bindings'::regclass AND contype = 'f'
-                         AND confrelid IN ('ingot_legacy.data_source_instances'::regclass,
-                                           'ingot_legacy.ingestion_task_templates'::regclass));
+                  AND to_regclass('public.edge_task_deployment_observations') IS NULL
+                  AND to_regclass('public.edge_task_deployment_observation_state') IS NULL
+                  AND to_regclass('public.edge_task_freshness_current') IS NULL
+                  AND to_regclass('public.edge_task_freshness_transitions') IS NULL
+                  AND to_regclass('public.idx_production_events_ingestion_task_receipt') IS NULL
+                  AND to_regclass('public.idx_process_sample_frames_ingestion_task_receipt') IS NULL
+                  AND to_regclass('public.idx_production_events_ingestion_task_receipt_event_id') IS NULL
+                  AND to_regclass('public.collection_points') IS NOT NULL
+                  AND to_regclass('public.process_sample_frames') IS NOT NULL
+                  AND to_regclass('public.process_sample_values') IS NOT NULL;
                 """, connection);
             Assert.True((bool)(await verify.ExecuteScalarAsync())!);
-
-            await using var invalidBinding = new NpgsqlCommand("""
-                INSERT INTO ingot_legacy.ingestion_task_bindings
-                  VALUES ('invalid-binding', 1, 'template-old', 1, 'missing-source', 1, 'draft', '{}', now());
-                """, connection);
-            var error = await Assert.ThrowsAsync<PostgresException>(() => invalidBinding.ExecuteNonQueryAsync());
-            Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
         }
         finally
         {
@@ -126,7 +125,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
-    public async Task FreshSchema_ShouldSeparateRetiredAcquisitionFromActiveSampleTables()
+    public async Task FreshSchema_ShouldContainOnlyActiveSampleTablesForAcquisitionData()
     {
         await postgres.EnsureSchemaAsync();
         await using var command = postgres.DataSource.CreateCommand("""
@@ -136,11 +135,14 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
               AND to_regclass('public.ingestion_task_bindings') IS NULL
               AND to_regclass('public.ingestion_tasks') IS NULL
               AND to_regclass('public.acquisition_probe_tasks') IS NULL
-              AND to_regclass('ingot_legacy.data_source_instances') IS NOT NULL
-              AND to_regclass('ingot_legacy.ingestion_task_templates') IS NOT NULL
-              AND to_regclass('ingot_legacy.ingestion_task_bindings') IS NOT NULL
-              AND to_regclass('ingot_legacy.ingestion_tasks') IS NOT NULL
-              AND to_regclass('ingot_legacy.acquisition_probe_tasks') IS NOT NULL
+              AND to_regnamespace('ingot_legacy') IS NULL
+              AND to_regclass('public.edge_task_deployment_observations') IS NULL
+              AND to_regclass('public.edge_task_deployment_observation_state') IS NULL
+              AND to_regclass('public.edge_task_freshness_current') IS NULL
+              AND to_regclass('public.edge_task_freshness_transitions') IS NULL
+              AND to_regclass('public.idx_production_events_ingestion_task_receipt') IS NULL
+              AND to_regclass('public.idx_process_sample_frames_ingestion_task_receipt') IS NULL
+              AND to_regclass('public.idx_production_events_ingestion_task_receipt_event_id') IS NULL
               AND to_regclass('public.collection_points') IS NOT NULL
               AND to_regclass('public.process_sample_frames') IS NOT NULL
               AND to_regclass('public.process_sample_values') IS NOT NULL;
@@ -636,7 +638,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
               @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
               'SITE-MIGRATION', 'EDGE-MIGRATION', 'test', 'equipment', 'PRESS-MIGRATION',
               'model-migration', 1,
-              'ingestion-task', 'task-migration', NULL);
+              'external-config', 'external-config-migration', NULL);
             """,
             connection);
         partialConfiguration.Parameters.AddWithValue("occurred_at", occurredAt);
@@ -663,7 +665,7 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
               @occurred_at, @frame_id, @event_id, @recorded_at, @ingested_at,
               'SITE-MIGRATION', 'EDGE-MIGRATION', 'test', 'equipment', 'PRESS-MIGRATION',
               'model-migration', 1,
-              'ingestion-task', E'\t\r\n', 1);
+              'external-config', E'\t\r\n', 1);
             """,
             connection);
         whitespaceConfiguration.Parameters.AddWithValue("occurred_at", occurredAt.AddSeconds(1));

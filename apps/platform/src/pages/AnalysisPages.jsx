@@ -45,35 +45,6 @@ const reliabilityRunReasonDetails = {
   quality_unlinked: ["未关联有效质量结果", "核对检验结果是否关联到该运行。"],
 };
 
-const sampleSourceVerificationDetails = {
-  matched: {
-    label: "平台任务版本与 Edge 一致",
-    tone: "success",
-    detail: "该任务版本存在于当前站点的平台记录中，且记录归属 Edge 与帧报告 Edge 一致。",
-  },
-  "version-not-found": {
-    label: "站点内未找到该任务版本",
-    tone: "warning",
-    detail: "当前站点的平台任务记录中没有这组任务编号和版本。",
-  },
-  "edge-mismatch": {
-    label: "平台记录与帧来源 Edge 不一致",
-    tone: "warning",
-    detail: "当前站点存在该任务版本，但记录归属 Edge 与帧报告 Edge 不同。",
-  },
-  unverifiable: {
-    label: "无法逐版本核对",
-    tone: "neutral",
-    detail: "来源已汇总、帧来源信息不完整，或配置引用无法按历史任务版本核验。",
-  },
-};
-
-const ingestionTaskStatusLabels = {
-  draft: "草稿",
-  published: "已发布",
-  retired: "已停用",
-};
-
 function reliabilityRunActions(reasonCode, run, siteId) {
   const detailQuery = new URLSearchParams();
   if (siteId) detailQuery.set("siteId", siteId);
@@ -927,26 +898,12 @@ export function DataQualityPage() {
           <div id="run-impacts" className="scroll-mt-5">
             <Card
               title="未满足基线条件的运行"
-              description="列表只显示未满足通用数据可靠性基线条件的已分析运行。命中原因本身不证明某项具体分析或配方建议已受影响；请在对应页面复核其准入结果。样本来源与质量汇总该运行本次返回的完整帧集；起止时间只用于筛选运行，因此帧的首末观测时间可能超出所选窗口。应用观察只表示 Edge 心跳报告过某任务版本已应用，区间端点是 Platform 接收时刻，不是精确生效边界；运行时间重叠仅是相关证据，不证明该版本造成缺口。没有应用观察或匹配帧时，状态保持未知；首末采样时间不代表连续覆盖。多项原因可以同时命中。"
+              description="列表只显示未满足通用数据可靠性基线条件的已分析运行。命中原因本身不证明某项具体分析或配方建议已受影响；请在对应页面复核其准入结果。样本来源与质量汇总该运行本次返回的完整帧集；起止时间只用于筛选运行，因此帧的首末观测时间可能超出所选窗口。配置引用是 Edge 随采样帧报告的信息，不代表平台已核验配置或部署状态。多项原因可以同时命中。"
             >
             {baseline.data?.missingExecutionRowCount > 0 && (
               <div className="mb-4">
                 <Alert tone="warning">
                   本次纳入范围的匹配运行中，有 {formatInteger(baseline.data.missingExecutionRowCount)} 个没有可用的运行分析记录，未计入基线或本清单。
-                </Alert>
-              </div>
-            )}
-            {baseline.data?.taskDeploymentObservationHistoryTruncated && (
-              <div className="mb-4">
-                <Alert tone="warning">
-                  任务版本应用观察超过本次查询上限。未列出的运行保持未知，不能据此认为该时段没有应用观察。
-                </Alert>
-              </div>
-            )}
-            {baseline.data?.expectedConfigurationCoverageTruncated && (
-              <div className="mb-4">
-                <Alert tone="warning">
-                  应用观察覆盖详情超过本次响应上限。未显示的映射代码和覆盖结果保持未知。
                 </Alert>
               </div>
             )}
@@ -994,42 +951,17 @@ export function DataQualityPage() {
                     },
                     {
                       key: "sampleConfigurationEvidence",
-                      label: "样本来源与应用观察",
+                      label: "采样帧与值质量",
                       sortable: false,
-                      render: (evidence, run) => {
+                      render: evidence => {
                         const groups = evidence || [];
-                        const expectedCoverage = run.expectedConfigurationCoverage || [];
-                        const hasEvidence = groups.length > 0 || expectedCoverage.length > 0;
-                        const runStartReceipt = Date.parse(run.startedPlatformIngestedAt || "");
-                        const runCompletionReceipt = Date.parse(run.completedPlatformIngestedAt || "");
-                        const baselineGeneratedAt = Date.parse(baseline.data?.generatedAt || "");
-                        const baselineEnd = Date.parse(baseline.data?.to || "");
-                        const reportReceiptEnd = Number.isFinite(baselineGeneratedAt)
-                          ? Number.isFinite(baselineEnd) ? Math.min(baselineEnd, baselineGeneratedAt) : baselineGeneratedAt
-                          : Number.NaN;
-                        const runReceiptBoundaryUnavailable = !run.hasStarted ||
-                          !Number.isFinite(runStartReceipt) ||
-                          !Number.isFinite(reportReceiptEnd) ||
-                          runStartReceipt > reportReceiptEnd ||
-                          (run.hasCompleted && (!Number.isFinite(runCompletionReceipt) ||
-                            runCompletionReceipt < runStartReceipt ||
-                            runCompletionReceipt > baselineGeneratedAt));
-                        if (!hasEvidence) return (
+                        if (groups.length === 0) return (
                           <p className="min-w-64 whitespace-normal text-xs leading-5 text-slate-600">
-                            {runReceiptBoundaryUnavailable
-                              ? "缺少有效的生命周期 Platform 收件时间，无法划定运行区间；版本覆盖保持未知。"
-                              : baseline.data?.taskDeploymentObservationHistoryTruncated
-                              ? "应用观察历史已截断；此运行的来源状态未知。"
-                              : baseline.data?.expectedConfigurationCoverageTruncated
-                                ? "应用观察覆盖详情已截断；此运行的版本与映射来源未知。"
-                                : "没有可核验的样本来源或历史任务版本应用观察；不能据此判断现场适配器是否健康。"}
+                            当前没有可展示的已保存采样帧汇总；仅凭这一点无法判断现场采集状态。
                           </p>
                         );
                         return (
-                          <div className="min-w-80 space-y-3">
-                            {groups.length === 0 && <p className="text-xs leading-5 text-slate-600">
-                              未返回匹配的已保存采样帧；仅凭这一点无法判断现场适配器是否健康。
-                            </p>}
+                          <div className="min-w-72 space-y-2">
                             {groups.map((item, index) => {
                               const summarizedGroupCount = item.summarizedConfigurationGroupCount ?? 0;
                               const hasConfiguration = item.appliedConfigurationKind &&
@@ -1040,35 +972,13 @@ export function DataQualityPage() {
                                 : hasConfiguration
                                   ? `${item.appliedConfigurationKind} / ${item.appliedConfigurationId}@v${item.appliedConfigurationVersion}`
                                   : "来源未知 / 帧未报告配置引用";
-                              const referenceIsVerifiable = summarizedGroupCount === 0 &&
-                                item.appliedConfigurationKind === "ingestion-task" &&
-                                Boolean(item.appliedConfigurationId) &&
-                                Number.isInteger(Number(item.appliedConfigurationVersion)) &&
-                                Number(item.appliedConfigurationVersion) > 0 &&
-                                Boolean(item.sourceEdgeId);
-                              const verificationStatus = referenceIsVerifiable &&
-                                Object.hasOwn(sampleSourceVerificationDetails, item.referenceVerificationStatus)
-                                ? item.referenceVerificationStatus
-                                : "unverifiable";
-                              const verification = sampleSourceVerificationDetails[verificationStatus];
-                              const configurationStatusLabel = ingestionTaskStatusLabels[item.configurationStatus];
                               return (
                                 <div key={`${source}:${index}`} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                                   <div className="font-medium text-slate-800">{source}</div>
-                                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    <span className="text-xs font-medium text-slate-600">帧报告来源/版本核对</span>
-                                    <Badge tone={verification.tone}>{verification.label}</Badge>
-                                  </div>
-                                  <p className="mt-1 text-xs leading-5 text-slate-600">{verification.detail}</p>
+                                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                                    配置引用来自 Edge 报告，平台不核验其配置内容或部署状态。
+                                  </p>
                                   {item.sourceEdgeId && <div className="text-xs leading-5 text-slate-600">帧报告 Edge：{item.sourceEdgeId}</div>}
-                                  {verificationStatus === "matched" && configurationStatusLabel && (
-                                    <>
-                                      <div className="text-xs leading-5 text-slate-600">当前平台记录状态：{configurationStatusLabel}</div>
-                                      <p className="text-xs leading-5 text-slate-500">
-                                        当前平台记录状态不代表采样时状态；不证明 Edge 当时或当前已部署或应用该版本，也不证明该版本导致运行、分析或配方建议受影响。
-                                      </p>
-                                    </>
-                                  )}
                                   <div className="mt-1 text-xs leading-5 text-slate-600">
                                     {formatInteger(item.sampleFrameCount ?? 0)} 帧 · {formatInteger(item.observedValueCount ?? 0)} 个已保存值
                                   </div>
@@ -1081,83 +991,6 @@ export function DataQualityPage() {
                                 </div>
                               );
                             })}
-                            <section className="border-t border-slate-200 pt-2" aria-label={`${run.executionId} 的任务版本应用观察`}>
-                              <h4 className="text-xs font-semibold text-slate-700">运行时段的任务版本应用观察</h4>
-                              <p className="mt-1 text-xs leading-5 text-slate-500">
-                                运行区间按 Platform 收到生命周期事件的时间计算，并截断至查询截止时间与报告生成时间中的较早者；未完成运行截至该边界。开始收件时间缺失，或已完成运行缺少完成收件时间时，覆盖状态保持未知。
-                              </p>
-                              {expectedCoverage.length === 0 ? (
-                                <p className="mt-1 text-xs leading-5 text-slate-600">
-                                  {runReceiptBoundaryUnavailable
-                                    ? "缺少有效的生命周期 Platform 收件时间，无法划定运行区间；版本覆盖保持未知。"
-                                    : baseline.data?.taskDeploymentObservationHistoryTruncated
-                                    ? "本次应用观察历史已截断；此运行是否有重叠观察仍未知。"
-                                    : baseline.data?.expectedConfigurationCoverageTruncated
-                                      ? "应用观察覆盖详情已截断；此运行的版本与映射来源保持未知。"
-                                      : "没有可核验的 Applied 版本观察；这不代表该运行时段未部署任务或没有采样。"}
-                                </p>
-                              ) : (
-                                <div className="mt-2 space-y-2">
-                                  {expectedCoverage.map((item, index) => {
-                                    const evidenceStatus = item.sampleEvidenceStatus;
-                                    const sampleEvidenceStatus = {
-                                      matched: { label: "找到该版本样本", tone: "success" },
-                                      "no-matching-frames": { label: "未找到该版本样本", tone: "warning" },
-                                      "summarized-unverifiable": { label: "来源已汇总，无法逐版本核验", tone: "neutral" },
-                                      "unverifiable-sample-time-range": { label: "样本时间无法限定到观察区间", tone: "neutral" },
-                                      "unverifiable-task-version": { label: "任务版本归属无法核验", tone: "neutral" },
-                                      "observation-history-truncated": { label: "应用观察历史截断，无法判断", tone: "neutral" },
-                                      "coverage-result-truncated": { label: "映射覆盖详情截断，无法判断", tone: "neutral" },
-                                    }[evidenceStatus] || { label: "样本来源未知", tone: "neutral" };
-                                    const expectedCodes = item.requiredDataItemCodes || [];
-                                    const observedCodes = item.observedDataItemCodes || [];
-                                    const notObservedCodes = item.notObservedRequiredDataItemCodes || [];
-                                    const sourceCodesAreVerifiable = ["matched", "no-matching-frames"].includes(evidenceStatus);
-                                    return (
-                                      <div key={`${item.edgeId}:${item.taskId}:${item.taskVersion}:${index}`} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                        <div className="font-medium text-slate-800">{item.taskId}@v{item.taskVersion} · {item.edgeId}</div>
-                                        <div className="mt-1 text-xs leading-5 text-slate-600">
-                                          Platform 观察：{item.firstObservedAt ? formatTime(item.firstObservedAt) : "—"} 至 {item.lastObservedAt ? formatTime(item.lastObservedAt) : "—"}
-                                        </div>
-                                        <div className="text-xs leading-5 text-slate-600">
-                                          与运行重叠：{item.runOverlapStart ? formatTime(item.runOverlapStart) : "—"} 至 {item.runOverlapEnd ? formatTime(item.runOverlapEnd) : "—"}
-                                        </div>
-                                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                                          <Badge tone="info">Edge 报告已应用版本</Badge>
-                                          <Badge tone={sampleEvidenceStatus.tone}>{sampleEvidenceStatus.label}</Badge>
-                                          {evidenceStatus === "matched" && <span className="text-xs text-slate-600">{formatInteger(item.sampleFrameCount ?? 0)} 帧</span>}
-                                        </div>
-                                        {sourceCodesAreVerifiable && expectedCodes.length > 0 && (
-                                          <div className="mt-2 text-xs leading-5 text-slate-600">
-                                            <p>必需映射 {expectedCodes.length} 项；该版本样本报告 {observedCodes.length} 项。</p>
-                                            {notObservedCodes.length > 0 && <details className="mt-1">
-                                              <summary className="cursor-pointer font-medium text-amber-800">有 {notObservedCodes.length} 项必需映射未见于该版本返回的样本值</summary>
-                                              <p className="mt-1 break-words">{notObservedCodes.join("、")}</p>
-                                            </details>}
-                                            {evidenceStatus === "matched" && notObservedCodes.length === 0 && <p>该版本返回的样本值包含全部必需映射代码。</p>}
-                                          </div>
-                                        )}
-                                        <p className="mt-2 text-xs leading-5 text-slate-600">
-                                          {evidenceStatus === "no-matching-frames"
-                                            ? "该运行未找到此版本的已保存样本帧；请核对节点采样和运行边界，不能单凭此项归因缺口。"
-                                            : evidenceStatus === "summarized-unverifiable"
-                                              ? "样本来源分组超过逐项明细范围；未观察到的映射代码不能解释为缺失。"
-                                              : evidenceStatus === "unverifiable-task-version"
-                                                ? "平台无法核验此任务版本与运行对象的对应关系；不会列出缺失映射代码。"
-                                                : evidenceStatus === "unverifiable-sample-time-range"
-                                                  ? "该版本样本的 Platform 接收时间统计跨出本次应用观察重叠区间，无法确认区间内的点位覆盖。"
-                                                : evidenceStatus === "observation-history-truncated"
-                                                  ? "应用观察超出本次查询结果上限；该版本的样本覆盖状态保持未知。"
-                                                  : evidenceStatus === "coverage-result-truncated"
-                                                    ? "覆盖详情超出本次响应上限；未返回的映射代码和覆盖结果保持未知。"
-                                                : "应用观察与运行时间重叠只提供相关线索；不证明精确生效边界或因果关系。"}
-                                        </p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </section>
                           </div>
                         );
                       },

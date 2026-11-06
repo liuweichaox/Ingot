@@ -1,4 +1,4 @@
-namespace Ingot.Platform.Application.Acquisition;
+namespace Ingot.Platform.Application.Edges;
 
 /// <summary>Lists only the edge identities owned by a site for cross-resource scope checks.</summary>
 public interface IEdgeSiteDirectory

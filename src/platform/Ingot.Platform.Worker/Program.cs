@@ -17,8 +17,6 @@ builder.Services.AddIngotLocalIdentityMaintenance();
 builder.Services.AddIngotAgentCore(builder.Configuration);
 builder.Services.AddIngotAgentProviders(builder.Configuration);
 builder.Services.AddHostedService<AgentRunQueueWorker>();
-builder.Services.AddSingleton<EdgeTaskFreshnessWorkerMetrics>();
-builder.Services.AddHostedService<EdgeTaskFreshnessHistoryWorker>();
 builder.Services.AddHealthChecks()
     .AddCheck<PlatformWorkerPulseHealthCheck>("worker-heartbeat");
 
@@ -27,7 +25,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 {
     AllowCachingResponses = false
 });
-app.MapGet("/metrics", (PlatformWorkerPulse pulse, EdgeTaskFreshnessWorkerMetrics freshnessMetrics, IOptions<PlatformWorkerPulseOptions> options) => Results.Text(
-    pulse.RenderPrometheus(options.Value.StaleAfter) + freshnessMetrics.RenderPrometheus(),
+app.MapGet("/metrics", (PlatformWorkerPulse pulse, IOptions<PlatformWorkerPulseOptions> options) => Results.Text(
+    pulse.RenderPrometheus(options.Value.StaleAfter),
     "text/plain; version=0.0.4; charset=utf-8"));
 await app.RunAsync();

@@ -2,7 +2,6 @@
 
 using Ingot.Contracts.Analytics;
 using Ingot.Contracts.Events;
-using Ingot.Platform.Application.Acquisition;
 using Ingot.Platform.Application.Analytics;
 using Ingot.Platform.Application.Events;
 using Ingot.Platform.Application.ProcessConfiguration;
@@ -14,11 +13,7 @@ namespace Ingot.Platform.Infrastructure.Analytics;
 public sealed class DataReliabilityBaselineService(
     IPlatformEventStore events,
     IExecutionComparisonService executions,
-    IProcessSampleConfigurationReferenceVerifier sampleConfigurationReferenceVerifier,
-    ResearchContextAdmissionEvaluator? contextAdmission = null,
-    IEdgeTaskDeploymentHistoryReader? taskDeploymentHistory = null,
-    IEdgeSiteDirectory? edgeSites = null,
-    ILegacyIngestionMetadataReader? ingestionTasks = null) : IDataReliabilityBaselineService
+    ResearchContextAdmissionEvaluator? contextAdmission = null) : IDataReliabilityBaselineService
 {
     private readonly ResearchContextAdmissionEvaluator _contextAdmission =
         contextAdmission ?? new ResearchContextAdmissionEvaluator();
@@ -72,10 +67,6 @@ public sealed class DataReliabilityBaselineService(
 
     private const int MaximumFactorLevels = 50;
     private const int MaximumScannedEvents = 50_000;
-    private const int MaximumExpectedCoverageItems = 2_000;
-    private const int MaximumExpectedCoverageCodesPerKind = 500;
-    private const int MaximumExpectedCoverageCodesTotal = 100_000;
-    private const int MaximumCoverageCandidateComparisons = 250_000;
 
     public async Task<DataReliabilityBaseline> CalculateAsync(
         DataReliabilityBaselineQuery query,
@@ -181,23 +172,9 @@ public sealed class DataReliabilityBaselineService(
             foreach (var pair in LifecycleReceiptTimesByExecution(recoveredBoundaries[1], earliest: false))
                 completedPlatformIngestedAtByExecution[pair.Key] = pair.Value;
         }
-        var reportedConfigurationEvidence = impactedRows
-            .SelectMany(static item => item.Row.SampleConfigurationEvidence)
-            .ToArray();
-        var verifiedConfigurationEvidence = await sampleConfigurationReferenceVerifier.VerifyAsync(
-                scopedQuery.SiteId!, reportedConfigurationEvidence, ct)
-            .ConfigureAwait(false);
-        if (verifiedConfigurationEvidence.Count != reportedConfigurationEvidence.Length)
-            throw new InvalidOperationException("采样来源核验结果与输入证据数量不一致。");
-
         var runImpacts = new List<ReliabilityRunImpact>(impactedRows.Length);
-        var evidenceCursor = 0;
         foreach (var item in impactedRows)
         {
-            var sourceCount = item.Row.SampleConfigurationEvidence.Count;
-            var verifiedForRun = new ProcessSampleConfigurationEvidence[sourceCount];
-            for (var index = 0; index < sourceCount; index++)
-                verifiedForRun[index] = verifiedConfigurationEvidence[evidenceCursor++];
             runImpacts.Add(new ReliabilityRunImpact
             {
                 ExecutionId = item.Row.ExecutionId,
@@ -215,13 +192,9 @@ public sealed class DataReliabilityBaselineService(
                     item.Row.ExecutionId),
                 ProcessDataStatus = item.Row.ProcessDataQuality.Status,
                 ReasonCodes = item.ReasonCodes,
-                SampleConfigurationEvidence = verifiedForRun
+                SampleConfigurationEvidence = item.Row.SampleConfigurationEvidence
             });
         }
-        var coverageProjection = await ProjectExpectedConfigurationCoverageAsync(
-                runImpacts, query, generatedAt, ct)
-            .ConfigureAwait(false);
-        runImpacts = coverageProjection.RunImpacts;
 
         var denominator = rows.Length;
         var lifecycleComplete = rows.Count(static row => row.LifecycleComplete);
@@ -305,8 +278,6 @@ public sealed class DataReliabilityBaselineService(
                 item.Identifiability == "confounded"),
             Exclusions = exclusions,
             RunImpacts = runImpacts,
-            TaskDeploymentObservationHistoryTruncated = coverageProjection.HistoryTruncated,
-            ExpectedConfigurationCoverageTruncated = coverageProjection.ResultTruncated,
             DuplicateTimestampCount = rows.Sum(static row => row.ProcessDataQuality.DuplicateTimestampCount),
             OutOfOrderCount = rows.Sum(static row => row.ProcessDataQuality.OutOfOrderCount),
             SequenceGapCount = rows.Sum(static row => row.ProcessDataQuality.SequenceGapCount),
@@ -320,376 +291,6 @@ public sealed class DataReliabilityBaselineService(
             NegativePlatformIngestLatencyCount = rows.Sum(static row =>
                 row.ProcessDataQuality.NegativePlatformIngestLatencyCount)
         };
-    }
-
-    // Joins receipt-bounded applied-version observations to runs and detailed sample groups without asserting causality.
-    private async Task<CoverageProjection> ProjectExpectedConfigurationCoverageAsync(
-        List<ReliabilityRunImpact> runImpacts,
-        DataReliabilityBaselineQuery query,
-        DateTimeOffset generatedAt,
-        CancellationToken ct)
-    {
-        if (runImpacts.Count == 0 || taskDeploymentHistory is null || edgeSites is null || ingestionTasks is null)
-            return new CoverageProjection(runImpacts, false, false);
-
-        var siteId = Normalize(query.SiteId)!;
-        var authorizedEdgeIds = await edgeSites.ListEdgeIdsAsync(siteId, ct).ConfigureAwait(false);
-        if (authorizedEdgeIds.Count == 0)
-            return new CoverageProjection(runImpacts, false, false);
-
-        var runSpans = new Dictionary<string, RunTimeSpan>(StringComparer.Ordinal);
-        var reportEnd = query.To is { } queryEnd && queryEnd < generatedAt ? queryEnd : generatedAt;
-        foreach (var impact in runImpacts)
-        {
-            if (ResolveRunTimeSpan(impact, reportEnd, generatedAt) is { } span)
-                runSpans[impact.ExecutionId] = span;
-        }
-        if (runSpans.Count == 0)
-            return new CoverageProjection(runImpacts, false, false);
-
-        var scopedEdgeIds = runImpacts
-            .SelectMany(static impact => impact.EdgeIds)
-            .Where(edgeId => !string.IsNullOrWhiteSpace(edgeId) && authorizedEdgeIds.Contains(edgeId))
-            .Select(static edgeId => edgeId.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (scopedEdgeIds.Length == 0)
-            return new CoverageProjection(runImpacts, false, false);
-
-        var from = runSpans.Values.Min(static span => span.Start);
-        var to = runSpans.Values.Max(static span => span.End);
-        var observationResult = await taskDeploymentHistory.FindOverlappingAsync(
-                siteId, scopedEdgeIds, from, to, ct)
-            .ConfigureAwait(false);
-        var historyTruncated = observationResult.Truncated;
-        var observationsByEdge = observationResult.Observations
-            .Where(item => authorizedEdgeIds.Contains(item.EdgeId))
-            .GroupBy(static item => item.EdgeId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
-
-        var candidates = new List<RunObservationCandidate>(Math.Min(
-            MaximumExpectedCoverageItems, observationResult.Observations.Count));
-        var candidateComparisons = 0;
-        var resultTruncated = false;
-        foreach (var impact in runImpacts)
-        {
-            if (!runSpans.TryGetValue(impact.ExecutionId, out var span))
-                continue;
-            var stop = false;
-            foreach (var edgeId in impact.EdgeIds
-                         .Where(edgeId => !string.IsNullOrWhiteSpace(edgeId) && authorizedEdgeIds.Contains(edgeId))
-                         .Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                if (!observationsByEdge.TryGetValue(edgeId, out var edgeObservations))
-                    continue;
-                foreach (var observation in edgeObservations)
-                {
-                    candidateComparisons++;
-                    if (candidateComparisons > MaximumCoverageCandidateComparisons)
-                    {
-                        resultTruncated = true;
-                        stop = true;
-                        break;
-                    }
-                    var observationEnd = observation.ClosedObservedAt ?? observation.LastObservedAt;
-                    if (observation.FirstObservedAt > span.End || observationEnd < span.Start)
-                        continue;
-                    if (candidates.Count == MaximumExpectedCoverageItems)
-                    {
-                        resultTruncated = true;
-                        stop = true;
-                        break;
-                    }
-                    candidates.Add(new RunObservationCandidate(
-                        impact,
-                        observation,
-                        observation.FirstObservedAt > span.Start ? observation.FirstObservedAt : span.Start,
-                        observationEnd < span.End ? observationEnd : span.End));
-                }
-                if (stop)
-                    break;
-            }
-            if (stop)
-                break;
-        }
-
-        if (candidates.Count == 0)
-            return new CoverageProjection(runImpacts, historyTruncated, resultTruncated);
-
-        var references = candidates
-            .Select(static candidate => new IngestionTaskVersionReference(
-                candidate.Observation.TaskId, candidate.Observation.TaskVersion))
-            .Distinct()
-            .ToArray();
-        var versionMetadata = await ingestionTasks.FindCoverageMetadataAsync(
-                references, scopedEdgeIds, ct)
-            .ConfigureAwait(false);
-        var metadataByVersion = versionMetadata
-            .GroupBy(static item => new TaskVersionKey(item.TaskId, item.Version))
-            .ToDictionary(static group => group.Key, static group => group.First());
-
-        var expectedByExecution = new Dictionary<string, List<ExpectedConfigurationCoverageEvidence>>(StringComparer.Ordinal);
-        var emittedItemCount = 0;
-        var emittedCodeCount = 0;
-        foreach (var candidate in candidates)
-        {
-            var observation = candidate.Observation;
-            var key = new TaskVersionKey(observation.TaskId, observation.TaskVersion);
-            var hasMetadata = metadataByVersion.TryGetValue(key, out var metadata);
-            var metadataEdgeMatches = hasMetadata && metadata!.AuthorizedEdgeId is not null &&
-                                      authorizedEdgeIds.Contains(metadata.AuthorizedEdgeId) &&
-                                      string.Equals(metadata.AuthorizedEdgeId, observation.EdgeId,
-                                          StringComparison.OrdinalIgnoreCase);
-            var subjectMatch = metadataEdgeMatches
-                ? MatchRunSubject(metadata!, candidate.Impact)
-                : SubjectMatch.Unknown;
-            if (subjectMatch == SubjectMatch.Mismatch)
-                continue;
-
-            var metadataVerified = metadataEdgeMatches && subjectMatch == SubjectMatch.Match;
-            var coverage = BuildCoverageEvidence(candidate, metadataVerified ? metadata : null,
-                candidate.Impact.SampleConfigurationEvidence, historyTruncated);
-            if (coverage.SampleEvidenceStatus ==
-                ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated)
-                resultTruncated = true;
-
-            var rowCodes = coverage.RequiredDataItemCodes.Count +
-                           coverage.ObservedDataItemCodes.Count +
-                           coverage.NotObservedRequiredDataItemCodes.Count;
-            if (!historyTruncated && metadataVerified &&
-                (metadata!.RequiredDataItemCodesTruncated || rowCodes > MaximumExpectedCoverageCodesPerKind * 3 ||
-                 emittedCodeCount + rowCodes > MaximumExpectedCoverageCodesTotal))
-            {
-                coverage = coverage with
-                {
-                    SampleEvidenceStatus = ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated,
-                    SampleFrameCount = 0,
-                    RequiredDataItemCodes = [],
-                    ObservedDataItemCodes = [],
-                    NotObservedRequiredDataItemCodes = []
-                };
-                resultTruncated = true;
-                rowCodes = 0;
-            }
-
-            if (emittedItemCount >= MaximumExpectedCoverageItems)
-            {
-                resultTruncated = true;
-                break;
-            }
-            emittedItemCount++;
-            emittedCodeCount += rowCodes;
-            if (!expectedByExecution.TryGetValue(candidate.Impact.ExecutionId, out var runEvidence))
-            {
-                runEvidence = [];
-                expectedByExecution.Add(candidate.Impact.ExecutionId, runEvidence);
-            }
-            runEvidence.Add(coverage);
-        }
-
-        var enriched = runImpacts.Select(impact => expectedByExecution.TryGetValue(
-                impact.ExecutionId, out var evidence)
-            ? impact with
-            {
-                ExpectedConfigurationCoverage = evidence
-                    .OrderBy(static item => item.FirstObservedAt)
-                    .ThenBy(static item => item.EdgeId, StringComparer.Ordinal)
-                    .ThenBy(static item => item.TaskId, StringComparer.Ordinal)
-                    .ThenBy(static item => item.TaskVersion)
-                    .ToArray()
-            }
-            : impact).ToList();
-        return new CoverageProjection(enriched, historyTruncated, resultTruncated);
-    }
-
-    private static ExpectedConfigurationCoverageEvidence BuildCoverageEvidence(
-        RunObservationCandidate candidate,
-        IngestionTaskCoverageMetadata? metadata,
-        IReadOnlyList<ProcessSampleConfigurationEvidence> sampleEvidence,
-        bool historyTruncated)
-    {
-        var observation = candidate.Observation;
-        var requiredCodes = metadata?.RequiredDataItemCodes ?? [];
-        var exactEvidence = sampleEvidence.Where(item =>
-                string.Equals(item.AppliedConfigurationKind, "ingestion-task", StringComparison.Ordinal) &&
-                string.Equals(item.AppliedConfigurationId, observation.TaskId, StringComparison.OrdinalIgnoreCase) &&
-                item.AppliedConfigurationVersion == observation.TaskVersion &&
-                string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase) &&
-                item.SummarizedConfigurationGroupCount == 0)
-            .ToArray();
-        var verifiedExactEvidence = exactEvidence.Where(static item =>
-                string.Equals(item.ReferenceVerificationStatus,
-                    ProcessSampleConfigurationReferenceStatuses.Matched, StringComparison.Ordinal))
-            .ToArray();
-        var timeScopedEvidence = verifiedExactEvidence.Where(item =>
-                item.HasCompletePlatformIngestedAt &&
-                item.FirstPlatformIngestedAt is { } first && item.LastPlatformIngestedAt is { } last &&
-                first >= candidate.OverlapStart && last <= candidate.OverlapEnd)
-            .ToArray();
-        var rawExactEvidenceExists = sampleEvidence.Any(item =>
-            string.Equals(item.AppliedConfigurationKind, "ingestion-task", StringComparison.Ordinal) &&
-            string.Equals(item.AppliedConfigurationId, observation.TaskId, StringComparison.OrdinalIgnoreCase) &&
-            item.AppliedConfigurationVersion == observation.TaskVersion &&
-            string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase));
-
-        var observedCodes = new HashSet<string>(StringComparer.Ordinal);
-        var observedCodesTruncated = false;
-        long frameCount = 0;
-        foreach (var item in timeScopedEvidence)
-        {
-            frameCount += Math.Max(0, item.SampleFrameCount);
-            foreach (var code in item.ObservedDataItemCodes)
-            {
-                if (string.IsNullOrWhiteSpace(code))
-                    continue;
-                observedCodes.Add(code);
-                if (observedCodes.Count > MaximumExpectedCoverageCodesPerKind)
-                {
-                    observedCodesTruncated = true;
-                    break;
-                }
-            }
-            if (observedCodesTruncated)
-                break;
-        }
-
-        var hasSummarizedEvidence = sampleEvidence.Any(static item => item.SummarizedConfigurationGroupCount > 0);
-        var hasUnattributableEvidence = sampleEvidence.Any(item =>
-            item.SampleFrameCount > 0 &&
-            (item.SourceEdgeId is null ||
-             string.Equals(item.SourceEdgeId, observation.EdgeId, StringComparison.OrdinalIgnoreCase)) &&
-            (string.IsNullOrWhiteSpace(item.AppliedConfigurationKind) ||
-             string.IsNullOrWhiteSpace(item.AppliedConfigurationId) ||
-             item.AppliedConfigurationVersion is null));
-        var status = historyTruncated
-            ? ExpectedConfigurationSampleEvidenceStatuses.ObservationHistoryTruncated
-            : metadata is null
-                ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
-                : metadata.RequiredDataItemCodesTruncated || observedCodesTruncated
-                    ? ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
-                    : timeScopedEvidence.Length > 0
-                        ? ExpectedConfigurationSampleEvidenceStatuses.Matched
-                        : verifiedExactEvidence.Length > 0
-                            ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableSampleTimeRange
-                        : rawExactEvidenceExists || hasUnattributableEvidence
-                            ? ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion
-                            : hasSummarizedEvidence
-                                ? ExpectedConfigurationSampleEvidenceStatuses.SummarizedUnverifiable
-                                : ExpectedConfigurationSampleEvidenceStatuses.NoMatchingFrames;
-
-        IReadOnlyList<string> required = status is ExpectedConfigurationSampleEvidenceStatuses.ObservationHistoryTruncated or
-            ExpectedConfigurationSampleEvidenceStatuses.UnverifiableSampleTimeRange or
-            ExpectedConfigurationSampleEvidenceStatuses.UnverifiableTaskVersion or
-            ExpectedConfigurationSampleEvidenceStatuses.CoverageResultTruncated
-            ? []
-            : requiredCodes;
-        IReadOnlyList<string> observed = status == ExpectedConfigurationSampleEvidenceStatuses.Matched
-            ? observedCodes.Order(StringComparer.Ordinal).ToArray()
-            : [];
-        IReadOnlyList<string> notObserved = status == ExpectedConfigurationSampleEvidenceStatuses.Matched
-            ? required.Except(observed, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
-            : status == ExpectedConfigurationSampleEvidenceStatuses.NoMatchingFrames
-                ? required
-                : [];
-        var includeCounts = status == ExpectedConfigurationSampleEvidenceStatuses.Matched;
-
-        return new ExpectedConfigurationCoverageEvidence
-        {
-            TaskId = observation.TaskId,
-            TaskVersion = observation.TaskVersion,
-            EdgeId = observation.EdgeId,
-            ConfigurationHash = observation.ConfigurationHash,
-            ConfigurationSource = observation.ConfigurationSource,
-            ConfigurationStatus = metadata?.AuthorizedStatus ?? "unknown",
-            FirstObservedAt = observation.FirstObservedAt,
-            LastObservedAt = observation.LastObservedAt,
-            RunOverlapStart = candidate.OverlapStart,
-            RunOverlapEnd = candidate.OverlapEnd,
-            SampleEvidenceStatus = status,
-            SampleFrameCount = includeCounts && frameCount <= int.MaxValue ? (int)frameCount : 0,
-            RequiredDataItemCodes = required,
-            ObservedDataItemCodes = observed,
-            NotObservedRequiredDataItemCodes = notObserved
-        };
-    }
-
-    private static SubjectMatch MatchRunSubject(
-        IngestionTaskCoverageMetadata metadata,
-        ReliabilityRunImpact impact)
-    {
-        var expectedType = Normalize(metadata.SubjectType);
-        var expectedId = Normalize(metadata.SubjectId);
-        var runType = Normalize(impact.SubjectType);
-        var runId = Normalize(impact.SubjectId);
-        if (string.Equals(expectedType, "equipment", StringComparison.OrdinalIgnoreCase))
-        {
-            runType ??= "equipment";
-            runId ??= Normalize(impact.EquipmentId);
-        }
-        if (expectedType is null || expectedId is null || runType is null || runId is null)
-            return SubjectMatch.Unknown;
-        return string.Equals(expectedType, runType, StringComparison.OrdinalIgnoreCase) &&
-               string.Equals(expectedId, runId, StringComparison.OrdinalIgnoreCase)
-            ? SubjectMatch.Match
-            : SubjectMatch.Mismatch;
-    }
-
-    private static RunTimeSpan? ResolveRunTimeSpan(
-        ReliabilityRunImpact impact,
-        DateTimeOffset reportEnd,
-        DateTimeOffset generatedAt)
-    {
-        if (!impact.HasStarted)
-            return null;
-        var start = impact.StartedPlatformIngestedAt;
-        if (!start.HasValue || start.Value == default)
-            return null;
-        if (start.Value > reportEnd || start.Value > generatedAt)
-            return null;
-        DateTimeOffset end;
-        if (impact.HasCompleted)
-        {
-            if (impact.CompletedPlatformIngestedAt is not { } completedAt ||
-                completedAt == default || completedAt > generatedAt)
-                return null;
-            end = completedAt < reportEnd ? completedAt : reportEnd;
-        }
-        else
-            end = reportEnd;
-        return end < start.Value ? null : new RunTimeSpan(start.Value, end);
-    }
-
-    private sealed record RunObservationCandidate(
-        ReliabilityRunImpact Impact,
-        EdgeTaskDeploymentObservation Observation,
-        DateTimeOffset OverlapStart,
-        DateTimeOffset OverlapEnd);
-
-    private sealed record RunTimeSpan(DateTimeOffset Start, DateTimeOffset End);
-
-    private sealed record CoverageProjection(
-        List<ReliabilityRunImpact> RunImpacts,
-        bool HistoryTruncated,
-        bool ResultTruncated);
-
-    private enum SubjectMatch
-    {
-        Match,
-        Mismatch,
-        Unknown
-    }
-
-    private readonly record struct TaskVersionKey
-    {
-        public string TaskId { get; }
-
-        public int Version { get; }
-
-        public TaskVersionKey(string taskId, int version)
-        {
-            TaskId = taskId.Trim().ToLowerInvariant();
-            Version = version;
-        }
     }
 
     private static double? Maximum(IEnumerable<double?> values)

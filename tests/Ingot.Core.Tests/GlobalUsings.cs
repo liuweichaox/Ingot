@@ -1,7 +1,7 @@
 // 汇总核心测试项目共享的命名空间导入。
 
-global using Ingot.Platform.Application.Acquisition;
 global using Ingot.Platform.Application.Analytics;
+global using Ingot.Platform.Application.Edges;
 global using Ingot.Platform.Application.Events;
 global using Ingot.Platform.Application.Identity;
 global using Ingot.Platform.Application.Inspections;

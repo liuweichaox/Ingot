@@ -23,7 +23,7 @@ Next-recipe recommendations, mechanism claims, and conflicts belong to “factor
 | Group | Relations | Formal responsibility |
 | --- | --- | --- |
 | Identity and access | `users`, `user_sessions` | Identity, sessions, and site authorization; never production facts. |
-| Site and connectivity | `platform_edges`, `edge_runtime_status_history`, `edge_task_deployment_observations`, `edge_task_deployment_observation_state` | Edge identity and runtime state, plus deployment observations reported by adapters. |
+| Site and connectivity | `platform_edges`, `edge_runtime_status_history` | Edge identity, heartbeat, and runtime status. |
 | Event idempotency and raw facts | `event_ingest_keys`, `production_events`, `collection_points`, `process_sample_frames`, `process_sample_values` | Ingest deduplication ledger, immutable event envelopes, point catalogue, and high-frequency samples. |
 | Execution and derived analysis | `process_execution_boundaries`, `execution_boundary_recompute_jobs`, `execution_analysis_backfill_jobs`, `execution_analysis_recompute_jobs`, `execution_analysis_materializations`, `execution_features`, `execution_phases` | Execution boundaries plus recomputable phases, features, and materialization state. |
 | Process configuration | `process_data_models`, `signal_definitions`, `feature_definitions`, `phase_definitions`, `phase_mappings`, `process_specification_versions`, `scenario_packages`, `process_analysis_plans` | Versioned process semantics, signals/features, specifications, and scenario policy. |
@@ -35,7 +35,7 @@ Next-recipe recommendations, mechanism claims, and conflicts belong to “factor
 | Agent conversations and problem cases | `agent_runs`, `agent_stream_events`, `problem_cases`, `case_level_evaluations`, `chat_conversations`, `chat_messages` | Model traces, problem cases, case evaluation, and durable chat; no business-write permission. |
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
 
-Retired acquisition-configuration tables are outside the active schema. Migration `0043` moved `data_source_instances`, `ingestion_task_templates`, `ingestion_task_bindings`, and `acquisition_probe_tasks` into `ingot_legacy`; migration `0044` moved `ingestion_tasks` there as well. Original rows, indexes, and inter-table foreign keys are preserved. Platform reads `ingot_legacy.ingestion_tasks` only to verify historical `AppliedConfiguration` references on sample events; the current API no longer creates, publishes, or deletes acquisition tasks.
+Platform does not manage or verify device acquisition configuration, task freshness, or task deployment history. Migration `0045` removes the retired acquisition-configuration tables in `ingot_legacy` and the Edge task freshness and deployment observation tables; migration `0046` removes unused acquisition-task references from scenario packages. Device protocols, sampling schedules, and site point bindings belong to external Edge adapters. Platform retains the generic `collection_points`, `process_sample_frames`, and `process_sample_values` relations to catalogue points and store the sample facts it receives. These migrations permanently remove the retired data.
 
 `process_sample_values.quality_code` stores point quality, and `quality_evidence_version` identifies the acquisition contract that justified it. Samples projected before this migration and writes from older Edge versions use version `0` and are read as uncertain; only events with the current contract version can classify an unflagged point as good. Unknown quality values and older formats are never inferred as good or admitted as complete evidence for formal diagnosis or recipe recommendations.
 
@@ -54,8 +54,7 @@ The recommendation's recipe version is retained in the frozen brief context; rel
 ## 4. Unresolved Debt
 
 1. `event_ingest_keys` is pruned while `production_events` lacks permanent event uniqueness. The current contract is retention-window idempotency, not indefinite replay idempotency. Long-term audit needs a durable tombstone or `(site_id, edge_id, seq)` watermark.
-2. Retired acquisition-configuration tables remain in `ingot_legacy`; production code reads only `ingestion_tasks` to verify historical evidence. The other archived tables are available for administrator audits and are outside the active schema.
-3. Some older indexes are covered by newer pagination-index prefixes. Remove them only after production `pg_stat_user_indexes` and `EXPLAIN` evidence.
+2. Some older indexes are covered by newer pagination-index prefixes. Remove them only after production `pg_stat_user_indexes` and `EXPLAIN` evidence.
 
 ## 5. Write Rules
 

@@ -55,14 +55,14 @@ public sealed class ScenarioPackageValidatorTests
     }
 
     [Fact]
-    public void DuplicateReferencesAndInvalidConstraintBounds_AreRejected()
+    public void DuplicateContextFieldsAndInvalidConstraintBounds_AreRejected()
     {
         var duplicate = Package() with
         {
-            IngestionTasks =
+            ContextFields =
             [
-                new VersionedConfigurationReference { Id = "device-a", Version = 1 },
-                new VersionedConfigurationReference { Id = "DEVICE-A", Version = 1 }
+                new ScenarioContextFieldPolicy { FieldCode = "equipment_id", Name = "设备" },
+                new ScenarioContextFieldPolicy { FieldCode = "EQUIPMENT_ID", Name = "设备" }
             ]
         };
         Assert.False(ScenarioPackageValidator.TryValidate(duplicate, out _, out var duplicateError));

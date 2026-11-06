@@ -58,26 +58,3 @@ public sealed record EdgeRuntimeStatusInterval
     public long DistinctBacklogObservationCount { get; init; }
     public DateTimeOffset? LastBacklogObservedAt { get; init; }
 }
-
-public static class EdgeTaskFreshnessStates
-{
-    public const string Unknown = "unknown";
-    public const string Unmonitored = "unmonitored";
-    public const string WithinLimit = "within-limit";
-    public const string Timeout = "timeout";
-    public const string Removed = "removed";
-}
-
-public sealed record EdgeTaskFreshnessTransition
-{
-    public required string EdgeId { get; init; }
-    public required string ConfigurationKey { get; init; }
-    public string? PreviousState { get; init; }
-    public required string State { get; init; }
-    public int? PreviousThresholdMs { get; init; }
-    public int? ThresholdMs { get; init; }
-    public DateTimeOffset EffectiveAt { get; init; }
-    public DateTimeOffset DetectedAt { get; init; }
-    public long? DurationMs { get; init; }
-    public DateTimeOffset? LastValidSnapshotAt { get; init; }
-}

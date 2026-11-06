@@ -3,7 +3,6 @@
 using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ResearchAssets;
 using Ingot.Platform.Infrastructure;
-using Ingot.Platform.Infrastructure.Acquisition;
 using Ingot.Platform.Infrastructure.Events;
 using Ingot.Platform.Infrastructure.Inspections;
 using Ingot.Platform.Infrastructure.Manufacturing;
@@ -55,8 +54,6 @@ public sealed class PostgresSchemaOwnershipTests(PostgresIntegrationFixture post
             await provider.GetRequiredService<IInspectionReviewStore>().InitializeAsync();
             await provider.GetRequiredService<IProcessConfigurationStore>().InitializeAsync();
             await provider.GetRequiredService<IResearchAssetStore>().InitializeAsync();
-            _ = provider.GetRequiredService<ILegacyIngestionMetadataReader>();
-
             var after = await ReadPublicColumnsAsync(postgres.ConnectionString);
             Assert.Equal(before, after);
         }

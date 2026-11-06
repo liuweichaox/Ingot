@@ -184,7 +184,7 @@ Edge 向 Platform 使用至少一次传输，Platform 对已接收身份执行�
 | 部署级研发资产与评测 | 数据集/模型/案例身份与版本；按岗位授权 | `training_dataset_versions`、`model_evaluations`、`model_drift_readings`、`case_level_evaluations` | 当前没有独立的 `SiteId` 隔离契约，不得作为跨团队或跨租户隔离能力使用；引用生产事实时仍须遵守其来源权限 |
 | Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events`、`problem_cases` | Agent 记录不授予新数据权限；回放时重新验证用户和站点范围 |
 
-退役采集配置已归档到 `ingot_legacy`。`ingestion_tasks` 只作为历史来源证据，由 Platform 只读核验；当前设备采集配置由现场适配器负责，不通过 Platform API 管理。
+Platform 不管理设备采集配置、采集任务新鲜度或任务部署历史。设备协议、采样计划和现场点位绑定由外部 Edge 适配器负责；Platform 保留通用点位目录和采样帧/值表，用于存储实际收到的生产数据。迁移 `0045` 删除退役采集配置及任务新鲜度/部署观察表，迁移 `0046` 清除场景包中的旧采集任务引用。
 
 当前数据库门禁已经强制规范摄入/投影表以及 Edge 注册、检验记录、质量范围和检验附件的 `site_id NOT NULL`。Edge 注册不能跨站迁移；检验附件按站点和内容哈希去重，读取时重新校验岗位与站点。
 

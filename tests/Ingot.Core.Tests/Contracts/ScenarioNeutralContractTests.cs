@@ -32,9 +32,8 @@ public sealed class ScenarioNeutralContractTests
 
         Assert.True(admitted.Admitted);
         Assert.Empty(admitted.ExclusionReasons);
-        Assert.Contains(normalized!.IngestionTasks, item => item.Id == "http-line-events");
+        Assert.NotNull(normalized);
         Assert.DoesNotContain("optical", normalized.PackageId, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("plc", normalized.IngestionTasks[0].Id, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -61,17 +60,12 @@ public sealed class ScenarioNeutralContractTests
         PackageId = "continuous-coating-sandbox",
         Version = 1,
         Name = "连续涂布合成沙盘",
-        Description = "通过 HTTP 事件和文件检验结果验证核心上下文契约的场景中立性。",
+        Description = "验证核心上下文契约的场景中立性。",
         Status = ConfigurationStatuses.Published,
         DataModelId = "continuous-web-process",
         DataModelVersion = 1,
         AnalysisPlanId = "coating-thickness-analysis",
         AnalysisPlanVersion = 1,
-        IngestionTasks =
-        [
-            new VersionedConfigurationReference { Id = "http-line-events", Version = 1 },
-            new VersionedConfigurationReference { Id = "file-thickness-inspection", Version = 1 }
-        ],
         ContextFields =
         [
             Required("equipment_id"),

@@ -19,15 +19,6 @@ const model = {
   acquisition: { dataItems: [{ code: "mold.temperature", displayName: "模具温度", category: "process" }, { code: "stage", category: "stage" }] },
 };
 
-const task = {
-  taskId: "press-01",
-  dataModelId: "model-lens",
-  dataModelVersion: 3,
-  status: "published",
-  valueMappings: [{ dataItemCode: "mold.temperature" }],
-  processSpecification: { parameterMappings: [{ dataItemCode: "holding.temperature-set" }] },
-};
-
 const analysisPlan = { planId: "analysis-01", status: "published", analysisScope: "production-execution", dataModelId: "model-lens", dataModelVersion: 3, signals: [{ dataItemCode: "mold.temperature" }] };
 const qualityPlan = { planId: "quality-01", status: "published", scope: { productFamilyCode: "lens" }, items: [{ definitionCode: "surface", definitionVersion: 1 }] };
 const definition = { code: "surface", version: 1, characteristics: [{ code: "pv", name: "面形 PV", inputType: "numeric", unit: "μm", lowerLimit: 0, upperLimit: 1 }] };
@@ -35,7 +26,6 @@ const definition = { code: "surface", version: 1, characteristics: [{ code: "pv"
 const checks = overrides => recipeLaunchChecks({
   specification,
   models: [model],
-  tasks: [task],
   analysisPlans: [analysisPlan],
   qualityPlans: [qualityPlan],
   definitions: [definition],
@@ -49,8 +39,8 @@ describe("配方版本上线检查", () => {
     expect(checks().every(item => item.ready)).toBe(true);
   });
 
-  it("不依赖采集任务配置", () => {
-    expect(checks({ tasks: [] }).every(item => item.ready)).toBe(true);
+  it("设备适配器配置不属于配方上线检查项", () => {
+    expect(checks().every(item => item.ready)).toBe(true);
     expect(byKey(checks(), "acquisition")).toBeUndefined();
   });
 

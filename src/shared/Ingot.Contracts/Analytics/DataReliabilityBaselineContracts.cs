@@ -95,38 +95,6 @@ public sealed record ReliabilityRunImpact
     public required string ProcessDataStatus { get; init; }
     public IReadOnlyList<string> ReasonCodes { get; init; } = [];
     public IReadOnlyList<ProcessSampleConfigurationEvidence> SampleConfigurationEvidence { get; init; } = [];
-    public IReadOnlyList<ExpectedConfigurationCoverageEvidence> ExpectedConfigurationCoverage { get; init; } = [];
-}
-
-/// <summary>Observed applied-version and mapping evidence overlapping one run; overlap is not causal proof.</summary>
-public sealed record ExpectedConfigurationCoverageEvidence
-{
-    public required string TaskId { get; init; }
-    public int TaskVersion { get; init; }
-    public required string EdgeId { get; init; }
-    public required string ConfigurationHash { get; init; }
-    public required string ConfigurationSource { get; init; }
-    public required string ConfigurationStatus { get; init; }
-    public DateTimeOffset FirstObservedAt { get; init; }
-    public DateTimeOffset LastObservedAt { get; init; }
-    public DateTimeOffset RunOverlapStart { get; init; }
-    public DateTimeOffset RunOverlapEnd { get; init; }
-    public required string SampleEvidenceStatus { get; init; }
-    public int SampleFrameCount { get; init; }
-    public IReadOnlyList<string> RequiredDataItemCodes { get; init; } = [];
-    public IReadOnlyList<string> ObservedDataItemCodes { get; init; } = [];
-    public IReadOnlyList<string> NotObservedRequiredDataItemCodes { get; init; } = [];
-}
-
-public static class ExpectedConfigurationSampleEvidenceStatuses
-{
-    public const string Matched = "matched";
-    public const string NoMatchingFrames = "no-matching-frames";
-    public const string SummarizedUnverifiable = "summarized-unverifiable";
-    public const string UnverifiableSampleTimeRange = "unverifiable-sample-time-range";
-    public const string UnverifiableTaskVersion = "unverifiable-task-version";
-    public const string ObservationHistoryTruncated = "observation-history-truncated";
-    public const string CoverageResultTruncated = "coverage-result-truncated";
 }
 
 public sealed record DataReliabilityBaseline
@@ -144,8 +112,6 @@ public sealed record DataReliabilityBaseline
     public int AnalyzedRunCount { get; init; }
     public int MissingExecutionRowCount { get; init; }
     public bool Truncated { get; init; }
-    public bool TaskDeploymentObservationHistoryTruncated { get; init; }
-    public bool ExpectedConfigurationCoverageTruncated { get; init; }
     public IReadOnlyList<ReliabilityRate> Rates { get; init; } = [];
     public IReadOnlyList<ContextFieldCoverage> ContextFields { get; init; } = [];
     public IReadOnlyList<ContextFactorSummary> ContextFactors { get; init; } = [];

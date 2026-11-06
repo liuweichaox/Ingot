@@ -1,6 +1,7 @@
 
 using System.Text.RegularExpressions;
 
+// Validates and normalizes scenario package contracts before they cross application boundaries.
 namespace Ingot.Contracts.ProcessConfiguration;
 
 public static partial class ScenarioPackageValidator
@@ -22,8 +23,6 @@ public static partial class ScenarioPackageValidator
         if (!ValidCode(dataModelId) || value.DataModelVersion < 1 ||
             !ValidCode(analysisPlanId) || value.AnalysisPlanVersion < 1)
             return Fail("工艺配置必须引用有效的工艺数据模型和分析方案版本。", out error);
-        if (!TryReferences(value.IngestionTasks, "数据摄取任务", out var ingestionTasks, out error))
-            return false;
         VersionedConfigurationReference? qualityPlan = null;
         if (value.QualityPlan is not null)
         {
@@ -93,35 +92,12 @@ public static partial class ScenarioPackageValidator
             Status = status,
             DataModelId = dataModelId,
             AnalysisPlanId = analysisPlanId,
-            IngestionTasks = ingestionTasks,
             QualityPlan = qualityPlan,
             ContextFields = contextFields,
             Constraints = constraints,
             Terminology = terminology,
             UpdatedAt = value.UpdatedAt == default ? DateTimeOffset.UtcNow : value.UpdatedAt.ToUniversalTime()
         };
-        error = string.Empty;
-        return true;
-    }
-
-    private static bool TryReferences(
-        IReadOnlyList<VersionedConfigurationReference> values,
-        string label,
-        out IReadOnlyList<VersionedConfigurationReference> normalized,
-        out string error)
-    {
-        var result = new List<VersionedConfigurationReference>();
-        var seen = new HashSet<(string, int)>();
-        foreach (var value in values)
-        {
-            if (!TryReference(value, out var item) || !seen.Add((item!.Id, item.Version)))
-            {
-                normalized = [];
-                return Fail($"{label}引用无效或重复：{value.Id} v{value.Version}。", out error);
-            }
-            result.Add(item);
-        }
-        normalized = result;
         error = string.Empty;
         return true;
     }

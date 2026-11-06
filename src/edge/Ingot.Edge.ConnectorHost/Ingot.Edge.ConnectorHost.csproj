@@ -8,6 +8,7 @@
     <AssemblyName>Ingot.Edge.ConnectorHost</AssemblyName>
   </PropertyGroup>
 
+  <!-- The generic Edge host excludes retired protocol-specific acquisition implementations. -->
   <ItemGroup>
     <Compile Remove="Acquisition/**/*.cs;Controllers/AcquisitionController.cs;BackgroundServices/AcquisitionProbeTaskHostedService.cs" />
   </ItemGroup>

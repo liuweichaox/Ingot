@@ -148,9 +148,6 @@ describe("生产界面状态反馈", () => {
       if (path.includes("/process-data-models")) return Promise.resolve(jsonResponse([
         { modelId: "model-lens", version: 1, status: "published", controlParameters: [{ code: "holding.temperature" }], acquisition: { dataItems: [{ code: "mold.temperature", category: "process" }] } },
       ]));
-      if (path.includes("/ingestion-tasks")) return Promise.resolve(jsonResponse([
-        { taskId: "press-01", dataModelId: "model-lens", dataModelVersion: 1, status: "draft" },
-      ]));
       return Promise.resolve(jsonResponse([]));
     }));
 

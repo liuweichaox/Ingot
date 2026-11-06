@@ -1,3 +1,4 @@
+// Defines scenario package contracts for process context, quality plans, and analysis rules.
 namespace Ingot.Contracts.ProcessConfiguration;
 
 public static class ScenarioContextModes
@@ -21,7 +22,6 @@ public sealed record ScenarioPackage
     public int DataModelVersion { get; init; } = 1;
     public required string AnalysisPlanId { get; init; }
     public int AnalysisPlanVersion { get; init; } = 1;
-    public IReadOnlyList<VersionedConfigurationReference> IngestionTasks { get; init; } = [];
     public VersionedConfigurationReference? QualityPlan { get; init; }
     public IReadOnlyList<ScenarioContextFieldPolicy> ContextFields { get; init; } = [];
     public IReadOnlyList<ScenarioConstraintDefinition> Constraints { get; init; } = [];
