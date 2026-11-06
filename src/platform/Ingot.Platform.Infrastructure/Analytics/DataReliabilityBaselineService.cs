@@ -18,7 +18,7 @@ public sealed class DataReliabilityBaselineService(
     ResearchContextAdmissionEvaluator? contextAdmission = null,
     IEdgeTaskDeploymentHistoryReader? taskDeploymentHistory = null,
     IEdgeSiteDirectory? edgeSites = null,
-    IIngestionTaskStore? ingestionTasks = null) : IDataReliabilityBaselineService
+    ILegacyIngestionMetadataReader? ingestionTasks = null) : IDataReliabilityBaselineService
 {
     private readonly ResearchContextAdmissionEvaluator _contextAdmission =
         contextAdmission ?? new ResearchContextAdmissionEvaluator();

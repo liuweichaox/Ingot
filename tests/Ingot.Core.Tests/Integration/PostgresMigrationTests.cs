@@ -38,6 +38,117 @@ public sealed class PostgresMigrationTests(PostgresIntegrationFixture postgres)
     }
 
     [LinuxDockerFact]
+    public async Task RetiredAcquisitionArchive_ShouldPreserveExistingDataAndForeignKeys()
+    {
+        // An isolated database lets this test exercise the real pre-archive migrations and populated tables.
+        var database = $"ingot_archive_test_{Guid.NewGuid():N}";
+        var isolatedConnectionString = new NpgsqlConnectionStringBuilder(postgres.ConnectionString)
+        {
+            Database = database,
+            Pooling = false
+        }.ConnectionString;
+
+        await using var admin = new NpgsqlConnection(postgres.ConnectionString);
+        await admin.OpenAsync();
+        await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\";", admin))
+            await create.ExecuteNonQueryAsync();
+        try
+        {
+            await using var connection = new NpgsqlConnection(isolatedConnectionString);
+            await connection.OpenAsync();
+            var resources = typeof(MigrationRunner).Assembly.GetManifestResourceNames()
+                .Where(static name => name.Contains(".Migrations.sql.", StringComparison.Ordinal) &&
+                                      name.EndsWith(".sql", StringComparison.Ordinal) &&
+                                      string.CompareOrdinal(name, "Ingot.Platform.Infrastructure.Migrations.sql.0043_") < 0)
+                .Order(StringComparer.Ordinal);
+            foreach (var resource in resources)
+            {
+                using var stream = typeof(MigrationRunner).Assembly.GetManifestResourceStream(resource)!;
+                using var reader = new StreamReader(stream);
+                await using var transaction = await connection.BeginTransactionAsync();
+                await using var apply = new NpgsqlCommand(await reader.ReadToEndAsync(), connection, transaction) { CommandTimeout = 600 };
+                await apply.ExecuteNonQueryAsync();
+                await transaction.CommitAsync();
+            }
+
+            await using (var seed = new NpgsqlCommand("""
+                INSERT INTO public.data_source_instances VALUES ('source-old', 1, 'edge-old', 'draft', 'legacy', '{"evidence":"source"}', now());
+                INSERT INTO public.ingestion_task_templates VALUES ('template-old', 1, 'draft', 'legacy', '{"evidence":"template"}', now());
+                INSERT INTO public.ingestion_task_bindings VALUES ('binding-old', 1, 'template-old', 1, 'source-old', 1, 'draft', '{"evidence":"binding"}', now());
+                INSERT INTO public.ingestion_tasks VALUES ('task-old', 1, 'edge-old', 'draft', '{"evidence":"task"}', now());
+                INSERT INTO public.acquisition_probe_tasks (task_id, edge_id, expected_protocol, task_payload, created_at, expires_at)
+                  VALUES ('probe-old', 'edge-old', 'legacy', '{"evidence":"probe"}', now(), now() + interval '1 hour');
+                """, connection))
+                await seed.ExecuteNonQueryAsync();
+
+            foreach (var migration in new[] { "0043_archive_retired_acquisition", "0044_archive_legacy_ingestion_tasks" })
+            {
+                // The scripts also support a retry if their state already exists in full.
+                var sql = LoadMigrationSql(migration);
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    await using var apply = new NpgsqlCommand(sql, connection);
+                    await apply.ExecuteNonQueryAsync();
+                }
+            }
+
+            await using var verify = new NpgsqlCommand("""
+                SELECT
+                  to_regclass('public.data_source_instances') IS NULL
+                  AND to_regclass('public.ingestion_task_templates') IS NULL
+                  AND to_regclass('public.ingestion_task_bindings') IS NULL
+                  AND to_regclass('public.ingestion_tasks') IS NULL
+                  AND to_regclass('public.acquisition_probe_tasks') IS NULL
+                  AND (SELECT payload ->> 'evidence' = 'source' FROM ingot_legacy.data_source_instances WHERE data_source_id = 'source-old')
+                  AND (SELECT payload ->> 'evidence' = 'template' FROM ingot_legacy.ingestion_task_templates WHERE template_id = 'template-old')
+                  AND (SELECT payload ->> 'evidence' = 'binding' FROM ingot_legacy.ingestion_task_bindings WHERE task_id = 'binding-old')
+                  AND (SELECT payload ->> 'evidence' = 'task' FROM ingot_legacy.ingestion_tasks WHERE task_id = 'task-old')
+                  AND (SELECT task_payload ->> 'evidence' = 'probe' FROM ingot_legacy.acquisition_probe_tasks WHERE task_id = 'probe-old')
+                  AND (SELECT count(*) = 2 FROM pg_constraint
+                       WHERE conrelid = 'ingot_legacy.ingestion_task_bindings'::regclass AND contype = 'f'
+                         AND confrelid IN ('ingot_legacy.data_source_instances'::regclass,
+                                           'ingot_legacy.ingestion_task_templates'::regclass));
+                """, connection);
+            Assert.True((bool)(await verify.ExecuteScalarAsync())!);
+
+            await using var invalidBinding = new NpgsqlCommand("""
+                INSERT INTO ingot_legacy.ingestion_task_bindings
+                  VALUES ('invalid-binding', 1, 'template-old', 1, 'missing-source', 1, 'draft', '{}', now());
+                """, connection);
+            var error = await Assert.ThrowsAsync<PostgresException>(() => invalidBinding.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
+        }
+        finally
+        {
+            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE);", admin);
+            await drop.ExecuteNonQueryAsync();
+        }
+    }
+
+    [LinuxDockerFact]
+    public async Task FreshSchema_ShouldSeparateRetiredAcquisitionFromActiveSampleTables()
+    {
+        await postgres.EnsureSchemaAsync();
+        await using var command = postgres.DataSource.CreateCommand("""
+            SELECT
+              to_regclass('public.data_source_instances') IS NULL
+              AND to_regclass('public.ingestion_task_templates') IS NULL
+              AND to_regclass('public.ingestion_task_bindings') IS NULL
+              AND to_regclass('public.ingestion_tasks') IS NULL
+              AND to_regclass('public.acquisition_probe_tasks') IS NULL
+              AND to_regclass('ingot_legacy.data_source_instances') IS NOT NULL
+              AND to_regclass('ingot_legacy.ingestion_task_templates') IS NOT NULL
+              AND to_regclass('ingot_legacy.ingestion_task_bindings') IS NOT NULL
+              AND to_regclass('ingot_legacy.ingestion_tasks') IS NOT NULL
+              AND to_regclass('ingot_legacy.acquisition_probe_tasks') IS NOT NULL
+              AND to_regclass('public.collection_points') IS NOT NULL
+              AND to_regclass('public.process_sample_frames') IS NOT NULL
+              AND to_regclass('public.process_sample_values') IS NOT NULL;
+            """);
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+    }
+
+    [LinuxDockerFact]
     public async Task RemovedWebhookSchema_ShouldNotRemainAfterMigrations()
     {
         var runner = new MigrationRunner(postgres.Configuration, NullLogger<MigrationRunner>.Instance);

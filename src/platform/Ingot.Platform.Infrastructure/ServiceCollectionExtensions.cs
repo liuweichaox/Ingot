@@ -166,7 +166,7 @@ public static class ServiceCollectionExtensions
 
         services.AddIngotProcessResearch(configuration);
 
-        services.AddSingleton<IIngestionTaskStore, PostgresIngestionTaskStore>();
+        services.AddSingleton<ILegacyIngestionMetadataReader, PostgresLegacyIngestionMetadataReader>();
         services.AddSingleton<IProcessSampleConfigurationReferenceVerifier, ProcessSampleConfigurationReferenceVerifier>();
 
         services.AddSingleton<PostgresExecutionBoundaryStore>();

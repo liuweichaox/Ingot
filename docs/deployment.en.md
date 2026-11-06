@@ -254,10 +254,12 @@ A recovery exercise verifies more than service startup:
 2. Back up the database, attachments, knowledge files, Data Protection keys, and enabled Edge persistent data.
 3. Run migrations and replay in a test environment.
 4. Run `scripts/verify.sh`.
-5. Upgrade Platform and database dependencies.
-6. Upgrade Edge instances in batches and confirm the old configuration remains available.
-7. Check backlog recovery, duplicate events, and configuration convergence.
+5. If a migration moves historical acquisition tables, stop the old Platform API and Worker first so they do not keep accessing tables under `public`.
+6. Upgrade Platform and database dependencies, run the Migrator, then start the new API and Worker.
+7. Upgrade Edge and external adapters; check event contracts, offline backlog recovery, and duplicate-event handling.
 8. Regress run assembly, comparison, and recommendation on a known recipe.
+
+Migrations `0043` and `0044` move historical acquisition-configuration tables into `ingot_legacy` while preserving their rows for provenance checks. Older Platform binaries are incompatible after these migrations and must not run alongside the new version. Custom multi-role database deployments must grant the Platform read-only role `USAGE` on the schema and `SELECT` on `ingestion_tasks`; historical-audit roles need `USAGE` and `SELECT` on the tables they inspect.
 
 ## Minimum security set
 

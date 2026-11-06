@@ -124,7 +124,7 @@ public sealed class ProcessSampleConfigurationReferenceVerifierTests
     }
 
     private sealed class FakeTaskStore(IReadOnlyList<IngestionTaskVersionMetadata> metadata)
-        : IIngestionTaskStore
+        : ILegacyIngestionMetadataReader
     {
         public int LookupCount { get; private set; }
         public IReadOnlyList<IngestionTaskVersionReference> LastReferences { get; private set; } = [];

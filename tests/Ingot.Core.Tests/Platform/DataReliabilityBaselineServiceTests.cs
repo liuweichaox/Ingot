@@ -855,7 +855,7 @@ public sealed class DataReliabilityBaselineServiceTests
     }
 
     private sealed class FixedCoverageTaskStore(
-        IReadOnlyList<IngestionTaskCoverageMetadata> coverageMetadata) : IIngestionTaskStore
+        IReadOnlyList<IngestionTaskCoverageMetadata> coverageMetadata) : ILegacyIngestionMetadataReader
     {
         public Task InitializeAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<IngestionTask>> ListAsync(CancellationToken ct = default) => throw new NotSupportedException();

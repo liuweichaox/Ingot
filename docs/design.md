@@ -116,7 +116,7 @@ Chat 以 `ChatConversation` 和有序 `ChatMessage` 作为面向用户的正式�
 
 生产宿主把 Agent 运行快照和事件流保存在 Platform PostgreSQL 中；Agent 核心仍只依赖 `IAgentRunStore`，不引用 Npgsql。API 在消息事务完成后只创建排队运行，独立 Platform Worker 通过数据库租约领取、续租和执行；API 重启不会丢失已接收的回答任务，Worker 中断后过期租约可由后续实例重新领取。连续对话只装配最近已完成回答的摘要、有限发现和限制，不把完整图表、建议或旧记录引用无限回灌给模型；旧回答也不能替代当前问题所需的生产数据查询。
 
-Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。配方优化、制造上下文、事件、身份、洞察、分析与检验的数据库无关端口，以及其中的多步规则和用例，均归属 Application；PostgreSQL Store、优化器 HTTP 客户端、后台宿主和证据装配器归属 Infrastructure，并通过按模块的组合入口注册。历史采集配置保留用于解释已有证据，不作为当前设备配置入口。
+Platform 内部按用例分离策略与实现：`Platform.Application` 保存可脱离数据库测试的应用规则和存储端口，`Platform.Infrastructure` 实现 PostgreSQL 事务、外部服务和跨上下文适配。配方优化、制造上下文、事件、身份、洞察、分析与检验的数据库无关端口，以及其中的多步规则和用例，均归属 Application；PostgreSQL Store、优化器 HTTP 客户端、后台宿主和证据装配器归属 Infrastructure，并通过按模块的组合入口注册。退役采集配置表已归档到 `ingot_legacy`，其中任务版本只读用于解释历史样本证据；当前设备配置由现场适配器负责。
 
 新业务控制器只处理传输、鉴权并通过 Application 用例委托业务操作；当前 Edge 注册/诊断、身份和运行指标等少量运维适配器仍由 API 直接注入 Infrastructure 服务，受下方 `ARCH-001` 约束，不允许扩展为新的业务写路径。首用户引导由 Migrator 在事务锁内完成，周期维护由 Worker 执行。
 

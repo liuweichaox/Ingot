@@ -7,7 +7,7 @@ using Ingot.Platform.Application.Analytics;
 namespace Ingot.Platform.Infrastructure.Analytics;
 
 public sealed class ProcessSampleConfigurationReferenceVerifier(
-    IIngestionTaskStore ingestionTasks,
+    ILegacyIngestionMetadataReader ingestionTasks,
     IEdgeSiteDirectory edgeSites) : IProcessSampleConfigurationReferenceVerifier
 {
     public const int MaximumUniqueReferences = 40_000;
