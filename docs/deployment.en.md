@@ -254,24 +254,22 @@ A recovery exercise verifies more than service startup:
 2. Back up the database, attachments, knowledge files, Data Protection keys, and enabled Edge persistent data.
 3. Run migrations and replay in a test environment.
 4. Run `scripts/verify.sh`.
-5. Ensure no older Platform API or Worker instances are still running during the upgrade window.
-6. Upgrade Platform and database dependencies, run the Migrator, then start the new API and Worker.
+5. During the upgrade window, stop the Platform API and Worker, upgrade Platform and database dependencies, run the Migrator, and start the API and Worker at the same version.
+6. Configure database permissions for the current schema; the Migrator cleans acquisition archives and retains the generic point catalogue and sample-frame/value tables.
 7. Upgrade Edge and external adapters; check event contracts, offline backlog recovery, and duplicate-event handling.
 8. Regress run assembly, comparison, and recommendation on a known recipe.
 
-Migrations `0045` and `0046` permanently drop the retired acquisition-configuration tables in `ingot_legacy`, the Edge task freshness and deployment observation tables, and obsolete acquisition-task references from scenario packages. Confirm those records are no longer needed before upgrading, and stop older Platform API and Worker instances during the migration window; old and new binaries must not run together. Platform no longer needs privileges on `ingot_legacy`.
-
 ## Minimum security set
 
-- Do not expose PostgreSQL, Optimizer, or ConnectorHost to unnecessary networks.
-- Replace every example password, token, and certificate.
+- Expose PostgreSQL, Optimizer, and ConnectorHost only to trusted networks.
+- Configure site-specific passwords, tokens, and certificates.
 - Give each Edge an independent identity and least-privilege token.
-- Restrict the equipment network to required addresses and protocols.
-- Apply access control to attachments, knowledge, and backup directories.
-- Separate roles for quality entry and review.
-- Require engineer approval before a recommended recipe enters field execution.
-- Keep equipment interlocks and field safety independent of model recommendations.
-- Report security issues privately under `SECURITY.md`.
+- Open only the required addresses and protocols on the equipment network.
+- Configure access controls for attachments, knowledge, and backup directories.
+- Assign quality entry and review to separate roles.
+- Route recipe recommendations to field execution after engineer approval.
+- Run equipment interlocks and field safety rules independently.
+- Report security issues through the private channel in `SECURITY.md`.
 
 ## Production acceptance
 

@@ -184,7 +184,7 @@ Table ownership is fixed by the keys and access rules below, not by directory na
 | Deployment-level R&D assets and evaluation | Dataset, model, or case identity and version; authorized by role | `training_dataset_versions`, `model_evaluations`, `model_drift_readings`, `case_level_evaluations` | There is no separate `SiteId` isolation contract today; do not treat these tables as cross-team or cross-tenant isolation; references to production facts still follow source permissions |
 | Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events`, `problem_cases` | Agent records do not grant new data permissions; replay rechecks the user and site scope |
 
-Platform does not manage device acquisition configuration, task freshness, or task deployment history. External Edge adapters own device protocols, sampling schedules, and site point bindings; Platform retains a generic point catalogue and sample-frame/value relations for production data it receives. Migration `0045` removes retired acquisition-configuration and task freshness/deployment observation tables, and migration `0046` removes obsolete scenario-package acquisition-task references.
+Site Edge adapters manage device protocols, sampling schedules, and point bindings. Platform stores received production data through its generic point catalogue and sample-frame/value relations.
 
 Current database gates already require `site_id NOT NULL` on canonical ingestion and projection tables, and on Edge registration, inspection records, quality scopes, and inspection attachments. An Edge registration cannot move across sites. Inspection attachments are deduplicated by site and content hash, and reads recheck role and site.
 

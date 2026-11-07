@@ -181,6 +181,5 @@ test("both locales link the pilot and external adapter guide", async () => {
     assert.ok(quickPaths, `Expected the ${locale} quick-path navigation`);
     assert.ok(quickPaths[1].includes(anchor[0]), "The field integration guide should stay in the quick-path navigation");
     assert.ok(quickPaths[1].includes(`href="https://docs.ingotstack.com/${locale}/pilot"`));
-    assert.ok(!quickPaths[1].includes("semiconductor-demo"));
   }
 });

@@ -4,22 +4,22 @@ Ingot is an Open-source Process R&D and Optimization System. Organize recipe ver
 
 Choose a path from local installation to a first recommendation and ongoing operations. Documentation is maintained with repository code. [Current status](status.en.md) describes implemented capability; the [Roadmap](project-plan.en.md) describes planned work.
 
-The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight, while Ingot Chat is a cross-module verification and investigation entry rather than a production step.
+The business reading order is Field Operations → Quality Inspection → Process Analysis → Recipe Optimization. Process materials and mechanism knowledge belong to Process Insight; Ingot Chat provides cross-module verification and investigation.
 
 Configuration and integration prepares process semantics for that daily path; site adapters can map and submit data from equipment or existing systems to Edge. The user-facing boundary is a factory or production site, which also bounds data and authorization; the system identifies it internally with `SiteId`. An engineer confirms the next recipe adjustment before it enters a subsequent run through existing field procedures.
 
 ## First use
 
-Choose an entry by objective; you do not need to read every page first:
+Choose an entry by objective:
 
 | Objective | Path | Completion signal |
 |---|---|---|
-| Start locally and open the workbench | [Getting started](getting-started.en.md) | Migration succeeds, core services are healthy, and sign-in works; no external-system account or equipment connection is required |
+| Start locally and open the workbench | [Getting started](getting-started.en.md) | Start the core services with Docker, apply migrations, check health, and sign in |
 | Understand field integration | [Data integration](data-connection.en.md) | Review site adapters, the Edge event interface, and acceptance boundaries |
 | Evaluate the real-run evidence workflow | [Current status](status.en.md) → [Recipe-optimization pilot guide](pilot.en.md) | Check admission using authorized real runs and reviewed quality outcomes, then record a recommendation and its later outcome |
 | Contribute code or documentation | [Contributing](../CONTRIBUTING.en.md) | Prepare tools for the change area and complete its checks; the full pre-submission gate is in the guide |
 
-Read [Current status](status.en.md) before or after startup to understand implemented capability and data boundaries. You can start the system without a field connector. A healthy deployment does not establish admitted production evidence or show that the system can produce a recommendation.
+Read [Current status](status.en.md) before or after startup to understand implemented capability and data boundaries. The system starts independently; recipe recommendations use admitted real runs and quality evidence.
 
 ## Read by task
 
@@ -41,7 +41,6 @@ Read [Current status](status.en.md) before or after startup to understand implem
 ### How-to guides
 
 - [Data integration](data-connection.en.md): integration identities, points, mappings, and run admission.
-- [Semiconductor wafer etch acquisition demo](semiconductor-demo.en.md): historical information about the retired demo; its equipment acquisition workflow is no longer available.
 - [Deployment](deployment.en.md): configuration, model services, observability, backup, and upgrades.
 - [Troubleshooting](troubleshooting.en.md): diagnose startup, authorization, data, and recommendation problems by symptom.
 - [Scenario evaluation boundary](rollout.en.md): assess suitability and effects using your own evidence.
@@ -67,6 +66,6 @@ Read [Current status](status.en.md) before or after startup to understand implem
 
 For usage problems, include reproduction steps, version, service status, and redacted errors in [Issues](https://github.com/liuweichaox/Ingot/issues). Use [Discussions](https://github.com/liuweichaox/Ingot/discussions) for design discussions. Report vulnerabilities privately through the [Security policy](../SECURITY.md).
 
-Do not submit `.env`, credentials, real production data, or identifiable field materials. Documentation corrections can be submitted as a Pull Request with the corresponding Chinese page updated.
+Keep `.env`, credentials, real production data, and identifiable field information out of Issues and Pull Requests. Update the corresponding Chinese page with each documentation revision.
 
 [简体中文文档](index.md)
