@@ -1,5 +1,5 @@
 # ---- Build ----
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 # 根级 MSBuild 约定（ImplicitUsings/Nullable/LangVersion 等）—— 必须先于 restore/build 拷入，
