@@ -11,7 +11,7 @@ COPY docs/ /src/docs/
 COPY apps/website/public/brand/ /src/apps/website/public/brand/
 RUN npm run build
 
-FROM nginx:1.29-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 COPY deploy/nginx-static.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/apps/docs-site/out/ /usr/share/nginx/html/
 
