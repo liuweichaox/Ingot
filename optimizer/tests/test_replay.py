@@ -1,9 +1,12 @@
 """Verify replay success, rejection, and boundary behavior."""
 
+import numpy as np
 import pytest
 
 from ingot_optimizer import Campaign, Objective, Variable
 from ingot_optimizer.botorch_engine import MODEL_VERSION
+from ingot_optimizer.campaign import OutcomeConstraint, ParameterConstraint
+from ingot_optimizer.coverage import build_coverage_envelope
 from ingot_optimizer.replay import (
     SyntheticTruthResult,
     replay_history_pool,
@@ -269,3 +272,104 @@ def test_synthetic_replay_rejects_unstructured_truth_results():
             budget=1,
             n_seeds=1,
         )
+
+
+def test_synthetic_comparison_shares_initial_observations_and_enforces_coverage():
+    # An impossible target forces both policies to consume their equal budget.
+    constrained = Campaign(
+        "synthetic-fairness", [Variable("x", 0, 1)],
+        [Objective("loss", "le", threshold=-1)],
+        constraints=[ParameterConstraint("x", "<=", 0.8)],
+    )
+    calls = []
+
+    def truth(params):
+        calls.append(dict(params))
+        return SyntheticTruthResult(outcomes={"loss": (params["x"] - 0.7) ** 2})
+
+    result = replay_synthetic(constrained, truth, budget=5, n_seeds=1)
+    optimizer = result["optimizer_traces"][0]["steps"]
+    random = result["random_traces"][0]["steps"]
+    assert optimizer[:3] == random[:3]
+    assert len(optimizer) == len(random) == 5
+    assert len(calls) == 7  # Three initial observations evaluated once, then two per method.
+    for steps in (optimizer, random):
+        for index, step in enumerate(steps):
+            assert 0 <= step["params"]["x"] <= 0.8
+            if index >= 3:
+                observed = np.asarray([constrained.to_unit(s["params"]) for s in steps[:index]])
+                envelope = build_coverage_envelope(observed)
+                assert envelope.contains(constrained.to_unit(step["params"]))[0]
+
+
+def test_synthetic_replay_rejects_unmatched_safety_constraint_semantics():
+    constrained = Campaign(
+        "safety", [Variable("x", 0, 1)], [Objective("loss", "le", threshold=0.1)],
+        outcome_constraints=[OutcomeConstraint("pressure", "<=", 2.0)],
+    )
+    with pytest.raises(ValueError, match="outcome.*constraint"):
+        replay_synthetic(
+            constrained,
+            lambda params: SyntheticTruthResult(
+                outcomes={"loss": params["x"]}, constraint_outcomes={"pressure": 1.0}
+            ),
+            n_seeds=1,
+        )
+
+
+def test_synthetic_replay_is_reproducible_and_marks_unconstrained_mode():
+    impossible = Campaign(
+        "repeatable", [Variable("x", 0, 1)], [Objective("loss", "le", threshold=-1)]
+    )
+
+    def truth(params):
+        return SyntheticTruthResult(outcomes={"loss": params["x"] ** 2})
+
+    first = replay_synthetic(impossible, truth, budget=4, n_seeds=1, enforce_coverage=False)
+    second = replay_synthetic(impossible, truth, budget=4, n_seeds=1, enforce_coverage=False)
+    assert first == second
+    assert first["coverage_mode"] == "unrestricted"
+
+
+def test_synthetic_short_budget_never_fabricates_optimizer_runs():
+    impossible = Campaign(
+        "short", [Variable("x", 0, 1)], [Objective("loss", "le", threshold=-1)]
+    )
+    result = replay_synthetic(
+        impossible, lambda params: SyntheticTruthResult(outcomes={"loss": params["x"]}),
+        budget=2, n_seeds=1,
+    )
+    assert result["optimizer_traces"][0]["steps"] == result["random_traces"][0]["steps"]
+    assert result["optimizer_traces"][0]["stop_reason"] == "budget_exhausted"
+    assert all(step["kind"] == "initial" for step in result["optimizer_traces"][0]["steps"])
+
+
+def test_synthetic_initial_success_reports_all_initial_evaluations():
+    reached = Campaign(
+        "initial-hit", [Variable("x", 0, 1)], [Objective("loss", "le", threshold=1)]
+    )
+    result = replay_synthetic(
+        reached, lambda params: SyntheticTruthResult(outcomes={"loss": params["x"]}),
+        budget=5, n_seeds=1,
+    )
+    for key in ("optimizer_traces", "random_traces"):
+        trace = result[key][0]
+        assert trace["runs_to_specification"] == 1
+        assert trace["evaluated_runs"] == len(trace["steps"]) == 3
+        assert trace["stop_reason"] == "success"
+    assert result["initial_success_count"] == 1
+
+
+def test_synthetic_candidate_exhaustion_is_not_misreported_as_budget_exhaustion(monkeypatch):
+    from ingot_optimizer import replay
+
+    impossible = Campaign(
+        "exhaustion", [Variable("x", 0, 1)], [Objective("loss", "le", threshold=-1)]
+    )
+    monkeypatch.setattr(replay, "_synthetic_random_candidate", lambda *args: None)
+    result = replay_synthetic(
+        impossible, lambda params: SyntheticTruthResult(outcomes={"loss": params["x"]}),
+        budget=4, n_seeds=1,
+    )
+    assert result["random_traces"][0]["stop_reason"] == "no_candidates"
+    assert len(result["random_traces"][0]["steps"]) == 3

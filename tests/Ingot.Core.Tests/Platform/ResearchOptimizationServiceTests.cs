@@ -1,5 +1,6 @@
 // 验证待出质量结果的真实运行会占用下一配方优化器的候选点。
 using System.Text.Json;
+using Ingot.Contracts.Events;
 using Ingot.Contracts.ProcessResearch;
 using Ingot.Platform.Application.ProcessResearch;
 using Xunit;
@@ -8,6 +9,50 @@ namespace Ingot.Core.Tests.Platform;
 
 public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTestBase
 {
+    [Fact]
+    public async Task SyntheticApplicationLoop_RecommendationDecisionAndFrozenOutcomeRemainTraceable()
+    {
+        // 合成观察和优化器桩只验证应用服务之间的契约，不验证 Edge、Platform 接收或现场效果。
+        var store = new MemoryStore();
+        var optimizer = new CapturingOptimizerClient();
+        var recommendation = await CreateService(store, optimizer)
+            .CreateNextRecipeRecommendationAsync(Request(), "synthetic-engineer");
+        Assert.Equal(3, optimizer.LastSuggestionCall!.Observations.Count);
+
+        var item = Assert.Single(recommendation.Items);
+        var observed = Observation(515, 11) with { ExecutionKey = "synthetic-run-001" };
+        var assembler = new MultipleObservationAssembler(observed);
+        var executions = new MutableExecutionComparisonService();
+        var decisions = new ResearchRecipeRecommendationDecisionService(store, assembler, executions);
+        var decision = await decisions.RecordDecisionAsync(recommendation.RecommendationId,
+            item.RecommendationKey, new ResearchRecipeRecommendationDecisionRequest
+            {
+                Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
+                EngineerSelectedParameters = item.Parameters
+            }, "synthetic-engineer");
+
+        var startedAt = decision.DecidedAt.AddSeconds(1);
+        executions.Set(new ExecutionComparisonRow
+        {
+            ExecutionId = observed.ExecutionKey, EquipmentId = "press-01",
+            HasStarted = true, HasCompleted = true, LifecycleComplete = true,
+            StartedAt = startedAt, CompletedAt = startedAt.AddMinutes(1),
+            ProductFamilyCode = "lens-a", ProductCode = "product-a",
+            ProcessSpecificationId = TestProcessSpecificationId
+        });
+        var linked = await decisions.LinkActualExecutionAsync(decision.DecisionId,
+            new ResearchRecipeRecommendationExecutionLinkRequest { ActualExecutionKey = observed.ExecutionKey },
+            "synthetic-engineer");
+        var frozen = await decisions.MaterializeOutcomeAsync(linked.DecisionId, "synthetic-engineer");
+
+        Assert.Equal(observed.ExecutionKey, frozen.Outcome!.ActualExecutionKey);
+        Assert.Equal(observed.SourceContentHash, frozen.Outcome.SourceContentHash);
+        Assert.Equal(observed.Outcomes["form-error"], frozen.Outcome.Outcomes["form-error"]);
+        Assert.Equal(ResearchExecutionAdherenceStatuses.WithinTolerance, frozen.Outcome.ExecutionAdherence!.Status);
+        Assert.Equal(frozen.Outcome.CapturedAt,
+            (await decisions.MaterializeOutcomeAsync(decision.DecisionId, "synthetic-engineer")).Outcome!.CapturedAt);
+    }
+
     [Fact]
     public async Task CreateNextRecipeRecommendation_UsesOnlyPendingDecisionsUnderTheSameBrief()
     {

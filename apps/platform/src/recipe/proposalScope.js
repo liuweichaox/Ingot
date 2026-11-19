@@ -108,16 +108,17 @@ export function revisionOverrides(specification, parameters) {
   });
 }
 
-export function nextRunAfterDecision(runs, specificationId, version, decidedAt) {
+// 列出决定之后开始的同配方同版本已完成运行；由工程师确认哪一条实际执行了这轮参数。
+export function runsAfterDecision(runs, specificationId, version, decidedAt) {
   const decided = Date.parse(decidedAt || "");
-  if (!Number.isFinite(decided) || !version) return null;
+  if (!Number.isFinite(decided) || !version) return [];
   return (runs || [])
     .filter(run => run?.processSpecificationId === specificationId && String(run.processSpecificationVersion) === String(version))
     .filter(run => {
       const started = Date.parse(run.startedAt || "");
       return Number.isFinite(started) && started > decided;
     })
-    .sort((left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt))[0] || null;
+    .sort((left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt));
 }
 
 const openStates = new Set(["pending-decision", "pending-execution", "pending-outcome"]);

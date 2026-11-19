@@ -10,6 +10,8 @@ A shared run identity links actual recipes, process curves, and quality outcomes
 
 Ingot is a process R&D and optimization system; external adapters handle field data acquisition. Edge receives and delivers standard events from adapters, while the system organizes runs, actual conditions, and quality outcomes for analysis and subsequent R&D decisions.
 
+Ingot does not maintain protocol drivers in this repository. Protocols, point mappings, unit conversions, and retry policies vary by site; making them generic would turn the core into an unmaintainable driver collection without covering real sites. Deployers can use AI assistance to write site adapters against the public event contract and contract tests. Ingot owns evidence, decisions, and the generic contract, not a universal acquisition platform.
+
 ## Does Ingot replace process engineers?
 
 No. The system organizes facts, performs calculations, explains uncertainty, and proposes actions. Engineers define objectives and safety boundaries, decide whether to adopt the next recipe, and make the final judgment from later real-run outcomes.

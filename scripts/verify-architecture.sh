@@ -436,6 +436,24 @@ check "connector-contract" src \
   'IPlc|Plc(Read|Write)|WriteRegister|Read(UShort|UInt|ULong|Short|Int|Long|Float|Double|String|Bool)Async' \
   "核心源码必须保持连接器协议中立"
 
+echo "== Edge 协议边界 =="
+
+edge_protocol_hits=$(grep -RInE --include='*.cs' --exclude-dir=bin --exclude-dir=obj \
+  'using (NModbus|MQTTnet|Opc\.Ua|S7\.Net|libplctag|Sharp7)|using System\.IO\.Ports' \
+  src/edge 2>/dev/null || true)
+if [[ -n "$edge_protocol_hits" ]]; then
+  echo "✗ [edge-adapter-boundary] Edge 不得内置设备协议驱动；协议由外部适配器负责" >&2
+  echo "$edge_protocol_hits" | sed 's/^/    /'
+  fail=1
+else
+  echo "✓ [edge-adapter-boundary]"
+fi
+
+if [[ -d src/edge/Ingot.Edge.ConnectorHost/Acquisition ]]; then
+  echo "✗ [edge-adapter-boundary] 退休的 Acquisition 目录不得回到 Edge 宿主" >&2
+  fail=1
+fi
+
 echo "== 架构图一致性 =="
 
 diagram_require docs/architecture/system-architecture.svg \

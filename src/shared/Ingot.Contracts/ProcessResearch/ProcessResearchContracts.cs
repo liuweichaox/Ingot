@@ -43,6 +43,11 @@ public sealed record ResearchObjective
     public required double Target { get; init; }
     public double? LowerLimit { get; init; }
     public double? UpperLimit { get; init; }
+
+    /// <summary>
+    /// 保留字段。当前数值策略按归一化规格距离的最坏目标排序，权重尚不参与计算；
+    /// 在实现加权语义前，界面和调用方不应把它当作可调策略。
+    /// </summary>
     public double Weight { get; init; } = 1;
 
     public string? DataSource { get; init; }
@@ -144,6 +149,38 @@ public sealed record ResearchVariableSetting
     public required string Unit { get; init; }
 }
 
+public static class ResearchExecutionAdherenceStatuses
+{
+    public const string WithinTolerance = "within-tolerance";
+    public const string OutsideTolerance = "outside-tolerance";
+    public const string Unverifiable = "unverifiable";
+
+    public static bool IsValid(string? value)
+        => value is WithinTolerance or OutsideTolerance or Unverifiable;
+}
+
+/// <summary>记录一个可调参数的决定值、实际回读值和核对容差。</summary>
+public sealed record ResearchVariableAdherence
+{
+    public required string VariableCode { get; init; }
+    public required string Unit { get; init; }
+    public double ExpectedValue { get; init; }
+    public double ActualValue { get; init; }
+    public double Deviation { get; init; }
+    public double Tolerance { get; init; }
+    public bool WithinTolerance { get; init; }
+}
+
+/// <summary>冻结结果时对执行一致性的只追加核对；不改变生产状态。</summary>
+public sealed record ResearchExecutionAdherence
+{
+    public required string Status { get; init; }
+    public required string PolicyVersion { get; init; }
+    public IReadOnlyList<ResearchVariableAdherence> Variables { get; init; } = [];
+    public string? Reason { get; init; }
+    public DateTimeOffset CheckedAt { get; init; }
+}
+
 public sealed record OptimizationMetricPrediction
 {
     public double Mean { get; init; }
@@ -205,6 +242,8 @@ public sealed record ResearchRecipeRecommendationDecisionRequest
     public required string Decision { get; init; }
     public IReadOnlyList<ResearchVariableSetting> EngineerSelectedParameters { get; init; } = [];
     public string? Reason { get; init; }
+
+    /// <summary>可选的工程师自报评价；调用方不得根据决定类型推断该值。</summary>
     public string? UsefulnessRating { get; init; }
 }
 
@@ -234,6 +273,8 @@ public sealed record ResearchRecipeRecommendationOutcome
         new Dictionary<string, double>();
     public IReadOnlyDictionary<string, string> ActualContextSnapshot { get; init; } =
         new Dictionary<string, string>();
+    /// <summary>结果冻结时的执行一致性核对；历史结果可能没有该字段。</summary>
+    public ResearchExecutionAdherence? ExecutionAdherence { get; init; }
     public bool ValidForOptimization { get; init; }
     public string? ExclusionReason { get; init; }
     public required string SourceContentHash { get; init; }
@@ -257,6 +298,8 @@ public sealed record ResearchRecipeRecommendationDecision
     public IReadOnlyList<ResearchVariableSetting> EngineerSelectedParameters { get; init; } = [];
     public required OptimizationRunPrediction Prediction { get; init; }
     public string? Reason { get; init; }
+
+    /// <summary>工程师自报评价；历史记录可能由旧界面按决定类型推断，分析时应与决定分开。</summary>
     public string? UsefulnessRating { get; init; }
     public required string DecisionSnapshotHash { get; init; }
     public string DecidedBy { get; init; } = "";

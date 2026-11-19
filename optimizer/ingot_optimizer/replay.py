@@ -14,6 +14,7 @@ from typing import Callable, Mapping, Sequence
 import numpy as np
 
 from .campaign import Campaign
+from .coverage import build_coverage_envelope, sample_within_envelope
 from .engine_selection import OptimizerObservation, build_optimizer
 from .feature_transforms import DerivedFeature
 
@@ -76,49 +77,103 @@ def _summarize(runs: Sequence[int | None]) -> dict[str, float | int | None]:
     }
 
 
-def _run_optimizer(
+def _synthetic_step(
+    campaign: Campaign, observation: OptimizerObservation, kind: str
+) -> dict:
+    return {
+        "kind": kind,
+        "params": dict(observation.params),
+        "outcomes": dict(observation.outcomes),
+        "constraint_outcomes": dict(observation.constraint_outcomes),
+        "process_features": dict(observation.process_features),
+        "success": _is_success(campaign, observation),
+    }
+
+
+def _synthetic_random_candidate(
+    campaign: Campaign,
+    observations: Sequence[OptimizerObservation],
+    rng: np.random.Generator,
+    enforce_coverage: bool,
+) -> dict[str, float] | None:
+    observed = np.vstack([campaign.to_unit(value.params) for value in observations])
+    if enforce_coverage:
+        envelope = build_coverage_envelope(observed)
+        # Draw directly inside the same range/leverage gates used by production;
+        # whole-cube rejection becomes impractical for thin envelopes.
+        for _ in range(8):
+            points = sample_within_envelope(
+                envelope, 256, seed=int(rng.integers(0, 2**31))
+            )
+            for point in points:
+                if campaign.is_feasible_unit(point) and np.min(
+                    np.linalg.norm(observed - point, axis=1)
+                ) > 1e-7:
+                    return campaign.from_unit(point)
+        return None
+    for _ in range(10_000):
+        point = _sample_feasible(campaign, rng)
+        unit = campaign.to_unit(point)
+        if np.min(np.linalg.norm(observed - unit, axis=1)) > 1e-7:
+            return point
+    return None
+
+
+def _synthetic_policy(
     campaign: Campaign,
     truth_fn: TruthFunction,
+    initial: Sequence[OptimizerObservation],
     budget: int,
     seed: int,
-    n_seed_points: int = 2,
-    prior_means: Mapping[str, object] | None = None,
-) -> int | None:
-    observations: list[OptimizerObservation] = []
-    rng = np.random.default_rng(seed)
-    for _ in range(min(n_seed_points, budget)):
-        params = _sample_feasible(campaign, rng)
-        observation = _evaluate_truth(campaign, truth_fn, params)
-        observations.append(observation)
-        if _is_success(campaign, observation):
-            return len(observations)
-    while len(observations) < budget:
-        optimizer = build_optimizer(
-            campaign,
-            observations,
-            prior_means=prior_means,
-            seed=seed,
-        )
-        # Offline replay measures algorithm mechanics against a simulator rather
-        # than issuing a recipe to a factory, so the production coverage gate
-        # does not apply here.
-        params = optimizer.suggest(enforce_coverage=False)[0].recommended_params
-        observation = _evaluate_truth(campaign, truth_fn, params)
-        observations.append(observation)
-        if _is_success(campaign, observation):
-            return len(observations)
-    return None
+    *,
+    method: str,
+    enforce_coverage: bool,
+    prior_means: Mapping[str, object] | None,
+) -> dict:
+    observations = list(initial)
+    steps = [_synthetic_step(campaign, item, "initial") for item in observations]
 
+    def finish(reason: str, first_hit: int | None) -> dict:
+        # Initial observations are a completed batch even if an earlier row hit.
+        return {
+            "steps": steps,
+            "stop_reason": reason,
+            "runs_to_specification": first_hit,
+            "evaluated_runs": len(steps),
+        }
 
-def _run_random(
-    campaign: Campaign, truth_fn: TruthFunction, budget: int, seed: int
-) -> int | None:
+    initial_success = next((i + 1 for i, step in enumerate(steps) if step["success"]), None)
+    if initial_success is not None:
+        return finish("success", initial_success)
+    if len(observations) >= budget:
+        return finish("budget_exhausted", None)
+    if len(observations) < 3 or len({tuple(campaign.to_unit(item.params)) for item in observations}) < 2:
+        return finish("insufficient_initial_observations", None)
     rng = np.random.default_rng(seed + 10_000)
-    for run_number in range(1, budget + 1):
-        params = _sample_feasible(campaign, rng)
-        if _is_success(campaign, _evaluate_truth(campaign, truth_fn, params)):
-            return run_number
-    return None
+    while len(observations) < budget:
+        if method == "random":
+            params = _synthetic_random_candidate(campaign, observations, rng, enforce_coverage)
+            if params is None:
+                return finish("no_candidates", None)
+        else:
+            optimizer = build_optimizer(campaign, observations, prior_means=prior_means, seed=seed)
+            try:
+                params = optimizer.suggest(enforce_coverage=enforce_coverage)[0].recommended_params
+            except ValueError as exc:
+                # Only known candidate-exhaustion conditions are experiment outcomes;
+                # malformed input and model failures must remain visible to the caller.
+                if not str(exc).startswith((
+                    "fewer candidates inside the observed coverage envelope",
+                    "fewer feasible unobserved candidates",
+                )):
+                    raise
+                return finish("no_candidates", None)
+        observation = _evaluate_truth(campaign, truth_fn, params)
+        observations.append(observation)
+        steps.append(_synthetic_step(campaign, observation, method))
+        if steps[-1]["success"]:
+            return finish("success", len(observations))
+    return finish("budget_exhausted", None)
 
 
 def replay_synthetic(
@@ -128,30 +183,65 @@ def replay_synthetic(
     budget: int = 40,
     n_seeds: int = 30,
     prior_means: Mapping[str, object] | None = None,
+    enforce_coverage: bool = True,
+    n_initial_observations: int = 3,
 ) -> dict:
-    """Compare sequential optimization with random search on a simulator."""
+    """Compare policies on paired synthetic observations, not real-world performance.
+
+    The simulator must be deterministic for a given parameter point, or encode
+    noise in a reproducible point/seed mapping. Shared initial outcomes are
+    evaluated once per seed. The initial batch is fully evaluated even if it
+    contains a hit: runs_to_specification is its first-hit sequence number,
+    while evaluated_runs records the actual number of observations consumed.
+    Production also validates site data, parameter
+    steps and other contracts not simulated here. Outcome safety constraints
+    are rejected because random search lacks the optimizer's probability gate.
+    """
     if budget < 1 or n_seeds < 1:
         raise ValueError("budget and n_seeds must be positive")
-    optimizer_runs = [
-        _run_optimizer(
-            campaign,
-            truth_fn,
-            budget,
-            seed,
-            prior_means=prior_means,
-        )
-        for seed in range(n_seeds)
-    ]
-    random_runs = [
-        _run_random(campaign, truth_fn, budget, seed)
-        for seed in range(n_seeds)
-    ]
+    if n_initial_observations < 3:
+        raise ValueError("n_initial_observations must be at least 3")
+    if campaign.outcome_constraints:
+        raise ValueError("synthetic comparison does not support outcome safety constraints")
+    optimizer_traces, random_traces = [], []
+    for seed in range(n_seeds):
+        rng = np.random.default_rng(seed)
+        initial = [
+            _evaluate_truth(campaign, truth_fn, _sample_feasible(campaign, rng))
+            for _ in range(min(n_initial_observations, budget))
+        ]
+        optimizer_traces.append(_synthetic_policy(
+            campaign, truth_fn, initial, budget, seed, method="optimizer",
+            enforce_coverage=enforce_coverage, prior_means=prior_means,
+        ))
+        random_traces.append(_synthetic_policy(
+            campaign, truth_fn, initial, budget, seed, method="random",
+            enforce_coverage=enforce_coverage, prior_means=None,
+        ))
+    optimizer_runs = [trace["runs_to_specification"] for trace in optimizer_traces]
+    random_runs = [trace["runs_to_specification"] for trace in random_traces]
     return {
         "optimizer": _summarize(optimizer_runs),
         "random": _summarize(random_runs),
         "raw_optimizer": optimizer_runs,
         "raw_random": random_runs,
+        "optimizer_traces": optimizer_traces,
+        "random_traces": random_traces,
+        "stop_reason_counts": {
+            method: {
+                reason: sum(trace["stop_reason"] == reason for trace in traces)
+                for reason in ("success", "budget_exhausted", "no_candidates", "insufficient_initial_observations")
+            }
+            for method, traces in (("optimizer", optimizer_traces), ("random", random_traces))
+        },
         "evidence_kind": "synthetic",
+        "coverage_mode": "observed-envelope" if enforce_coverage else "unrestricted",
+        "initial_observation_count": min(n_initial_observations, budget),
+        "initial_success_count": sum(
+            any(step["success"] for step in trace["steps"] if step["kind"] == "initial")
+            for trace in optimizer_traces
+        ),
+        "budget": budget,
     }
 
 

@@ -1,38 +1,12 @@
-// 定义数据集、模型、机理知识和提取任务的研究资产存储端口。
+// 定义机理知识、知识来源、提取任务和审计记录的存储端口。
 using Ingot.Contracts.ResearchAssets;
 
 namespace Ingot.Platform.Application.ResearchAssets;
 
-/// <summary>保存可审计的研究资产及其显式提取和质量验证生命周期。</summary>
+/// <summary>保存可审计的机理知识、知识来源、提取任务和审计记录。</summary>
 public interface IResearchAssetStore
 {
     Task InitializeAsync(CancellationToken ct = default);
-
-    Task<TrainingDatasetVersion> AddDatasetAsync(TrainingDatasetVersion value, CancellationToken ct = default);
-    Task<TrainingDatasetVersion?> GetDatasetAsync(string datasetId, int version, CancellationToken ct = default);
-    Task<IReadOnlyList<TrainingDatasetVersion>> ListDatasetsAsync(CancellationToken ct = default);
-    Task<ResearchAssetPage<TrainingDatasetVersion>> ListDatasetsPageAsync(
-        int limit, string? cursor, CancellationToken ct = default);
-
-    Task<ProcessModelVersion> SaveModelAsync(ProcessModelVersion value, CancellationToken ct = default);
-    Task<ProcessModelVersion?> GetModelAsync(string modelId, int version, CancellationToken ct = default);
-    Task<IReadOnlyList<ProcessModelVersion>> ListModelsAsync(CancellationToken ct = default);
-    Task<ResearchAssetPage<ProcessModelVersion>> ListModelsPageAsync(
-        int limit, string? cursor, CancellationToken ct = default);
-    Task<ModelEvaluation> AddEvaluationAsync(ModelEvaluation value, CancellationToken ct = default);
-    Task<IReadOnlyList<ModelEvaluation>> ListEvaluationsAsync(
-        string modelId,
-        int version,
-        CancellationToken ct = default);
-    Task<ResearchAssetPage<ModelEvaluation>> ListEvaluationsPageAsync(
-        string modelId, int version, int limit, string? cursor, CancellationToken ct = default);
-    Task<ModelDriftReading> AddDriftReadingAsync(ModelDriftReading value, CancellationToken ct = default);
-    Task<IReadOnlyList<ModelDriftReading>> ListDriftReadingsAsync(
-        string modelId,
-        int version,
-        CancellationToken ct = default);
-    Task<ResearchAssetPage<ModelDriftReading>> ListDriftReadingsPageAsync(
-        string modelId, int version, int limit, string? cursor, CancellationToken ct = default);
 
     Task<MechanismModelVersion> SaveMechanismModelAsync(
         MechanismModelVersion value,
@@ -56,14 +30,6 @@ public interface IResearchAssetStore
         CancellationToken ct = default);
     Task<ResearchAssetPage<MechanismFusionDefinition>> ListMechanismFusionsPageAsync(
         int limit, string? cursor, CancellationToken ct = default);
-    Task<DatasetQualityValidationReport> SaveDatasetQualityValidationReportAsync(
-        DatasetQualityValidationReport value,
-        CancellationToken ct = default);
-    Task<IReadOnlyList<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsAsync(
-        CancellationToken ct = default);
-    Task<ResearchAssetPage<DatasetQualityValidationReport>> ListDatasetQualityValidationReportsPageAsync(
-        int limit, string? cursor, CancellationToken ct = default);
-
     Task<KnowledgeSource> AddKnowledgeSourceAsync(
         Stream content,
         string title,

@@ -29,6 +29,7 @@ public static class ProcessResearchModuleServiceCollectionExtensions
                     : $"{baseAddress.AbsoluteUri}/");
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.RequestTimeoutSeconds, 1, 300));
         }).AddHttpMessageHandler<ProcessOptimizerCircuitBreakerHandler>();
+        services.AddSingleton<ResearchExecutionAdherenceEvaluator>();
         services.AddSingleton<ResearchOptimizationService>();
         services.AddSingleton<ResearchRecipeRecommendationDecisionService>();
         return services;

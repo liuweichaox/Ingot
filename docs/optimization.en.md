@@ -18,7 +18,7 @@ real recipe run + actual settings + process context + valid quality outcome
 
 A recommendation is not an equipment command. It is an append-only record containing its input snapshot, prediction, uncertainty, constraints, evidence scope, and rationale. Engineer decisions, actual-execution links, and outcomes are also appended separately and never overwritten.
 
-The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision; it does not create or publish a new version or download equipment settings. The next qualifying real run of that version supplies the execution link and frozen outcome.
+The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision; it does not create or publish a new version or download equipment settings. The engineer confirms the later same-version run that actually executed the decision, and freezing checks actual parameters against the decision. An outcome that did not follow the decision remains as traceability evidence and does not count as validation for that decision; the run itself still contributes to later surrogate observations using its actual parameters.
 
 When the engineer considers a change significant, the suggested settings open a revision draft for that version and follow the configuration publication process. A recipe version cannot open another correction while one remains unfrozen.
 
@@ -42,7 +42,7 @@ The readiness interface returns candidate, valid, and excluded counts, a truncat
 
 Inputs comprise published conditions, actual run settings, quality objective values, outcome-constraint values, process features, and applicable knowledge and models. Platform deduplicates by execution key and records the request seed and input hash. An identical input hash may return an existing recommendation; repeated requests are not independent experiments.
 
-The output is one recommendation with predictions, uncertainty, constraints, and coverage information. Platform checks the optimizer's observation and recommendation counts and independently recomputes the coverage envelope. Review input execution keys, objective and parameter units, bounds, and the knowledge and model versions used. Predictions do not replace later real inspection.
+The output is one recommendation with predictions, uncertainty, constraints, and coverage information. Platform checks the optimizer's observation and recommendation counts, independently recomputes the range gate, and validates the coverage-envelope variable set. Review input execution keys, objective and parameter units, bounds, and the knowledge and model versions used. Predictions do not replace later real inspection.
 
 ## Observed Coverage Envelope
 
@@ -57,7 +57,7 @@ Candidates are generated inside the envelope rather than sampled across the decl
 
 Recommendations use `reach-specification` only: they aim for the predicted outcome to reach the specification and do not pursue more extreme values beyond it, and they always stay inside the observed coverage envelope.
 
-The optimization service returns the envelope it applied and Platform recomputes the same envelope from the same runs. Platform stops the recommendation when the two disagree or when any suggestion falls outside it. The coverage envelope does not constrain offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
+The optimization service returns the envelope it applied and Platform recomputes the range gate from the same runs. Platform stops the recommendation when the range bounds disagree, the report is missing, or any suggestion falls outside the range gate. The leverage gate is applied by the optimizer and is not currently recomputed by Platform. The coverage envelope does not constrain offline algorithm evaluation: historical replay may only select runs that actually happened, so it is not extrapolation.
 
 ## Numerical Methods
 

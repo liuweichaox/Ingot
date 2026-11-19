@@ -8,10 +8,7 @@
     <AssemblyName>Ingot.Edge.ConnectorHost</AssemblyName>
   </PropertyGroup>
 
-  <!-- The generic Edge host excludes retired protocol-specific acquisition implementations. -->
-  <ItemGroup>
-    <Compile Remove="Acquisition/**/*.cs;Controllers/AcquisitionController.cs;BackgroundServices/AcquisitionProbeTaskHostedService.cs" />
-  </ItemGroup>
+  <!-- Edge is adapter-agnostic: external adapters own device protocols and submit standard events. -->
 
   <ItemGroup>
     <InternalsVisibleTo Include="Ingot.Core.Tests" />

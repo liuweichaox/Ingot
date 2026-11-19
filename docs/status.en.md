@@ -18,7 +18,7 @@ The repository claims only code, database contracts, automated tests, and reprod
 | Local stack | Runnable | See [Getting started](getting-started.en.md) for deployment components and instructions |
 | Recipe versions and parameters | Web/API implemented | Parameter definitions reference the process variables; recipe versions retain multiple parameter settings |
 | Runs and experiment outcomes | Web/API implemented | Each run is an experiment linking actual parameters, process data, and quality outcomes; admitted runs form optimization observations |
-| Recipe recommendations and engineer decisions | Web/API implemented | A correction lives on the published recipe version. Adoption leaves that version unchanged and the next run of the same version attaches automatically. A significant change creates a revision draft from the suggested settings |
+| Recipe recommendations and engineer decisions | Web/API implemented | A correction lives on the published recipe version. Adoption leaves that version unchanged; the engineer confirms the later same-version run that actually executed it, and freezing checks actual parameters. A run that did not follow the decision does not count as validation for that decision, while the run itself still contributes to later surrogate observations using its actual parameters. A significant change creates a revision draft from the suggested settings |
 | Software path | Implemented with automated tests | Tested paths behave as contracted; unmet conditions stop a recommendation and explain why |
 | Production operation | Single-machine reference deployment available | Deployers still complete factory/production-site security, recovery, capacity, and operations configuration |
 
@@ -32,6 +32,7 @@ The repository currently covers:
 - checking completeness, actual execution values, units, sources, and versions before analysis;
 - comparing eligible runs and showing key differences, candidate causes, counterevidence, and evidence gaps;
 - automatically combining admitted real recipe runs with quality outcomes into optimization observations;
+- checking actual parameter readback against the engineer decision when freezing an outcome; a run that did not follow the decision remains as traceability evidence and does not count as validation for that decision, while the run itself still contributes to later surrogate observations using its actual parameters;
 - generating next-recipe recommendations inside safety boundaries and the observed parameter envelope without automatic dispatch, then appending the engineer's adoption, modification, or rejection, its reason, actual recipe, and linked run;
 - selecting response-surface or Gaussian-process methods according to the data and degrading when evidence is insufficient;
 - preserving evidence, constraints, model versions, engineer decisions, and one-time frozen final outcomes from actual execution, parameter readback, and inspection records for every recommendation;

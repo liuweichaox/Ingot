@@ -2,7 +2,7 @@
 
 [简体中文](CONTRIBUTING.md)
 
-Ingot accepts contributions across code, equipment adapters, algorithms, authorized public replay data, tests, documentation, and process knowledge. Every contribution must respect the evidence and safety claim boundaries and must not overstate run efficiency.
+Ingot accepts contributions across generic code, algorithms, authorized public replay data, tests, documentation, and process knowledge. Site-specific equipment adapters are maintained outside this repository. Every contribution must respect the evidence and safety claim boundaries and must not overstate run efficiency.
 
 Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -41,9 +41,24 @@ The full pre-submission gate requires .NET SDK 10, Node.js 22.22+, Python 3.12, 
 - Distinguish planned values, actual values, trajectories, and outcomes.
 - Retain model version, uncertainty, and provenance.
 - Never let an LLM generate numerical process settings.
-- Keep equipment protocols outside the core domain.
+- Keep equipment protocols, point mappings, and vendor adapters outside the core repository; the core retains only the event contract, validation, diagnostics, and generic business capabilities.
 - Never present simulation as real-process benefit.
 - Update bilingual README, documentation, and website for public capability changes.
+
+## Core and site-adapter boundary
+
+The core repository maintains only capabilities that are generic across sites: the domain model, event contract, evidence assembly, analysis, optimization, permissions, audit, diagnostics, and tests. Device protocols, point mappings, vendor SDKs, unit conversions, and site-specific retry policies belong to site adapters, which deployers write and maintain for their environment, with AI assistance where useful.
+
+This is a deliberate trade-off: field connectivity is a long-tail problem. Making it generic turns the core into an unmaintainable driver collection, lowers code quality, and still fails to cover real sites. With adapters outside the repository, the core is responsible only for stable contracts.
+
+Therefore:
+
+- Do not submit device protocol drivers, point-mapping tables, or vendor SDK wrappers under `src/`;
+- Adapters depend only on the public event contract, validators, and contract tests, never on Platform internals;
+- The core owns the event contract, error codes, diagnostics, and validation; reusable adapter templates and contract tests are separate tools and contain no protocol implementations;
+- Code that serves only one factory, one device, or one protocol is an adapter and belongs outside this repository;
+- Do not submit speculative modules without a user-facing path, tests, and a real deployment scenario; implement them when the need appears;
+- A capability is generic when it needs no code change, or only a configuration change, for another site, device, or product.
 
 ## Change workflow
 
@@ -115,7 +130,7 @@ docs: document historical replay protocol
 
 ## High-value contribution areas
 
-- additional real equipment protocol adapters;
+- adapter contract tests, event-mapping examples, and adapter authoring guidance;
 - process-specific features and physical priors for real manufacturing scenarios;
 - Bayesian optimization, transfer, and calibration;
 - replay datasets and benchmarks with explicit authorization, licensing, and provenance;

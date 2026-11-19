@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipeVersionProposal } from "../src/recipe/RecipeVersionProposal";
+import { OutcomeReceipt, RecommendationEvidence } from "../src/recipe/RecommendationEvidence";
 
 afterEach(() => {
   cleanup();
@@ -65,12 +66,19 @@ const flow = {
     recommendationId: "22222222-2222-4222-8222-222222222222",
     siteCode: "SITE-001",
     processSpecificationId: "lens-press",
+    modelVersion: "recipe-test-model",
+    observationCount: 3,
     brief: { name: "lens-press 第 2 版", context: { process_specification_version: "2" } },
   },
   item: {
     recommendationKey: "recipe-001",
     parameters: [{ variableCode: "temperature", value: 510, unit: "Cel" }],
-    prediction: { rationale: "在已观察范围内靠近目标。", objectives: { "form-error": { mean: 0.4, unit: "um" } } },
+    prediction: {
+      rationale: "在已观察范围内靠近目标。",
+      feasibilityProbability: 0.87,
+      objectives: { "form-error": { mean: 0.4, lower95: 0.3, upper95: 0.5, unit: "um" } },
+      constraints: { "crack-rate": { mean: 0.01, lower95: 0, upper95: 0.02, unit: "1" } },
+    },
   },
   decision: null,
   allowedActions: ["decide"],
@@ -118,7 +126,7 @@ describe("配方版本上的下一轮校正", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("research-projects"))).toBe(false);
   });
 
-  it("决定之后的同配方运行会自动接上", async () => {
+  it("决定之后列出候选运行，由工程师确认后才关联", async () => {
     const pendingExecution = {
       ...flow,
       state: "pending-execution",
@@ -140,10 +148,89 @@ describe("配方版本上的下一轮校正", () => {
       },
       "/execution-link": { decisionId: pendingExecution.decision.decisionId },
     });
-    expect(await screen.findByText("已发布版本不变。决定之后，下一轮使用这一版配方并完成的运行会自动接上。")).toBeInTheDocument();
+
+    expect(await screen.findByText("RUN-NEXT")).toBeInTheDocument();
+    expect(screen.queryByText("RUN-OLD")).not.toBeInTheDocument();
+    expect(screen.queryByText("RUN-OTHER")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "核对此运行" }));
+    expect(screen.getByText(/关联后不能更换运行/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByLabelText("确认关联运行")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "核对此运行" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认关联" }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) =>
       String(url).includes("/recipe-recommendations/decisions/44444444-4444-4444-8444-444444444444/execution-link") &&
       JSON.parse(options.body).actualExecutionKey === "RUN-NEXT")).toBe(true));
+  });
+
+  it("展示预测区间与冻结结果的执行一致性回执", async () => {
+    const frozen = {
+      ...flow,
+      state: "outcome-frozen",
+      decision: {
+        decisionId: "55555555-5555-4555-8555-555555555555",
+        decision: "accepted",
+        decidedAt: "2026-10-09T00:00:00Z",
+        prediction: flow.item.prediction,
+        outcome: {
+          actualExecutionKey: "RUN-FROZEN",
+          outcomes: { "form-error": 0.42 },
+          constraintOutcomes: { "crack-rate": 0.01 },
+          validForOptimization: true,
+          executionAdherence: {
+            status: "within-tolerance",
+            policyVersion: "execution-adherence-v1",
+            variables: [{
+              variableCode: "temperature",
+              expectedValue: 510,
+              actualValue: 510.5,
+              deviation: 0.5,
+              tolerance: 1,
+              unit: "Cel",
+              withinTolerance: true,
+            }],
+            checkedAt: "2026-10-09T01:00:00Z",
+          },
+          capturedAt: "2026-10-09T01:00:00Z",
+        },
+      },
+      allowedActions: [],
+    };
+    renderProposal({ "/recipe-recommendations/flows": { items: [frozen] } });
+
+    expect(await screen.findByText("按决定执行")).toBeInTheDocument();
+    expect(screen.getByText("RUN-FROZEN", { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText(/95% 区间/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/0\.42/)).toBeInTheDocument();
+    expect(screen.getByText("在容差内")).toBeInTheDocument();
+  });
+
+  it("支持输入不在最近运行列表中的运行号", async () => {
+    const pending = { ...flow, state: "pending-execution", decision: { decisionId: "decision-1", decision: "accepted", decidedAt: "2026-10-09T00:00:00Z" } };
+    const { fetchMock } = renderProposal({ "/recipe-recommendations/flows": { items: [pending] }, "/execution-link": { decisionId: "decision-1" } });
+    const input = await screen.findByLabelText("输入运行号 recipe-001");
+    fireEvent.change(input, { target: { value: "RUN-OLDER-THAN-FIRST-PAGE" } });
+    fireEvent.click(screen.getByRole("button", { name: "核对输入的运行" }));
+    expect(screen.getByText(/最近运行列表没有该运行的详细信息/)).toBeInTheDocument();
+    expect(screen.getByText(/关联后不能更换运行/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "确认关联" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) => String(url).includes("/execution-link") && JSON.parse(options.body).actualExecutionKey === "RUN-OLDER-THAN-FIRST-PAGE")).toBe(true));
+  });
+
+  it("缺少可行概率时不显示零概率", () => {
+    render(<RecommendationEvidence recommendation={{}} prediction={{ feasibilityProbability: null }} />);
+    expect(screen.queryByText(/可行概率/)).not.toBeInTheDocument();
+  });
+
+  it.each([["modified", "within-tolerance"], ["accepted", "outside-tolerance"], ["accepted", null]])("%s 决定、%s 执行一致性不计算区间命中", (decisionType, status) => {
+    const decision = { decision: decisionType, prediction: flow.item.prediction, outcome: { outcomes: { "form-error": 0.42 }, executionAdherence: status ? { status } : null } };
+    render(<MemoryRouter><OutcomeReceipt decision={decision} siteId="SITE-001" /></MemoryRouter>);
+    expect(screen.getByText("不适用")).toBeInTheDocument();
+    expect(screen.queryByText("是", { exact: true })).not.toBeInTheDocument();
   });
 
   it("采用为下一轮校正时不创建新版本", async () => {

@@ -13,8 +13,12 @@ namespace Ingot.Platform.Application.ProcessResearch;
 public sealed class ResearchRecipeRecommendationDecisionService(
     IProcessResearchStore store,
     IResearchObservationAssembler observationAssembler,
-    IExecutionComparisonService executionComparisons)
+    IExecutionComparisonService executionComparisons,
+    ResearchExecutionAdherenceEvaluator? adherenceEvaluator = null)
 {
+    private readonly ResearchExecutionAdherenceEvaluator _adherence =
+        adherenceEvaluator ?? new ResearchExecutionAdherenceEvaluator();
+
     public async Task<ResearchRecipeRecommendationDecision> RecordDecisionAsync(
         Guid recommendationId,
         string recommendationKey,
@@ -183,6 +187,19 @@ public sealed class ResearchRecipeRecommendationDecisionService(
             "实际运行尚未形成完整结果约束");
         if (observation.ProcessFeatures.Count == 0)
             throw new ProcessResearchRuleException("实际运行尚未形成过程特征，不能冻结日常建议结果。");
+        var adherence = await _adherence.EvaluateAsync(
+            brief, decision, observation, ct).ConfigureAwait(false);
+        if (!string.Equals(
+                adherence.Status,
+                ResearchExecutionAdherenceStatuses.WithinTolerance,
+                StringComparison.Ordinal))
+        {
+            observation = observation with
+            {
+                ValidForOptimization = false,
+                ExclusionReason = AppendReason(observation.ExclusionReason, adherence.Reason)
+            };
+        }
         var outcome = new ResearchRecipeRecommendationOutcome
         {
             BriefHash = decision.BriefHash,
@@ -196,6 +213,7 @@ public sealed class ResearchRecipeRecommendationDecisionService(
             Outcomes = observation.Outcomes,
             ConstraintOutcomes = observation.ConstraintOutcomes,
             ActualContextSnapshot = observation.Context,
+            ExecutionAdherence = adherence,
             ValidForOptimization = observation.ValidForOptimization,
             ExclusionReason = observation.ExclusionReason,
             SourceContentHash = observation.SourceContentHash,
@@ -279,6 +297,13 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         var missing = codes.Where(code => !present(code)).ToArray();
         if (missing.Length > 0)
             throw new ProcessResearchRuleException($"{message}：{string.Join("、", missing)}。");
+    }
+
+    private static string AppendReason(string? existing, string? addition)
+    {
+        if (string.IsNullOrWhiteSpace(addition))
+            return string.IsNullOrWhiteSpace(existing) ? "执行一致性核对未通过。" : existing;
+        return string.IsNullOrWhiteSpace(existing) ? addition : $"{existing}；{addition}";
     }
 
     private static ResearchRecipeRecommendationDecision ExactRetryOrConflict(

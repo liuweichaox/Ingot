@@ -35,7 +35,9 @@ Invoke-RestMethod -Method Post -Uri "$edgeUrl/api/v1/connector-events" `
     -ContentType 'application/json' -Body $body
 ```
 
-该示例需要支持 `[guid]::CreateVersion7()` 的 PowerShell/.NET 运行时。`202 Accepted` 只说明 Edge 已接受并本地持久化，并不表示 Platform 已接受或质量结果已验证。
+该示例需要支持 `[guid]::CreateVersion7()` 的 PowerShell/.NET 运行时。`202 Accepted` 表示 Edge 已处理并确认该批事件，不表示 Platform 已接收或质量结果已验证。Edge 待上传队列达到硬上限时，会在同一事务中丢弃最旧的待上传事件；如果本批超出容量，本批事件也可能立即被丢弃，即使响应仍为 202。
+
+部署者应监控积压、丢弃指标和 Edge 日志，并查询本地 `diagnostic.backlog_dropped` 诊断事件中的丢弃数量及序号范围；适配器应保留必要的原始数据供对账和恢复。事件被清理或丢弃后不要盲目重发：先核对 Platform 接收和 Edge 隔离记录，参见[数据接入](../../docs/data-connection.md)。
 
 ## 用于实际工艺
 

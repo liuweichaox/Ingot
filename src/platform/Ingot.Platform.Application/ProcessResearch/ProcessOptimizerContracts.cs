@@ -23,6 +23,8 @@ public sealed record OptimizerObjectiveInput
     public double? OutcomeLowerBound { get; init; }
     [JsonPropertyName("outcome_upper_bound")]
     public double? OutcomeUpperBound { get; init; }
+
+    /// <summary>保留字段；当前优化器按最坏目标归一化距离排序，权重不参与计算。</summary>
     public double Weight { get; init; } = 1;
     public string Unit { get; init; } = "";
 }

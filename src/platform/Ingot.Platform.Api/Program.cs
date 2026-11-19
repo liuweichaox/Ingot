@@ -232,7 +232,6 @@ app.MapGet("/", () => Results.Ok(new
         executions = "/api/v1/process-executions",
         executionComparisons = "/api/v1/execution-comparisons/{executionId}",
         recipeRecommendations = "/api/v1/recipe-recommendations",
-        trainingDatasets = "/api/v1/training-datasets",
         toolingTypes = "/api/v1/tooling-types",
         toolingComponents = "/api/v1/tooling-components",
         toolingAssemblies = "/api/v1/tooling-assemblies",

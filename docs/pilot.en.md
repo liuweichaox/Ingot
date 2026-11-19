@@ -14,8 +14,8 @@ Before starting, confirm three things: the account can read run and inspection r
 2. Select “检查数据” (Check data) to review admitted completed runs and exclusion reasons. The recipe needs adjustable parameters with units and bounds, a numeric quality characteristic covering the recipe, and published process analysis containing process curves.
 3. After at least three valid runs cover two distinct actual recipes, select “生成下一轮校正” (Generate next-run correction). These are minimum data requirements; failed coverage, constraint, or method checks still stop the recommendation with an explanation.
 4. Choose “采用为下一轮校正” (Adopt as next-run correction), “修改后作为下一轮校正” (Modify and adopt), or “拒绝” (Reject). Modification and rejection require a reason; direct adoption keeps the suggested parameters and may include a reason. Adoption or modification leaves the published recipe version unchanged. Use “作为显著变更” (Treat as significant change) to open a revision draft for a significant change.
-5. After adoption or modification, use that recipe version for a subsequent real run. The recipe page attempts to link the next completed same-version run that started after the decision; the server still validates the factory/production site and frozen context. Rejection requires no linked run.
-6. The page reads parameter readback and inspection facts from the linked run and requests outcome freezing. If this fails, repair the data and select “再次读取结果” (Read result again). Only runs passing outcome admission become later optimization observations.
+5. After adoption or modification, use that recipe version for a subsequent real run. The recipe page lists completed runs of the same version that started after the decision, and the engineer selects the one that actually executed those parameters; the server still validates the factory/production site and frozen context. Rejection requires no linked run.
+6. The page reads parameter readback and inspection facts from the linked run and requests outcome freezing. If this fails, repair the data and read again. Freezing checks actual parameters against the decision. A run that did not follow the decision remains as traceability evidence and does not count as validation for that decision, while the run itself still contributes to later surrogate observations using its actual parameters. Only runs passing outcome admission and execution-adherence checks become validation results for that round.
 7. Complete the current decision and outcome before generating another correction. Recommendations are never dispatched automatically; field parameter changes follow existing operating procedures.
 
 ## Check Every Recommendation
@@ -26,8 +26,8 @@ Check completion in the same order as the operating steps:
 2. **Data confirmed**: admitted and excluded runs are identifiable; the minimum count is met and actual settings include at least two combinations.
 3. **Recommendation generated**: a retrievable recommendation identifies its inputs, predictions, and constraints and stays within declared safety boundaries and observed coverage; a stopped request retains its reason.
 4. **Decision recorded**: adoption, modification, or rejection is saved; modified settings and reasons are inspectable, and a significant change opens a revision draft.
-5. **Run linked**: adoption or modification links a real same-version run starting after the decision and passing server-side context validation.
-6. **Outcome frozen**: parameter readback and valid inspection facts come from the linked run, and freezing succeeds; failed reads retain the record while data is repaired.
+5. **Run linked**: adoption or modification links a real same-version run starting after the decision and passing server-side context validation; the page lists candidates and the engineer confirms the run that actually executed.
+6. **Outcome frozen**: parameter readback and valid inspection facts come from the linked run; actual parameters within tolerance count as validation for the round, while values outside tolerance remain as traceability evidence but do not count; failed reads retain the record while data is repaired.
 7. **Round closed**: the decision and required outcome are complete before another round; rejection does not manufacture an execution outcome.
 
 ## Insufficient Samples or Bad Data

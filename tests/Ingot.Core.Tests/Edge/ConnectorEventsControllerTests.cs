@@ -4,15 +4,68 @@ using System.Text.Json;
 using Ingot.Domain.Events;
 using Ingot.Edge.Application.Abstractions;
 using Ingot.Edge.ConnectorHost.Controllers;
+using Ingot.Edge.Infrastructure.Events;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Ingot.Core.Tests.Edge;
 
 public sealed class ConnectorEventsControllerTests
 {
+    [Fact]
+    public async Task Ingest_BatchExceedsCapacity_AcceptsButRecordsDroppedBatchEvents()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"ingot-backlog-{Guid.NewGuid():N}.db");
+        try
+        {
+            var log = new SqliteEventLog(Options.Create(new EventOptions
+            {
+                DatabasePath = dbPath,
+                MaxBacklogRows = 2
+            }), NullLogger<SqliteEventLog>.Instance);
+            var sink = new EventSink(log, NullLogger<EventSink>.Instance, new EventPersistenceHealth());
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["ConnectorHost:IngestToken"] = "test-token" }).Build();
+            var controller = new ConnectorEventsController(sink, new StubEdgeIdentityProvider(), configuration)
+            {
+                ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            };
+            controller.Request.Headers.Authorization = "Bearer test-token";
+            var events = Enumerable.Range(0, 3).Select(index => ProductionEvent.Create(
+                "equipment.heartbeat", DateTimeOffset.UtcNow, "connector/test",
+                new ObjectRef("equipment", $"SYNTHETIC-{index}"))).ToArray();
+
+            var accepted = Assert.IsType<AcceptedResult>(await controller.Ingest(events, CancellationToken.None));
+            using var response = JsonDocument.Parse(JsonSerializer.Serialize(accepted.Value));
+            Assert.Equal(3, response.RootElement.GetProperty("count").GetInt32());
+            var returned = response.RootElement.GetProperty("events");
+            Assert.Equal(3, returned.GetArrayLength());
+            var firstSequence = returned[0].GetProperty("Seq").GetInt64();
+
+            var stored = await log.QueryAsync(new EventQuery { Limit = 100 });
+            Assert.DoesNotContain(stored, item => item.EventId == events[0].EventId);
+            Assert.Contains(stored, item => item.EventId == events[1].EventId);
+            Assert.Contains(stored, item => item.EventId == events[2].EventId);
+            var diagnostic = Assert.Single(stored, item => item.EventType == "diagnostic.backlog_dropped");
+            Assert.Equal(1, Assert.IsType<JsonElement>(diagnostic.Data["dropped_count"]).GetInt32());
+            Assert.Equal(firstSequence, Assert.IsType<JsonElement>(diagnostic.Data["dropped_seq_from"]).GetInt64());
+            Assert.Equal(firstSequence, Assert.IsType<JsonElement>(diagnostic.Data["dropped_seq_to"]).GetInt64());
+            Assert.Equal(2, await log.CountPendingAsync());
+        }
+        finally
+        {
+            foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
+            {
+                try { if (File.Exists(path)) File.Delete(path); }
+                catch (IOException) { /* Temporary test cleanup is best-effort. */ }
+            }
+        }
+    }
+
     [Fact]
     public async Task Ingest_ConflictingEventIdentity_ReturnsConflict()
     {

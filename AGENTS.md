@@ -31,7 +31,7 @@ Run these checks directly when changing architecture, product scope, public term
 
 ## Coding Style & Naming Conventions
 
-Follow existing files: four-space indentation in C# and Python, two spaces in JavaScript/TypeScript/JSON/YAML, and UTF-8 text. C# uses file-scoped namespaces, nullable reference types, `PascalCase` for public symbols, and `camelCase` for locals and parameters. Frontend components use `PascalCase` filenames; variables and functions use `camelCase`. Run each app's `npm run lint` before submitting. Keep domain and agent abstractions independent of databases, model providers, and equipment protocols.
+Follow existing files: four-space indentation in C# and Python, two spaces in JavaScript/TypeScript/JSON/YAML, and UTF-8 text. C# uses file-scoped namespaces, nullable reference types, `PascalCase` for public symbols, and `camelCase` for locals and parameters. Frontend components use `PascalCase` filenames; variables and functions use `camelCase`. Run each app's `npm run lint` before submitting. Keep domain and agent abstractions independent of databases, model providers, and equipment protocols. Keep the core repository generic: protocol drivers, site mappings, vendor SDKs, and speculative modules do not belong in `src/`; every core module needs a user-facing path, tests, and a real deployment scenario.
 
 ## Testing Guidelines
 

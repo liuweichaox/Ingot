@@ -8,9 +8,9 @@ import {
   chooseCharacteristic,
   dominant,
   inferObjective,
-  nextRunAfterDecision,
   proposalStillOpen,
   revisionOverrides,
+  runsAfterDecision,
   runsForRecipe,
 } from "./proposalScope";
 import {
@@ -22,15 +22,16 @@ import {
   recordDecision,
 } from "./suggestionApi";
 import { Alert, Button, Field, Input, RequestError, Textarea, notify } from "../ui/components";
-import { formatMeasurementValue } from "../pages/shared";
+import { formatMeasurementValue, formatTime } from "../pages/shared";
+import { OutcomeReceipt, RecommendationEvidence } from "./RecommendationEvidence";
 
 const stateLabels = {
   "pending-decision": "待决定",
   rejected: "已拒绝",
-  "pending-execution": "等待下一轮运行",
-  "pending-outcome": "等待质量结果",
+  "pending-execution": "待关联实际运行",
+  "pending-outcome": "待读取结果",
   "outcome-frozen": "结果已冻结",
-  "outcome-excluded": "结果未纳入后续建议",
+  "outcome-excluded": "结果未纳入本轮验证",
   stale: "已过期，需重新生成",
 };
 
@@ -122,7 +123,8 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
   const [runsBySite, setRunsBySite] = useState({});
   const [runsReadySite, setRunsReadySite] = useState("");
   const [decisionDrafts, setDecisionDrafts] = useState({});
-  const attached = useRef(new Set());
+  const [runIds, setRunIds] = useState({});
+  const [runConfirmation, setRunConfirmation] = useState(null);
   const flowsRequestId = useRef(0);
   const error = errorState.scopeKey === scopeKey ? errorState.message : "";
   const busy = busyScope === scopeKey;
@@ -218,47 +220,6 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
     plan.dataModelId === specification.dataModelId &&
     (plan.signals || []).length > 0);
 
-  useEffect(() => {
-    if (!runsReady) return undefined;
-    const waiting = scopedFlows.filter(flow => flow.state === "pending-execution" || flow.state === "pending-outcome");
-    if (!waiting.length) return undefined;
-    let cancelled = false;
-    async function settle() {
-      for (const flow of waiting) {
-        if (cancelled || currentScope.current !== scopeKey) return;
-        const recommendation = flow.recommendation;
-        const version = recommendation?.brief?.context?.process_specification_version;
-        const runs = runsBySite[recommendation?.siteCode] || [];
-        try {
-          if (flow.state === "pending-execution") {
-            const run = nextRunAfterDecision(runs, recommendation.processSpecificationId, version, flow.decision?.decidedAt);
-            if (!run) continue;
-            const key = `link:${flow.decision.decisionId}:${run.executionId}`;
-            if (attached.current.has(key)) continue;
-            if (cancelled || currentScope.current !== scopeKey) return;
-            attached.current.add(key);
-            await linkRun(flow.decision.decisionId, run.executionId);
-            if (!cancelled && currentScope.current === scopeKey) notify(`已把 ${run.executionId} 接到这一版的校正上。`);
-          } else {
-            const key = `freeze:${flow.decision.decisionId}`;
-            if (attached.current.has(key)) continue;
-            if (cancelled || currentScope.current !== scopeKey) return;
-            attached.current.add(key);
-            await freezeOutcome(flow.decision.decisionId);
-            if (!cancelled && currentScope.current === scopeKey) notify("这轮质量结果已冻结。");
-          }
-          if (!cancelled && currentScope.current === scopeKey) await reloadFlows(scopeKey);
-        } catch (requestError) {
-          if (!cancelled) setScopedError(scopeKey, requestError.message);
-        }
-      }
-    }
-    void settle();
-    return () => {
-      cancelled = true;
-    };
-  }, [scopedFlows, runsBySite, runsReady, siteId, scopeKey]);
-
   function currentBrief() {
     return briefForRecipe({
       specification,
@@ -283,6 +244,25 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
     } finally {
       setScopedBusy(actionScope, false);
     }
+  }
+
+  function attachRun(flow, run) {
+    return runAction(
+      () => linkRun(flow.decision.decisionId, run.executionId),
+      `已关联 ${run.executionId}。系统将在结果冻结时核对实际参数。`,
+    );
+  }
+
+  // 关联不可覆盖，先冻结用户选择的运行号和已知信息供确认。
+  function reviewRun(flow, run) {
+    setRunConfirmation({ scopeKey, decisionId: flow.decision.decisionId, run });
+  }
+
+  function readOutcome(flow) {
+    return runAction(
+      () => freezeOutcome(flow.decision.decisionId),
+      "已读取并冻结这轮结果。",
+    );
   }
 
   async function checkReadiness() {
@@ -371,8 +351,19 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
       {scopedFlows.map(flow => {
         const editor = decisionState(flow);
         const parameters = flow.item.parameters || [];
-        const objectives = Object.entries(flow.item.prediction?.objectives || {});
         const recommendation = flow.recommendation;
+        const decisionAt = flow.decision?.decidedAt;
+        const version = recommendation?.brief?.context?.process_specification_version;
+        const candidateRuns = flow.state === "pending-execution"
+          ? runsAfterDecision(
+            recipeRuns,
+            recommendation.processSpecificationId,
+            version,
+            decisionAt,
+          )
+          : [];
+        const confirmation = runConfirmation?.scopeKey === scopeKey &&
+          runConfirmation.decisionId === flow.decision?.decisionId ? runConfirmation : null;
         return (
           <section key={`${recommendation.recommendationId}:${flow.item.recommendationKey}`} className="grid gap-3 border-t border-slate-200 pt-4" aria-label={stateLabels[flow.state] || flow.state}>
             <div>
@@ -387,11 +378,7 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
                 </div>
               ))}
             </dl>
-            {objectives.length > 0 && (
-              <p className="text-sm text-slate-600">
-                预测：{objectives.map(([code, metric]) => `${code} ${formatMeasurementValue(metric.mean)} ${metric.unit || ""}`).join("；")}
-              </p>
-            )}
+            <RecommendationEvidence recommendation={recommendation} prediction={flow.item.prediction} />
             {canWrite && flow.state === "pending-decision" && (
               <div className="grid gap-3">
                 <Field label="修改后的参数。作为下一轮校正采用时保持建议值。">
@@ -406,41 +393,83 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
                   <Button variant="primary" disabled={busy} onClick={() => runAction(() => recordDecision(recommendation.recommendationId, flow.item.recommendationKey, {
                     decision: "accepted",
                     engineerSelectedParameters: parameters,
-                    usefulnessRating: "useful",
                   }), "已采用为下一轮校正。已发布版本不变。")}>采用为下一轮校正</Button>
                   <Button disabled={busy} onClick={() => runAction(() => recordDecision(recommendation.recommendationId, flow.item.recommendationKey, {
                     decision: "modified",
                     reason: editor.reason,
                     engineerSelectedParameters: parameters.map(parameter => ({ ...parameter, value: Number(editor.values[parameter.variableCode]) })),
-                    usefulnessRating: "partly-useful",
                   }), "已登记修改后的下一轮校正。已发布版本不变。")}>修改后作为下一轮校正</Button>
                   <Button disabled={busy} onClick={() => promote(flow)}>作为显著变更</Button>
                   <Button disabled={busy} onClick={() => runAction(() => recordDecision(recommendation.recommendationId, flow.item.recommendationKey, {
                     decision: "rejected",
                     reason: editor.reason,
                     engineerSelectedParameters: [],
-                    usefulnessRating: "not-useful",
                   }), "已拒绝这轮校正。")}>拒绝</Button>
                 </div>
               </div>
             )}
             {flow.state === "pending-execution" && (
-              <p className="text-sm text-slate-600">已发布版本不变。决定之后，下一轮使用这一版配方并完成的运行会自动接上。</p>
-            )}
-            {canWrite && flow.state === "pending-outcome" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm text-slate-600">正在读取这轮运行的质量结果。</p>
-                <Button variant="primary" disabled={busy} onClick={() => {
-                  attached.current.delete(`freeze:${flow.decision.decisionId}`);
-                  void runAction(() => freezeOutcome(flow.decision.decisionId), "已冻结这轮结果。");
-                }}>再次读取结果</Button>
+              <div className="grid gap-2 rounded-lg border border-slate-200 p-3">
+                <p className="text-sm leading-6 text-slate-600">
+                  选择实际执行了这轮参数的运行。系统会在结果冻结时核对实际参数；未按决定执行的结果会保留，但不作为本轮验证；运行可能按实际参数进入后续观察。
+                </p>
+                {!canWrite && <p className="text-[13px] text-slate-500">等待有权限的工程师关联实际运行。</p>}
+                {canWrite && candidateRuns.length === 0 && (
+                  <p className="text-[13px] text-slate-500">最近读取的运行中没有符合条件的候选；也可以输入运行号关联。</p>
+                )}
+                {canWrite && (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Field label="输入运行号">
+                      <Input aria-label={`输入运行号 ${flow.item.recommendationKey}`} value={runIds[flow.decision.decisionId] || ""} onChange={event => setRunIds(current => ({ ...current, [flow.decision.decisionId]: event.target.value }))} />
+                    </Field>
+                    <Button disabled={busy || !runIds[flow.decision.decisionId]?.trim()} onClick={() => {
+                      const executionId = runIds[flow.decision.decisionId].trim();
+                      reviewRun(flow, candidateRuns.find(run => run.executionId === executionId) || { executionId });
+                    }}>核对输入的运行</Button>
+                  </div>
+                )}
+                {canWrite && candidateRuns.length > 0 && (
+                  <ul className="grid gap-2">
+                    {candidateRuns.map(run => (
+                      <li key={run.executionId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{run.executionId}</p>
+                          <p className="text-[13px] text-slate-500">{formatTime(run.startedAt)} · {run.qualityStatus || "质量状态未知"} · 设备 {run.equipmentId || "未知"} · 产品 {run.productCode || "未知"}</p>
+                        </div>
+                        <Button variant="primary" disabled={busy} onClick={() => reviewRun(flow, run)}>核对此运行</Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {confirmation && (
+                  <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm" aria-label="确认关联运行">
+                    <p className="font-medium">确认运行 {confirmation.run.executionId}</p>
+                    <p>决定范围：站点 {siteId} · 配方 {recommendation.processSpecificationId} / 第 {version || "未知"} 版</p>
+                    {confirmation.run.startedAt ? (
+                      <p>开始 {formatTime(confirmation.run.startedAt)} · 设备 {confirmation.run.equipmentId || "未知"} · 产品 {confirmation.run.productCode || "未知"} · 质量 {confirmation.run.qualityStatus || "未知"}</p>
+                    ) : <p>最近运行列表没有该运行的详细信息，请先核实运行号和执行范围。</p>}
+                    {(flow.decision.engineerSelectedParameters || []).length > 0 && (
+                      <p>工程师决定：{flow.decision.engineerSelectedParameters.map(item => `${item.variableCode} ${formatMeasurementValue(item.value)} ${item.unit || ""}`).join("；")}</p>
+                    )}
+                    <Link className="text-trajectory-700 underline" to={`/process-executions/${encodeURIComponent(confirmation.run.executionId)}?siteId=${encodeURIComponent(siteId)}`}>查看运行详情</Link>
+                    <p>关联后不能更换运行；实际参数将在冻结结果时核对。请确认这是执行该决定的运行。</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="primary" disabled={busy} onClick={() => { void attachRun(flow, confirmation.run); }}>确认关联</Button>
+                      <Button disabled={busy} onClick={() => setRunConfirmation(null)}>取消</Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            {flow.decision?.outcome && (
-              <Alert tone={flow.decision.outcome.validForOptimization ? "success" : "warning"} title="结果已从真实运行冻结">
-                {flow.decision.outcome.exclusionReason || "这轮质量结果可以进入下一轮校正。"}
-              </Alert>
+            {flow.state === "pending-outcome" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm leading-6 text-slate-600">
+                  运行已关联。读取质量结果后冻结；若实际参数与决定不一致，结果不作为本轮验证；运行可能按实际参数进入后续观察。
+                </p>
+                {canWrite && <Button variant="primary" disabled={busy} onClick={() => readOutcome(flow)}>读取并冻结结果</Button>}
+              </div>
             )}
+            {flow.decision?.outcome && <OutcomeReceipt decision={flow.decision} siteId={siteId} />}
           </section>
         );
       })}

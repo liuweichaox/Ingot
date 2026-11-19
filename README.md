@@ -171,7 +171,7 @@ AI 助手（Ingot Chat，独立调查入口）
 
 ## 参与贡献
 
-欢迎设备适配、统计方法、优化算法、测试和文档贡献。
+欢迎统计方法、优化算法、测试、文档和适配器契约方面的贡献；具体设备适配器由部署者在仓库外维护。
 
 1. 先阅读[贡献指南](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)和[安全策略](SECURITY.md)。
 2. 在 [Issues](https://github.com/liuweichaox/Ingot/issues) 或 [Discussions](https://github.com/liuweichaox/Ingot/discussions) 中确认没有重复问题；较大变更先说明场景和验证方式。

@@ -141,6 +141,41 @@ public sealed partial class RecipeRecommendationBriefPolicy(
         return snapped;
     }
 
+    /// <summary>
+    /// 返回已发布数据模型中各可调参数的步长；参数没有步长或无法解析时返回 null。
+    /// 只用于执行一致性核对，不改变建议条件或建议参数。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, double?>> ResolveParameterStepsAsync(
+        RecipeRecommendationBrief brief,
+        IReadOnlyCollection<string> controlCodes,
+        CancellationToken ct = default)
+    {
+        var codes = controlCodes.ToHashSet(StringComparer.Ordinal);
+        var result = codes.ToDictionary(static code => code, static _ => (double?)null, StringComparer.Ordinal);
+        if (processConfigurations is null || codes.Count == 0)
+            return result;
+        // 只有冻结条件明确固定版本时才读取步长；否则不把生成后的新版本步长套到历史决定上。
+        if (!brief.Context.TryGetValue(RecipeRecommendationScopeKeys.ProcessSpecificationVersion, out var pinnedVersion) ||
+            !int.TryParse(pinnedVersion, System.Globalization.CultureInfo.InvariantCulture, out _))
+            return result;
+
+        var model = await LoadPublishedModelAsync(brief, ct).ConfigureAwait(false);
+        var definitions = model.ControlParameters.ToDictionary(
+            static value => value.Code, StringComparer.OrdinalIgnoreCase);
+        foreach (var variable in brief.Variables.Where(value =>
+                     value.Role == ResearchVariableRoles.Control && codes.Contains(value.Code)))
+        {
+            var parameterCode = variable.DataSource is null
+                ? variable.Code
+                : variable.DataSource.StartsWith(ControlParameterSourcePrefix, StringComparison.OrdinalIgnoreCase)
+                    ? variable.DataSource[ControlParameterSourcePrefix.Length..].Trim()
+                    : variable.Code;
+            if (definitions.TryGetValue(parameterCode, out var definition) && definition.Step is > 0)
+                result[variable.Code] = definition.Step;
+        }
+        return result;
+    }
+
     internal static bool TrySnapToStep(
         double value,
         double origin,

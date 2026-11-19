@@ -13,8 +13,9 @@ using Ingot.ImportCli;
 //                [--seq-start 1] [--source-tag historical-data]
 //                [--dry-run] [--show-values] [--batch 500]
 // 说明：
-//   - seq 单调递增即可、允许间隙；平台按 eventId 与 (siteId, edgeId, seq) 去重，失败后用相同
-//     --seq-start 重跑是安全的（重复行会被识别为 duplicates）。
+//   - seq 单调递增即可、允许间隙；平台按 eventId 与 (siteId, edgeId, seq) 去重。当前实现每次
+//     转换都会重新生成 EventId 和 RecordedAt，失败后不能重跑整份文件；应先核对已提交范围，
+//     只导入确认未提交的记录，不要用新序号绕过去重。
 //   - --seq-start 缺省取启动时刻的 unix 毫秒 ×1000，保证多次导入不同文件时仍单调。
 //   - 映射文件格式见 sample-mapping.json 与 README。
 
@@ -127,7 +128,7 @@ static async Task<(int Accepted, int Duplicates)> ShipAsync(
     if (!response.IsSuccessStatusCode)
         throw new InvalidOperationException(
             $"平台拒绝批次（HTTP {(int)response.StatusCode}）：{body}\n" +
-            $"失败批次 Seq 范围 {events[0].Seq}-{events[^1].Seq}；修正后用相同 --seq-start 重跑即可安全续传。");
+            $"失败批次 Seq 范围 {events[0].Seq}-{events[^1].Seq}；请先核对已提交范围，只导入确认未提交的记录；不要重跑整份文件或用新序号绕过去重。");
     var result = JsonSerializer.Deserialize<EventBatchResponse>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("平台返回了空的确认响应。");
     return (result.Accepted, result.Duplicates);

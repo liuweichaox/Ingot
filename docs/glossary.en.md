@@ -32,7 +32,7 @@
 
 ## Deployment and responsibilities
 
-- **Factory / production site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. The system identifies the site internally with `SiteId`; one factory may have multiple Edges, while each Edge belongs to one factory. Shared training datasets and model assets within a deployment use role-based authorization; `SiteId` does not mean every table is isolated.
+- **Factory / production site**: Ownership scope for field events, inspections, recommendations, and knowledge, and the basis for Edge-token binding and applicable authorization checks. The system identifies the site internally with `SiteId`; one factory may have multiple Edges, while each Edge belongs to one factory. Model-service configuration uses platform-administrator authorization; `SiteId` does not mean every table is isolated.
 - **Edge ingestion token**: A separate, rotatable credential that a field connector uses to send events, configured independently per factory.
 - **Engineering decision**: Recommendations are never sent to equipment automatically; engineers define objectives and boundaries and review, adopt, or reject each recommendation.
 

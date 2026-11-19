@@ -9,14 +9,14 @@ See the [system design](../docs/design.en.md) for boundaries and [analysis and o
 ## Current capabilities
 
 - Continuous controls, hard parameter bounds, and measured outcome-safety constraints
-- Explicit `context` stratification for discrete factors such as material, equipment, tooling, and recipe; category codes are never disguised as continuous controls
+- Discrete factors such as material, equipment, tooling, and recipe are recorded as explicit `context` and used by admission grouping upstream; the numerical engine does not currently use `context` as a model feature, so callers must ensure comparable context levels within one optimization scope or organize inputs by level. Category codes are never disguised as continuous controls
 - Less-than, greater-than, target, and range objectives
-- Objective weights and BoTorch/GPyTorch multi-output GPs with 95% intervals
+- Normalized multi-objective specification distance (worst-objective priority) and BoTorch/GPyTorch multi-output GPs with 95% intervals; intervals use a fixed relative noise floor and do not estimate measurement error
 - Declared physical outcome bounds; formal PASS/FAIL objectives keep posterior means, intervals, and the acquisition function inside 0-1
 - GP outcome-safety filtering followed by visible-evidence admission for response surfaces, GP probability, and mechanism features
 - Decision intent is `reach-specification` only: seek the specification inside the observed coverage envelope
 - Safe derived features declared by the frozen brief, with no hidden behavior selected by industry, equipment, or variable names
-- Safe-baseline local cold start, pending recipe points, and idempotent batches
+- Safe-baseline local cold start, pending recipe points, and idempotent batches; the Platform product path calls for a recommendation only after at least three valid observations, so cold start remains a service-internal capability
 - Historical pool replay that can select only real parameter settings from completed runs (`POST /v1/historical-replay`)
 - Stateless `POST /v1/suggestions` HTTP contract
 - Stateless `POST /v1/diagnosis` contract, plus `/health` and `/ready` probes
@@ -60,7 +60,7 @@ The repository bundles no public or field-validation datasets, historical protoc
 
 `POST /v1/suggestions` accepts:
 
-- a campaign with variables, weighted objectives, parameter and outcome constraints;
+- a campaign with variables, normalized multi-objective specification distance, parameter and outcome constraints;
 - an optional versioned `derived_features` DAG using only bounded numeric operators;
 - the complete immutable observation snapshot;
 - measured process features, outcome-constraint measurements, and pending parameter settings;
@@ -69,7 +69,7 @@ The repository bundles no public or field-validation datasets, historical protoc
 
 It returns recommended parameters, objective means and 95% intervals, predicted distance to specification, feasibility probability, acquisition value, model version, rationale, and the `coverage_envelope` applied to the request.
 
-Candidates are generated only inside the region historical runs cover: every variable stays within its observed range plus a margin (the larger of 10% of the observed spread and 2% of the declared range), and a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. Platform recomputes the same envelope from the same runs and stops the recommendation when the two disagree or a suggestion falls outside it. When too few candidates remain inside the envelope, the service returns 422 and reports that production runs have not covered enough of the parameter space. Recommendations use `reach-specification` only and always stay inside the observed coverage envelope.
+Candidates are generated only inside the region historical runs cover: every variable stays within its observed range plus a margin (the larger of 10% of the observed spread and 2% of the declared range), and a candidate's Mahalanobis distance from the observed centre stays within the largest distance among the observations themselves, widened by 10%. Platform recomputes the range gate from the same runs and validates the reported coverage-envelope variable set; it stops the recommendation when range bounds disagree, the report is missing, or a suggestion falls outside the range gate. The leverage gate is applied by the optimizer and is not currently recomputed by Platform. When too few candidates remain inside the envelope, the service returns 422 and reports that production runs have not covered enough of the parameter space. Recommendations use `reach-specification` only and always stay inside the observed coverage envelope.
 
 Derived operators run on engineering-unit controls and are normalized with the
 declared offset and scale. Inputs may reference campaign controls or an earlier
@@ -88,7 +88,9 @@ Replay return fields have undergone a breaking change: summaries use `median_run
 
 This response-contract change corresponds to Optimizer HTTP API `0.6.0` (Python package `0.5.0`).
 
-Synthetic replay truth functions must return `SyntheticTruthResult` with explicit `outcomes`, `constraint_outcomes`, and optional `process_features`. A synthetic run succeeds only when its objectives and every outcome-safety constraint pass.
+Synthetic replay truth functions must return `SyntheticTruthResult` and give reproducible results for the same parameters; callers must encode any random noise as a reproducible parameter/seed mapping. The optimizer and random baseline share the initial observations for each seed and the same total budget. By default each policy updates its own range and leverage coverage gates; `enforce_coverage=False` explicitly labels an unrestricted experiment. Per-step traces and stop reasons retain unsuccessful and no-candidate runs. At least three initial observations are requested by default and count against the total budget.
+
+The random baseline has no model-based outcome safety probability gate, so synthetic comparison currently rejects campaigns with outcome safety constraints. It does not simulate all Platform admission, site, and parameter-step contracts and is not a complete production-equivalence check. Run `uv run --project optimizer --locked python optimizer/tests/synthetic_benchmark.py` to compare the included synthetic surfaces; results describe algorithm mechanics, not plant benefits.
 
 ## Platform integration
 

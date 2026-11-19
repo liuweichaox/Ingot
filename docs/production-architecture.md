@@ -181,8 +181,7 @@ Edge 向 Platform 使用至少一次传输，Platform 对已接收身份执行�
 | 运行派生数据 | `ExecutionId`，可追溯到站点摄入事实 | `execution_features`、`execution_phases`、分析物化与重算任务、`operation_context_snapshots` | 不作为独立租户边界；所有外部读取必须从已授权站点范围解析运行集合，禁止仅凭任意 ExecutionId 越站点读取 |
 | 配方建议与知识 | `SiteId` + 配方；知识来源仅 `SiteId` | `research_recipe_recommendation*`、`recipe_recommendation*`、`mechanism_*`、`knowledge_*` | 建议、决定、运行关联与机理证据只在同一站点和配方内引用；知识来源与片段只在所属站点检索 |
 | 质量与检验 | `SiteId` + 运行/检验计划关系 | `inspection_*` | 检验记录、范围和附件固化站点归属；授权仍从关联运行继承，附件和审核日志不能脱离父记录单独访问 |
-| 部署级研发资产与评测 | 数据集/模型/案例身份与版本；按岗位授权 | `training_dataset_versions`、`model_evaluations`、`model_drift_readings`、`case_level_evaluations` | 当前没有独立的 `SiteId` 隔离契约，不得作为跨团队或跨租户隔离能力使用；引用生产事实时仍须遵守其来源权限 |
-| Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events`、`problem_cases` | Agent 记录不授予新数据权限；回放时重新验证用户和站点范围 |
+| Agent 审计 | 发起用户 + 输入证据范围 | `agent_runs`、`agent_stream_events` | Agent 记录不授予新数据权限；回放时重新验证用户和站点范围 |
 
 现场 Edge 适配器负责设备协议、采样计划和点位绑定。Platform 使用通用点位目录及采样帧/值表保存接收的生产数据。
 

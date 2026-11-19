@@ -21,7 +21,7 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
                 new ResearchVariableSetting
                     { VariableCode = "holding-temperature", Value = 521, Unit = "Cel" },
                 new ResearchVariableSetting
-                    { VariableCode = "press-force", Value = 12.2, Unit = "kN" }
+                    { VariableCode = "press-force", Value = 12.05, Unit = "kN" }
             ],
             ProcessFeatures = new Dictionary<string, double> { ["temperature.average"] = 520.4 },
             Outcomes = new Dictionary<string, double> { ["form-error"] = 0.31 },
@@ -75,6 +75,10 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
         Assert.Equal(1, completed.Outcome.SettingDeviationFromEngineerSelection["holding-temperature"]);
         Assert.Equal(0.31, completed.Outcome.Outcomes["form-error"]);
         Assert.Equal(new string('a', 64), completed.Outcome.SourceContentHash);
+        Assert.NotNull(completed.Outcome.ExecutionAdherence);
+        Assert.Equal(ResearchExecutionAdherenceStatuses.WithinTolerance,
+            completed.Outcome.ExecutionAdherence.Status);
+        Assert.True(completed.Outcome.ValidForOptimization);
         Assert.Equal("production-recipe-001", assembler.RequestedExecutionKey);
         var frozen = await service.MaterializeOutcomeAsync(recorded.DecisionId, "engineer-d");
         Assert.Equal(completed.Outcome.CapturedAt, frozen.Outcome!.CapturedAt);
@@ -83,6 +87,57 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
             new RecipeRecommendationFilter([TestSiteCode], TestProcessSpecificationId), null, 100);
         var flow = Assert.Single(flows.Items);
         Assert.Equal(recorded.DecisionId, flow.Decision!.DecisionId);
+    }
+
+    [Fact]
+    public async Task RecipeRecommendationDecision_ExcludesOutcomeWhenActualParametersDiffer()
+    {
+        var store = new MemoryStore();
+        var recommendation = await CreateRecommendationAsync(store, BriefDraft());
+        var assembler = new StubObservationAssembler(new ResearchRunObservation
+        {
+            ExecutionKey = "production-recipe-outside",
+            ActualFactors = Parameters(540, 13),
+            ProcessFeatures = new Dictionary<string, double> { ["temperature.average"] = 540 },
+            Outcomes = new Dictionary<string, double> { ["form-error"] = 0.3 },
+            SourceContentHash = new string('b', 64)
+        });
+        var executions = new MutableExecutionComparisonService();
+        var service = new ResearchRecipeRecommendationDecisionService(store, assembler, executions);
+        var item = Assert.Single(recommendation.Items);
+        var decision = await service.RecordDecisionAsync(
+            recommendation.RecommendationId,
+            item.RecommendationKey,
+            new ResearchRecipeRecommendationDecisionRequest
+            {
+                Decision = ResearchRecipeRecommendationDecisionStatuses.Modified,
+                EngineerSelectedParameters = Parameters(520, 12),
+                Reason = "按当前批次调整。"
+            },
+            "engineer-b");
+        var startedAt = decision.DecidedAt.AddSeconds(1);
+        executions.Set(Execution("production-recipe-outside", startedAt));
+        var linked = await service.LinkActualExecutionAsync(
+            decision.DecisionId,
+            new ResearchRecipeRecommendationExecutionLinkRequest
+            {
+                ActualExecutionKey = "production-recipe-outside"
+            },
+            "engineer-b");
+        executions.Set(Execution("production-recipe-outside", startedAt, completed: true));
+
+        var completed = await service.MaterializeOutcomeAsync(linked.DecisionId, "engineer-c");
+
+        Assert.NotNull(completed.Outcome);
+        Assert.NotNull(completed.Outcome.ExecutionAdherence);
+        Assert.Equal(ResearchExecutionAdherenceStatuses.OutsideTolerance,
+            completed.Outcome.ExecutionAdherence.Status);
+        Assert.False(completed.Outcome.ValidForOptimization);
+        Assert.Contains("偏差超出容差", completed.Outcome.ExclusionReason ?? "", StringComparison.Ordinal);
+        var flows = await new RecipeRecommendationQueries(store).ListFlowsAsync(
+            new RecipeRecommendationFilter([TestSiteCode], TestProcessSpecificationId), null, 100);
+        Assert.Equal(ResearchRecipeRecommendationFlowStates.OutcomeExcluded,
+            Assert.Single(flows.Items).State);
     }
 
     [Fact]

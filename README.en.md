@@ -171,7 +171,7 @@ Acceptance criteria are in the [Roadmap](docs/project-plan.en.md). Open work is 
 
 ## Contributing
 
-Contributions are welcome for equipment adapters, statistical methods, optimization, tests, and documentation.
+Contributions are welcome for statistical methods, optimization, tests, documentation, and adapter contracts; site-specific equipment adapters are maintained outside this repository.
 
 1. Read [Contributing](CONTRIBUTING.en.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [Security Policy](SECURITY.md).
 2. Check [Issues](https://github.com/liuweichaox/Ingot/issues) or [Discussions](https://github.com/liuweichaox/Ingot/discussions) for duplicates. Describe the scenario and verification for a larger change first.
