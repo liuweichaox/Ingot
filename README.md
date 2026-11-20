@@ -150,8 +150,8 @@ AI 助手（Ingot Chat，独立调查入口）
 - **首次使用**：[快速开始](docs/getting-started.md) → [配方优化试点指南](docs/pilot.md)。
 - **理解系统**：[系统设计](docs/design.md)、[数据模型](docs/data-model.md)与[分析与优化](docs/optimization.md)。
 - **接入与运维**：[数据接入](docs/data-connection.md)、[生产架构](docs/production-architecture.md)与[部署运维](docs/deployment.md)。
-- **判断适用范围**：[当前状态](docs/status.md)、[场景评估边界](docs/rollout.md)与[常见问题](docs/faq.md)。
-- **参与建设**：[贡献指南](CONTRIBUTING.md)与[开源依赖](docs/open-source-dependencies.md)。
+- **判断适用范围**：[当前状态](docs/status.md)与[试点评估](docs/pilot.md#现场评估与数据保密)。
+- **参与建设**：[贡献指南](CONTRIBUTING.md)。
 
 仓库 Markdown 是文档源文件，文档站发布同一份内容。英文入口见 [English documentation](docs/index.en.md)。
 
@@ -162,10 +162,10 @@ AI 助手（Ingot Chat，独立调查入口）
 - [x] 在已发布配方版本上记录建议的采用、修改、拒绝和结果冻结
 - [ ] 完整呈现运行证据：实际值、来源、缺失项和质量复核
 - [ ] 说明推荐准入，并把拒绝原因追溯到运行和质量记录
-- [ ] 用来源、范围和冲突检查约束后续建议
+- [ ] 验证知识约束的适用范围、冲突处理和建议来源追溯
 - [ ] 使备份恢复、容量和告警可以独立验收
 
-验收条件见[发展规划](docs/project-plan.md)。未关闭的问题见 [Issues](https://github.com/liuweichaox/Ingot/issues)。
+软件能力见[当前状态](docs/status.md)，现场评价与部署验收见[试点指南](docs/pilot.md)和[部署运维](docs/deployment.md)。待办事项见 [Issues](https://github.com/liuweichaox/Ingot/issues)。
 
 <p align="right"><a href="#readme-top">返回顶部</a></p>
 
@@ -201,6 +201,6 @@ AI 助手（Ingot Chat，独立调查入口）
 
 README 结构参考 [Best-README-Template](https://github.com/othneildrew/Best-README-Template)。
 
-运行时依赖、许可证和引入要求见[开源依赖](docs/open-source-dependencies.md)。精确版本以 lockfile 和容器清单为准。
+依赖引入与核查要求见[贡献指南](CONTRIBUTING.md#工程原则)。精确版本以锁文件和实际容器清单为准。
 
 <p align="right"><a href="#readme-top">返回顶部</a></p>

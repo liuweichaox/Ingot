@@ -14,7 +14,7 @@ Reliability requirements stack by scope of use. Not every deployment is an equip
 2. **Production-field integration**: deploy Edge when needed, and additionally accept durable acquisition, outage replay, site authorization, data integrity, and the field safety boundary. The platform does not change equipment state directly.
 3. **High availability**: when the business cannot accept a single-node outage, or requires a smaller RPO/RTO, deploy and drill multiple replicas, database HA, continuous WAL/PITR, and independent monitoring.
 
-Equipment action is not a default deliverable of these three scopes, and it is not a required next stage for the R&D system. If it is needed later, it must be a separate safety-engineering project. Product priority follows the [Roadmap](project-plan.en.md).
+These three scopes cover R&D system deliverables. Any need for equipment action requires a separate safety engineering project.
 
 The production architecture must ensure that:
 
@@ -140,9 +140,9 @@ Edge uses at-least-once transport to Platform, which checks accepted event ident
 3. Edge uploads batches from the lowest unacknowledged sequence. A timeout or a lost response resends the same event.
 4. Platform completes the deduplication key, canonical event, time-series projection, and derived-job dirty mark inside one durable transaction.
 5. After commit, Platform returns the batch's maximum sequence `AckSeq` and reports sequence gaps separately with `GapDetected`.
-6. Edge advances its local uploaded mark from that acknowledgement and later cleans up by retention policy. Deterministically rejected events are quarantined and keep an audit record.
+6. Edge advances its local uploaded mark from that acknowledgement and later cleans up by retention policy. After a payload error (HTTP 400 or 422), Edge retries events individually and quarantines only those still rejected, with a local audit record.
 
-`EventId` and `(SiteId, EdgeId, Seq)` are both idempotency keys. Replay must keep the event identity and source payload. The same key with a different event identity or payload is an integrity failure and must be rejected. A later value must not overwrite an earlier one. `AckSeq` does not prove that every preceding integer sequence was received. The sender must follow local in-order upload and rejection quarantine. `AckSeq` is not a global watermark for arbitrary out-of-order upload.
+`EventId` and `(SiteId, EdgeId, Seq)` are both idempotency keys. Replay must keep the event identity and source payload. The same key with a different event identity or payload is an integrity failure. Platform returns HTTP 409, and Edge stops automatic delivery from that node pending a review of the outbox and node identity. A later value must not overwrite a previously accepted event. `AckSeq` does not prove that every preceding integer sequence was received. The sender must follow local in-order upload and rejection quarantine. `AckSeq` is not a global watermark for arbitrary out-of-order upload.
 
 Acceptance from an external adapter means Edge has received and written the event locally. At the queue hard limit, the same transaction may drop the oldest pending events. After an event is cleaned up or dropped, resubmitting the same `EventId` can assign a new sequence and trigger an identity conflict at Platform. Adapters must reconcile Platform receipt and quarantine records during recovery; see [Data integration](data-connection.en.md).
 
@@ -176,11 +176,11 @@ Table ownership is fixed by the keys and access rules below, not by directory na
 | Ownership class | Authoritative key | Current table family | Access and evolution rule |
 |---|---|---|---|
 | Deployment-global | No `SiteId`; deployment-administrator permission | `users`, `user_sessions`, global type catalogues, shared templates | May store only cross-site identity or reusable definitions; must not store a production run, a field value, or an approval result |
-| Site production data | `SiteId`, bound by the Edge token | `platform_edges`; `event_ingest_keys`, `production_events`, `process_sample_frames`, `collection_points`, `data_object_summaries`, `data_object_operation_keys` | Ingestion, query, retention, capacity, and export must name the site; inferring a default site is forbidden |
+| Site production data | `SiteId`, bound by the Edge token | `platform_edges`; `event_ingest_keys`, `production_events`, `process_sample_frames`, `collection_points`, `data_object_summaries`, `data_object_operation_keys` | Site-scoped ingestion and access must resolve ownership and permissions. The current time-series retention setting applies to all sites in the shared database. Per-site retention and capacity limits are design targets |
 | Versioned configuration | Process definitions, analysis plans, and recipe identities and versions | `process_data_models`, `process_analysis_plans`, `process_specification_versions`, `signal_definitions` | Process definitions may be reused; external adapters should retain traceable applied configuration versions, while `AppliedConfiguration` may be empty when no reference applies |
 | Run-derived data | `ExecutionId`, traceable to a site ingestion fact | `execution_features`, `execution_phases`, analysis materializations and recompute jobs, `operation_context_snapshots` | Not an independent tenant boundary; every external read must resolve the run set from an authorized site scope and must not cross sites by an arbitrary ExecutionId alone |
 | Recipe recommendations and knowledge | `SiteId` plus recipe; knowledge sources are authorized by `SiteId` with optional recipe applicability | `research_recipe_recommendation*`, `recipe_recommendation*`, `mechanism_*`, `knowledge_*` | Recommendations, decisions, run links, and mechanism evidence are referenced only inside the same site and recipe; knowledge sources and fragments require site authorization and are further filtered by recipe applicability when known |
-| Quality and inspection | `SiteId` plus run or inspection-plan relationship | `inspection_*` | Inspection records, scopes, and attachments fix site ownership; authorization is inherited from the linked run; attachments and audit logs cannot be read apart from the parent record |
+| Quality and inspection | `SiteId` plus run or inspection-plan relationship | `inspection_*` | Inspection records and scopes retain their site and run relationship. An attachment gets its site at upload. Metadata and content reads check that site's authorization and a quality-read role, including for attachments awaiting a record link. A different policy that restricts reads to a parent record requires a separate design and verification |
 | Agent audit | Initiating user plus input-evidence scope | `agent_runs`, `agent_stream_events` | Agent records do not grant new data permissions; replay rechecks the user and site scope |
 
 Site Edge adapters manage device protocols, sampling schedules, and point bindings. Platform stores received production data through its generic point catalogue and sample-frame/value relations.
@@ -196,7 +196,7 @@ Other run-derived tables keep `ExecutionId` ownership so a drift-prone site colu
 - The current ingestion transaction marks affected runs and queues derived processing. A complete allowed-lateness window and watermark are still to be built.
 - A later watermark design must keep late facts and determine the recompute range of affected runs.
 - A later complete-replay contract must include the input range, configuration version, and algorithm version in a traceable recompute identity.
-- Data that cannot be parsed, is out of bounds, or violates the contract enters quarantine. It cannot be disguised as successful ingestion, and it cannot block later valid data.
+- When a batch fails with a payload error (HTTP 400 or 422), Edge retries events individually and quarantines those that still fail. Subsequent valid events can continue. An identity or sequence conflict (HTTP 409) stops delivery as described above.
 
 ### Cross-store consistency
 
@@ -243,11 +243,11 @@ The current product provides records, analysis, recommendations, and engineer de
 
 If equipment action is chartered separately later, action identity, independent approval, parameter freeze, time limits, signatures, idempotent receipts, actual-value readback, stop, and recovery must be designed separately. Agent does not connect to equipment and does not hold equipment credentials. Optimizer does not approve or execute. Field hardware interlocks stay independently effective. Each equipment class and action needs its own safety validation. Analysis capability, or the deployment acceptance in this document, is not admission for equipment action.
 
-That direction is not a completion condition for the current deployment. Implementation priority is in the [Roadmap](project-plan.en.md).
+Accept current deployments within their defined scope. Equipment action requires a separate safety engineering acceptance process.
 
 ## Storage lifecycle
 
-The tiers below are a storage target, not a completed capability. Event retention and compression in default Compose are off. Reference protection, recovery, and capacity must be verified before they are enabled. Full hot/warm/cold tiering, evidence pinning, and deletion protection are still unfinished.
+The tiers below are a storage target, not a completed capability. Event retention and compression in default Compose are off. Reference protection, recovery, and capacity must be verified before they are enabled. Full hot/warm/cold tiering, evidence pinning, and deletion protection are still unfinished. When time-series retention is enabled today, the Worker removes expired chunks from the current database using a shared retention window. See [Deployment](deployment.en.md#sample-and-event-retention) for what is currently removed and the limits of that feature.
 
 | Tier | Content | Default design |
 |---|---|---|
@@ -362,10 +362,10 @@ Equipment action is outside this acceptance. If it is chartered later, its safet
 | Ingestion and evidence contract | Site binding, canonical-event validation, configuration version, quality flags, content hash, and idempotency constraints are implemented | Complete tiered evidence pinning and deletion protection; data-integrity acceptance on a real site |
 | Base recovery | Consistent logical backup and restore, checksums, optional monitoring, and limited API, Worker, and Optimizer failure drills are provided | Protect and restore Data Protection keys, Edge data, and field configuration separately; verify the real recovery objective |
 | High availability | Formal job state for API and Worker is persisted, which is the base for scaling | Default Compose has no ingress load balancer, database HA, continuous WAL/PITR, off-host immutable backup, or object storage |
-| Data plane | Edge outbox, idempotent ingestion, deterministic-rejection quarantine, derived processing, background leases, and part of dead letter exist | Lateness watermarks, a complete recompute and replay operations surface, hot/warm/cold lifecycle, and fair quotas |
-| Equipment action | Analysis tools are read-only, Optimizer does not approve or execute, and an engineer decision does not write to equipment | Action ledger, signed dispatch, safety executor, and the equipment-execution loop are not implemented, and they are not on the default roadmap |
+| Data plane | Edge outbox, idempotent ingestion, quarantine for payload rejections, delivery blocking on identity conflicts, derived processing, background leases, and partial dead-letter support | Lateness watermarks, a complete recompute and replay operations surface, hot/warm/cold lifecycle, and fair quotas |
+| Equipment action | Analysis tools are read-only, Optimizer does not approve or execute, and an engineer decision does not write to equipment | A separate equipment action project would need to design an action ledger, signed dispatch, safety executor, and equipment execution loop |
 
-"Implemented" means code, tests, or deployment assets exist in the repository. It does not mean a site has passed capacity, recovery, HA, security, or sustained-observation acceptance. This page does not define its own product priorities; build order follows the [Roadmap](project-plan.en.md).
+"Implemented" means code, tests, or deployment assets exist in the repository. Capacity, recovery, HA, security, and sustained observation each require acceptance for the intended site deployment. See [Current status](status.en.md) for software capabilities.
 
 ### Triggers for later engineering
 
@@ -386,7 +386,7 @@ Every engineering change needs a migration, tests, a runbook, and a rollback poi
 - Do not keep two long-lived production data paths without capacity evidence.
 - Do not treat the lack of legacy users as permission to omit migration, recovery, and rollback discipline after the first production release.
 
-See [Deployment](deployment.en.md) for operations, [System design](design.en.md) for stable business boundaries, and [Scenario evaluation](rollout.en.md) for scientific evaluation of a real scenario.
+See [Deployment](deployment.en.md) for operations, [System design](design.en.md) for stable business boundaries, and the [Pilot guide](pilot.en.md#field-evaluation-and-data-confidentiality) for field evaluation.
 
 ## Using this baseline in deployment review
 

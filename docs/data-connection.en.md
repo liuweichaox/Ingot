@@ -6,15 +6,19 @@
 
 Ingot does not include equipment protocol drivers. A site adapter owns its equipment, gateway, or existing collector protocols, sampling frequency, triggers, and PLC writes. Engineers may write adapters with AI assistance; before use, verify real values, safety boundaries, and failure handling in the target environment.
 
-For adapter-local storage, see the [site acquisition data reference design](acquisition-data-design.en.md). Its tables are examples, not required or existing Ingot database tables.
-
-Edge provides authenticated event ingestion, local persistence, delivery, and health status. Platform is the system of record and enforces site isolation, event ingestion, and process-data admission. Receiving an event does not control equipment or prove process quality or optimization results.
+Edge authenticates incoming requests, persists events in a local SQLite log, delivers them, and reports its health. Platform keeps a separate system of record and enforces site isolation, event ingestion, and process-data admission. Intake confirms arrival at the relevant layer. Process quality and optimization results require separate verification.
 
 ## Identity and data semantics
 
 Each Edge binds to a stable `SiteId` and a distinct `EdgeId`. The adapter must use a reliable `ExecutionId` to associate events, actual parameters, and inspection with the same run; do not infer associations from timestamps alone. The adapter supplies the actual occurrence time, source, equipment identity, and process context, and converts values to the codes, types, and units of the published process data model.
 
 `OccurredAt` is the source occurrence time. Edge records receipt time and assigns a local sequence; Platform ingestion time is separate. Preserve occurrence time when replaying after an outage. Do not represent recipe setpoints as actual parameters; keep missing, invalid, and unknown data visible.
+
+## Site mapping and local storage
+
+- **Points and runs**. Reuse point configuration where available. Retain the source reference, equipment, source and target units, type, and versioned conversion rule. Map values to stable codes in the published process data model. Use actual signals to form `process.execution.started` and `process.execution.completed` events. Use the same `ExecutionId` for samples, actual parameter readbacks, and inspection associations. Preserve inspection provenance and review state. Store times in UTC, retaining the source time zone or offset and a separate receipt time.
+- **Samples and quality**. Group values from one read into `data.values` in a `process.sample` event, retaining the actual sample time. Supply published model identity and version, or recipe identity and version, in context. Use `data.quality.qualityVersion=1` with a `valueFlags` object for versioned point quality. Missing or unsupported versions are treated as uncertain. Flag points with unknown quality explicitly and verify their projection in Platform. See the [data model](data-model.en.md) for formal point, frame, and value tables.
+- **Local records and replay**. If local persistence is needed, retain point versions, runs, samples, parameter readbacks, inspection references, and a delivery queue. The adapter chooses its storage and can reuse a reliable existing collector. Persist the event ID and content before sending and reuse them on retry. Query by site, equipment, and run identity. Record Edge acceptance, Platform receipt, inspection review, and optimization admission separately. Exercise full queues, duplicates, outage retries, clock differences, and backup and recovery during site acceptance.
 
 ## Submitting events to Edge
 

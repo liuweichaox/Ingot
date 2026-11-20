@@ -150,8 +150,8 @@ Choose a reading path from the [documentation index](docs/index.en.md) or [onlin
 - **First use**: [Getting started](docs/getting-started.en.md) → [Recipe-optimization pilot guide](docs/pilot.en.md).
 - **Understand the system**: [System design](docs/design.en.md), [Data model](docs/data-model.en.md), and [Analysis and optimization](docs/optimization.en.md).
 - **Connect and operate**: [Data integration](docs/data-connection.en.md), [Production architecture](docs/production-architecture.en.md), and [Deployment](docs/deployment.en.md).
-- **Assess fit**: [Current status](docs/status.en.md), [Scenario evaluation boundary](docs/rollout.en.md), and [FAQ](docs/faq.en.md).
-- **Contribute**: [Contributing](CONTRIBUTING.en.md) and [Open-source dependencies](docs/open-source-dependencies.en.md).
+- **Assess fit**: [Current status](docs/status.en.md) and [Field evaluation](docs/pilot.en.md#field-evaluation-and-data-confidentiality).
+- **Contribute**: [Contributing](CONTRIBUTING.en.md).
 
 Repository Markdown files are the documentation source; the documentation site publishes the same content. See [中文文档](docs/index.md) for Chinese.
 
@@ -162,10 +162,10 @@ Repository Markdown files are the documentation source; the documentation site p
 - [x] Record adoption, modification, rejection, and outcome freeze on the published recipe version
 - [ ] Present run evidence completely: actual values, provenance, gaps, and quality review
 - [ ] Explain recommendation admission and trace rejection reasons to run and quality records
-- [ ] Constrain later recommendations with sourced, scoped, conflict-checked knowledge
+- [ ] Verify knowledge constraint applicability, conflict handling, and recommendation provenance
 - [ ] Make backup and restore, capacity, and alerting independently acceptable
 
-Acceptance criteria are in the [Roadmap](docs/project-plan.en.md). Open work is tracked in [Issues](https://github.com/liuweichaox/Ingot/issues).
+See [Current status](docs/status.en.md) for delivered capabilities, the [Pilot guide](docs/pilot.en.md) for site evaluation, and [Deployment](docs/deployment.en.md) for operational acceptance. Open work is tracked in [Issues](https://github.com/liuweichaox/Ingot/issues).
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
@@ -201,6 +201,6 @@ Ingot is licensed under the [Apache License 2.0](LICENSE).
 
 The README structure follows [Best-README-Template](https://github.com/othneildrew/Best-README-Template).
 
-Runtime dependencies, licenses, and introduction rules are in [Open-source dependencies](docs/open-source-dependencies.en.md). Exact versions come from lockfiles and container manifests.
+See [Contributing](CONTRIBUTING.en.md#engineering-principles) for dependency adoption and review. Exact versions come from lockfiles and the deployed container manifests.
 
 <p align="right"><a href="#readme-top">Back to top</a></p>

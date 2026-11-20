@@ -30,7 +30,10 @@ Choose the smallest environment for your change. A documentation or single-app c
 | .NET services | .NET SDK 10 | `dotnet restore Ingot.sln` |
 | Optimizer | Python 3.12, uv 0.12.5 | `uv sync --project optimizer --extra service --group dev --locked` |
 
-Run these commands from the repository root. When changing application code, lint the affected app; build the website, docs site, or workbench when changing it to confirm that its pages generate.
+Run the commands in the table from the repository root. After installing dependencies, run `npm run dev` for a local preview, `npm run lint`, and `npm test` from the affected app directory. From the repository root, use `npm --prefix <app-directory>`.
+
+- The workbench needs a running Platform API. Vite defaults to `http://localhost:3000` and proxies to `INGOT_PLATFORM_API_TARGET`, which defaults to `http://127.0.0.1:8000`. `npm test` runs node:test and Vitest. Use `npm run build` to check the production build. See [`apps/platform/nginx.conf`](apps/platform/nginx.conf) for production proxy rules.
+- Website copy is maintained in `apps/website/app/IngotSite.tsx` and rendered through separate Chinese and English entry points. Follow the [brand guide](docs/brand.en.md) for wording and assets. The website and docs site `npm test` commands build and check rendered pages and document exports respectively. See the [deployment instructions](deploy/README.md) for public hosting.
 
 The full pre-submission gate requires .NET SDK 10, Node.js 22.22+, Python 3.12, uv 0.12.5, Docker Compose, and Bash. It verifies all three frontends, .NET, Optimizer, deployment manifests, and architecture and product boundaries. With these tools available, run `./scripts/verify.sh` from the repository root. The gate remains required even when local iteration uses only one app.
 
@@ -44,6 +47,10 @@ The full pre-submission gate requires .NET SDK 10, Node.js 22.22+, Python 3.12, 
 - Keep equipment protocols, point mappings, and vendor adapters outside the core repository; the core retains only the event contract, validation, diagnostics, and generic business capabilities.
 - Never present simulation as real-process benefit.
 - Update bilingual README, documentation, and website for public capability changes.
+
+Add runtime dependencies for a specific engineering need. Evaluate maintenance, license compatibility, and on-premises deployment. Pin versions or use a controlled version range, verify licensing for the actual features, versions, transitive dependencies, and release method, and retain required notices in images and releases. Keep proprietary cloud services optional for acquisition, record keeping, inspection, and numerical analysis.
+
+Review dependency use together with manifest and lockfile changes. Include dependencies in build, vulnerability, license, and supply-chain checks. For major upgrades, run the full gate and relevant replay checks. Remove unused dependencies and address license or maintenance changes before release. Find exact versions in the corresponding commit's `.csproj` files, `Directory.Build.props`, `package-lock.json`, `optimizer/uv.lock`, Dockerfiles, and Compose manifests. Use the generated SBOM or dependency inventory for releases.
 
 ## Core and site-adapter boundary
 
@@ -77,11 +84,10 @@ During implementation:
 Code and comment style:
 
 - follow the root `.editorconfig`: use four spaces for C# and Python, two spaces for JavaScript, JSX, JSON, YAML, and shell, plus UTF-8, LF, and a final newline;
-- keep comment language consistent within each file: default new C# business and contract code to Chinese explanations, retain English docstrings in the Optimizer Python module, and preserve protocol names, configuration keys, and code identifiers verbatim;
-- use comments for business constraints, design rationale, failure boundaries, or non-obvious invariants; do not narrate each line or retain dead commented-out code;
-- use XML documentation when a public C# type or member needs explanation and docstrings for public Python modules or functions;
-- every public C# interface must have a type-level `summary`, and public Optimizer types and entry-point functions must have docstrings; submission checks reject missing documentation;
-- every source, test, script, and build file whose format supports comments must include at least one responsibility, constraint, or failure-boundary explanation; pure data formats such as JSON and historical migrations protected by committed checksums are exempt. New migrations must still document their purpose in their first commit.
+- express intent through domain names, explicit types, focused modules, readable control flow, and specific test names. Improve the code when a comment would only restate its behavior;
+- use brief comments when external constraints, design tradeoffs, compatibility requirements, or failure consequences would be easy to miss. Keep the language consistent within a file. Default new C# business and contract explanations to Chinese and Optimizer docstrings to English. Preserve protocol names, configuration keys, and identifiers as written;
+- provide type-level XML `summary` for public C# interfaces and the Application and Agent public classes covered by the gate. Provide docstrings for public Optimizer types and entry-point functions. Document the contract callers need;
+- document the purpose of new migrations. Preserve committed migrations protected by checksums.
 
 Before submitting:
 
@@ -104,7 +110,10 @@ During iteration, run relevant tests and application lint, then run the full gat
 python3 scripts/verify-documentation-style.py
 ```
 
-Keep Chinese documents and their `.en.md` counterparts aligned in heading structure and behavioral descriptions. Documentation sources live in `docs/`; the site generates pages from those files. When adding a page, update `apps/docs-site/lib/public-docs.json` and the navigation so both languages remain reachable. Commands should state the working directory, prerequisites, success criteria, and failure handling. Describe capabilities using inspectable code and tests, and explicitly label planned work.
+- Maintain each rule in one primary location and link to it from other pages. Document the shell, working directory, prerequisites, expected result, and failure-diagnosis steps for commands. Use recognizable placeholders in examples. Use read-only diagnostics by default and explain data protection for backup, recovery, and upgrade procedures.
+- Verify current behavior against the implementation and runtime configuration. Check services, ports, and profiles in `docker-compose.app.yml`, defaults in `.env.example`, host configuration, and validators, API and access rules in endpoint and authorization code, and storage in SQL migrations. [Current status](docs/status.en.md) summarizes delivered capabilities. Distinguish implementation, validation left to deployers, and conditional targets. Limit conclusions to the tests or site acceptance actually performed. Support claims about site suitability, safety, and benefit with authorized evidence.
+- Keep headings, steps, and behavioral boundaries aligned in `docs/<slug>.md` and `docs/<slug>.en.md`. Use relative links within the same language. Register public pages in `apps/docs-site/lib/public-docs.json`, assign each to one group in `apps/docs-site/lib/docs.ts`, and update the catalogue and index assertions in `apps/docs-site/tests/export.test.mjs`. Markdown supplies the page content. `prepare-content.mjs` generates the search index and copies brand assets.
+- When renaming or merging pages, preserve published entry points or provide a same-language static redirect. Check heading anchors. Keep redirect pages outside the content catalogue, navigation, search, and sitemap. Use `npm --prefix apps/docs-site test` to check bilingual exports, links, the catalogue, and search indexing. Check language switching, navigation at desktop and narrow widths, task entry points, and source and feedback links. The build generates `out/` and `public/search-index.json`.
 
 ## Pull requests
 

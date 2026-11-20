@@ -30,7 +30,10 @@ Ingot 接受通用代码、算法、获授权的公开回放数据、测试、�
 | .NET 服务 | .NET SDK 10 | `dotnet restore Ingot.sln` |
 | Optimizer | Python 3.12、uv 0.12.5 | `uv sync --project optimizer --extra service --group dev --locked` |
 
-以上命令在仓库根目录执行。修改应用代码时，在对应应用运行 lint；文档站页面、网站或工作台改动应构建对应应用，确认页面能够生成。
+表中命令在仓库根目录执行。安装依赖后，在对应应用目录运行 `npm run dev` 本地预览、`npm run lint` 和 `npm test`，也可用 `npm --prefix <应用目录>` 从仓库根目录执行。
+
+- 工作台需要运行中的 Platform API。Vite 默认监听 `http://localhost:3000`，代理目标由 `INGOT_PLATFORM_API_TARGET` 指定，默认为 `http://127.0.0.1:8000`。`npm test` 运行 node:test 和 Vitest，另用 `npm run build` 验证生产构建。生产代理规则见 [`apps/platform/nginx.conf`](apps/platform/nginx.conf)。
+- 官网文案位于 `apps/website/app/IngotSite.tsx`，中英文由各自入口渲染，措辞及素材以[品牌规范](docs/brand.md)为依据。官网和文档站的 `npm test` 分别构建并检查静态页面与文档导出。公网发布见[部署说明](deploy/README.md)。
 
 提交前的完整门禁需要 .NET SDK 10、Node.js 22.22+、Python 3.12、uv 0.12.5、Docker Compose 和 Bash。它会验证三个前端、.NET、Optimizer、部署清单及架构和产品边界；准备好这些工具后，在仓库根目录运行 `./scripts/verify.sh`。门禁要求不因本地迭代只安装单个应用而改变。
 
@@ -44,6 +47,10 @@ Ingot 接受通用代码、算法、获授权的公开回放数据、测试、�
 - 设备协议、点位映射和厂商适配器不进入核心仓库；核心只保留事件契约、验证、诊断和通用业务能力；
 - 不把模拟结果写成真实工艺收益；
 - 公共能力变更同步更新中英文 README、文档和官网。
+
+新增运行期依赖应服务于明确的工程需求，评估维护状态、许可证兼容性和厂内可部署性。固定版本或使用受控版本范围，按实际功能、版本、传递依赖和发布方式核对许可，在镜像和发布产物中保留所需声明。云端专有服务不得成为采集、记录、检验或数值分析的必需条件。
+
+依赖使用代码与清单、锁文件同批评审，纳入构建、漏洞、许可与供应链核查。主要版本升级执行完整验证与相关回放，及时移除闲置依赖，在发布前处理许可或维护状态变化。精确版本以对应提交的 `.csproj`、`Directory.Build.props`、`package-lock.json`、`optimizer/uv.lock`、Dockerfile 和 Compose 清单为依据。发布时使用实际生成的 SBOM 或依赖清单。
 
 ## 核心与现场适配器边界
 
@@ -77,11 +84,10 @@ git checkout -b codex/short-description
 代码与注释风格：
 
 - 遵循仓库根目录 `.editorconfig`：C# 与 Python 使用 4 空格，JavaScript、JSX、JSON、YAML 与 Shell 使用 2 空格；统一 UTF-8、LF 和文件末尾换行；
-- 同一文件内保持注释语言一致；新增的 C# 业务与契约代码默认使用中文说明，Optimizer Python 模块沿用英文 Docstring，协议名、配置键和代码标识保持原文；
-- 注释说明业务约束、设计原因、失败边界或不明显的不变量，不逐行复述代码，也不保留已失效的注释代码；
-- C# 公共类型或成员需要说明时使用 XML 文档注释，Python 公共模块或函数需要说明时使用 Docstring；
-- 所有公共 C# 接口必须有类型级 `summary`，Optimizer 的公共类型与入口函数必须有 Docstring；提交检查会拒绝缺失项；
-- 每个支持注释的源码、测试、脚本和构建文件至少包含一处职责、约束或失败边界说明；JSON 等不支持注释的纯数据格式，以及受已提交校验和保护的历史迁移除外。新增迁移仍须在首次提交时写明用途。
+- 优先用领域命名、明确的类型、职责清晰的模块、易读的控制流和具体的测试名称表达意图。遇到需要解释代码在做什么的注释，先改善代码结构；
+- 在外部约束、设计取舍、兼容要求或失败后果容易被误解时，用简短的注释说明原因。同一文件内保持注释语言一致，新写的 C# 业务与契约说明默认用中文，Optimizer Docstring 用英文。协议名、配置键和标识符保留原文；
+- 公共 C# 接口及门禁指定的 Application 和 Agent 公共类须有类型级 XML `summary`，Optimizer 的公共类型和入口函数须有 Docstring。说明调用方需要知道的约定；
+- 新增迁移须写明用途。已提交且受校验和保护的迁移保持原样。
 
 提交前运行：
 
@@ -104,7 +110,10 @@ git checkout -b codex/short-description
 python3 scripts/verify-documentation-style.py
 ```
 
-中文文档与对应 `.en.md` 保持标题层级和行为说明一致。文档源在 `docs/`，文档站从这些文件生成页面；新增页面时更新 `apps/docs-site/lib/public-docs.json` 与导航，确保中英文都能访问。命令注明运行目录、前置条件、成功标志与失败处理。能力以可检验代码和测试为依据，规划明确标为规划。
+- 同一规则在一个主要位置维护，其他页面用链接引用。命令写明适用终端、工作目录、前置条件、预期结果与失败后如何定位。示例使用可识别的占位值，诊断命令默认只读，备份、恢复和升级操作说明数据保护要求。
+- 用实现和运行配置核实现有行为。服务、端口和 profile 查 `docker-compose.app.yml`，默认值查 `.env.example`、宿主配置与验证器，API 与授权查端点和授权规则，存储查 SQL 迁移。[当前状态](docs/status.md)汇总已交付能力。区分已实现、部署者待验证和条件性目标，结论只写到实际测试或现场验收所覆盖的范围。用获授权的数据支撑现场适用性、安全和收益声明。
+- `docs/<slug>.md` 与 `docs/<slug>.en.md` 同步维护标题层级、步骤和行为边界。同语种使用相对链接。公开页面在 `apps/docs-site/lib/public-docs.json` 登记，在 `apps/docs-site/lib/docs.ts` 分配一个导航组，并更新 `apps/docs-site/tests/export.test.mjs` 的目录与索引断言。正文由 Markdown 渲染，搜索索引和品牌素材由 `prepare-content.mjs` 生成与复制。
+- 改名或合并时保留已发布入口或提供同语言的静态跳转，并检查页内锚点。跳转页不加入内容目录、导航、搜索和站点地图。用 `npm --prefix apps/docs-site test` 核对双语导出、链接、目录和搜索索引，再检查语言切换、桌面和窄屏导航、任务入口及源码与反馈链接。生成物 `out/` 和 `public/search-index.json` 由构建流程产生。
 
 ## Pull Request
 

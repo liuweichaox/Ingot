@@ -1,8 +1,8 @@
 # Data Model Overview
 
-This page lists Ingot's PostgreSQL relations and their responsibilities. Ordered SQL migrations maintain the database schema.
+This page lists Ingot's key PostgreSQL business relations and their responsibilities. Ordered SQL migrations maintain the database schema.
 
-Site adapters can use the local tables in the [site acquisition data reference design](acquisition-data-design.en.md) as needed. Platform relations are listed here.
+See [data integration](data-connection.en.md#site-mapping-and-local-storage) for site adapter mapping and local records. Platform relations are listed here.
 
 In this document, “site” means a factory or independent production site, identified by `SiteId`; one factory may have multiple Edges.
 
@@ -13,12 +13,15 @@ The system's data trail must remain separate:
 ```text
 Production event / actual execution / inspection facts
   -> optimization observation -> next-recipe recommendation -> engineer decision
-  -> execution link -> source outcome -> next observation round
+      ├─ adoption or modification -> execution link -> frozen source outcome
+      └─ rejection -> keep the decision and close the round
 ```
+
+Real runs that meet the admission criteria can form later observations.
 
 Next-recipe recommendations, mechanism claims, and conflicts belong to “factory/production site + recipe”; process-knowledge sources are authorized by factory/production site and may have an optional recipe-applicability selector in `knowledge_source_context`. Source reads apply site authorization first, then filter by recipe applicability. Analysis evidence comes from actual executions; recommendations, decisions, execution links, and outcomes are stored as separate append-only records. See “Recipe recommendation architecture constraints” in [System design](design.en.md).
 
-## 2. Relation Inventory
+## 2. Key Relations
 
 | Group | Relations | Formal responsibility |
 | --- | --- | --- |
@@ -36,6 +39,8 @@ Next-recipe recommendations, mechanism claims, and conflicts belong to “factor
 | Operation-object cache | `data_object_operation_keys`, `data_object_summaries` | External-object operation keys and bounded summary cache. |
 
 Upgrade note: the former `/api/v1/training-datasets` endpoints have been removed and return 404 after upgrade; there is no replacement export endpoint. Before upgrading, export required training dataset records through the previous API or preserve a database backup, and restrict access to exports and backups. Historical tables remain, but the current application does not read or write these records.
+
+Check older databases that have yet to apply migration 0026. The migration stops if any of the legacy project container, recipe recommendation, mechanism claim, mechanism conflict, or knowledge source tables contain records, because their factory and recipe ownership cannot be established reliably. If the check finds records, back up the database and arrange a controlled export according to retention requirements. Verify migration and recovery on an isolated copy before planning the production upgrade.
 
 Site Edge adapters manage device protocols, sampling schedules, and local point bindings. Platform uses `collection_points` to catalogue points and `process_sample_frames` with `process_sample_values` to store received production samples.
 
@@ -62,7 +67,7 @@ Daily recommendations, engineer decisions, actual execution links, and source ou
 - Daily recommendations, decisions, execution links, and outcomes use stable business keys for retry idempotency.
 - Decisions can precede an actual execution; outcomes freeze after execution, parameter readback, and inspection facts are complete.
 - Cross-module reads pass through assemblers; optimizers receive data through formal analysis interfaces.
-- Factory/production site + recipe defines authorization and relational scope for recommendations and mechanism evidence; composite foreign keys include `SiteId` and recipe identity.
+- Factory and recipe scope govern access and relationships for recommendations and mechanism evidence. The foreign keys from an engineer decision to its recommendation and from a mechanism conflict to its claims include `site_code`, `process_specification_id`, and the parent record ID. The foreign keys from an execution link to its decision and from a frozen outcome to its execution link each use `decision_id` alone and inherit scope through the parent records.
 
 ## 6. Using and changing the model
 
@@ -72,4 +77,4 @@ When adding a model, define record ownership, the owning module's write path, ap
 
 Validate successful writes, duplicate requests, site authorization, and existing-data migration. Back up the database, attachments, and keys before upgrades, then verify recovery and migration in isolation. See [Deployment](deployment.en.md) for recovery requirements.
 
-Related entry points: [System design](design.en.md), [Mechanism knowledge design](mechanism-knowledge.en.md), and [Contributing](../CONTRIBUTING.en.md).
+Related entry points: [System design](design.en.md), [Mechanism knowledge and retrieval](optimization.en.md#mechanism-knowledge-and-retrieval), and [Contributing](../CONTRIBUTING.en.md).

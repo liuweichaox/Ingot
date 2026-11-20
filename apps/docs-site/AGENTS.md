@@ -11,7 +11,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Ingot docs-site rules
 
 - Content comes from paired `docs/<slug>.md` and `docs/<slug>.en.md` files; edit those sources, not generated pages.
-- Register every public slug in `lib/public-docs.json` and assign it to one group in `lib/docs.ts`.
 - Never edit `out/` or `public/search-index.json` by hand.
-- Run `npm test` before publishing; it builds the export and checks routes, links, the public catalogue, brand assets, and product boundaries.
-- Public wording follows `docs/brand.en.md` and `docs/documentation-guide.en.md`.
+- Follow [Contributing](../../CONTRIBUTING.en.md#verification-and-documentation) to register pages and verify the export before publishing.
+- Public wording follows `docs/brand.en.md`.

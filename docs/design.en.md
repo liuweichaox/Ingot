@@ -1,14 +1,14 @@
 # System design
 
-> Status: **v1 architecture baseline**. This document fixes product principles, business-record boundaries, and stable component responsibilities. Algorithms, default validation parameters, page layouts, and implementation sequence remain evolvable strategies.
+> Status: **v1 architecture baseline**. This document records current product principles, business-record boundaries, and component responsibilities for implementation and architecture review.
 
-This document defines component responsibilities, dependency direction, systems of record, runtime boundaries, and architecture constraints that may not be bypassed. Implementation changes are reviewed against this baseline and the automated architecture gates. See [Getting started](getting-started.en.md) for operating instructions.
+Routine implementation follows the current component responsibilities, dependency direction, systems of record, and runtime boundaries, and passes the applicable automated gates. Architecture reviews may revisit the baseline using verified requirements, risks, and verification evidence. When implementing an improvement, update the design, implementation, tests, and affected gates together. Verify compatibility and invariants during the transition. See the [engineering foundation](engineering-foundation.en.md) for review methods and [getting started](getting-started.en.md) for operating instructions.
 
 ## Design objective
 
 Ingot's core value is fixed by the [Brand guide](brand.en.md): Organize recipe versions, experiment records, and run evidence to support quality analysis, process analysis (including process diagnosis), and recipe optimization.
 
-Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Site adapters are optional data sources: they acquire data and map process semantics as the site requires; Edge receives standard events, buffers them locally, and delivers them to Platform. Site adapters must not become required dependencies of core R&D workflows, and Ingot does not replace MES, QMS, LIMS, scheduling, or equipment control. See [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented capabilities and planned work.
+Ingot is designed as a standalone R&D system. Its database, Web, API, and optimizer form its own runtime stack; recipe, run, and quality record keeping do not require external business systems. Site adapters are optional data sources: they acquire data and map process semantics as the site requires; Edge receives standard events, buffers them locally, and delivers them to Platform. Site adapters must not become required dependencies of core R&D workflows, and Ingot does not replace MES, QMS, LIMS, scheduling, or equipment control. See [Current status](status.en.md) for delivered capabilities.
 
 The architecture must therefore:
 
@@ -38,7 +38,7 @@ The current Web information architecture balances the decision chain with freque
 - **Process insight**: process analysis, process materials, and mechanism knowledge;
 - **Recipe optimization**: recipe versions, adjustment and validation, engineer decisions, and later real-run outcome freezing;
 - **Configuration and integration**: process variables, analysis rules, inspection definitions, quality plans, Edge nodes, and tooling configuration when the scenario needs tooling traceability;
-- **System administration**: users and permissions, system status, logs, raw events, model services, and assistant evaluation for administrators.
+- **System administration**: users and permissions, system status, logs, raw events, and model services for administrators.
 
 Raw events reported by Edge nodes belong to system administration, where platform administrators audit them and troubleshoot integration.
 
@@ -66,24 +66,27 @@ flowchart LR
     Api -.->|configuration and diagnostics| Edge
 
     subgraph ApiProcess["Platform API process"]
-        Api["Platform API\nformal business record · evidence assembly"]
+        Api["Platform API\nbusiness requests · evidence assembly · Chat admission and queries"]
         Analysis["deterministic analysis\nquality · comparison · features · statistics"]
-        Agent["optional Agent\nread-only tools · evidence explanation"]
         Api --- Analysis
-        Api -.-> Agent
     end
 
     Api <--> Optimizer["Optimizer\nrecipe recommendation · diagnosis · optional validation design"]
     Api <--> DB[("PostgreSQL 17\nTimescaleDB extension")]
     Api <--> Files[("persistent file volumes\nattachments · process knowledge · archives")]
-    Worker["Platform Worker\nChat runs · projection · recompute · maintenance · outcome freezing · knowledge jobs"] <--> DB
+    subgraph WorkerProcess["Platform Worker process"]
+        Worker["Platform Worker\nleased jobs · projection · recompute · maintenance · outcome freezing · knowledge jobs"]
+        Agent["Chat run execution\nread-only tools · optional model Agent"]
+        Worker --> Agent
+    end
+    Worker <--> DB
     Worker -.-> Files
     Migrator["Platform Migrator\none-shot migration and first-user bootstrap"] --> DB
 ```
 
 Code-project boundaries are not deployment boundaries. Current long-running units are Platform API, Platform Worker, independent Edge ConnectorHost instances, PostgreSQL/TimescaleDB, Optimizer, and Web; Migrator is a one-shot job completed before API and Worker start.
 
-Chat admission and queries run with Platform API, while Platform Worker executes durable deterministic-analysis and optional model-Agent jobs; Agent remains a code library rather than an independent service. Inspection attachments and process knowledge use persistent file volumes while metadata and formal state remain in PostgreSQL.
+Chat admission and queries run with Platform API. Platform Worker executes durable Chat jobs, including deterministic analysis and optional model Agent work. Agent is a library that runs in its host. Inspection attachments and process knowledge use persistent file volumes. Metadata and formal state remain in PostgreSQL.
 
 A small site may share a physical server, while Edge and Platform retain independent processes, storage, identity, and recovery lifecycles.
 
@@ -99,7 +102,7 @@ This document fixes stable business boundaries. [Production architecture](produc
 
 Edge does not decide process causes, run product-level optimization, or become the formal record for recipe decisions and quality outcomes.
 
-Site adapters must keep run identity traceable and must not present a run without its start as complete. A single event deterministically rejected by Platform is quarantined with a local audit record and must not block later valid events.
+Site adapters must keep run identity traceable and must not present a run without its start as complete. When Platform rejects a payload with HTTP 400 or 422, Edge retries events individually, quarantines those still rejected, records the rejection locally, and continues with subsequent valid events. An identity or sequence conflict (HTTP 409) stops delivery from that Edge pending a review of the outbox and node identity.
 
 ### Platform
 
@@ -167,7 +170,7 @@ who / which equipment / which product
 
 Stable identifiers connect these facts:
 
-- `ExecutionId`: the shared run identity generated by Edge and used by Platform to correlate process execution and field events;
+- `ExecutionId`: a stable run identifier the site adapter obtains or determines from a reliable source. Edge preserves it, and Platform uses it to link field events to the corresponding run;
 - `ExecutionKey`: the association between a next-recipe recommendation record and real execution;
 - `EquipmentId`, product/process object, and recipe version number: minimum run identity;
 - planned and actually applied recipe versions remain separate, and comparable cohorts use the actual recipe version dimension declared by the analysis plan;
@@ -199,7 +202,7 @@ comparable runs → differences and first deviation → candidate cause
 
 - Observational analysis may report differences, associations, and candidate causes.
 - Every candidate cites source runs, comparison baseline, analysis version, and limitations.
-- Only controllable or blockable candidates can automatically become investigation drafts.
+- Investigation drafts are a conditional extension. If automatic drafting is introduced, candidates must be controllable or suitable for blocking in a follow-up experiment.
 - Causal promotion requires appropriate controls, repetition, blocking, randomization, or intervention evidence.
 - When identification conditions are absent, “insufficient evidence” is the correct result.
 
@@ -260,6 +263,12 @@ Within a site, one content hash maps to one source record and one scope selector
 - `Platform.Api`: `RecipeRecommendationsController` handles only transport, identity resolution, and site authorization; rule conflicts return 409 and optimizer unavailability returns 503;
 - Web: the published recipe version submits the brief directly and keeps no recommendation state in the browser. Adopting a small correction does not create a version; a significant change uses that version's revision draft.
 
+## Architecture decisions to review
+
+- **Final parameter validation.** Platform aligns parameters to the recipe step after the optimizer predicts outcomes. The review should determine how to verify range and multivariate coverage on the final parameters and ensure that predictions correspond to those parameters. Use a regression case where step alignment changes the candidate and cover both acceptance and rejection. See [analysis and optimization](optimization.en.md#observed-coverage-envelope).
+- **Concurrent unfinished corrections.** The workbench disables generation when it finds an unfinished correction for the same version. The server can still generate a recommendation with pending points excluded. Decide whether the server should limit concurrent corrections and test concurrent requests, retries, and pending decisions.
+- **Inspection attachment access.** Content reads currently check the attachment's site and the quality-read role. Decide whether reads also require access to a parent record and verify the expected outcomes for unlinked attachments, linked attachments, and requests from outside the site.
+
 ## Consistency and replay
 
 - The same analytical input produces a stable content hash.
@@ -295,7 +304,7 @@ Capabilities open progressively by risk:
 - **Commit**: freeze a version and submit independent approval; creators cannot self-approve.
 - **Execute**: invoke only allow-listed, time-bounded, scoped, stoppable, reversible actions.
 
-The current Agent exposes authorized read-only analysis tools, does not connect to devices, and has no business-write permissions. Proposal, commitment, and execution above describe risk levels for conditional extensions, not a list of existing tools. Any future equipment action requires a separate safety-engineering project: Platform would retain authorization records, a controlled integration or Edge gateway would execute the action, and actual confirmation and outcomes would return to the formal record. See the [Roadmap](project-plan.en.md) for scope and prerequisites.
+The current Agent exposes authorized read-only analysis tools, does not connect to devices, and has no business-write permissions. Proposal, commitment, and execution above describe risk levels for conditional extensions, not a list of existing tools. Any future equipment action requires a separate safety-engineering project: Platform would retain authorization records, a controlled integration or Edge gateway would execute the action, and actual confirmation and outcomes would return to the formal record. See [Production architecture](production-architecture.en.md#conditional-boundary-for-equipment-action) for scope and prerequisites.
 
 ## Evolvable strategies
 

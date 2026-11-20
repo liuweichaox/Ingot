@@ -12,7 +12,7 @@ For product communication, prefer the more concrete action line:
 
 > **From process data to evidence-based R&D decisions.**
 
-The product summary covers R&D management, data and evidence, analysis, and optimization. Specific workflows depend on data-admission conditions; see [Current status](status.en.md) and the [Roadmap](project-plan.en.md) for implemented and planned capabilities.
+The product summary covers R&D management, data and evidence, analysis, and optimization. Specific workflows depend on data-admission conditions. [Current status](status.en.md) describes implemented capabilities and the scope of their verification.
 
 ## Product position
 
@@ -95,7 +95,7 @@ Public documentation uses a formal, direct, and verifiable engineering voice:
 - The same fact may have layered wording: user documentation explains business meaning, while technical documentation supplies model names and decision rules. Both layers retain the same claim strength.
 - State the object, capability, and result before implementation detail. Do not replace a concrete calculation or workflow with anthropomorphic terms such as *thinking*, *understanding*, or *brain*.
 - Product definitions state the user, unit of work, capabilities, and outputs directly. Do not continue a definition with vague pronouns or explain internal marketing choices to readers.
-- Distinguish implemented capability, test result, development-stage evidence, external validation, and roadmap work. Planned work is never written as current behavior.
+- Distinguish implemented capabilities, test results, development evidence, external validation, and pending work.
 - Use `AI`, `LLM`, Gaussian process, and Bayesian optimization only to identify a concrete technical responsibility, not as effect adjectives.
 - Quantitative results include the evaluated population, comparator, metric, confidence interval, and applicability boundary. Without those elements, do not present a number as a benefit claim.
 - Procedures use explicit commands and expected results. Product explanations avoid slogan stacking, rhetorical questions, self-assessment, and promotional second-person language.
@@ -153,4 +153,4 @@ The domain does not rename the product; do not use “IngotStack” as the produ
 
 - [Documentation home](index.en.md)
 - [System design](design.en.md)
-- [Roadmap](project-plan.en.md)
+- [Current status](status.en.md)

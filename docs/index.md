@@ -2,7 +2,7 @@
 
 Ingot 是开源工艺研发与优化系统。组织配方版本、实验记录与运行证据，支持质量分析、工艺分析（包含工艺追因）和配方优化。
 
-从本地启动到第一份建议，再到长期运维，按你的任务选择阅读路径。文档与仓库代码一同维护；已实现能力以[当前状态](status.md)为准，计划以[发展规划](project-plan.md)为准。
+从本地启动到第一份建议，再到长期运维，按你的任务选择阅读路径。文档与仓库代码一同维护。[当前状态](status.md)说明已实现的能力和仍需完成的验证。
 
 业务阅读顺序是：现场运行 → 质量检验 → 工艺分析 → 配方优化。工艺资料和机理知识属于工艺洞察；Ingot Chat 提供跨模块的核对与调查入口。
 
@@ -25,10 +25,10 @@ Ingot 是开源工艺研发与优化系统。组织配方版本、实验记录�
 
 | 角色 | 阅读路径 |
 |---|---|
-| 工艺与研发工程师 | [试点指南](pilot.md) → [分析与优化](optimization.md) → [术语表](glossary.md) |
+| 工艺与研发工程师 | [试点指南](pilot.md) → [分析与优化](optimization.md) |
 | 接入工程师 | [数据接入](data-connection.md) → [系统设计](design.md) |
 | 部署与运维人员 | [生产架构](production-architecture.md) → [部署运维](deployment.md) → [故障排查](troubleshooting.md) |
-| 贡献者 | [贡献指南](../CONTRIBUTING.md) → [系统设计](design.md)、[数据模型](data-model.md) → [文档维护指南](documentation-guide.md) |
+| 贡献者 | [贡献指南](../CONTRIBUTING.md) → [系统设计](design.md)、[数据模型](data-model.md) |
 
 ## 文档目录
 
@@ -36,31 +36,25 @@ Ingot 是开源工艺研发与优化系统。组织配方版本、实验记录�
 
 - [快速开始](getting-started.md)：环境准备、完整栈启动、健康检查和首次登录。
 - [当前状态](status.md)：已实现能力、验证范围和部署者责任。
-- [配方优化试点指南](pilot.md)：完成第一条可审计的建议与结果链。
+- [配方优化试点指南](pilot.md)：完成建议与结果链，评估现场适用性。
 
 ### 操作指南
 
 - [数据接入](data-connection.md)：接入身份、点位、映射及运行质量准入。
 - [部署运维](deployment.md)：配置、模型服务、可观测性、备份和升级。
 - [故障排查](troubleshooting.md)：按症状定位启动、授权、数据与建议问题。
-- [场景评估边界](rollout.md)：用部署者自己的证据评估适用性与效果。
 
 ### 系统概念
 
 - [系统设计](design.md)：组件职责、业务模型、依赖方向和架构约束。
-- [分析与优化](optimization.md)：观察准入、安全边界、覆盖包络和方法选择。
-- [机理知识设计](mechanism-knowledge.md)：来源复核、适用范围、约束和检索。
+- [分析与优化](optimization.md)：观察准入、覆盖包络、方法选择和机理知识。
+- [工程与理论基础](engineering-foundation.md)：架构、数据、优化和验证的工程参考。
 - [生产架构](production-architecture.md)：部署等级、故障模型与可靠性验收。
 
 ### 参考资料
 
 - [数据模型总览](data-model.md)：正式表职责、追加记录、迁移与授权边界。
-- [术语表](glossary.md)：运行、配方、证据和建议的统一定义。
-- [常见问题](faq.md)：适用范围、数据条件和系统边界。
-- [发展规划](project-plan.md)：建设优先级与完成条件。
 - [品牌规范](brand.md)：产品定位、视觉资产和公开措辞。
-- [开源依赖](open-source-dependencies.md)：主要组件、许可证与引入要求。
-- [文档维护指南](documentation-guide.md)：文档分工、双语维护和验证方法。
 
 ## 支持与反馈
 

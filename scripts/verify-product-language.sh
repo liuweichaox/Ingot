@@ -136,21 +136,21 @@ canonical_en='Organize recipe versions, experiment records, and run evidence to 
 canonical_category_zh='开源工艺研发与优化系统'
 canonical_category_en_pattern='Open-source Process R(&|&amp;)D and Optimization System'
 
-for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
+for file in README.md docs/brand.md docs/index.md; do
   if ! grep -Fq "$canonical_zh" "$file"; then
     echo "$file must retain the canonical Chinese core value from docs/brand.md." >&2
     exit 1
   fi
 done
 
-for file in README.md docs/brand.md docs/index.md docs/project-plan.md; do
+for file in README.md docs/brand.md docs/index.md; do
   if ! grep -Fq "$canonical_category_zh" "$file"; then
     echo "$file must retain the canonical Chinese product category from docs/brand.md." >&2
     exit 1
   fi
 done
 
-for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.md; do
+for file in README.en.md docs/brand.en.md docs/index.en.md; do
   if ! grep -Eqi "$canonical_category_en_pattern" "$file"; then
     echo "$file must retain the canonical English product category from docs/brand.en.md." >&2
     exit 1
@@ -164,7 +164,7 @@ if grep -RIniE --exclude='package-lock.json' \
   exit 1
 fi
 
-for file in README.en.md docs/brand.en.md docs/index.en.md docs/project-plan.en.md; do
+for file in README.en.md docs/brand.en.md docs/index.en.md; do
   if ! grep -Fq "$canonical_en" "$file"; then
     echo "$file must retain the canonical English core value from docs/brand.en.md." >&2
     exit 1
@@ -173,7 +173,7 @@ done
 
 # Headline fragments may be separated by markup for responsive line wrapping.
 # Keep the login page, public hero, metadata, and share-card sources aligned.
-for file in README.md docs/brand.md docs/project-plan.md \
+for file in README.md docs/brand.md \
   apps/platform/src/auth/AuthGate.jsx apps/website/app/IngotSite.tsx \
   'apps/website/app/(zh)/layout.tsx' apps/website/public/og.zh.svg; do
   if ! grep -Fq '从工艺数据，' "$file" || ! grep -Fq '到有依据的研发决策。' "$file"; then
@@ -181,7 +181,7 @@ for file in README.md docs/brand.md docs/project-plan.md \
     exit 1
   fi
 done
-for file in README.en.md docs/brand.en.md docs/project-plan.en.md \
+for file in README.en.md docs/brand.en.md \
   apps/website/app/IngotSite.tsx apps/website/app/en/layout.tsx; do
   if ! grep -Fq 'From process data' "$file" || ! grep -Eq 'to evidence-based R(&|&amp;)D decisions\.' "$file"; then
     echo "$file must use the canonical English product headline." >&2
@@ -230,8 +230,8 @@ if grep -RInE \
   exit 1
 fi
 
-if ! grep -Fq '真实生产数据、项目与设备标识' docs/rollout.md ||
-   ! grep -Fq 'Real production data, project and equipment identities' docs/rollout.en.md; then
+if ! grep -Fq '真实生产数据、项目与设备标识' docs/pilot.md ||
+   ! grep -Fq 'Real production data, project and equipment identities' docs/pilot.en.md; then
   echo "Scenario validation documents must retain the real-production-data confidentiality boundary." >&2
   exit 1
 fi

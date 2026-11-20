@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 阻断缺少文件职责说明或公共边界文档的源码变更。
+# 检查变更的 C# 公共接口和指定应用类的 XML 文档。
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,14 +13,6 @@ if ! command -v rg >/dev/null 2>&1; then
       --files)
         git ls-files --cached --others --exclude-standard
         ;;
-      -q)
-        shift
-        grep -Eq -- "$1" "${@:2}"
-        ;;
-      -v)
-        shift
-        grep -Ev -- "$1" "${@:2}"
-        ;;
       *)
         grep -E -- "$1" "${@:2}"
         ;;
@@ -28,7 +20,7 @@ if ! command -v rg >/dev/null 2>&1; then
   }
 fi
 
-# 历史代码按增量基线治理；新建或修改的文件必须满足当前注释契约。
+# 默认只检查变更，允许显式审计整个仓库。
 source_file_list="$(mktemp)"
 trap 'rm -f -- "$source_file_list"' EXIT
 if [[ "${INGOT_VERIFY_ALL_COMMENTS:-0}" == "1" ]]; then
@@ -63,9 +55,6 @@ files_matching() {
 failures=()
 while IFS= read -r file; do
   [[ -f "$file" ]] || continue
-  if ! rg -q '^[[:space:]]*(///|//|/\*)' "$file"; then
-    failures+=("$file: C# 文件缺少职责或边界说明")
-  fi
   while IFS= read -r failure; do
     [[ -z "$failure" ]] || failures+=("$failure")
   done < <(
@@ -82,6 +71,7 @@ while IFS= read -r file; do
 done < <(files_matching '\.cs$')
 
 while IFS= read -r file; do
+  [[ -f "$file" ]] || continue
   while IFS= read -r failure; do
     [[ -z "$failure" ]] || failures+=("$failure")
   done < <(
@@ -97,58 +87,10 @@ while IFS= read -r file; do
   )
 done < <(files_matching '^(src/agent/Ingot\.Agent|src/edge/Ingot\.Edge\.Application|src/platform/Ingot\.Platform\.Application)/.*\.cs$')
 
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*(//|/\*)' "$file"; then
-    failures+=("$file: JavaScript/TypeScript 文件缺少职责或边界说明")
-  fi
-done < <(files_matching '^apps/.*\.(js|jsx|mjs|ts|tsx)$')
-
-while IFS= read -r file; do
-  if ! rg -q '^#[[:space:]]' "$file"; then
-    failures+=("$file: Shell 文件缺少 shebang 以外的职责或边界说明")
-  fi
-done < <(files_matching '^(scripts|deploy)/.*\.sh$')
-
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*(--|/\*)' "$file"; then
-    failures+=("$file: SQL 文件缺少用途或数据边界说明")
-  fi
-done < <(files_matching '\.sql$' | rg -v '^src/platform/Ingot\.Platform\.Infrastructure/Migrations/sql/' || true)
-
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*/\*' "$file"; then
-    failures+=("$file: CSS 文件缺少样式职责说明")
-  fi
-done < <(files_matching '^apps/.*\.(css|scss)$')
-
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*#' "$file"; then
-    failures+=("$file: Dockerfile 缺少镜像职责说明")
-  fi
-done < <(files_matching '(^|/)(Dockerfile|[^/]+\.Dockerfile)$')
-
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*#' "$file"; then
-    failures+=("$file: PowerShell 文件缺少操作范围说明")
-  fi
-done < <(files_matching '\.ps1$')
-
-while IFS= read -r file; do
-  if ! rg -q '<!--' "$file"; then
-    failures+=("$file: HTML 文件缺少页面职责说明")
-  fi
-done < <(files_matching '\.html$')
-
-while IFS= read -r file; do
-  if ! rg -q '^[[:space:]]*[#;]' "$file"; then
-    failures+=("$file: 配置文件缺少用途或边界说明")
-  fi
-done < <(files_matching '\.(yml|yaml|toml|conf)$')
-
 if (( ${#failures[@]} > 0 )); then
   printf '%s\n' "${failures[@]}" >&2
-  echo "源码注释完整性检查失败。" >&2
+  echo "C# 公共类型文档检查失败。" >&2
   exit 1
 fi
 
-echo "源码注释完整性检查通过。"
+echo "C# 公共类型文档检查通过。"

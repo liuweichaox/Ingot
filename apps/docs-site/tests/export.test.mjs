@@ -8,9 +8,9 @@ const root = path.resolve(import.meta.dirname, "../../..");
 const out = path.join(root, "apps/docs-site/out");
 
 test("exports the bilingual product documentation journey", async () => {
-  for (const file of ["zh/index.html", "en/index.html", "zh/getting-started/index.html", "en/getting-started/index.html", "zh/status/index.html", "en/status/index.html", "zh/pilot/index.html", "en/pilot/index.html", "zh/design/index.html", "en/design/index.html", "zh/optimization/index.html", "en/optimization/index.html", "zh/mechanism-knowledge/index.html", "en/mechanism-knowledge/index.html", "zh/rollout/index.html", "en/rollout/index.html", "search-index.json", "sitemap.xml", "robots.txt"])
+  for (const file of ["search-index.json", "sitemap.xml", "robots.txt"])
     assert.ok((await readFile(path.join(out, file))).length > 0, file);
-  for (const slug of ["getting-started", "status", "pilot", "design", "optimization", "mechanism-knowledge", "data-connection", "acquisition-data-design", "production-architecture", "project-plan", "rollout", "deployment", "faq", "brand", "open-source-dependencies", "glossary", "data-model", "troubleshooting", "documentation-guide"])
+  for (const slug of ["getting-started", "status", "pilot", "design", "engineering-foundation", "optimization", "data-connection", "production-architecture", "deployment", "brand", "data-model", "troubleshooting"])
     for (const lang of ["zh", "en"])
       assert.ok((await readFile(path.join(out, lang, slug, "index.html"))).length > 0, `${lang}/${slug}`);
 
@@ -32,10 +32,10 @@ test("uses the exact official brand assets", async () => {
 
 test("publishes the approved documentation catalogue and product boundaries", async () => {
   const search = JSON.parse(await readFile(path.join(out, "search-index.json"), "utf8"));
-  assert.equal(search.length, 40);
+  assert.equal(search.length, 26);
   assert.deepEqual(
     [...new Set(search.map((item) => item.slug))].sort(),
-    ["", "acquisition-data-design", "brand", "data-connection", "data-model", "deployment", "design", "documentation-guide", "faq", "getting-started", "glossary", "mechanism-knowledge", "open-source-dependencies", "optimization", "pilot", "production-architecture", "project-plan", "rollout", "status", "troubleshooting"],
+    ["", "brand", "data-connection", "data-model", "deployment", "design", "engineering-foundation", "getting-started", "optimization", "pilot", "production-architecture", "status", "troubleshooting"],
   );
 
   for (const lang of ["zh", "en"]) {
@@ -51,6 +51,36 @@ test("publishes the approved documentation catalogue and product boundaries", as
 
   for (const slug of ["rfc-production-events", "tutorial-development", "architecture", "modules", "ingot-chat", "use-cases"])
     await assert.rejects(readFile(path.join(out, "zh", slug, "index.html")));
+});
+
+test("retired routes only forward to public pages in the matching language", async () => {
+  const targets = {
+    "project-plan": "status",
+    "faq": "design",
+    "glossary": "data-model",
+    "documentation-guide": "",
+    "open-source-dependencies": "",
+    "acquisition-data-design": "data-connection",
+    "rollout": "pilot",
+    "mechanism-knowledge": "optimization",
+  };
+  const retiredSlugs = Object.keys(targets).join("|");
+  const retiredHref = new RegExp(`href="/(zh|en)/(${retiredSlugs})(?:[/#?"]|$)`);
+  const sitemap = await readFile(path.join(out, "sitemap.xml"), "utf8");
+  assert.doesNotMatch(sitemap, new RegExp(`/(zh|en)/(${retiredSlugs})(?:[/<]|$)`));
+  for (const lang of ["zh", "en"]) {
+    const home = await readFile(path.join(out, lang, "index.html"), "utf8");
+    assert.doesNotMatch(home, retiredHref);
+    for (const [slug, destination] of Object.entries(targets)) {
+      const route = `${lang}/${slug}`;
+      const legacy = await readFile(path.join(out, lang, slug, "index.html"), "utf8");
+      const target = `/${lang}/${destination ? `${destination}/` : ""}`;
+      assert.ok(legacy.includes(`http-equiv="refresh" content="0; url=${target}"`), route);
+      assert.ok(legacy.includes(`href="${target}"`), route);
+      assert.match(legacy, /<meta name="robots" content="noindex, follow"/, route);
+      assert.doesNotMatch(legacy, /<(article|aside)\b/, route);
+    }
+  }
 });
 
 test("does not publish legacy desktop or code-generation product copy", async () => {

@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { docs, getDoc, groups, renderDoc, routeFor, type Lang } from "@/lib/docs";
 import Search from "@/components/Search";
@@ -9,14 +10,31 @@ import Search from "@/components/Search";
 type Props = { params: Promise<{ lang: string; slug?: string[] }> };
 export const dynamicParams = false;
 
+// Compatibility routes are kept out of the public document catalog and its indexes.
+const retiredDocTargets = new Map([
+  ["project-plan", "status"],
+  ["faq", "design"],
+  ["glossary", "data-model"],
+  ["documentation-guide", ""],
+  ["open-source-dependencies", ""],
+  ["acquisition-data-design", "data-connection"],
+  ["rollout", "pilot"],
+  ["mechanism-knowledge", "optimization"],
+]);
+
 export function generateStaticParams() {
-  return docs.map((doc) => ({ lang: doc.lang, slug: doc.slug ? [doc.slug] : [] }));
+  const publicPaths = docs.map((doc) => ({ lang: doc.lang, slug: doc.slug ? [doc.slug] : [] }));
+  const retiredPaths = (["zh", "en"] as const).flatMap((lang) =>
+    Array.from(retiredDocTargets.keys(), (slug) => ({ lang, slug: [slug] })),
+  );
+  return [...publicPaths, ...retiredPaths];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const value = await params;
   const lang = value.lang as Lang;
   const slug = value.slug?.join("/") || "";
+  if (retiredDocTargets.has(slug)) return { robots: { index: false, follow: true } };
   const doc = getDoc(lang, slug);
   if (!doc) return {};
   const alternate = getDoc(lang === "zh" ? "en" : "zh", slug);
@@ -34,6 +52,18 @@ export default async function DocPage({ params }: Props) {
   if (value.lang !== "zh" && value.lang !== "en") notFound();
   const lang = value.lang as Lang;
   const slug = value.slug?.join("/") || "";
+  const targetSlug = retiredDocTargets.get(slug);
+  if (targetSlug !== undefined) {
+    const target = getDoc(lang, targetSlug);
+    if (!target) notFound();
+    const href = `${routeFor(lang, target.slug)}/`;
+    return (
+      <main className="redirect">
+        <meta httpEquiv="refresh" content={`0; url=${href}`} />
+        <p>{lang === "zh" ? "正在进入 " : "Continue to "}<Link href={href}>{target.title}</Link>…</p>
+      </main>
+    );
+  }
   const doc = getDoc(lang, slug);
   if (!doc) notFound();
   const { html, toc } = await renderDoc(doc);

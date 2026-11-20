@@ -259,6 +259,8 @@ A recovery exercise verifies more than service startup:
 7. Upgrade Edge and external adapters; check event contracts, offline backlog recovery, and duplicate-event handling.
 8. Regress run assembly, comparison, and recommendation on a known recipe.
 
+If an older database has yet to apply migration 0026, restore a backup in a controlled test environment and check the migration prerequisites first. The migration stops if any legacy project container, recipe recommendation, mechanism claim, conflict, or knowledge source table still contains records. Retain the original backup, have the data owner decide how to preserve and migrate the records, and verify the approach in isolation before a production upgrade. See the [data model](data-model.en.md).
+
 ## Minimum security set
 
 - Expose PostgreSQL, Optimizer, and ConnectorHost only to trusted networks.

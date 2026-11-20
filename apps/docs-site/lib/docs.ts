@@ -39,9 +39,9 @@ export const docs: Doc[] = files.map((file) => {
 
 export const groups = [
   { key: "start", zh: "开始使用", en: "Getting started", slugs: ["", "getting-started", "status", "pilot"] },
-  { key: "guides", zh: "操作指南", en: "Guides", slugs: ["data-connection", "acquisition-data-design", "deployment", "rollout", "troubleshooting"] },
-  { key: "concepts", zh: "概念与架构", en: "Concepts & architecture", slugs: ["design", "optimization", "mechanism-knowledge", "production-architecture"] },
-  { key: "reference", zh: "参考资料", en: "Reference", slugs: ["data-model", "faq", "glossary", "project-plan", "brand", "open-source-dependencies", "documentation-guide"] },
+  { key: "guides", zh: "操作指南", en: "Guides", slugs: ["data-connection", "deployment", "troubleshooting"] },
+  { key: "concepts", zh: "概念与架构", en: "Concepts & architecture", slugs: ["design", "engineering-foundation", "optimization", "production-architecture"] },
+  { key: "reference", zh: "参考资料", en: "Reference", slugs: ["data-model", "brand"] },
 ];
 
 export const routeFor = (lang: Lang, slug: string) => `/${lang}${slug ? `/${slug}` : ""}`;
