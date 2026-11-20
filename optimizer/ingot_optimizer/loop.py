@@ -178,7 +178,10 @@ class SequentialOptimizer:
             if not candidate_params:
                 raise ValueError("candidate pool must not be empty")
             points = np.vstack(
-                [self.campaign.to_unit(params) for params in candidate_params]
+                [
+                    self.campaign.align_candidate_params(params)
+                    for params in candidate_params
+                ]
             )
             return np.unique(points, axis=0)
 
@@ -186,12 +189,20 @@ class SequentialOptimizer:
         attempts = 0
         while sum(len(batch) for batch in accepted) < n_random and attempts < 50:
             batch = self.rng.uniform(0.0, 1.0, (max(n_random, 64), self.campaign.dim))
+            aligned = np.asarray(
+                [
+                    self.campaign.align_candidate_unit(
+                        point, enforce_candidate_constraints=False
+                    )
+                    for point in batch
+                ]
+            ).reshape(-1, self.campaign.dim)
             feasible = np.array(
-                [self.campaign.is_feasible_unit(point) for point in batch],
+                [self.campaign.is_feasible_unit(point) for point in aligned],
                 dtype=bool,
             )
             if feasible.any():
-                accepted.append(batch[feasible])
+                accepted.append(aligned[feasible])
             attempts += 1
         if not accepted:
             raise ValueError("unable to sample a feasible candidate")

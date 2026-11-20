@@ -26,6 +26,28 @@ def test_campaign_rejects_invalid_or_empty_definitions():
         Objective("pass", "ge", threshold=1.0, outcome_lower_bound=0.0)
 
 
+def test_parameter_step_grid_must_intersect_bounds_and_constraints():
+    with pytest.raises(ValueError, match="step must be positive"):
+        Variable("x", 0.0, 10.0, step=0.0)
+    with pytest.raises(ValueError, match="no value inside its bounds"):
+        Variable("x", 0.1, 0.9, step=2.0, step_origin=5.0)
+    with pytest.raises(ValueError, match="no feasible variable range"):
+        Campaign(
+            "empty-step-range",
+            [Variable("x", 0.0, 10.0, step=2.0, step_origin=1.0)],
+            [Objective("loss", "le", threshold=0.5)],
+            [ParameterConstraint("x", "<=", 0.5)],
+        )
+
+
+def test_parameter_step_grid_rounds_half_away_from_zero_and_stays_in_bounds():
+    variable = Variable("x", 0.0, 10.0, step=2.0, step_origin=1.0)
+
+    assert variable.align(2.0) == 3.0
+    assert variable.align(0.0) == 1.0
+    assert variable.align(10.0) == 9.0
+
+
 def test_campaign_enforces_bounds_constraints_and_exact_keys():
     campaign = Campaign(
         "lens",

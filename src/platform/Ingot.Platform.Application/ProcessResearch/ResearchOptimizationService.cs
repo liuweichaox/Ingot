@@ -100,10 +100,13 @@ public sealed class ResearchOptimizationService(
         // The platform exposes one actionable recommendation. Keep the optimizer
         // contract aligned with that UX instead of calculating and discarding candidates.
         const int topK = 1;
+        var parameterStepGrids = await briefPolicy.ResolveParameterStepGridsAsync(
+            brief, controls.Keys.ToArray(), ct).ConfigureAwait(false);
         var call = new OptimizerSuggestionCall
         {
             Campaign = MechanismModelRecommendationPolicy.Apply(
-                MechanismKnowledgeRecommendationPolicy.ApplyHardConstraints(BuildCampaign(brief), mechanismKnowledge),
+                MechanismKnowledgeRecommendationPolicy.ApplyHardConstraints(
+                    BuildCampaign(brief, parameterStepGrids), mechanismKnowledge),
                 mechanismModels),
             Observations = observations,
             PendingPoints = pendingPoints,
@@ -132,20 +135,16 @@ public sealed class ResearchOptimizationService(
             static value => value.Name, StringComparer.Ordinal);
         var coverage = BuildObservedCoverage(call.Campaign.Variables, observations);
         ValidateReportedCoverage(response.CoverageEnvelope, coverage, campaignVariables);
-        var alignedSuggestions = new List<OptimizerSuggestionOutput>(response.Suggestions.Count);
+        var validatedSuggestions = new List<OptimizerSuggestionOutput>(response.Suggestions.Count);
         foreach (var candidate in response.Suggestions)
         {
-            var aligned = candidate with
-            {
-                RecommendedParameters = await briefPolicy.SnapRecommendedParametersAsync(
-                    brief, candidate.RecommendedParameters, ct).ConfigureAwait(false)
-            };
-            ValidateSuggestion(brief, response.ModelVersion, aligned);
-            ValidateObservedCoverage(coverage, campaignVariables, aligned);
-            MechanismKnowledgeRecommendationPolicy.ValidateHardConstraints(aligned, mechanismKnowledge);
-            alignedSuggestions.Add(aligned);
+            ValidateSuggestion(brief, response.ModelVersion, candidate);
+            ValidateStepGrid(call.Campaign.Variables, candidate);
+            ValidateObservedCoverage(coverage, campaignVariables, candidate);
+            MechanismKnowledgeRecommendationPolicy.ValidateHardConstraints(candidate, mechanismKnowledge);
+            validatedSuggestions.Add(candidate);
         }
-        var suggestion = MechanismKnowledgeRecommendationPolicy.Rank(alignedSuggestions, mechanismKnowledge, controls).First();
+        var suggestion = MechanismKnowledgeRecommendationPolicy.Rank(validatedSuggestions, mechanismKnowledge, controls).First();
         var recommendationId = CreateDeterministicRecommendationId(
             brief.SiteCode, brief.ProcessSpecificationId, inputHash);
         var recommendationKey = $"recipe-{recommendationId:N}"[..22];
@@ -224,7 +223,9 @@ public sealed class ResearchOptimizationService(
         await mechanismKnowledgeStore.SaveRecipeRecommendationUsagesAsync(usages, ct).ConfigureAwait(false);
     }
 
-    internal static OptimizerCampaignInput BuildCampaign(RecipeRecommendationBrief brief)
+    internal static OptimizerCampaignInput BuildCampaign(
+        RecipeRecommendationBrief brief,
+        IReadOnlyDictionary<string, (double Step, double Origin)?>? parameterStepGrids = null)
     {
         var controls = brief.Variables.Where(static value => value.Role == ResearchVariableRoles.Control).ToArray();
         if (controls.Length == 0 || controls.Any(static value => value.LowerLimit is null || value.UpperLimit is null))
@@ -238,7 +239,9 @@ public sealed class ResearchOptimizationService(
                 NormalizationScale = value.NormalizationScale, Epsilon = value.Epsilon }).ToArray(),
             DecisionIntent = ResearchOptimizationIntents.ReachSpecification,
             Variables = controls.Select(value => new OptimizerVariableInput(value.Code, value.LowerLimit!.Value,
-                value.UpperLimit!.Value, value.Unit)).ToArray(),
+                value.UpperLimit!.Value, value.Unit,
+                parameterStepGrids?.GetValueOrDefault(value.Code)?.Step,
+                parameterStepGrids?.GetValueOrDefault(value.Code)?.Origin)).ToArray(),
             Objectives = brief.Objectives.Select(MapObjective).ToArray(),
             Constraints = brief.Constraints.Select(value => new OptimizerConstraintInput
             { Variable = value.VariableCode, Operator = value.Operator, Limit = value.Limit, SafetyCritical = value.SafetyCritical }).ToArray(),
@@ -313,6 +316,27 @@ public sealed class ResearchOptimizationService(
         foreach (var (code, parameter) in value.RecommendedParameters)
             if (!double.IsFinite(parameter) || parameter < controls[code].LowerLimit || parameter > controls[code].UpperLimit)
                 throw new ProcessResearchRuleException($"优化变量 {code} 超出建议条件的参数范围。");
+    }
+
+    private static void ValidateStepGrid(
+        IReadOnlyList<OptimizerVariableInput> variables,
+        OptimizerSuggestionOutput suggestion)
+    {
+        var parameterVariables = variables.ToDictionary(static value => value.Name, StringComparer.Ordinal);
+        foreach (var (code, parameter) in suggestion.RecommendedParameters)
+        {
+            var variable = parameterVariables[code];
+            if (variable.Step is not { } step)
+                continue;
+            if (variable.StepOrigin is not { } origin ||
+                !RecipeRecommendationBriefPolicy.TrySnapToStep(
+                    parameter, origin, step, variable.Low, variable.High, out var aligned) ||
+                Math.Abs(aligned - parameter) > Math.Max(
+                    1e-9 * step,
+                    8 * 2.2204460492503131e-16 * Math.Max(1, Math.Abs(parameter))))
+                throw new ProcessResearchRuleException(
+                    $"优化变量 {code} 未按配方步长生成；平台拒绝保存与预测不一致的建议。");
+        }
     }
 
     // Mirrors the range gate in optimizer/ingot_optimizer/coverage.py; the platform

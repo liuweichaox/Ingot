@@ -9,6 +9,7 @@ from ingot_optimizer import (
     Objective,
     OptimizerObservation,
     OutcomeConstraint,
+    ParameterConstraint,
     SequentialOptimizer,
     Variable,
     build_optimizer,
@@ -70,6 +71,50 @@ def test_five_observation_policy_rejects_attractive_unsafe_candidate():
     )
 
     assert suggestions[0].recommended_params["x"] == pytest.approx(0.45)
+
+
+@pytest.mark.parametrize("optimizer_type", [SequentialOptimizer, BotorchOptimizer])
+def test_candidate_pools_are_aligned_to_the_parameter_grid(optimizer_type):
+    campaign = Campaign(
+        "stepped-campaign",
+        [Variable("x", 0.0, 10.0, step=2.0, step_origin=1.0)],
+        [Objective("loss", "le", threshold=0.5)],
+    )
+    optimizer = optimizer_type(campaign, seed=7)
+
+    points = optimizer._candidate_units([{"x": 2.8}, {"x": 8.1}], n_random=2)
+    values = [campaign.from_unit(point)["x"] for point in points]
+
+    assert values == pytest.approx([3.0, 9.0])
+
+
+def test_candidate_alignment_reapplies_parameter_constraints():
+    campaign = Campaign(
+        "stepped-constrained-campaign",
+        [Variable("x", 0.0, 10.0, step=2.0, step_origin=1.0)],
+        [Objective("loss", "le", threshold=0.5)],
+        constraints=[ParameterConstraint("x", "<=", 7.0)],
+    )
+    optimizer = SequentialOptimizer(campaign, seed=7)
+
+    points = optimizer._candidate_units(None, n_random=100)
+    values = [campaign.from_unit(point)["x"] for point in points]
+
+    assert values
+    assert all(value in {1.0, 3.0, 5.0, 7.0} for value in values)
+
+
+def test_observed_values_remain_as_measured_when_candidates_use_a_step_grid():
+    campaign = Campaign(
+        "stepped-observation-campaign",
+        [Variable("x", 0.0, 10.0, step=2.0, step_origin=1.0)],
+        [Objective("loss", "le", threshold=0.5)],
+    )
+    optimizer = SequentialOptimizer(campaign, seed=7)
+
+    optimizer.observe({"x": 2.8}, {"loss": 0.2})
+
+    assert campaign.from_unit(optimizer.X[0])["x"] == pytest.approx(2.8)
 
 
 def test_reach_specification_scores_keep_linear_when_quadratic_lacks_evidence():

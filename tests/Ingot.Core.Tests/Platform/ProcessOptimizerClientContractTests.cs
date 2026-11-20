@@ -2,6 +2,7 @@
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ingot.Platform.Application.ProcessResearch;
 using Ingot.Platform.Infrastructure.ProcessResearch;
@@ -85,6 +86,28 @@ public sealed class ProcessOptimizerClientContractTests
             client.SuggestAsync(CreateCall("expected")));
 
         Assert.Contains("特征集契约", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SuggestionCampaign_ShouldSerializeTheRecipeStepGridForPython()
+    {
+        var call = CreateCall("grid-contract") with
+        {
+            Campaign = new OptimizerCampaignInput
+            {
+                Name = "grid-contract",
+                FeatureSetId = "grid-contract",
+                Variables = [new OptimizerVariableInput("x", 0, 10, "C", 2, 1)],
+                Objectives = [new OptimizerObjectiveInput { Name = "loss", Kind = "le", Threshold = 0.5 }]
+            }
+        };
+
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(
+            call, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var variable = document.RootElement.GetProperty("campaign").GetProperty("variables")[0];
+
+        Assert.Equal(2, variable.GetProperty("step").GetDouble());
+        Assert.Equal(1, variable.GetProperty("step_origin").GetDouble());
     }
 
     private static OptimizerSuggestionCall CreateCall(string featureSetId) => new()

@@ -263,6 +263,27 @@ def test_service_reports_and_enforces_the_observed_coverage_envelope():
     )
 
 
+def test_service_returns_predictions_for_the_step_aligned_candidate():
+    body = request_body()
+    body["campaign"]["variables"][0].update(step=0.1, step_origin=0.0)
+    body["candidate_pool"] = [{"x": 0.23}]
+    body["top_k"] = 1
+    response = client.post("/v1/suggestions", json=body)
+
+    assert response.status_code == 200, response.text
+    suggestion = response.json()["suggestions"][0]
+    assert suggestion["recommended_params"]["x"] == pytest.approx(0.2)
+
+    aligned_body = request_body()
+    aligned_body["campaign"]["variables"][0].update(step=0.1, step_origin=0.0)
+    aligned_body["candidate_pool"] = [{"x": 0.2}]
+    aligned_body["top_k"] = 1
+    aligned_response = client.post("/v1/suggestions", json=aligned_body)
+
+    assert aligned_response.status_code == 200, aligned_response.text
+    assert suggestion == aligned_response.json()["suggestions"][0]
+
+
 def test_service_stops_when_runs_never_covered_enough_of_the_space():
     body = request_body()
     body["candidate_pool"] = [{"x": 0.89}]

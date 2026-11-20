@@ -43,6 +43,8 @@ class VariableIn(StrictModel):
     low: float
     high: float
     unit: str = Field(default="", max_length=40)
+    step: float | None = None
+    step_origin: float | None = None
 
 
 class ObjectiveIn(StrictModel):

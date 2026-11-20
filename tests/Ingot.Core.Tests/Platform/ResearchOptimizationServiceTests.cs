@@ -1,7 +1,9 @@
 // 验证待出质量结果的真实运行会占用下一配方优化器的候选点。
 using System.Text.Json;
 using Ingot.Contracts.Events;
+using Ingot.Contracts.ProcessConfiguration;
 using Ingot.Contracts.ProcessResearch;
+using Ingot.Platform.Application.ProcessConfiguration;
 using Ingot.Platform.Application.ProcessResearch;
 using Xunit;
 
@@ -190,6 +192,36 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
     }
 
     [Fact]
+    public async Task CreateNextRecipeRecommendation_PassesTheRecipeGridAndPreservesItsPrediction()
+    {
+        var optimizer = new CapturingOptimizerClient();
+        var service = CreateServiceWithPublishedGrid(new MemoryStore(), optimizer);
+
+        var recommendation = await service.CreateNextRecipeRecommendationAsync(RequestWithPinnedRecipe(), "engineer-a");
+
+        var temperature = Assert.Single(optimizer.LastSuggestionCall!.Campaign.Variables,
+            value => value.Name == "holding-temperature");
+        Assert.Equal(5, temperature.Step);
+        Assert.Equal(480, temperature.StepOrigin);
+        var item = Assert.Single(recommendation.Items);
+        Assert.Equal(515, item.Parameters.Single(value => value.VariableCode == "holding-temperature").Value);
+        Assert.Equal(0.2, item.Prediction.Objectives["form-error"].Mean);
+    }
+
+    [Fact]
+    public async Task CreateNextRecipeRecommendation_RejectsSuggestionOutsideTheRecipeGrid()
+    {
+        var service = CreateServiceWithPublishedGrid(
+            new MemoryStore(), new CapturingOptimizerClient(temperature: 517.5));
+
+        var error = await Assert.ThrowsAsync<ProcessResearchRuleException>(
+            () => service.CreateNextRecipeRecommendationAsync(RequestWithPinnedRecipe(), "engineer-a"));
+
+        Assert.Contains("holding-temperature", error.Message, StringComparison.Ordinal);
+        Assert.Contains("步长", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreateNextRecipeRecommendation_StopsWhenCoverageEnvelopeIsMissing()
     {
         var service = CreateService(new MemoryStore(), new CapturingOptimizerClient(reportCoverage: false));
@@ -214,6 +246,54 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
 
     private static ResearchRecipeRecommendationRequest Request()
         => new() { Brief = BriefDraft(), Seed = 17 };
+
+    private static ResearchRecipeRecommendationRequest RequestWithPinnedRecipe()
+    {
+        var brief = BriefDraft();
+        var context = new Dictionary<string, string>(brief.Context, StringComparer.Ordinal)
+        {
+            [RecipeRecommendationScopeKeys.ProcessSpecificationVersion] = "1"
+        };
+        return new ResearchRecipeRecommendationRequest { Brief = brief with { Context = context }, Seed = 17 };
+    }
+
+    private static ResearchOptimizationService CreateServiceWithPublishedGrid(
+        MemoryStore store,
+        CapturingOptimizerClient optimizer)
+    {
+        var configuration = new RecipeConfigurationTestStore(
+            [new ProcessSpecification
+            {
+                ProcessSpecificationId = TestProcessSpecificationId,
+                Version = 1,
+                Name = "Optical press",
+                DataModelId = "grid-model",
+                DataModelVersion = 1,
+                Status = ConfigurationStatuses.Published
+            }],
+            [new ProcessDataModel
+            {
+                ModelId = "grid-model",
+                Version = 1,
+                Name = "Grid model",
+                ControlParameters =
+                [
+                    new ControlParameterDefinition
+                    {
+                        Code = "holding-temperature", DisplayName = "Temperature", Unit = "Cel",
+                        Minimum = 480, Maximum = 550, Step = 5
+                    },
+                    new ControlParameterDefinition
+                    {
+                        Code = "press-force", DisplayName = "Force", Unit = "kN",
+                        Minimum = 5, Maximum = 20, Step = 1
+                    }
+                ]
+            }]);
+        return new ResearchOptimizationService(store, optimizer,
+            new MultipleObservationAssembler(Observation(500, 8), Observation(520, 12), Observation(540, 16)),
+            new RecipeRecommendationBriefPolicy(configuration));
+    }
 
     private static ResearchOptimizationService CreateService(MemoryStore store, CapturingOptimizerClient optimizer)
         => new(store, optimizer,
@@ -330,6 +410,14 @@ public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTe
                         {
                             ["holding-temperature"] = temperature,
                             ["press-force"] = force
+                        },
+                        Predictions = new Dictionary<string, OptimizerObjectivePrediction>
+                        {
+                            ["form-error"] = new()
+                            {
+                                Mean = 0.2, StandardDeviation = 0.1,
+                                Lower95 = 0.004, Upper95 = 0.396, Unit = "um"
+                            }
                         },
                         ModelVersion = "pending-point-test-v1"
                     }

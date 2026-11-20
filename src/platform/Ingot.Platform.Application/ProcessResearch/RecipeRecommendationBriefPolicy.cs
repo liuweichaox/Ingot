@@ -106,39 +106,41 @@ public sealed partial class RecipeRecommendationBriefPolicy(
         };
     }
 
-    public async Task<IReadOnlyDictionary<string, double>> SnapRecommendedParametersAsync(
+    public async Task<IReadOnlyDictionary<string, (double Step, double Origin)?>> ResolveParameterStepGridsAsync(
         RecipeRecommendationBrief brief,
-        IReadOnlyDictionary<string, double> parameters,
+        IReadOnlyCollection<string> controlCodes,
         CancellationToken ct = default)
     {
-        if (processConfigurations is null || parameters.Count == 0)
-            return parameters;
+        var codes = controlCodes.ToHashSet(StringComparer.Ordinal);
+        var grids = codes.ToDictionary(
+            static code => code,
+            static _ => ((double Step, double Origin)?)null,
+            StringComparer.Ordinal);
+        if (processConfigurations is null || codes.Count == 0)
+            return grids;
         var model = await LoadPublishedModelAsync(brief, ct).ConfigureAwait(false);
         var definitions = model.ControlParameters.ToDictionary(
             static value => value.Code, StringComparer.OrdinalIgnoreCase);
-        var controls = brief.Variables
-            .Where(static value => value.Role == ResearchVariableRoles.Control)
-            .ToDictionary(static value => value.Code, StringComparer.Ordinal);
-        var snapped = new Dictionary<string, double>(parameters, StringComparer.Ordinal);
-        foreach (var (code, value) in parameters)
+        foreach (var variable in brief.Variables.Where(value =>
+                     value.Role == ResearchVariableRoles.Control && codes.Contains(value.Code)))
         {
-            if (!controls.TryGetValue(code, out var variable) ||
-                variable.LowerLimit is not { } lower ||
-                variable.UpperLimit is not { } upper)
+            if (variable.LowerLimit is not { } lower || variable.UpperLimit is not { } upper)
                 continue;
             var parameterCode = variable.DataSource is null
                 ? variable.Code
                 : variable.DataSource.StartsWith(ControlParameterSourcePrefix, StringComparison.OrdinalIgnoreCase)
-                    ? variable.DataSource[ControlParameterSourcePrefix.Length..]
+                    ? variable.DataSource[ControlParameterSourcePrefix.Length..].Trim()
                     : variable.Code;
-            if (!definitions.TryGetValue(parameterCode.Trim(), out var definition) || definition.Step is not { } step)
+            if (!definitions.TryGetValue(parameterCode, out var definition) || definition.Step is not { } step)
                 continue;
-            var origin = definition.Minimum ?? lower;
-            if (!TrySnapToStep(value, origin, step, lower, upper, out var aligned))
-                throw new ProcessResearchRuleException($"推荐参数 {code} 按步长对齐后超出允许范围。");
-            snapped[code] = aligned;
+            if (!(step > 0) || !double.IsFinite(step))
+                throw new ProcessResearchRuleException($"配方参数 {parameterCode} 的步长必须是正有限数值。");
+            var origin = definition.Minimum ?? 0d;
+            if (!double.IsFinite(origin) || !TrySnapToStep(lower, origin, step, lower, upper, out _))
+                throw new ProcessResearchRuleException($"配方参数 {parameterCode} 的步长网格与建议范围没有交集。");
+            grids[variable.Code] = (step, origin);
         }
-        return snapped;
+        return grids;
     }
 
     /// <summary>
@@ -187,17 +189,33 @@ public sealed partial class RecipeRecommendationBriefPolicy(
         snapped = value;
         if (!(step > 0) || !double.IsFinite(value) || !double.IsFinite(origin) || !double.IsFinite(step))
             return true;
-        var stepDecimal = (decimal)step;
-        var aligned = (decimal)origin +
-            decimal.Round(((decimal)value - (decimal)origin) / stepDecimal, 0, MidpointRounding.AwayFromZero) * stepDecimal;
-        if (aligned < (decimal)lower)
-            aligned += stepDecimal;
-        if (aligned > (decimal)upper)
-            aligned -= stepDecimal;
-        if (aligned < (decimal)lower || aligned > (decimal)upper)
+        try
+        {
+            var stepDecimal = (decimal)step;
+            if (stepDecimal <= 0)
+                return false;
+            var originDecimal = (decimal)origin;
+            var lowerDecimal = (decimal)lower;
+            var upperDecimal = (decimal)upper;
+            var aligned = originDecimal +
+                decimal.Round(((decimal)value - originDecimal) / stepDecimal, 0, MidpointRounding.AwayFromZero) * stepDecimal;
+            if (aligned < lowerDecimal)
+                aligned += stepDecimal;
+            if (aligned > upperDecimal)
+                aligned -= stepDecimal;
+            if (aligned < lowerDecimal || aligned > upperDecimal)
+                return false;
+            snapped = (double)aligned;
+            return true;
+        }
+        catch (OverflowException)
+        {
             return false;
-        snapped = (double)aligned;
-        return true;
+        }
+        catch (DivideByZeroException)
+        {
+            return false;
+        }
     }
 
     private async Task<ProcessDataModel> LoadPublishedModelAsync(

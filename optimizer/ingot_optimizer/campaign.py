@@ -7,6 +7,13 @@ out-of-range observations before they can enter a model.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import (
+    Decimal,
+    DecimalException,
+    ROUND_CEILING,
+    ROUND_FLOOR,
+    ROUND_HALF_UP,
+)
 import math
 from typing import Mapping
 
@@ -21,6 +28,12 @@ class Variable:
     low: float
     high: float
     unit: str = ""
+    step: float | None = None
+    step_origin: float | None = None
+    _origin_decimal: Decimal | None = field(init=False, default=None, repr=False, compare=False)
+    _step_decimal: Decimal | None = field(init=False, default=None, repr=False, compare=False)
+    _minimum_grid_index: int | None = field(init=False, default=None, repr=False, compare=False)
+    _maximum_grid_index: int | None = field(init=False, default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -28,6 +41,37 @@ class Variable:
             raise ValueError("variable name must not be empty")
         if not math.isfinite(self.low) or not math.isfinite(self.high) or self.low >= self.high:
             raise ValueError(f"variable {name} must have finite low < high bounds")
+        if self.step is None:
+            if self.step_origin is not None:
+                raise ValueError(f"variable {name} cannot have a step origin without a step")
+        else:
+            if not math.isfinite(self.step) or self.step <= 0:
+                raise ValueError(f"variable {name} step must be positive and finite")
+            if self.step_origin is not None and not math.isfinite(self.step_origin):
+                raise ValueError(f"variable {name} step origin must be finite")
+            origin = self.low if self.step_origin is None else self.step_origin
+            try:
+                origin_decimal = Decimal(str(origin))
+                step_decimal = Decimal(str(self.step))
+                minimum_index = int(
+                    ((Decimal(str(self.low)) - origin_decimal) / step_decimal)
+                    .to_integral_value(rounding=ROUND_CEILING)
+                )
+                maximum_index = int(
+                    ((Decimal(str(self.high)) - origin_decimal) / step_decimal)
+                    .to_integral_value(rounding=ROUND_FLOOR)
+                )
+            except DecimalException as error:
+                raise ValueError(
+                    f"variable {name} step grid exceeds supported numeric precision"
+                ) from error
+            if minimum_index > maximum_index:
+                raise ValueError(f"variable {name} step grid has no value inside its bounds")
+            object.__setattr__(self, "step_origin", origin)
+            object.__setattr__(self, "_origin_decimal", origin_decimal)
+            object.__setattr__(self, "_step_decimal", step_decimal)
+            object.__setattr__(self, "_minimum_grid_index", minimum_index)
+            object.__setattr__(self, "_maximum_grid_index", maximum_index)
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "unit", self.unit.strip())
 
@@ -36,6 +80,32 @@ class Variable:
 
     def denorm(self, unit_value: float) -> float:
         return self.low + unit_value * (self.high - self.low)
+
+    def align(self, value: float) -> float:
+        if self.step is None:
+            return float(value)
+        index = int(((Decimal(str(value)) - self._origin_decimal) / self._step_decimal)
+                    .to_integral_value(rounding=ROUND_HALF_UP))
+        index = min(max(index, self._minimum_grid_index), self._maximum_grid_index)
+        return float(self._origin_decimal + index * self._step_decimal)
+
+    def has_grid_value(self, low: float, high: float) -> bool:
+        if self.step is None:
+            return low < high
+        try:
+            minimum_index = int(
+                ((Decimal(str(low)) - self._origin_decimal) / self._step_decimal)
+                .to_integral_value(rounding=ROUND_CEILING)
+            )
+            maximum_index = int(
+                ((Decimal(str(high)) - self._origin_decimal) / self._step_decimal)
+                .to_integral_value(rounding=ROUND_FLOOR)
+            )
+        except DecimalException as error:
+            raise ValueError("campaign step constraints exceed supported numeric precision") from error
+        return max(minimum_index, self._minimum_grid_index) <= min(
+            maximum_index, self._maximum_grid_index
+        )
 
 
 @dataclass(frozen=True)
@@ -386,7 +456,10 @@ class Campaign:
                 bounds[constraint.variable][0] = max(
                     bounds[constraint.variable][0], constraint.limit
                 )
-        return all(low < high for low, high in bounds.values())
+        return all(
+            variable.has_grid_value(*bounds[variable.name])
+            for variable in self.variables
+        )
 
     def validate_params(
         self, params: Mapping[str, float], *, enforce_candidate_constraints: bool = True
@@ -473,6 +546,51 @@ class Campaign:
             [variable.norm(float(params[variable.name])) for variable in self.variables],
             dtype=float,
         )
+
+    def align_candidate_params(self, params: Mapping[str, float]) -> np.ndarray:
+        if not any(variable.step is not None for variable in self.variables):
+            return self.to_unit(params)
+        self.validate_params(params, enforce_candidate_constraints=False)
+        aligned = {
+            variable.name: variable.align(float(params[variable.name]))
+            for variable in self.variables
+        }
+        self.validate_params(aligned)
+        return np.array(
+            [
+                variable.norm(aligned[variable.name])
+                if variable.step is not None
+                else variable.norm(float(params[variable.name]))
+                for variable in self.variables
+            ],
+            dtype=float,
+        )
+
+    def align_candidate_unit(
+        self, unit_values: np.ndarray, *, enforce_candidate_constraints: bool = True
+    ) -> np.ndarray:
+        values = np.asarray(unit_values, dtype=float).reshape(-1)
+        if values.shape != (self.dim,) or not np.isfinite(values).all():
+            raise ValueError(f"unit point must contain {self.dim} finite values")
+        if np.any(values < 0.0) or np.any(values > 1.0):
+            raise ValueError("unit point must remain inside [0, 1]")
+        if not any(variable.step is not None for variable in self.variables):
+            return values.copy()
+        params = {
+            variable.name: float(variable.denorm(values[index]))
+            for index, variable in enumerate(self.variables)
+        }
+        self.validate_params(params, enforce_candidate_constraints=False)
+        aligned = {
+            variable.name: variable.align(params[variable.name])
+            for variable in self.variables
+        }
+        self.validate_params(aligned, enforce_candidate_constraints=enforce_candidate_constraints)
+        result = values.copy()
+        for index, variable in enumerate(self.variables):
+            if variable.step is not None:
+                result[index] = variable.norm(aligned[variable.name])
+        return np.clip(result, 0.0, 1.0)
 
     def from_unit(self, unit_values: np.ndarray) -> dict[str, float]:
         values = np.asarray(unit_values, dtype=float).reshape(-1)

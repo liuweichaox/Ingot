@@ -416,13 +416,23 @@ class BotorchOptimizer:
         from scipy.stats import qmc
 
         if candidate_params is not None:
-            points = np.vstack([self.campaign.to_unit(value) for value in candidate_params])
+            points = np.vstack(
+                [self.campaign.align_candidate_params(value) for value in candidate_params]
+            )
         else:
             if envelope is not None:
                 points = sample_within_envelope(envelope, n_random, seed=self.seed)
             else:
                 sampler = qmc.Sobol(self.campaign.dim, scramble=True, seed=self.seed)
                 points = sampler.random_base2(math.ceil(math.log2(max(n_random, 2))))[:n_random]
+            points = np.asarray(
+                [
+                    self.campaign.align_candidate_unit(
+                        point, enforce_candidate_constraints=False
+                    )
+                    for point in points
+                ]
+            ).reshape(-1, self.campaign.dim)
             points = np.asarray(
                 [point for point in points if self.campaign.is_feasible_unit(point)]
             ).reshape(-1, self.campaign.dim)

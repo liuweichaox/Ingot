@@ -8,7 +8,9 @@ public sealed record OptimizerVariableInput(
     string Name,
     double Low,
     double High,
-    string Unit);
+    string Unit,
+    [property: JsonPropertyName("step")] double? Step = null,
+    [property: JsonPropertyName("step_origin")] double? StepOrigin = null);
 
 public sealed record OptimizerObjectiveInput
 {
