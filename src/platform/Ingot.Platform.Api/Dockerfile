@@ -28,7 +28,7 @@ RUN dotnet publish src/platform/Ingot.Platform.Api/Ingot.Platform.Api.csproj \
     -c Release -o /app/publish --no-restore
 
 # ---- Runtime ----
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
