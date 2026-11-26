@@ -134,8 +134,6 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         if (decision.Decision == ResearchRecipeRecommendationDecisionStatuses.Rejected)
             throw new ProcessResearchRuleException("已拒绝的建议是终态，不能关联实际运行。");
         var brief = await RequireDecisionBriefAsync(decision, ct).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(decision.ActualExecutionKey))
-            throw new ProcessResearchRuleException("该工程师决定已经关联了其他实际运行，不能覆盖。");
         await RequireExecutionAsync(brief, actualExecutionKey, decision.DecidedAt, ct).ConfigureAwait(false);
         return await store.LinkRecipeRecommendationDecisionExecutionTransactionAsync(
                 decisionId,
@@ -286,9 +284,7 @@ public sealed class ResearchRecipeRecommendationDecisionService(
         string? actual,
         string label)
     {
-        if (brief.Context.TryGetValue(contextKey, out var expected) &&
-            !string.IsNullOrWhiteSpace(expected) &&
-            !string.Equals(expected.Trim(), actual?.Trim(), StringComparison.Ordinal))
+        if (!RecipeRecommendationScopeMatcher.Matches(brief.Context, contextKey, actual))
             throw new ProcessResearchRuleException($"实际运行的{label}不属于建议的冻结范围。");
     }
 

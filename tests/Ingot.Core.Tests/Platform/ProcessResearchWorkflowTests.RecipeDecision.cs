@@ -234,13 +234,15 @@ public sealed class ProcessResearchWorkflowRecipeDecisionTests : ProcessResearch
 
         Assert.Equal("production-recipe-004", linked.ActualExecutionKey);
         Assert.Equal(linked.ActualExecutionKey, repeated.ActualExecutionKey);
-        await Assert.ThrowsAsync<ProcessResearchRuleException>(() => service.LinkActualExecutionAsync(
+        executions.Set(Execution("production-recipe-005", decision.DecidedAt.AddSeconds(2)));
+        var corrected = await service.LinkActualExecutionAsync(
             decision.DecisionId,
             new ResearchRecipeRecommendationExecutionLinkRequest
             {
                 ActualExecutionKey = "production-recipe-005"
             },
-            "engineer-c"));
+            "engineer-c");
+        Assert.Equal("production-recipe-005", corrected.ActualExecutionKey);
     }
 
     [Fact]

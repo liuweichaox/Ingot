@@ -16,7 +16,9 @@ real recipe run + actual settings + process context + valid quality outcome
        └─ rejection → record the reason and close the round
 ```
 
-A recommendation is an append-only record with a frozen brief, input hash, prediction, uncertainty, and rationale. The engineer decides whether to adopt it. Engineer decisions, actual-execution links, and outcomes are also appended separately and never overwritten. Modification and rejection require a reason. Rejection is terminal and permits neither an execution link nor a frozen outcome.
+A recommendation is an append-only record with a frozen brief, input hash, prediction, uncertainty, and rationale. The engineer decides whether to adopt it. Engineer decisions, actual-execution links, and outcomes are stored separately. Before freezing an outcome, an incorrect execution link can be corrected while retaining the original link and correction history. A frozen outcome cannot be relinked. Modification and rejection require a reason. Rejection is terminal and permits neither an execution link nor a frozen outcome.
+
+Before freezing the outcome, an engineer can correct an incorrectly linked run. The original link and corrections are retained, and freezing uses the latest linked run.
 
 The current product starts a next-run correction from a published recipe version. Adoption records the engineer's decision without creating or publishing a new version or sending equipment settings. The engineer confirms a run of the same version that started after the decision. Before freezing the outcome, the server checks the actual parameters against the decision. An outcome that did not follow the decision remains as evidence for traceability and does not count as validation of that decision. The actual parameters and admission rules determine whether that run can form a later observation.
 
@@ -40,7 +42,9 @@ The readiness interface returns candidate, valid, and excluded counts, a truncat
 
 ## Traceable Inputs and Outputs
 
-Inputs comprise published conditions, actual run settings, quality objective values, outcome-constraint values, process features, and applicable knowledge and models. Platform deduplicates by execution key. The input hash covers the optimizer request, including its seed, as well as claim identities and model references. An identical input hash may return an existing recommendation for the same site and recipe. The recommendation stores the frozen brief, hashes, observation counts, model versions, and related details. The complete list of observations is not stored in the recommendation record.
+Inputs comprise published conditions, actual run settings, quality objective values, outcome-constraint values, process features, and applicable knowledge and models. Platform deduplicates by execution key. New recommendations store the execution keys and source content hashes actually admitted, and include them in the input hash. Historical recommendations without this list indicate that it is unavailable. The hash also covers the optimizer request, including its seed, claim identities, and model references. Identical inputs can return an existing recommendation while it is valid; after expiry a new round can be generated. The recommendation also stores the frozen brief, observation count, and model version.
+
+A workbench scope can include unrecorded fields. In the brief, `missing_scope_fields` identifies fields that must be absent. Fields that are neither specified nor marked missing retain their existing unrestricted meaning. The run query scans up to 2,000 candidates and readiness reports an incomplete scope if this limit is exceeded.
 
 The optimization service returns candidates with predictions, uncertainty, constraints, and coverage information. Platform checks the reported observation count, candidate count, and set of coverage variables. Review the run facts, objective and parameter units, parameter bounds, and the knowledge and model versions used. Later inspection provides the actual quality result.
 

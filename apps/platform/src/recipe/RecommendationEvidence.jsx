@@ -43,6 +43,25 @@ export function RecommendationEvidence({ recommendation, prediction }) {
         {prediction.coldStart && <Badge tone="warning">冷启动</Badge>}
         {Number.isFinite(feasibility) && <span>可行概率 {Math.round(feasibility * 100)}%</span>}
       </div>
+      {Array.isArray(recommendation?.observationReferences) ? (
+        <details className="text-[13px] text-slate-600">
+          <summary className="cursor-pointer">查看本次纳入的运行</summary>
+          <ul className="mt-2 grid gap-1">
+            {recommendation.observationReferences.map(reference => (
+              <li key={reference.executionKey}>
+                <Link
+                  className="text-trajectory-700 underline"
+                  to={`/process-executions/${encodeURIComponent(reference.executionKey)}?siteId=${encodeURIComponent(recommendation.siteCode)}`}
+                >
+                  {reference.executionKey}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : (
+        <p className="text-xs text-slate-500">这条历史建议未保存纳入运行清单。</p>
+      )}
       {objectives.length > 0 && (
         <div aria-label="目标预测">
           {objectives.map(([code, metric]) => <PredictionRow key={code} code={code} metric={metric} />)}

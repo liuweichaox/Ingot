@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipeVersionProposal } from "../src/recipe/RecipeVersionProposal";
 import { OutcomeReceipt, RecommendationEvidence } from "../src/recipe/RecommendationEvidence";
+import { inferObjective, runScopes } from "../src/recipe/proposalScope";
 
 afterEach(() => {
   cleanup();
@@ -68,6 +69,7 @@ const flow = {
     processSpecificationId: "lens-press",
     modelVersion: "recipe-test-model",
     observationCount: 3,
+    observationReferences: [{ executionKey: "RUN-1", sourceContentHash: "a".repeat(64) }],
     brief: { name: "lens-press 第 2 版", context: { process_specification_version: "2" } },
   },
   item: {
@@ -107,6 +109,15 @@ function renderProposal(overrides, onPromote = vi.fn()) {
 }
 
 describe("配方版本上的下一轮校正", () => {
+  it("保留质量规格并按实际组合选择工况", () => {
+    expect(inferObjective({ lowerLimit: 48, upperLimit: 52 })).toEqual({ direction: "range", target: 50, lowerLimit: 48, upperLimit: 52 });
+    expect(inferObjective({ lowerLimit: null, upperLimit: 0 })).toEqual({ direction: "minimize", target: 0, upperLimit: 0 });
+    expect(inferObjective({ lowerLimit: 2, upperLimit: null })).toEqual({ direction: "maximize", target: 2, lowerLimit: 2 });
+    expect(inferObjective({ lowerLimit: null, upperLimit: null })).toBeNull();
+    expect(inferObjective({ lowerLimit: 2, upperLimit: 1 })).toBeNull();
+    const scopes = runScopes([{ productFamilyCode: "A", productCode: "1", equipmentId: "E" }, { productFamilyCode: "A", productCode: "2", equipmentId: "E" }, { productFamilyCode: "B", productCode: "3", equipmentId: "E" }, { productFamilyCode: "B", productCode: "3", equipmentId: "E" }]);
+    expect(scopes[0].values).toEqual(["B", "3", "E"]);
+  });
   it("按这一版配方和已完成运行提交冻结的生成条件", async () => {
     const { fetchMock } = renderProposal({
       "/recipe-recommendations/flows": { items: [] },
@@ -121,7 +132,7 @@ describe("配方版本上的下一轮校正", () => {
     expect(brief.processSpecificationId).toBe("lens-press");
     expect(brief.context.process_specification_version).toBe("2");
     expect(brief.context.product_code).toBe("asph-01");
-    expect(brief.objectives).toEqual([expect.objectContaining({ code: "form-error", direction: "minimize", target: 0 })]);
+    expect(brief.objectives).toEqual([expect.objectContaining({ code: "form-error", direction: "range", lowerLimit: 0, upperLimit: 1 })]);
     expect(brief.variables).toEqual([expect.objectContaining({ code: "temperature", lowerLimit: 480, upperLimit: 550 })]);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("research-projects"))).toBe(false);
   });
@@ -155,7 +166,7 @@ describe("配方版本上的下一轮校正", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "核对此运行" }));
-    expect(screen.getByText(/关联后不能更换运行/)).toBeInTheDocument();
+    expect(screen.getByText(/实际参数将在冻结结果时核对/)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(screen.queryByLabelText("确认关联运行")).not.toBeInTheDocument();
@@ -164,6 +175,29 @@ describe("配方版本上的下一轮校正", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) =>
       String(url).includes("/recipe-recommendations/decisions/44444444-4444-4444-8444-444444444444/execution-link") &&
       JSON.parse(options.body).actualExecutionKey === "RUN-NEXT")).toBe(true));
+  });
+
+  it("结果冻结前允许纠正已关联的运行", async () => {
+    const pendingOutcome = {
+      ...flow,
+      state: "pending-outcome",
+      decision: {
+        decisionId: "44444444-4444-4444-8444-444444444444",
+        decision: "accepted",
+        decidedAt: "2026-10-09T00:00:00Z",
+        actualExecutionKey: "RUN-WRONG",
+      },
+    };
+    const { fetchMock } = renderProposal({
+      "/recipe-recommendations/flows": { items: [pendingOutcome] },
+      "/process-executions": { items: [{ ...completedRun, executionId: "RUN-RIGHT", startedAt: "2026-10-10T00:00:00Z" }] },
+      "/execution-link": { decisionId: pendingOutcome.decision.decisionId },
+    });
+    expect(await screen.findByText(/当前关联运行：RUN-WRONG/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "核对此运行" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认关联" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) =>
+      String(url).includes("/execution-link") && JSON.parse(options.body).actualExecutionKey === "RUN-RIGHT")).toBe(true));
   });
 
   it("展示预测区间与冻结结果的执行一致性回执", async () => {
@@ -215,7 +249,7 @@ describe("配方版本上的下一轮校正", () => {
     fireEvent.change(input, { target: { value: "RUN-OLDER-THAN-FIRST-PAGE" } });
     fireEvent.click(screen.getByRole("button", { name: "核对输入的运行" }));
     expect(screen.getByText(/最近运行列表没有该运行的详细信息/)).toBeInTheDocument();
-    expect(screen.getByText(/关联后不能更换运行/)).toBeInTheDocument();
+    expect(screen.getByText(/实际参数将在冻结结果时核对/)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/execution-link"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "确认关联" }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) => String(url).includes("/execution-link") && JSON.parse(options.body).actualExecutionKey === "RUN-OLDER-THAN-FIRST-PAGE")).toBe(true));

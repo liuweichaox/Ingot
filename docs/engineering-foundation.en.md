@@ -4,6 +4,14 @@ This page provides methods for Ingot design, development, and review. Tailor the
 
 [System design](design.en.md) records the current architecture for routine development and architecture review. Start reviews with actual requirements and risks, and use engineering methods and evidence to evaluate the existing design and its assumptions. Use [current status](status.en.md), the implementation, and tests to check actual behavior and identify claims that still need verification.
 
+## Choose work from the core task
+
+Ingot organizes recipe versions, experiment records, and run evidence to support quality analysis, process analysis, and recipe optimization. Engineers use actual runs and quality results to analyze differences, generate a next-recipe recommendation, make a decision, and assess the result with later runs. The [brand guide](brand.en.md) maintains the product positioning.
+
+For an improvement, identify the engineer's task, the observed problem, its impact, and a verifiable outcome. Prioritize problems that block this workflow or change analysis and recommendation results. Distinguish reproduced defects, hypotheses requiring verification, and needs that depend on site conditions. Prioritize reliability and security work according to the actual deployment and impact. Reuse existing capabilities when they solve the problem. A new feature, abstraction, or infrastructure component needs a concrete scenario and expected benefit. Verify the actual entry point and result in proportion to the change.
+
+Keep code clear and consistent. Follow `.editorconfig` and the naming, formatting, and layering conventions of the owning module. Use clear domain names and direct control flow, and reuse existing rules and types. Introduce an abstraction when it addresses an actual responsibility or duplication, and avoid unrelated formatting changes. See [AGENTS.md](../AGENTS.md) for working rules.
+
 ## Systems engineering: goals, boundaries, and validation
 
 Use the lifecycle processes of [ISO/IEC/IEEE 15288](https://www.iso.org/standard/81702.html) and practices in the [NASA Systems Engineering Handbook](https://www.nasa.gov/reference/2-0-fundamentals-of-systems-engineering/) as references. The V model helps relate requirements decomposition to verification: start with an engineer's scenario, define system boundaries, requirements, design, and tests, then validate whether actual use addresses the need. The standard provides a process framework; using these references does not constitute certification.

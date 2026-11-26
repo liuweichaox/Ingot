@@ -13,6 +13,9 @@ public abstract partial class ProcessResearchWorkflowTestBase
 
         public IReadOnlyList<ResearchRecipeRecommendation> Recommendations => recommendations.Values.ToArray();
 
+        public void ReplaceRecommendation(ResearchRecipeRecommendation value)
+            => recommendations[value.RecommendationId] = value;
+
         public Task<ResearchRecipeRecommendation?> GetRecipeRecommendationAsync(
             Guid recommendationId, CancellationToken ct = default)
             => Task.FromResult(recommendations.GetValueOrDefault(recommendationId));
@@ -91,8 +94,8 @@ public abstract partial class ProcessResearchWorkflowTestBase
                 throw new ProcessResearchRuleException("配方建议决定不存在。");
             if (current.ActualExecutionKey == actualExecutionKey)
                 return Task.FromResult(current);
-            if (!string.IsNullOrWhiteSpace(current.ActualExecutionKey) ||
-                decisions.Values.Any(item => item.ActualExecutionKey == actualExecutionKey))
+            if (current.Outcome is not null || decisions.Values.Any(item =>
+                item.DecisionId != decisionId && item.ActualExecutionKey == actualExecutionKey))
                 throw new ProcessResearchRuleException("该工程师决定或实际运行已经关联，不能覆盖。");
             var linked = current with { ActualExecutionKey = actualExecutionKey };
             decisions[decisionId] = linked;

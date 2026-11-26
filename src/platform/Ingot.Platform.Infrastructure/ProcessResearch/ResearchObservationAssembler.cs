@@ -70,8 +70,11 @@ public sealed class ResearchObservationAssembler(
             totalMatchingRuns = page.Total;
             executionIds.AddRange(page.Data
                 .Where(static value => value.LifecycleComplete)
+                .Where(value => RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.ProductFamilyCode, value.ProductFamilyCode) &&
+                    RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.ProductCode, value.ProductCode) &&
+                    RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.EquipmentId, value.EquipmentId))
                 .Select(static value => value.ExecutionId));
-            if (executionIds.Count >= page.Total || page.Data.Count < pageSize)
+            if (offset + page.Data.Count >= page.Total || page.Data.Count < pageSize)
                 break;
         }
         var distinctIds = executionIds
@@ -163,8 +166,12 @@ public sealed class ResearchObservationAssembler(
                 eligibleRecords,
                 scenarioPackage));
         }
+        var uniqueObservations = observations
+            .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
+            .Select(static group => group.Last())
+            .ToArray();
         return new ResearchObservationAssembly(
-            ApplyCohortContextGates(observations, scenarioPackage),
+            ApplyCohortContextGates(uniqueObservations, scenarioPackage),
             candidates.Count);
     }
 
@@ -172,15 +179,16 @@ public sealed class ResearchObservationAssembler(
         IReadOnlyList<ResearchRunObservation> observations,
         ScenarioPackage? scenarioPackage)
     {
-        if (scenarioPackage is null || observations.Count == 0)
+        var eligible = observations.Where(static value => value.ValidForOptimization).ToArray();
+        if (scenarioPackage is null || eligible.Length == 0)
             return observations;
         var reasons = new List<string>();
         foreach (var field in scenarioPackage.ContextFields.OrderBy(static value => value.FieldCode, StringComparer.Ordinal))
         {
-            var populated = observations.Where(value =>
+            var populated = eligible.Where(value =>
                 value.Context.TryGetValue(field.FieldCode, out var contextValue) &&
                 !string.IsNullOrWhiteSpace(contextValue)).ToArray();
-            var coverage = (double)populated.Length / observations.Count;
+            var coverage = (double)populated.Length / eligible.Length;
             if (field.MinimumCoverage.HasValue && coverage + 1e-12 < field.MinimumCoverage.Value)
                 reasons.Add($"上下文字段 {field.FieldCode} 覆盖率 {coverage:P1} 低于门槛 {field.MinimumCoverage.Value:P1}");
             if (!field.MinimumFactorOverlap.HasValue || populated.Length == 0)
@@ -196,7 +204,7 @@ public sealed class ResearchObservationAssembler(
         if (reasons.Count == 0)
             return observations;
         var reason = string.Join("；", reasons);
-        return observations.Select(value => value with
+        return observations.Select(value => !value.ValidForOptimization ? value : value with
         {
             ValidForOptimization = false,
             ExclusionReason = string.IsNullOrWhiteSpace(value.ExclusionReason)
@@ -221,9 +229,9 @@ public sealed class ResearchObservationAssembler(
         ExecutionComparisonRow execution)
     {
         var context = brief.Context;
-        return Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProductFamilyCode), execution.ProductFamilyCode) &&
-            Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProductCode), execution.ProductCode) &&
-            Matches(ContextValue(context, RecipeRecommendationScopeKeys.EquipmentId), execution.EquipmentId) &&
+        return RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.ProductFamilyCode, execution.ProductFamilyCode) &&
+            RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.ProductCode, execution.ProductCode) &&
+            RecipeRecommendationScopeMatcher.Matches(context, RecipeRecommendationScopeKeys.EquipmentId, execution.EquipmentId) &&
             Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationId), execution.ProcessSpecificationId) &&
             Matches(ContextValue(context, RecipeRecommendationScopeKeys.ProcessSpecificationVersion), execution.ProcessSpecificationVersion) &&
             Matches(ContextValue(context, RecipeRecommendationScopeKeys.OutputItemId), execution.OutputItemId);

@@ -67,7 +67,7 @@ public sealed class ResearchOptimizationService(
         var constraintCodes = brief.OutcomeConstraints.Select(static value => value.Code).ToHashSet(StringComparer.Ordinal);
         var controls = brief.Variables.Where(static value => value.Role == ResearchVariableRoles.Control)
             .ToDictionary(static value => value.Code, StringComparer.Ordinal);
-        var observations = assembly.Observations
+        var admitted = assembly.Observations
             .Where(value => value.ValidForOptimization &&
                 value.Outcomes.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(objectiveCodes) &&
                 value.ConstraintOutcomes.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(constraintCodes) &&
@@ -75,7 +75,13 @@ public sealed class ResearchOptimizationService(
                     .SetEquals(controls.Keys))
             .GroupBy(static value => value.ExecutionKey, StringComparer.Ordinal)
             .Select(static group => group.Last())
-            .Select(static value => new OptimizerObservationInput
+            .ToArray();
+        var observationReferences = admitted.Select(static value => new RecipeRecommendationObservationReference
+        {
+            ExecutionKey = value.ExecutionKey,
+            SourceContentHash = value.SourceContentHash
+        }).ToArray();
+        var observations = admitted.Select(static value => new OptimizerObservationInput
             {
                 Params = value.ActualFactors.ToDictionary(static factor => factor.VariableCode,
                     static factor => factor.Value, StringComparer.Ordinal),
@@ -117,15 +123,28 @@ public sealed class ResearchOptimizationService(
         {
             Operation = "next-recipe-recommendation",
             OptimizerCall = call,
+            ObservationReferences = observationReferences,
             MechanismClaims = mechanismKnowledge.Claims.Select(static value => new { value.ClaimId, value.Version, value.ContentHash }),
             MechanismModels = mechanismModels.References
         })));
-        var existing = await store.GetRecipeRecommendationByInputHashAsync(
-            brief.SiteCode, brief.ProcessSpecificationId, inputHash, ct).ConfigureAwait(false);
-        if (existing is not null)
+        var originalInputHash = inputHash;
+        while (true)
         {
-            await RecordKnowledgeUsagesAsync(existing.RecommendationId, mechanismKnowledge, ct).ConfigureAwait(false);
-            return existing;
+            var existing = await store.GetRecipeRecommendationByInputHashAsync(
+                brief.SiteCode, brief.ProcessSpecificationId, inputHash, ct).ConfigureAwait(false);
+            if (existing is null)
+                break;
+            if (existing.ExpiresAt is null || existing.ExpiresAt > DateTimeOffset.UtcNow)
+            {
+                await RecordKnowledgeUsagesAsync(existing.RecommendationId, mechanismKnowledge, ct).ConfigureAwait(false);
+                return existing;
+            }
+
+            inputHash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                OriginalInputHash = originalInputHash,
+                PreviousRecommendationId = existing.RecommendationId
+            })));
         }
 
         var response = await optimizerClient.SuggestAsync(call, ct).ConfigureAwait(false);
@@ -159,6 +178,7 @@ public sealed class ResearchOptimizationService(
             ModelVersion = response.ModelVersion,
             InputHash = inputHash,
             ObservationCount = observations.Length,
+            ObservationReferences = observationReferences,
             AutoAssembledObservationCount = observations.Length,
             ProcessFeatureCount = CommonProcessFeatureCount(observations),
             FeatureSetId = brief.OptimizationFeatures.FeatureSetId,

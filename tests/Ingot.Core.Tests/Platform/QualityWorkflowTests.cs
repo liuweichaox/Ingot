@@ -694,6 +694,48 @@ public sealed class QualityWorkflowTests
     }
 
     [Fact]
+    public async Task ProcessExecutionRecipeFilterUsesAppliedIdentityBeforePagination()
+    {
+        var rows = new List<PlatformProductionEvent>();
+        var start = DateTimeOffset.Parse("2026-07-20T08:00:00Z");
+        foreach (var (id, version, offset) in new[] { ("V2-OLD", 2, 0), ("V1", 1, 1), ("V2-NEW", 2, 2) })
+        {
+            rows.Add(Row(rows.Count + 1, Event("process.execution.started", id, $"WP-{id}", "LENS-A", start.AddMinutes(offset))));
+            rows.Add(Row(rows.Count + 1, Event("process.specification.applied", id, $"WP-{id}", "LENS-A", start.AddMinutes(offset),
+                data: new Dictionary<string, object?>
+                {
+                    ["processSpecificationId"] = "RCP-LENS-A",
+                    ["processSpecificationVersion"] = version,
+                    ["resolvedParameters"] = new Dictionary<string, object?>()
+                })));
+            rows.Add(Row(rows.Count + 1, Event("process.execution.completed", id, $"WP-{id}", "LENS-A", start.AddMinutes(offset).AddSeconds(30))));
+        }
+        var missingContext = new Dictionary<string, string> { ["product_family_code"] = "LENS-A" };
+        rows.Add(Row(rows.Count + 1, Event("process.execution.started", "V2-NO-CONTEXT", "WP-MISSING", "LENS-A", start.AddMinutes(3)) with { Context = missingContext }));
+        rows.Add(Row(rows.Count + 1, Event("process.specification.applied", "V2-NO-CONTEXT", "WP-MISSING", "LENS-A", start.AddMinutes(3),
+            data: new Dictionary<string, object?> { ["processSpecificationId"] = "RCP-LENS-A", ["processSpecificationVersion"] = 2 })));
+        rows.Add(Row(rows.Count + 1, Event("process.execution.completed", "V2-NO-CONTEXT", "WP-MISSING", "LENS-A", start.AddMinutes(3).AddSeconds(30)) with { Context = missingContext }));
+        var service = new ProcessExecutionService(
+            new FakeEventStore(rows), new FakeInspectionStore([]), new FakeReviewStore(),
+            new FakeMasterDataStore(), new ProcessAnalysisResolver(new FakeProcessConfigurationStore()),
+            new FakeTimeSeriesStore(rows));
+
+        var first = await service.QueryAsync(null, null, "LENS-A", null, "RCP-LENS-A", null, null,
+            null, "completed", 1, siteId: "SITE-001", processSpecificationVersion: "2");
+        var second = await service.QueryAsync(null, null, "LENS-A", null, "RCP-LENS-A", null, null,
+            null, "completed", 1, 1, siteId: "SITE-001", processSpecificationVersion: "2");
+        var third = await service.QueryAsync(null, null, "LENS-A", null, "RCP-LENS-A", null, null,
+            null, "completed", 1, 2, siteId: "SITE-001", processSpecificationVersion: "2");
+
+        Assert.Equal(3, first.Total);
+        Assert.Equal(3, second.Total);
+        Assert.Equal(3, third.Total);
+        Assert.Equal("V2-NO-CONTEXT", Assert.Single(first.Data).ExecutionId);
+        Assert.Equal("V2-NEW", Assert.Single(second.Data).ExecutionId);
+        Assert.Equal("V2-OLD", Assert.Single(third.Data).ExecutionId);
+    }
+
+    [Fact]
     public async Task ProcessExecutionPaginationReturnsFilteredTotalBeyondCurrentPage()
     {
         var rows = new List<PlatformProductionEvent>();

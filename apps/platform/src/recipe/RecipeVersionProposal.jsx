@@ -6,12 +6,12 @@ import { extractRows, useApi } from "../hooks/useApi";
 import {
   briefForRecipe,
   chooseCharacteristic,
-  dominant,
   inferObjective,
   proposalStillOpen,
   revisionOverrides,
   runsAfterDecision,
   runsForRecipe,
+  runScopes,
 } from "./proposalScope";
 import {
   createSuggestion,
@@ -21,7 +21,7 @@ import {
   readReadiness,
   recordDecision,
 } from "./suggestionApi";
-import { Alert, Button, Field, Input, RequestError, Textarea, notify } from "../ui/components";
+import { Alert, Button, Field, Input, RequestError, Select, Textarea, notify } from "../ui/components";
 import { formatMeasurementValue, formatTime } from "../pages/shared";
 import { OutcomeReceipt, RecommendationEvidence } from "./RecommendationEvidence";
 
@@ -39,6 +39,7 @@ const directionLabels = {
   minimize: "越小越好",
   maximize: "越大越好",
   target: "逼近目标值",
+  range: "达到范围",
 };
 
 function matchesVersion(flow, specification) {
@@ -122,10 +123,12 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
   const [busyScope, setBusyScope] = useState("");
   const [runsBySite, setRunsBySite] = useState({});
   const [runsReadySite, setRunsReadySite] = useState("");
+  const [selectedScope, setSelectedScope] = useState({ scopeKey: "", key: "" });
   const [decisionDrafts, setDecisionDrafts] = useState({});
   const [runIds, setRunIds] = useState({});
   const [runConfirmation, setRunConfirmation] = useState(null);
   const flowsRequestId = useRef(0);
+  const readinessRequestId = useRef(0);
   const error = errorState.scopeKey === scopeKey ? errorState.message : "";
   const busy = busyScope === scopeKey;
   const visibleReadiness = readiness?.scopeKey === scopeKey ? readiness : null;
@@ -142,8 +145,20 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
   );
   const completedRuns = siteId ? runsBySite[siteId] || [] : [];
   const recipeRuns = runsForRecipe(completedRuns, specification);
+  const scopes = runScopes(recipeRuns);
+  const activeScope = scopes.find(scope => selectedScope.scopeKey === scopeKey && scope.key === selectedScope.key) || scopes[0];
+  const activeScopeKey = activeScope?.key || "";
   const siteCode = siteId;
   const runsReady = Boolean(siteId && runsReadySite === siteId);
+
+  useEffect(() => {
+    setSelectedScope(current => {
+      if (current.scopeKey === scopeKey && current.key === activeScopeKey) return current;
+      return { scopeKey, key: activeScopeKey };
+    });
+    readinessRequestId.current += 1;
+    setReadiness(null);
+  }, [scopeKey, activeScopeKey]);
 
   async function reloadFlows(targetScope = scopeKey) {
     if (currentScope.current !== targetScope) return;
@@ -190,7 +205,9 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
     setScopedError(scopeKey, "");
     async function load() {
       try {
-        const page = await getJson(`/api/v1/process-executions?status=completed&siteId=${encodeURIComponent(siteId)}&limit=100`);
+        const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+        const query = new URLSearchParams({ status: "completed", siteId, processSpecificationId: specification.processSpecificationId, processSpecificationVersion: String(specification.version), from, limit: "100" });
+        const page = await getJson(`/api/v1/process-executions?${query}`);
         if (!cancelled) {
           setRunsBySite(current => ({ ...current, [siteId]: extractRows(page) }));
           setRunsReadySite(siteId);
@@ -227,6 +244,7 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
       runs: completedRuns,
       characteristic,
       siteCode,
+      selectedScope: activeScope?.key,
     });
   }
 
@@ -248,12 +266,15 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
 
   function attachRun(flow, run) {
     return runAction(
-      () => linkRun(flow.decision.decisionId, run.executionId),
+      async () => {
+        await linkRun(flow.decision.decisionId, run.executionId);
+        setRunConfirmation(null);
+      },
       `已关联 ${run.executionId}。系统将在结果冻结时核对实际参数。`,
     );
   }
 
-  // 关联不可覆盖，先冻结用户选择的运行号和已知信息供确认。
+  // 确认关联或纠正前展示用户选择的运行号和已知信息。
   function reviewRun(flow, run) {
     setRunConfirmation({ scopeKey, decisionId: flow.decision.decisionId, run });
   }
@@ -267,13 +288,14 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
 
   async function checkReadiness() {
     const checkScope = scopeKey;
+    const requestId = ++readinessRequestId.current;
     setScopedBusy(checkScope, true);
     setScopedError(checkScope, "");
     setReadiness(null);
     try {
       const brief = currentBrief();
       const result = await readReadiness(brief);
-      if (currentScope.current === checkScope) setReadiness({ scopeKey: checkScope, brief, result });
+      if (currentScope.current === checkScope && requestId === readinessRequestId.current) setReadiness({ scopeKey: checkScope, brief, result });
     } catch (requestError) {
       setScopedError(checkScope, requestError.message);
     } finally {
@@ -316,18 +338,16 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
     onPromote?.({
       changeReason: editor.reason.trim() || flow.item.prediction?.rationale || "把这一轮校正转为新的配方版本。",
       parameterOverrides: revisionOverrides(specification, parameters),
-      evidenceReferences: recipeRuns
-        .filter(run => ["COMPLETE", "FAILED"].includes(String(run.qualityStatus || "").toUpperCase()))
-        .map(run => ({ kind: "process-execution", referenceId: run.executionId })),
+      evidenceReferences: (flow.recommendation.observationReferences || [])
+        .map(run => ({ kind: "process-execution", referenceId: run.executionKey })),
     });
   }
 
   const scopeText = [
     siteCode && `站点 ${siteCode}`,
     recipeRuns.length ? `${recipeRuns.length} 条已完成运行` : "还没有这一版的已完成运行",
-    dominant(recipeRuns, "productFamilyCode") && `产品 ${[dominant(recipeRuns, "productFamilyCode"), dominant(recipeRuns, "productCode")].filter(Boolean).join(" / ")}`,
-    dominant(recipeRuns, "equipmentId") && `设备 ${dominant(recipeRuns, "equipmentId")}`,
-    objective && `质量目标 ${characteristic.name || characteristic.code}，${directionLabels[objective.direction] || objective.direction}，目标 ${objective.target}`,
+    activeScope && `工况 ${activeScope.values.map(value => value || "未记录").join(" / ")}`,
+    objective && `质量目标 ${characteristic.name || characteristic.code}，${directionLabels[objective.direction]}，${objective.lowerLimit ?? "−∞"} ～ ${objective.upperLimit ?? "+∞"} ${characteristic.unit}`,
   ].filter(Boolean).join(" · ");
 
   return (
@@ -337,6 +357,8 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
       {!hasAnalysisPlan && <Alert tone="warning" title="还没有覆盖这个配方的分析规则">没有已发布且包含过程曲线的分析规则时，运行进不了校正。</Alert>}
       {!characteristic && <Alert tone="warning" title="还没有覆盖这个配方的质量方案">已发布质量方案里需要有带判定范围的数值指标。</Alert>}
       <p className="text-sm leading-6 text-slate-600">{scopeText}</p>
+      {scopes.length > 1 && <Field label="工况"><Select aria-label="工况" value={activeScope?.key || ""} onChange={event => { readinessRequestId.current += 1; setSelectedScope({ scopeKey, key: event.target.value }); setReadiness(null); }}>{scopes.map(scope => <option key={scope.key} value={scope.key}>{scope.values.map(value => value || "未记录").join(" / ")}（{scope.count} 条）</option>)}</Select></Field>}
+      <p className="text-sm text-slate-600">工况选项来自近一年最近 100 条运行，正式纳入由系统按所选范围检查。</p>
       <p className="text-sm leading-6 text-slate-600">采用为下一轮校正不会发布新版本，下一轮仍使用这一版配方。要改配方结构或质量目标时，用「作为显著变更」打开修订草稿。</p>
       {openProposal && <Alert tone="info" title="这一版已有未完成的校正">先完成决定，或等下一轮运行把结果冻结回来，再生成新的校正。</Alert>}
       {visibleReadiness && <RecipeReadinessPanel readiness={visibleReadiness} />}
@@ -354,7 +376,7 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
         const recommendation = flow.recommendation;
         const decisionAt = flow.decision?.decidedAt;
         const version = recommendation?.brief?.context?.process_specification_version;
-        const candidateRuns = flow.state === "pending-execution"
+        const candidateRuns = ["pending-execution", "pending-outcome"].includes(flow.state)
           ? runsAfterDecision(
             recipeRuns,
             recommendation.processSpecificationId,
@@ -408,8 +430,9 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
                 </div>
               </div>
             )}
-            {flow.state === "pending-execution" && (
+            {["pending-execution", "pending-outcome"].includes(flow.state) && (
               <div className="grid gap-2 rounded-lg border border-slate-200 p-3">
+                {flow.state === "pending-outcome" && <p className="text-sm">当前关联运行：{flow.decision.actualExecutionKey}。如选择有误，可在冻结前重新关联。</p>}
                 <p className="text-sm leading-6 text-slate-600">
                   选择实际执行了这轮参数的运行。系统会在结果冻结时核对实际参数；未按决定执行的结果会保留，但不作为本轮验证；运行可能按实际参数进入后续观察。
                 </p>
@@ -452,7 +475,7 @@ export function RecipeVersionProposal({ specification, siteId = "", canWrite = t
                       <p>工程师决定：{flow.decision.engineerSelectedParameters.map(item => `${item.variableCode} ${formatMeasurementValue(item.value)} ${item.unit || ""}`).join("；")}</p>
                     )}
                     <Link className="text-trajectory-700 underline" to={`/process-executions/${encodeURIComponent(confirmation.run.executionId)}?siteId=${encodeURIComponent(siteId)}`}>查看运行详情</Link>
-                    <p>关联后不能更换运行；实际参数将在冻结结果时核对。请确认这是执行该决定的运行。</p>
+                    <p>实际参数将在冻结结果时核对。请确认这是执行该决定的运行。</p>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="primary" disabled={busy} onClick={() => { void attachRun(flow, confirmation.run); }}>确认关联</Button>
                       <Button disabled={busy} onClick={() => setRunConfirmation(null)}>取消</Button>

@@ -17,7 +17,10 @@ dependencies = [
 service = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "httpx2>=2.16.2",
+    "pytest>=8",
+]
 
 [tool.uv]
 required-version = "==0.12.5"

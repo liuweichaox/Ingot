@@ -109,8 +109,8 @@ public sealed class ProcessExecutionService(
         var context = BuildContext(
             productFamilyCode,
             productCode,
-            processSpecificationId,
-            processSpecificationVersion,
+            null,
+            null,
             outputItemId,
             externalBatchRef);
         var lifecycle = new List<PlatformProductionEvent>();
@@ -155,6 +155,34 @@ public sealed class ProcessExecutionService(
             })
             .OrderByDescending(static item => item.StartedAt)
             .ToArray();
+        if (string.IsNullOrWhiteSpace(executionId) &&
+            (!string.IsNullOrWhiteSpace(processSpecificationId) || !string.IsNullOrWhiteSpace(processSpecificationVersion)))
+        {
+            var matched = new List<ExecutionCandidate>();
+            foreach (var batch in allCandidates.Chunk(100))
+            {
+                var sources = await events.QueryExecutionSummarySourcesAsync(
+                    batch.Select(static candidate => candidate.Id).ToArray(), siteId, ct).ConfigureAwait(false);
+                var eventsByExecution = sources
+                    .ToDictionary(static source => source.ExecutionId,
+                        static source => source.Events.OrderBy(static row => row.Event.OccurredAt)
+                            .ThenBy(static row => row.IngestId).ToArray(), StringComparer.Ordinal);
+                foreach (var candidate in batch)
+                {
+                    var resolved = ResolveContext(eventsByExecution.GetValueOrDefault(candidate.Id, []));
+                    var actualId = resolved.GetValueOrDefault("actual_process_specification_id") ??
+                        resolved.GetValueOrDefault("process_specification_id");
+                    var actualVersion = resolved.GetValueOrDefault("actual_process_specification_version") ??
+                        resolved.GetValueOrDefault("process_specification_version");
+                    if ((string.IsNullOrWhiteSpace(processSpecificationId) ||
+                         string.Equals(actualId, processSpecificationId.Trim(), StringComparison.Ordinal)) &&
+                        (string.IsNullOrWhiteSpace(processSpecificationVersion) ||
+                         string.Equals(actualVersion, processSpecificationVersion.Trim(), StringComparison.Ordinal)))
+                        matched.Add(candidate);
+                }
+            }
+            allCandidates = matched.ToArray();
+        }
         var candidates = allCandidates
             .Skip(offset)
             .Take(limit)

@@ -12,6 +12,64 @@ namespace Ingot.Core.Tests.Platform;
 public sealed class ResearchOptimizationServiceTests : ProcessResearchWorkflowTestBase
 {
     [Fact]
+    public async Task Recommendation_PreservesAdmittedEvidenceAndDistinguishesChangedSources()
+    {
+        var store = new MemoryStore();
+        var optimizer = new CapturingOptimizerClient();
+        var first = Observation(500, 8) with { ExecutionKey = "run-1" };
+        var second = Observation(520, 12) with { ExecutionKey = "run-2" };
+        var third = Observation(540, 16) with { ExecutionKey = "run-3" };
+        var excluded = Observation(530, 14) with { ExecutionKey = "excluded", ValidForOptimization = false };
+        ResearchOptimizationService Service(ResearchRunObservation observation) => new(
+            store, optimizer, new MultipleObservationAssembler(first, second, observation, excluded),
+            new RecipeRecommendationBriefPolicy());
+
+        var original = await Service(third).CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
+        var references = Assert.IsAssignableFrom<IReadOnlyList<RecipeRecommendationObservationReference>>(
+            original.ObservationReferences);
+        Assert.Equal(new[] { "run-1", "run-2", "run-3" }, references.Select(value => value.ExecutionKey));
+        Assert.All(references, value => Assert.Equal(new string('c', 64), value.SourceContentHash));
+
+        var changed = await Service(third with { SourceContentHash = new string('d', 64) })
+            .CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
+        Assert.NotEqual(original.RecommendationId, changed.RecommendationId);
+        Assert.Equal(new string('c', 64),
+            (await store.GetRecipeRecommendationAsync(original.RecommendationId))!.ObservationReferences![2].SourceContentHash);
+        Assert.Equal(new string('d', 64), changed.ObservationReferences![2].SourceContentHash);
+    }
+
+    [Fact]
+    public async Task ExpiredRecommendation_CreatesNewDecisionableRoundAndPreservesHistory()
+    {
+        var store = new MemoryStore();
+        var optimizer = new CapturingOptimizerClient();
+        var service = CreateService(store, optimizer);
+        var first = await service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
+        store.ReplaceRecommendation(first with { ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
+
+        var renewed = await service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
+        var retry = await service.CreateNextRecipeRecommendationAsync(Request(), "engineer-a");
+
+        Assert.NotEqual(first.RecommendationId, renewed.RecommendationId);
+        Assert.Equal(renewed.RecommendationId, retry.RecommendationId);
+        Assert.Equal(2, store.Recommendations.Count);
+        Assert.NotNull(await store.GetRecipeRecommendationAsync(first.RecommendationId));
+        Assert.True(renewed.ExpiresAt > DateTimeOffset.UtcNow);
+        Assert.Equal(2, optimizer.SuggestionCallCount);
+
+        var decisionService = new ResearchRecipeRecommendationDecisionService(
+            store, new MultipleObservationAssembler(Observation(515, 11)), new MutableExecutionComparisonService());
+        var item = Assert.Single(renewed.Items);
+        var decision = await decisionService.RecordDecisionAsync(renewed.RecommendationId, item.RecommendationKey,
+            new ResearchRecipeRecommendationDecisionRequest
+            {
+                Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
+                EngineerSelectedParameters = item.Parameters
+            }, "engineer-a");
+        Assert.Equal(renewed.RecommendationId, decision.RecommendationId);
+    }
+
+    [Fact]
     public async Task SyntheticApplicationLoop_RecommendationDecisionAndFrozenOutcomeRemainTraceable()
     {
         // 合成观察和优化器桩只验证应用服务之间的契约，不验证 Edge、Platform 接收或现场效果。

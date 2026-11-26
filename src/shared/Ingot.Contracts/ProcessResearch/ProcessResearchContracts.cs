@@ -387,6 +387,13 @@ public sealed record RecipeRecommendationExclusion
     public required string Reason { get; init; }
 }
 
+/// <summary>建议生成时纳入的运行及其证据内容标识。</summary>
+public sealed record RecipeRecommendationObservationReference
+{
+    public required string ExecutionKey { get; init; }
+    public required string SourceContentHash { get; init; }
+}
+
 /// <summary>
 /// 面向日常生产的下一配方建议。数据来自真实配方运行，不要求用户建立验证计划。
 /// </summary>
@@ -400,6 +407,8 @@ public sealed record ResearchRecipeRecommendation
     public required string ModelVersion { get; init; }
     public required string InputHash { get; init; }
     public int ObservationCount { get; init; }
+    /// <summary>生成建议时实际纳入优化的运行；旧建议未保存此清单时为 null。</summary>
+    public IReadOnlyList<RecipeRecommendationObservationReference>? ObservationReferences { get; init; }
     public int AutoAssembledObservationCount { get; init; }
     public int ProcessFeatureCount { get; init; }
     public required string FeatureSetId { get; init; }

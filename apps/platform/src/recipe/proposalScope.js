@@ -17,15 +17,27 @@ export function dominant(runs, key) {
 }
 
 export function inferObjective(characteristic) {
-  const lower = Number(characteristic?.lowerLimit);
-  const upper = Number(characteristic?.upperLimit);
-  const hasLower = Number.isFinite(lower);
-  const hasUpper = Number.isFinite(upper);
-  if (hasLower && lower === 0 && hasUpper) return { direction: "minimize", target: 0 };
-  if (hasLower && hasUpper) return { direction: "target", target: (lower + upper) / 2 };
-  if (hasUpper) return { direction: "minimize", target: upper };
-  if (hasLower) return { direction: "maximize", target: lower };
+  const lower = characteristic?.lowerLimit;
+  const upper = characteristic?.upperLimit;
+  const hasLower = lower != null && lower !== "" && Number.isFinite(Number(lower));
+  const hasUpper = upper != null && upper !== "" && Number.isFinite(Number(upper));
+  if (hasLower && hasUpper && Number(lower) < Number(upper)) return { direction: "range", target: (Number(lower) + Number(upper)) / 2, lowerLimit: Number(lower), upperLimit: Number(upper) };
+  if (hasLower && hasUpper) return null;
+  if (hasUpper) return { direction: "minimize", target: Number(upper), upperLimit: Number(upper) };
+  if (hasLower) return { direction: "maximize", target: Number(lower), lowerLimit: Number(lower) };
   return null;
+}
+
+export function runScopes(runs) {
+  const groups = new Map();
+  for (const run of runs) {
+    const values = [run.productFamilyCode, run.productCode, run.equipmentId].map(value => String(value || "").trim());
+    const key = JSON.stringify(values);
+    const group = groups.get(key) || { key, values, count: 0 };
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
 
 function planCovers(plan, specification) {
@@ -52,7 +64,7 @@ export function chooseCharacteristic(plans, definitions, specification) {
   return null;
 }
 
-export function briefForRecipe({ specification, model, runs, characteristic, siteCode }) {
+export function briefForRecipe({ specification, model, runs, characteristic, siteCode, selectedScope }) {
   if (!siteCode) throw new Error("还没有登记现场节点，也没有该配方的已完成运行。");
   if (!characteristic) throw new Error("已发布质量方案里没有可用于这版配方的数值质量指标。");
   const objective = inferObjective(characteristic);
@@ -71,10 +83,17 @@ export function briefForRecipe({ specification, model, runs, characteristic, sit
     throw new Error("这版配方没有带单位和上下界的可调参数。");
   }
   const scoped = runsForRecipe(runs, specification);
+  const scopes = runScopes(scoped);
+  if (!scopes.length) throw new Error("这一版配方没有已完成运行，无法确定工况。");
+  const scope = selectedScope ? scopes.find(group => group.key === selectedScope) : scopes[0];
+  if (!scope) throw new Error("所选工况已不在最近运行中，请重新选择工况。");
+  const missingScopeFields = ["product_family_code", "product_code", "equipment_id"]
+    .filter((_, index) => !scope.values[index]);
   const context = {
-    product_family_code: dominant(scoped, "productFamilyCode"),
-    product_code: dominant(scoped, "productCode"),
-    equipment_id: dominant(scoped, "equipmentId"),
+    product_family_code: scope?.values[0],
+    product_code: scope?.values[1],
+    equipment_id: scope?.values[2],
+    missing_scope_fields: missingScopeFields.join(","),
     process_specification_version: String(specification.version),
     lookback_days: "365",
   };
@@ -88,6 +107,8 @@ export function briefForRecipe({ specification, model, runs, characteristic, sit
       unit: characteristic.unit,
       direction: objective.direction,
       target: objective.target,
+      lowerLimit: objective.lowerLimit,
+      upperLimit: objective.upperLimit,
       dataSource: `inspection:${characteristic.code}`,
     }],
     variables,

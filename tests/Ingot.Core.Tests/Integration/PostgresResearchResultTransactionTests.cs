@@ -73,22 +73,97 @@ public sealed class PostgresResearchResultTransactionTests(PostgresIntegrationFi
         await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
             store.CreateRecipeRecommendationDecisionTransactionAsync(
                 decision with { DecisionId = Guid.CreateVersion7() }, executionKey));
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            store.CreateRecipeRecommendationDecisionTransactionAsync(
+                decision with { DecisionId = Guid.CreateVersion7(), RecommendationKey = "suggestion-conflict" }, executionKey));
 
+        var correctedKey = $"production-{Guid.NewGuid():N}";
+        var corrected = await store.LinkRecipeRecommendationDecisionExecutionTransactionAsync(
+            decision.DecisionId, correctedKey, "engineer-c");
+        Assert.Equal(correctedKey, corrected.ActualExecutionKey);
+        var otherDecision = decision with { DecisionId = Guid.CreateVersion7(), RecommendationKey = "suggestion-2" };
+        var linkedToReleasedRun = await store.CreateRecipeRecommendationDecisionTransactionAsync(otherDecision, executionKey);
+        Assert.Equal(executionKey, linkedToReleasedRun.ActualExecutionKey);
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            store.LinkRecipeRecommendationDecisionExecutionTransactionAsync(otherDecision.DecisionId, correctedKey, "engineer-c"));
+        await using (var command = postgres.DataSource.CreateCommand(
+            """
+            SELECT actual_execution_key, linked_by FROM research_recipe_recommendation_execution_corrections
+            WHERE decision_id = @id
+            """))
+        {
+            command.Parameters.AddWithValue("id", decision.DecisionId);
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(correctedKey, reader.GetString(0));
+            Assert.Equal("engineer-c", reader.GetString(1));
+        }
         var outcome = new ResearchRecipeRecommendationOutcome
         {
             BriefHash = recommendation.BriefHash,
-            ActualExecutionKey = executionKey,
+            ActualExecutionKey = correctedKey,
             SourceContentHash = new string('c', 64),
             CapturedAt = now.AddMinutes(2)
         };
         await store.AttachRecipeRecommendationOutcomeTransactionAsync(decision.DecisionId, outcome, "engineer-c");
+        await Assert.ThrowsAsync<ProcessResearchRuleException>(() =>
+            store.LinkRecipeRecommendationDecisionExecutionTransactionAsync(
+                decision.DecisionId, executionKey, "engineer-c"));
         Assert.Equal(new string('c', 64), (await store.GetRecipeRecommendationDecisionAsync(
             decision.DecisionId))!.Outcome!.SourceContentHash);
         var repeated = await store.AttachRecipeRecommendationOutcomeTransactionAsync(
             decision.DecisionId, outcome with { SourceContentHash = new string('d', 64) }, "engineer-d");
         Assert.Equal(new string('c', 64), repeated.Outcome!.SourceContentHash);
-        Assert.Empty(await store.ListPendingRecipeRecommendationDecisionsAsync(
-            recommendation.SiteCode, recommendation.ProcessSpecificationId));
+        var pending = await store.ListPendingRecipeRecommendationDecisionsAsync(
+            recommendation.SiteCode, recommendation.ProcessSpecificationId);
+        Assert.Equal(otherDecision.DecisionId, Assert.Single(pending).DecisionId);
+    }
+
+    [LinuxDockerFact]
+    public async Task ConcurrentLinksToSameExecution_AllowOnlyOneDecision()
+    {
+        await postgres.EnsureSchemaAsync();
+        var store = new PostgresProcessResearchStore(postgres.DataSource);
+        var now = DateTimeOffset.UtcNow;
+        var recommendation = Recommendation($"site-{Guid.NewGuid():N}", now);
+        await store.CreateRecipeRecommendationAsync(recommendation);
+        var first = new ResearchRecipeRecommendationDecision
+        {
+            DecisionId = Guid.CreateVersion7(),
+            RecommendationId = recommendation.RecommendationId,
+            RecommendationKey = "suggestion-1",
+            SiteCode = recommendation.SiteCode,
+            ProcessSpecificationId = recommendation.ProcessSpecificationId,
+            BriefHash = recommendation.BriefHash,
+            Decision = ResearchRecipeRecommendationDecisionStatuses.Accepted,
+            Prediction = recommendation.Items[0].Prediction,
+            DecisionSnapshotHash = new string('b', 64),
+            DecidedBy = "engineer",
+            DecidedAt = now
+        };
+        var second = first with { DecisionId = Guid.CreateVersion7(), RecommendationKey = "suggestion-2" };
+        await store.CreateRecipeRecommendationDecisionTransactionAsync(first, null);
+        await store.CreateRecipeRecommendationDecisionTransactionAsync(second, null);
+        var executionKey = $"production-{Guid.NewGuid():N}";
+
+        async Task<bool> TryLink(Guid id)
+        {
+            try
+            {
+                await store.LinkRecipeRecommendationDecisionExecutionTransactionAsync(id, executionKey, "engineer");
+                return true;
+            }
+            catch (ProcessResearchRuleException)
+            {
+                return false;
+            }
+        }
+
+        var results = await Task.WhenAll(TryLink(first.DecisionId), TryLink(second.DecisionId));
+        Assert.Single(results, value => value);
+        var firstSaved = await store.GetRecipeRecommendationDecisionAsync(first.DecisionId);
+        var secondSaved = await store.GetRecipeRecommendationDecisionAsync(second.DecisionId);
+        Assert.Single(new[] { firstSaved, secondSaved }, value => value?.ActualExecutionKey == executionKey);
     }
 
     private static ResearchRecipeRecommendation Recommendation(string siteCode, DateTimeOffset now)

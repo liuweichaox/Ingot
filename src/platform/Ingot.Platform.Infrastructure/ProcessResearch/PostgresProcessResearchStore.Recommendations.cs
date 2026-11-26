@@ -12,12 +12,18 @@ public sealed partial class PostgresProcessResearchStore
         """
         SELECT decision.payload
                || CASE WHEN execution_link.decision_id IS NULL THEN '{}'::jsonb
-                       ELSE jsonb_build_object('actualExecutionKey', execution_link.actual_execution_key) END
+                       ELSE jsonb_build_object('actualExecutionKey', COALESCE(correction.actual_execution_key, execution_link.actual_execution_key)) END
                || CASE WHEN outcome.decision_id IS NULL THEN '{}'::jsonb
                        ELSE jsonb_build_object('outcome', outcome.payload) END
         FROM research_recipe_recommendation_decisions AS decision
         LEFT JOIN research_recipe_recommendation_decision_executions AS execution_link
             ON execution_link.decision_id = decision.decision_id
+        LEFT JOIN LATERAL (
+            SELECT actual_execution_key
+            FROM research_recipe_recommendation_execution_corrections
+            WHERE decision_id = decision.decision_id
+            ORDER BY correction_id DESC LIMIT 1
+        ) AS correction ON true
         LEFT JOIN research_recipe_recommendation_decision_outcomes AS outcome
             ON outcome.decision_id = decision.decision_id
         """;
@@ -204,8 +210,73 @@ public sealed partial class PostgresProcessResearchStore
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            await InsertExecutionLinkAsync(connection, transaction, decisionId, actualExecutionKey, linkedBy, ct)
-                .ConfigureAwait(false);
+            await using (var guard = new NpgsqlCommand(
+                """
+                SELECT decision_id FROM research_recipe_recommendation_decisions
+                WHERE decision_id = @id FOR UPDATE
+                """, connection, transaction))
+            {
+                guard.Parameters.AddWithValue("id", decisionId);
+                if (await guard.ExecuteScalarAsync(ct).ConfigureAwait(false) is null)
+                    throw new ProcessResearchRuleException("配方建议决定不存在。");
+            }
+            await using (var keyLock = new NpgsqlCommand(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0))", connection, transaction))
+            {
+                keyLock.Parameters.AddWithValue("key", actualExecutionKey);
+                await keyLock.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
+            await using (var check = new NpgsqlCommand(
+                """
+                SELECT EXISTS(SELECT 1 FROM research_recipe_recommendation_decision_outcomes WHERE decision_id = @id),
+                       EXISTS(
+                           SELECT 1
+                           FROM research_recipe_recommendation_decision_executions AS other_link
+                           LEFT JOIN LATERAL (
+                               SELECT actual_execution_key
+                               FROM research_recipe_recommendation_execution_corrections
+                               WHERE decision_id = other_link.decision_id
+                               ORDER BY correction_id DESC LIMIT 1
+                           ) AS other_correction ON true
+                           WHERE other_link.decision_id <> @id
+                             AND COALESCE(other_correction.actual_execution_key, other_link.actual_execution_key) = @key),
+                       (SELECT COALESCE(
+                           (SELECT actual_execution_key FROM research_recipe_recommendation_execution_corrections WHERE decision_id = @id ORDER BY correction_id DESC LIMIT 1),
+                           (SELECT actual_execution_key FROM research_recipe_recommendation_decision_executions WHERE decision_id = @id))
+                       )
+                """, connection, transaction))
+            {
+                check.Parameters.AddWithValue("id", decisionId);
+                check.Parameters.AddWithValue("key", actualExecutionKey);
+                await using var reader = await check.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                await reader.ReadAsync(ct).ConfigureAwait(false);
+                if (reader.GetBoolean(0))
+                    throw new ProcessResearchRuleException("实际结果已冻结，不能重新关联实际运行。");
+                if (reader.GetBoolean(1))
+                    throw new ProcessResearchRuleException("该实际运行已经关联其他工程师决定。");
+                var current = reader.IsDBNull(2) ? null : reader.GetString(2);
+                await reader.CloseAsync().ConfigureAwait(false);
+                if (current == actualExecutionKey)
+                {
+                    await transaction.CommitAsync(ct).ConfigureAwait(false);
+                    return (await GetRecipeRecommendationDecisionAsync(decisionId, ct).ConfigureAwait(false))!;
+                }
+                if (current is null)
+                    await InsertExecutionLinkAsync(connection, transaction, decisionId, actualExecutionKey, linkedBy, ct).ConfigureAwait(false);
+                else
+                {
+                    await using var correction = new NpgsqlCommand(
+                        """
+                        INSERT INTO research_recipe_recommendation_execution_corrections
+                          (decision_id, actual_execution_key, linked_by)
+                        VALUES (@id, @key, @linked_by)
+                        """, connection, transaction);
+                    correction.Parameters.AddWithValue("id", decisionId);
+                    correction.Parameters.AddWithValue("key", actualExecutionKey);
+                    correction.Parameters.AddWithValue("linked_by", linkedBy);
+                    await correction.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                }
+            }
             await transaction.CommitAsync(ct).ConfigureAwait(false);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -226,16 +297,28 @@ public sealed partial class PostgresProcessResearchStore
         string materializedBy,
         CancellationToken ct = default)
     {
-        await using (var command = _dataSource.CreateCommand(
+        await using var connection = await _dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using (var guard = new NpgsqlCommand(
+            "SELECT decision_id FROM research_recipe_recommendation_decisions WHERE decision_id = @id FOR UPDATE",
+            connection, transaction))
+        {
+            guard.Parameters.AddWithValue("id", decisionId);
+            await guard.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        }
+        await using (var command = new NpgsqlCommand(
             """
             INSERT INTO research_recipe_recommendation_decision_outcomes
               (decision_id, payload, materialized_by, materialized_at)
             SELECT execution_link.decision_id, @payload, @materialized_by, @materialized_at
             FROM research_recipe_recommendation_decision_executions AS execution_link
             WHERE execution_link.decision_id = @id
-              AND execution_link.actual_execution_key = @execution_key
+              AND COALESCE(
+                (SELECT actual_execution_key FROM research_recipe_recommendation_execution_corrections
+                 WHERE decision_id = @id ORDER BY correction_id DESC LIMIT 1),
+                execution_link.actual_execution_key) = @execution_key
             ON CONFLICT (decision_id) DO NOTHING
-            """))
+            """, connection, transaction))
         {
             command.Parameters.AddWithValue("id", decisionId);
             AddJson(command, "payload", outcome);
@@ -244,12 +327,14 @@ public sealed partial class PostgresProcessResearchStore
             command.Parameters.AddWithValue("execution_key", outcome.ActualExecutionKey);
             if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
             {
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
                 var existing = await GetRecipeRecommendationDecisionAsync(decisionId, ct).ConfigureAwait(false);
                 if (existing?.Outcome is not null)
                     return existing;
                 throw new ProcessResearchRuleException("日常建议决策尚未关联该实际运行，不能冻结源数据结果。");
             }
         }
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
         return (await GetRecipeRecommendationDecisionAsync(decisionId, ct).ConfigureAwait(false))
             ?? throw new ProcessResearchRuleException("日常建议决策不存在。不能读取已冻结的源数据结果。");
     }
@@ -262,6 +347,12 @@ public sealed partial class PostgresProcessResearchStore
         string linkedBy,
         CancellationToken ct)
     {
+        await using (var keyLock = new NpgsqlCommand(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0))", connection, transaction))
+        {
+            keyLock.Parameters.AddWithValue("key", actualExecutionKey);
+            await keyLock.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        }
         await using var command = new NpgsqlCommand(
             """
             INSERT INTO research_recipe_recommendation_decision_executions
@@ -269,6 +360,17 @@ public sealed partial class PostgresProcessResearchStore
             SELECT decision_id, @execution_key, @linked_by, now()
             FROM research_recipe_recommendation_decisions
             WHERE decision_id = @id AND decision IN ('accepted', 'modified')
+              AND NOT EXISTS (
+                SELECT 1
+                FROM research_recipe_recommendation_decision_executions AS other_link
+                LEFT JOIN LATERAL (
+                  SELECT actual_execution_key
+                  FROM research_recipe_recommendation_execution_corrections
+                  WHERE decision_id = other_link.decision_id
+                  ORDER BY correction_id DESC LIMIT 1
+                ) AS other_correction ON true
+                WHERE other_link.decision_id <> @id
+                  AND COALESCE(other_correction.actual_execution_key, other_link.actual_execution_key) = @execution_key)
             """, connection, transaction);
         command.Parameters.AddWithValue("id", decisionId);
         command.Parameters.AddWithValue("execution_key", actualExecutionKey);
